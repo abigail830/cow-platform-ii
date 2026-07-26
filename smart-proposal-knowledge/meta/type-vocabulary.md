@@ -91,7 +91,7 @@ Consumer resolves: load all `Section Block` concepts with `compose_group: harney
 | [Reference Proposal](/examples/index.md) | Spine, fee pattern, block **candidates** | Yes |
 | Sample paragraph text | [Section Block](/blocks/index.md) body | **No** — promote after dedup, placeholderize, human `verified` |
 
-Path pattern: `blocks/{bu}/regions/{region}/` or `blocks/{bu}/jurisdictions/{jurisdiction}/` — see [bu-region-jurisdiction.md](/meta/bu-region-jurisdiction.md).
+Path pattern: `blocks/{bu}/regions/{region}/`, `blocks/{bu}/jurisdictions/{jurisdiction}/`, or `blocks/{bu}/shared/` (cross-region optional sections) — see [bu-region-jurisdiction](/meta/bu-region-jurisdiction.md).
 
 ### Section Block `render`
 

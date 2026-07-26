@@ -16,8 +16,8 @@ sources:
     resource: file:///Users/qianping/Documents/Source/ascentium/axon-flow/backend/agent_platform/agents/x-proposal/skills/sp-proposal-builder/references/quotation-layout-philippines-australia.md
     title: Legacy quotation-layout-philippines-australia.md
   - id: ref-ph
-    resource: references/examples/incorp-ph-CS.docx
-    title: Reference sample — PH CS
+    resource: references/examples/incorp-ph-CS-payroll-bookkeeping-ep.docx
+    title: Reference sample — PH CS / payroll / bookkeeping / EP
   - id: ref-au
     resource: references/examples/incorp-au-Incorporation.docx
     title: Reference sample — AU incorporation
@@ -36,9 +36,9 @@ Describes **column shape**, not a region. Legacy id was `philippines_australia` 
 | Quarterly | `fees.quarterly` |
 | Annual | `fees.annual` |
 | Once-off | `fees.once_off` |
-| Total | `fees.total` |
+| Total | `fees.total` — **derived** via [fee-table-total-column](/computations/fee-table-total-column.md) when `show_total_column: true` |
 
-Optional section-level **Total** toggle (`data.show_total`).
+Optional section-level **Total** toggle (`data.show_total`). Per-row Total is materialized at compose time — do not paste amounts in Section Blocks.
 
 ## Row JSON shape
 

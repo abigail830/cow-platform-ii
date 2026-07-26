@@ -1,0 +1,53 @@
+{
+  "success": true,
+  "data": {
+    "matches": 1,
+    "results": [
+      {
+        "path": "/body/tbl[1]",
+        "type": "table",
+        "childCount": 2,
+        "format": {
+          "cols": "8",
+          "rows": "2",
+          "_gridCols": "8",
+          "style": "ae",
+          "border.top": "nil",
+          "border.bottom": "nil",
+          "border.insideH": "nil",
+          "border.insideV": "nil",
+          "border.left": "nil",
+          "border.right": "nil",
+          "width": "9564",
+          "align": "center",
+          "layout": "fixed",
+          "tblLook": "0400",
+          "bandedRows": true,
+          "colWidths": "1185dxa,1185dxa,1185dxa,1185dxa,1185dxa,1268dxa,1186dxa,1185dxa"
+        },
+        "children": [
+          {
+            "path": "/body/tbl[1]/tr[1]",
+            "type": "row",
+            "childCount": 8,
+            "format": {
+              "height": "498dxa",
+              "rowAlign": "center"
+            },
+            "children": []
+          },
+          {
+            "path": "/body/tbl[1]/tr[2]",
+            "type": "row",
+            "childCount": 8,
+            "format": {
+              "height": "243dxa",
+              "rowAlign": "center"
+            },
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -2,11 +2,11 @@
 
 ## 2026-07-26
 
-* **sg-incorp cleanup**: Removed superseded `CS_EP_Accounting_Payroll_TAX` (inbox, examples binary, extraction, example concept). Anchor is `incorp-sg-cs-tas-payroll-accounting-ff`; Rikvin disclaimer sources `incorp-sg-employment-pass` extraction.
-* **sg-incorp anchor swap**: Ingested `incorp-sg-CS_TAS_Payroll_Accounting_ff.docx` → `references/extractions/incorp-sg-cs-tas-payroll-accounting-ff/` + `examples/incorp-sg-cs-tas-payroll-accounting-ff.md`; template `anchor_example` updated (optional **Estimated first invoice** tbl[6]).
+* **sg-incorp cleanup**: Removed superseded `CS_EP_Accounting_Payroll_TAX` (inbox, examples binary, extraction, example concept). Anchor is `incorp-sg-cs-tax-payroll-accounting-ff`; Rikvin disclaimer sources `incorp-sg-employment-pass` extraction.
+* **sg-incorp anchor swap**: Ingested `incorp-sg-CS_Tax_Payroll_Accounting_ff.docx` → `references/extractions/incorp-sg-cs-tax-payroll-accounting-ff/` + `examples/incorp-sg-cs-tax-payroll-accounting-ff.md`; template `anchor_example` updated (optional **Estimated first invoice** tbl[6]).
 * **Creation**: Scaffolded smart-proposal-knowledge OKF bundle (Phase 1) — root index, meta concepts, directory structure for layouts, catalogs, templates, blocks, brand, examples, computations, playbooks, and references staging.
 * **Brand shell ingest (Phase 3 pilot)**: Layer 1 extraction via `officecli` from `references/inbox/` → `references/extractions/brand-shell-20260726/`; binaries promoted to `references/templates/`; draft `Output Shell` concepts at `brand/ascentium-word-shell.md` and `brand/ascentium-pptx-shell.md`.
-* **SG reference proposals (Phase 3)**: Ingested InCorp SG samples — `incorp-sg-rikvin-Employment_Pass_Application.docx`, `incorp-sg-InternalAudit.pptx`, `incorp-sg-CS_TAS_Payroll_Accounting_ff.docx` → `references/examples/` + `references/extractions/incorp-sg-*/` + draft `Reference Proposal` concepts under `examples/`.
+* **SG reference proposals (Phase 3)**: Ingested InCorp SG samples — `incorp-sg-rikvin-Employment_Pass_Application.docx`, `incorp-sg-InternalAudit.pptx`, `incorp-sg-CS_Tax_Payroll_Accounting_ff.docx` → `references/examples/` + `references/extractions/incorp-sg-*/` + draft `Reference Proposal` concepts under `examples/`.
 * **Templates + blocks batch**: `au-advisory`, `ph-incorp`, `vn-incorp`, `harneys-uk` (BVI/Cayman unified), `harneys-hk` — all blocks from `references/extractions/*/text.txt`.
 * **Reference proposals batch (Phase 3/4)**: Ingested remaining 10 inbox samples → `references/examples/` + extractions + 10 draft `Reference Proposal` concepts (13 total with SG).
 * **Link dedup (OKF §8)**: Single authoritative example↔template map in `examples/index.md` + `template_id` frontmatter on Reference Proposals; removed bidirectional catalog links from templates, region-routing, layouts, and blocks index.

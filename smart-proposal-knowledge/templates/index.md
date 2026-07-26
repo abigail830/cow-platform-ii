@@ -10,7 +10,7 @@
 | sg-audit | InCorp SG | Special — RA internal audit | PPT | custom | planned |
 | [au-advisory](au-advisory.md) | InCorp AU | Generic Word — incorporation, advisory | Word | [multi-frequency](/layouts/multi-frequency.md) | draft |
 | au-audit | InCorp AU | Special — audit PPT | PPT | custom | planned |
-| [ph-incorp](ph-incorp.md) | InCorp PH | Corporate secretarial + SERVICE SLAs | Word | [multi-frequency](/layouts/multi-frequency.md) | draft |
+| [ph-incorp](ph-incorp.md) | InCorp PH | CS + payroll + bookkeeping + EP + SERVICE SLAs | Word | [multi-frequency](/layouts/multi-frequency.md) | draft |
 | [ph-recruitment](ph-recruitment.md) | InCorp PH | Special — recruitment & executive search (ITS) | Word | custom | draft |
 | [hk-incorp](hk-incorp.md) | InCorp HK | Generic Word — company secretarial / compliance | Word | custom | draft |
 | [vn-incorp](vn-incorp.md) | InCorp VN | VN fee schedule PPT | PPT | custom | draft |

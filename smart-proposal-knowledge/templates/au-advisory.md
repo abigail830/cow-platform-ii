@@ -66,6 +66,9 @@ sections:
       group_by: package
       table_style: frequency_columns
       currency: AUD
+      show_total_column: false
+      total_column:
+        computation: computations/fee-table-total-column.md
       show_line_amount: true
       service_columns:
         service_name: true
@@ -87,6 +90,27 @@ sections:
         label: Payment Option A (Progressive billing)
       - id: option_b
         label: Payment Option B (Tax monthly retainer)
+
+  - id: first_invoice
+    title: Estimated first invoice value
+    kind: derived_section
+    required: false
+    default_enabled: false
+    block: blocks/incorp/shared/estimated-first-invoice-value.md
+    derivation:
+      type: first_invoice_from_fee_tables
+      computation: computations/first-invoice-from-fee-tables.md
+      source_section: solution_and_fees
+      tax:
+        rate: 0.10
+        label: GST
+        rate_display: 10%
+      exclude:
+        pattern: '(?i)(?<![a-z-])ad[\s-]?hoc(?![a-z])'
+        fields: [preview_primary, scope_of_work_display, service_name, description, scope_of_work]
+    agent_guidance: >
+      Optional first-invoice rollup. Layout multi-frequency — map first selected
+      frequency column to first_period_amount before computation (no AU anchor yet).
 
   - id: terms
     title: Terms and conditions
@@ -111,6 +135,7 @@ OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
 * [Executive Summary](/blocks/incorp/regions/au/executive-summary.md)
 * [Solution and pricing intro](/blocks/incorp/regions/au/solution-pricing-intro.md)
 * [Fee summary intro](/blocks/incorp/regions/au/fee-summary-intro.md)
+* [Estimated first invoice value](/blocks/incorp/shared/estimated-first-invoice-value.md) (optional) — [computation](/computations/first-invoice-from-fee-tables.md)
 * [Terms and conditions](/blocks/incorp/regions/au/terms-appendix.md)
 * Fee layout: [multi-frequency](/layouts/multi-frequency.md)
 * Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)

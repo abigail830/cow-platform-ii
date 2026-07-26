@@ -2,6 +2,14 @@
 
 Reusable proposal prose — **`Section Block`** concepts. Optional `selection` for conditional chapters. Promotion rules: [type-vocabulary](/meta/type-vocabulary.md).
 
+## `incorp/shared/`
+
+Cross-region InCorp blocks — enable per template `sections[]` (`default_enabled: false`).
+
+| Block | `render` | Computation |
+|-------|----------|-------------|
+| [estimated-first-invoice-value](incorp/shared/estimated-first-invoice-value.md) | derived_table | [first-invoice-from-fee-tables](/computations/first-invoice-from-fee-tables.md) |
+
 ## `incorp/regions/sg/`
 
 | Block | `render` |
@@ -34,11 +42,16 @@ Reusable proposal prose — **`Section Block`** concepts. Optional `selection` f
 | [credentials-visual](incorp/regions/ph/credentials-visual.md) | visual_pending |
 | [executive-summary](incorp/regions/ph/executive-summary.md) | text |
 | [solution-pricing-intro](incorp/regions/ph/solution-pricing-intro.md) | text |
-| [service-slas-marker](incorp/regions/ph/service-slas-marker.md) | text |
+| [service-slas](incorp/regions/ph/service-slas.md) | text |
 | [cs-scope](incorp/regions/ph/cs-scope.md) | text |
 | [cs-exclusions](incorp/regions/ph/cs-exclusions.md) | text |
 | [cs-service-terms](incorp/regions/ph/cs-service-terms.md) | text |
 | [indemnity](incorp/regions/ph/indemnity.md) | text |
+| [corporate-treasurer-service](incorp/regions/ph/corporate-treasurer-service.md) | text |
+| [nominee-director-service](incorp/regions/ph/nominee-director-service.md) | text |
+| [bookkeeping-tax-terms](incorp/regions/ph/bookkeeping-tax-terms.md) | text |
+| [payroll-services](incorp/regions/ph/payroll-services.md) | text |
+| [immigration-scope](incorp/regions/ph/immigration-scope.md) | text |
 | [unified-terms](incorp/regions/ph/unified-terms.md) | text |
 
 ## `incorp/regions/hk/`

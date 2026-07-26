@@ -15,9 +15,9 @@ sources:
   - id: legacy-layout
     resource: file:///Users/qianping/Documents/Source/ascentium/axon-flow/backend/agent_platform/agents/x-proposal/skills/sp-proposal-builder/references/quotation-layout-singapore.md
     title: Legacy quotation-layout-singapore.md (layout_id singapore)
-  - id: ref-cs-tas-ff
-    resource: references/examples/incorp-sg-CS_TAS_Payroll_Accounting_ff.docx
-    title: Reference sample — sg-incorp anchor (TAS + first invoice)
+  - id: ref-cs-tax-ff
+    resource: references/examples/incorp-sg-CS_Tax_Payroll_Accounting_ff.docx
+    title: Reference sample — sg-incorp anchor (Tax + first invoice)
 ---
 
 # Layout: `oneoff-recurring`

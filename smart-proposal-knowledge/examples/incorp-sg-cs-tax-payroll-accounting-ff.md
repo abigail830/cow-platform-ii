@@ -1,6 +1,6 @@
 ---
 type: Reference Proposal
-title: "InCorp SG — CS / TAS / Payroll / Accounting (first invoice)"
+title: "InCorp SG — CS / Tax / Payroll / Accounting (first invoice)"
 description: >-
   Singapore Word proposal — Annual Compliance (accounting/tax/payroll) plus Full
   Finance Function Support. Anchor for sg-incorp; includes optional Estimated
@@ -8,19 +8,19 @@ description: >-
 tags: [incorp, region:SG, jurisdiction:SG, Word, accounting, payroll, tax, first-invoice]
 status: draft
 template_id: sg-incorp
-resource: references/examples/incorp-sg-CS_TAS_Payroll_Accounting_ff.docx
+resource: references/examples/incorp-sg-CS_Tax_Payroll_Accounting_ff.docx
 generated:
   by: process:office-ingest/v1
   at: 2026-07-26T23:05:00Z
 sources:
   - id: extraction
-    resource: references/extractions/incorp-sg-cs-tas-payroll-accounting-ff/spine.md
+    resource: references/extractions/incorp-sg-cs-tax-payroll-accounting-ff/spine.md
     title: Layer 1 spine extraction
 ---
 
-# Reference: CS / TAS / Payroll / Accounting + First Invoice (SG)
+# Reference: CS / Tax / Payroll / Accounting + First Invoice (SG)
 
-Layer 1 extraction: [extraction spine](/references/extractions/incorp-sg-cs-tas-payroll-accounting-ff/spine.md).
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-sg-cs-tax-payroll-accounting-ff/spine.md).
 
 **Primary anchor** for [`sg-incorp`](/templates/sg-incorp.md).
 
@@ -69,13 +69,15 @@ Layer 1 extraction: [extraction spine](/references/extractions/incorp-sg-cs-tas-
 | Table | tbl[6] (28 rows) |
 | Template section | `first_invoice` (`derived_section`, `default_enabled: false`) |
 | Derivation | One-off + first recurring period + GST 9%; excludes ad-hoc |
+| Computation | [first-invoice-from-fee-tables](/computations/first-invoice-from-fee-tables.md) |
+| Block | [estimated-first-invoice-value](/blocks/incorp/shared/estimated-first-invoice-value.md) |
 
 ## Distinction from other SG references
 
 | Sample | Role |
 |--------|------|
 | [Rikvin Employment Pass](/examples/incorp-sg-rikvin-employment-pass.md) | Immigration-only subset; Rikvin disclaimer source |
-| This file | **Anchor** — TAS + Full Finance + optional first invoice |
+| This file | **Anchor** — Tax + Full Finance + optional first invoice |
 
 ## Section Block promotion notes
 

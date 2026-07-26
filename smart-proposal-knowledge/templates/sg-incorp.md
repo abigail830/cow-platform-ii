@@ -4,7 +4,7 @@ template_id: sg-incorp
 title: Singapore Incorp
 description: >-
   Generic InCorp SG Word proposal — CS, EP, tax, accounting, payroll, and
-  multi-service packages. Anchor spine from cs-tas-payroll-accounting-ff sample
+  multi-service packages. Anchor spine from cs-tax-payroll-accounting-ff sample
   (includes optional first invoice).
 tags: [incorp, region:SG, jurisdiction:SG, Word, template]
 status: draft
@@ -14,14 +14,14 @@ catalog_filter:
   region: SG
   jurisdiction: SG
 default_layout: oneoff-recurring
-anchor_example: examples/incorp-sg-cs-tas-payroll-accounting-ff.md
+anchor_example: examples/incorp-sg-cs-tax-payroll-accounting-ff.md
 generated:
   by: human:qianping
   at: 2026-07-26T14:15:00Z
 sources:
   - id: anchor-example
-    resource: examples/incorp-sg-cs-tas-payroll-accounting-ff.md
-    title: Reference Proposal — CS / TAS / Payroll / Accounting (first invoice)
+    resource: examples/incorp-sg-cs-tax-payroll-accounting-ff.md
+    title: Reference Proposal — CS / Tax / Payroll / Accounting (first invoice)
 export:
   word:
     enabled: true
@@ -122,8 +122,10 @@ sections:
     kind: derived_section
     required: false
     default_enabled: false
+    block: blocks/incorp/shared/estimated-first-invoice-value.md
     derivation:
       type: first_invoice_from_fee_tables
+      computation: computations/first-invoice-from-fee-tables.md
       source_section: solution_and_fees
       tax:
         rate: 0.09
@@ -134,7 +136,7 @@ sections:
         fields: [preview_primary, scope_of_work_display, service_name, description, scope_of_work]
     agent_guidance: >
       Enable for first-invoice summary from solution_and_fees rows. Anchor sample
-      (incorp-sg-cs-tas-payroll-accounting-ff) places tbl[6] before T&C. Excludes
+      (incorp-sg-cs-tax-payroll-accounting-ff) places tbl[6] before T&C. Excludes
       ad-hoc services. One-off plus first recurring period only (not annualised).
 
   - id: terms
@@ -161,10 +163,11 @@ OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
 * [Scope of service](/blocks/incorp/regions/sg/scope-of-service.md)
 * [Solution and pricing intro](/blocks/incorp/regions/sg/solution-pricing-intro.md)
 * [Rikvin disclaimer](/blocks/incorp/regions/sg/rikvin-disclaimer.md) (optional)
+* [Estimated first invoice value](/blocks/incorp/shared/estimated-first-invoice-value.md) (optional) — [computation](/computations/first-invoice-from-fee-tables.md)
 * [Terms and conditions](/blocks/incorp/regions/sg/terms-incorp.md)
 * Fee layout: [oneoff-recurring](/layouts/oneoff-recurring.md)
 * Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)
-* Anchor lineage (§5.1): [CS / TAS / Payroll / Accounting + first invoice (SG)](/examples/incorp-sg-cs-tas-payroll-accounting-ff.md)
+* Anchor lineage (§5.1): [CS / Tax / Payroll / Accounting + first invoice (SG)](/examples/incorp-sg-cs-tax-payroll-accounting-ff.md)
 
 Immigration fees append optional `rikvin_disclaimer` block after EP modules (`append_after_fee_modules`).
 

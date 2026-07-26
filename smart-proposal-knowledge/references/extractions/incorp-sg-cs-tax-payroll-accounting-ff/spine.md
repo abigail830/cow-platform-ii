@@ -1,6 +1,6 @@
 ---
 type: Extraction Spine
-title: "Layer 1 spine — incorp-sg-cs-tas-payroll-accounting-ff"
+title: "Layer 1 spine — incorp-sg-cs-tax-payroll-accounting-ff"
 description: PII-redacted section index from office ingest (Layer 1 staging).
 status: draft
 generated:
@@ -8,16 +8,16 @@ generated:
   at: 2026-07-26T23:05:00Z
 sources:
   - id: reference-proposal
-    resource: examples/incorp-sg-cs-tas-payroll-accounting-ff.md
-    title: InCorp SG — CS / TAS / Payroll / Accounting (first invoice)
+    resource: examples/incorp-sg-cs-tax-payroll-accounting-ff.md
+    title: InCorp SG — CS / Tax / Payroll / Accounting (first invoice)
   - id: binary
-    resource: references/examples/incorp-sg-CS_TAS_Payroll_Accounting_ff.docx
+    resource: references/examples/incorp-sg-CS_Tax_Payroll_Accounting_ff.docx
     title: Original sample document
 ---
 
 # Spine (PII-redacted)
 
-Source: `incorp-sg-CS_TAS_Payroll_Accounting_ff.docx`
+Source: `incorp-sg-CS_Tax_Payroll_Accounting_ff.docx`
 
 ## Document stats
 
@@ -66,6 +66,8 @@ Maps to [oneoff-recurring](/layouts/oneoff-recurring.md).
 - Heading: `ESTIMATED FIRST INVOICE VALUE`
 - Placed **before** Formal Service Agreements cluster (after client-details block)
 - Line-item rollup table (28 rows) — validates template `first_invoice` derived section (`default_enabled: false`)
+- Block: [estimated-first-invoice-value](/blocks/incorp/shared/estimated-first-invoice-value.md)
+- Computation: [first-invoice-from-fee-tables](/computations/first-invoice-from-fee-tables.md)
 
 ## Notable footnotes (structure only)
 
@@ -76,4 +78,4 @@ Maps to [oneoff-recurring](/layouts/oneoff-recurring.md).
 ## Notes
 
 - No EP / incorporation fee table in anchor — use [Rikvin EP sample](/examples/incorp-sg-rikvin-employment-pass.md) for immigration modules
-- First invoice — **derived_section** in template, not a static block
+- First invoice — optional [shared block](/blocks/incorp/shared/estimated-first-invoice-value.md) + [attested computation](/computations/first-invoice-from-fee-tables.md); amounts materialized from fee tables

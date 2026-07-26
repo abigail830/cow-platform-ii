@@ -7,10 +7,10 @@ render: text
 status: draft
 generated:
   by: process:office-extract/v1
-  at: 2026-07-26T15:00:00Z
+  at: 2026-07-26T23:45:00Z
 sources:
   - id: extraction-text
-    resource: references/extractions/incorp-ph-cs/text.txt
+    resource: references/extractions/incorp-ph-cs-payroll-bookkeeping-ep/text.txt
     title: Layer 1 text extraction (lines 147–176)
 ---
 

@@ -94,6 +94,27 @@ sections:
       currency: HKD
       tables_heading: 服务费用提案
 
+  - id: first_invoice
+    title: Estimated first invoice value
+    kind: derived_section
+    required: false
+    default_enabled: false
+    block: blocks/incorp/shared/estimated-first-invoice-value.md
+    derivation:
+      type: first_invoice_from_fee_tables
+      computation: computations/first-invoice-from-fee-tables.md
+      source_section: solution_and_fees
+      tax:
+        rate: 0
+        label: Tax
+        rate_display: TBD
+      exclude:
+        pattern: '(?i)(?<![a-z-])ad[\s-]?hoc(?![a-z])'
+        fields: [preview_primary, scope_of_work_display, service_name, description, scope_of_work]
+    agent_guidance: >
+      Optional first-invoice rollup. HK fee layout is custom — map fee rows to
+      oneoff-recurring shape and set tax.rate before enabling (no HK anchor yet).
+
   - id: terms
     title: Terms and conditions
     kind: static_block
@@ -124,6 +145,7 @@ OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
 * [Listing services core team](/blocks/incorp/regions/hk/listing-core-team.md) (optional)
 * [Compliance and timeline](/blocks/incorp/regions/hk/compliance-and-timeline.md)
 * [Fee proposal intro](/blocks/incorp/regions/hk/fee-proposal-intro.md)
+* [Estimated first invoice value](/blocks/incorp/shared/estimated-first-invoice-value.md) (optional) — [computation](/computations/first-invoice-from-fee-tables.md)
 * [Terms and conditions](/blocks/incorp/regions/hk/terms-general.md)
 * [Scope of services (appendix)](/blocks/incorp/regions/hk/scope-of-services.md)
 * Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)

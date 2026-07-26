@@ -10,10 +10,10 @@ Primary spine per `template_id`. Template `anchor_example` points here.
 
 | Example | `template_id` | Notes |
 |---------|---------------|-------|
-| [CS / TAS / Payroll / Accounting + first invoice (SG)](incorp-sg-cs-tas-payroll-accounting-ff.md) | [`sg-incorp`](/templates/sg-incorp.md) | **Anchor** — optional estimated first invoice tbl[6] |
+| [CS / Tax / Payroll / Accounting + first invoice (SG)](incorp-sg-cs-tax-payroll-accounting-ff.md) | [`sg-incorp`](/templates/sg-incorp.md) | **Anchor** — optional estimated first invoice tbl[6] |
 | [Rikvin Employment Pass (SG)](incorp-sg-rikvin-employment-pass.md) | [`sg-incorp`](/templates/sg-incorp.md) | Immigration-only subset |
 | [Incorporation (AU)](incorp-au-incorporation.md) | [`au-advisory`](/templates/au-advisory.md) | |
-| [Corporate Secretarial (PH)](incorp-ph-cs.md) | [`ph-incorp`](/templates/ph-incorp.md) | |
+| [CS / Payroll / Bookkeeping / EP (PH)](incorp-ph-cs-payroll-bookkeeping-ep.md) | [`ph-incorp`](/templates/ph-incorp.md) | **Anchor** — multi-service + SERVICE SLAs + Total column |
 | [Corporate Secretarial (HK, zh-CN)](incorp-hk-cs-zh-cn.md) | [`hk-incorp`](/templates/hk-incorp.md) | `locale: zh-CN`; listed-co case context only |
 | [VN CS / Tax / Payroll / HR (PPT)](incorp-vn-cs-tax-payroll-tax-hr.md) | [`vn-incorp`](/templates/vn-incorp.md) | |
 | [BVI All Options](harneys-uk-bvi-all-options.md) | [`harneys-uk`](/templates/harneys-uk.md) | Entity jurisdiction BVI |

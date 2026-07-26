@@ -7,10 +7,10 @@ render: visual_pending
 status: draft
 generated:
   by: process:office-extract/v1
-  at: 2026-07-26T15:00:00Z
+  at: 2026-07-26T23:45:00Z
 sources:
   - id: extraction-spine
-    resource: references/extractions/incorp-ph-cs/spine.md
+    resource: references/extractions/incorp-ph-cs-payroll-bookkeeping-ep/spine.md
     title: Layer 1 spine extraction
 ---
 
@@ -23,4 +23,4 @@ sources:
 
 Image/table art only in anchor sample. Do not synthesize marketing copy.
 
-Source spine: [Layer 1 spine](/references/extractions/incorp-ph-cs/spine.md).
+Source spine: [Layer 1 spine](/references/extractions/incorp-ph-cs-payroll-bookkeeping-ep/spine.md).

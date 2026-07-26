@@ -39,4 +39,4 @@ Source: `incorp-ph-recruitment.docx`
 Recruitment fee % tables + guarantee/payment boilerplate. PHP.
 
 ## Distinct from
-incorp-ph-cs — no SERVICE SLAs; recruitment-specific T&Cs
+incorp-ph-cs-payroll-bookkeeping-ep — recruitment-specific T&Cs (no SERVICE SLAs / multi-service fee modules)

@@ -80,7 +80,7 @@ Record provenance in `sources`:
 ```yaml
 sources:
   - id: extraction-text
-    resource: references/extractions/incorp-sg-cs-tas-payroll-accounting-ff/text.txt
+    resource: references/extractions/incorp-sg-cs-tax-payroll-accounting-ff/text.txt
     title: Layer 1 text extraction (lines 85)
 ```
 
@@ -122,7 +122,7 @@ Authoritative example ↔ `template_id` map: [examples/index.md](../../../../sma
 
 | `template_id` | Anchor example (concept id) | Extraction slug |
 |---------------|----------------------------|-----------------|
-| `sg-incorp` | `examples/incorp-sg-cs-tas-payroll-accounting-ff` | `incorp-sg-cs-tas-payroll-accounting-ff` |
+| `sg-incorp` | `examples/incorp-sg-cs-tax-payroll-accounting-ff` | `incorp-sg-cs-tax-payroll-accounting-ff` |
 | `au-advisory` | `examples/incorp-au-incorporation` | `incorp-au-incorporation` |
 | `ph-incorp` | `examples/incorp-ph-cs` | `incorp-ph-cs` |
 | `vn-incorp` | `examples/incorp-vn-cs-tax-payroll-tax-hr` | `incorp-vn-cs-tax-payroll-tax-hr` |
