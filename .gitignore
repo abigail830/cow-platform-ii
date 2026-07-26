@@ -8,6 +8,7 @@
 .env.local
 .env.*.local
 !.env.example
+.env copy*
 
 # Python
 __pycache__/

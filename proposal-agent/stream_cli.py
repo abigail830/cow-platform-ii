@@ -1,32 +1,23 @@
 #!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#   "litellm>=1.55.0",
-#   "pyyaml>=6",
-#   "python-dotenv>=1.0.0",
-# ]
-# ///
 """Minimal streaming OKF consumer agent for smart-proposal-knowledge.
 
-Supports Azure OpenAI and Anthropic via LiteLLM env vars.
+Supports Azure OpenAI, OpenAI, and Anthropic (native SDKs — no LiteLLM).
 
 Examples:
-  uv run stream_cli.py "sg-incorp 有哪些 sections？"
-  uv run stream_cli.py --template ph-incorp "列出 fee 相关 computation"
+  cd proposal-agent && uv run stream_cli.py "sg-incorp 有哪些 sections？"
+  uv run stream_cli.py --template ph-incorp "Total 列用哪个 computation？"
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from litellm import completion
 
+from llm import resolve_backend
 from okf_bundle import OKFBundle
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -124,22 +115,6 @@ def run_tool(bundle: OKFBundle, name: str, args: dict) -> str:
         return json.dumps({"error": str(e)})
 
 
-def resolve_model(explicit: str | None) -> str:
-    if explicit:
-        return explicit
-    if os.getenv("AZURE_API_KEY") and os.getenv("AZURE_API_BASE"):
-        deployment = os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4o")
-        return f"azure/{deployment}"
-    if os.getenv("ANTHROPIC_API_KEY"):
-        return os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-    if os.getenv("OPENAI_API_KEY"):
-        return os.getenv("OPENAI_MODEL", "gpt-4o")
-    raise SystemExit(
-        "Set model credentials: AZURE_API_KEY+AZURE_API_BASE, or ANTHROPIC_API_KEY, or OPENAI_API_KEY. "
-        "See proposal-agent/.env.example"
-    )
-
-
 def main() -> None:
     load_dotenv(Path(__file__).parent / ".env")
     load_dotenv()
@@ -147,12 +122,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Streaming OKF proposal agent")
     parser.add_argument("prompt", nargs="?", default="Summarize how to compose sg-incorp from this bundle.")
     parser.add_argument("--bundle", type=Path, default=DEFAULT_BUNDLE, help="OKF bundle root (default: ../smart-proposal-knowledge)")
-    parser.add_argument("--model", help="LiteLLM model id, e.g. azure/my-gpt4o or claude-sonnet-4-20250514")
+    parser.add_argument("--provider", choices=["azure", "openai", "anthropic"], help="LLM provider (default: auto from .env)")
+    parser.add_argument("--model", help="Model or Azure deployment name")
     parser.add_argument("--template", help="Optional template_id hint injected into user message")
     args = parser.parse_args()
 
     bundle = OKFBundle(args.bundle)
-    model = resolve_model(args.model)
+    backend = resolve_backend(args.provider, args.model)
 
     user = args.prompt
     if args.template:
@@ -164,68 +140,39 @@ def main() -> None:
     ]
     tools = tool_specs()
 
+    print(f"[provider={backend.provider}]", file=sys.stderr)
+    if getattr(backend, "azure_endpoint", None):
+        print(f"[azure_endpoint={backend.azure_endpoint}]", file=sys.stderr)
+
     while True:
-        stream = completion(
-            model=model,
-            messages=messages,
-            tools=tools,
-            stream=True,
-            api_base=os.getenv("AZURE_API_BASE") or None,
-            api_version=os.getenv("AZURE_API_VERSION") or None,
-        )
+        def write_delta(piece: str) -> None:
+            sys.stdout.write(piece)
+            sys.stdout.flush()
 
-        tool_calls: dict[int, dict] = {}
-        finish_reason = None
-        assistant_text = ""
+        turn = backend.stream_turn(messages, tools, on_delta=write_delta)
 
-        for chunk in stream:
-            choice = chunk.choices[0]
-            finish_reason = choice.finish_reason or finish_reason
-            delta = choice.delta
-            if getattr(delta, "content", None):
-                piece = delta.content
-                assistant_text += piece
-                sys.stdout.write(piece)
-                sys.stdout.flush()
-            if getattr(delta, "tool_calls", None):
-                for tc in delta.tool_calls:
-                    idx = tc.index
-                    if idx not in tool_calls:
-                        tool_calls[idx] = {"id": "", "name": "", "arguments": ""}
-                    if tc.id:
-                        tool_calls[idx]["id"] = tc.id
-                    if tc.function and tc.function.name:
-                        tool_calls[idx]["name"] = tc.function.name
-                    if tc.function and tc.function.arguments:
-                        tool_calls[idx]["arguments"] += tc.function.arguments
-
-        if finish_reason != "tool_calls" or not tool_calls:
+        if not turn.tool_calls:
             sys.stdout.write("\n")
             break
 
         sys.stdout.write("\n")
-        assistant_msg: dict = {"role": "assistant", "content": assistant_text or None, "tool_calls": []}
-        for idx in sorted(tool_calls):
-            tc = tool_calls[idx]
-            assistant_msg["tool_calls"].append(
-                {
-                    "id": tc["id"],
-                    "type": "function",
-                    "function": {"name": tc["name"], "arguments": tc["arguments"]},
-                }
-            )
-        messages.append(assistant_msg)
+        messages.append(
+            {
+                "role": "assistant",
+                "content": turn.text or None,
+                "tool_calls": turn.tool_calls,
+            }
+        )
 
-        for idx in sorted(tool_calls):
-            tc = tool_calls[idx]
-            name = tc["name"]
-            raw_args = tc["arguments"] or "{}"
+        for tc in turn.tool_calls:
+            name = tc["function"]["name"]
+            raw_args = tc["function"].get("arguments") or "{}"
             try:
                 parsed = json.loads(raw_args)
             except json.JSONDecodeError:
                 parsed = {}
             result = run_tool(bundle, name, parsed)
-            print(f"\n[tool {name}]", file=sys.stderr)
+            print(f"[tool {name}]", file=sys.stderr)
             messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
 
 

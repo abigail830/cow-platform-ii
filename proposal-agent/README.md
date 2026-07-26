@@ -1,6 +1,6 @@
 # Proposal Agent
 
-OKF **consumer** for the [smart-proposal-knowledge](../smart-proposal-knowledge/) bundle — streaming CLI (LiteLLM → Azure OpenAI / Claude / OpenAI).
+OKF **consumer** for the [smart-proposal-knowledge](../smart-proposal-knowledge/) bundle — streaming CLI (Azure OpenAI / OpenAI / Anthropic native SDKs).
 
 Knowledge lives in the sibling bundle; this directory is the **runtime agent** only.
 
@@ -19,6 +19,7 @@ OKF/
 
 ```bash
 cd proposal-agent
+uv sync          # install deps (no Rust / LiteLLM)
 cp .env.example .env
 # 编辑 .env — 填入 Azure 或 Anthropic key
 
