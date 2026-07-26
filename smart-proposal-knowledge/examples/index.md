@@ -2,34 +2,39 @@
 
 [Reference Proposal](/meta/type-vocabulary.md) structural indexes — one concept per sample docx/pptx. No PII or fee figures in bodies.
 
-## InCorp SG (2026-07-26)
+Each sample is either a **template anchor** (generic spine for a [Proposal Template](/templates/index.md)) or a **special** variant (audit PPT, rates schedule, etc.).
 
-* Word — [CS + EP + Accounting / Payroll / Tax](incorp-sg-cs-ep-accounting-payroll-tax.md)
-* Word — [Rikvin Employment Pass](incorp-sg-rikvin-employment-pass.md)
-* PPT — [Internal Audit Services](incorp-sg-internal-audit.md)
+## Template anchors (generic)
 
-## InCorp AU
+| Example | → Template |
+|---------|------------|
+| [CS + EP + Accounting / Payroll / Tax (SG)](incorp-sg-cs-ep-accounting-payroll-tax.md) | `sg-incorp` — CS, EP, tax, accounting, payroll |
+| [Rikvin Employment Pass (SG)](incorp-sg-rikvin-employment-pass.md) | `sg-incorp` subset (immigration-only) |
+| [Incorporation (AU)](incorp-au-incorporation.md) | `au-advisory` |
+| [BVI All Options](harneys-uk-bvi-all-options.md) | `harneys-bvi` |
+| [Cayman All Options](harneys-uk-cayman-all-options.md) | `harneys-cayman` (~same spine as BVI) |
 
-* Word — [Incorporation](incorp-au-incorporation.md)
-* PPT — [Audit & Assurance](incorp-au-audit.md)
+## Special (own template)
 
-## InCorp PH
+| Example | → Template | Why special |
+|---------|------------|-------------|
+| [Internal Audit Services (SG PPT)](incorp-sg-internal-audit.md) | `sg-audit` | RA / audit deck, not Word proposal |
+| [Audit & Assurance (AU PPT)](incorp-au-audit.md) | `au-audit` | Audit deck |
+| [HK Incorporation Rates](harneys-hk-incorporation.md) | `harneys-hk` | Bilingual rates schedule — not UK options letter |
+
+## Unmapped (Phase 2+)
+
+### InCorp PH
 
 * Word — [Corporate Secretarial](incorp-ph-cs.md)
 * Word — [Recruitment & Executive Search](incorp-ph-recruitment.md)
 
-## InCorp HK / VN
+### InCorp HK / VN
 
 * Word — [Ascentium HK Listed Co CS (zh-CN)](incorp-hk-cs-zh-cn.md)
 * PPT — [VN CS / Tax / Payroll / HR](incorp-vn-cs-tax-payroll-tax-hr.md)
 * PPT — [VN Services Template (zh-CN)](incorp-vn-services-zh-cn.md)
 
-## Harneys
-
-* Word — [HK Incorporation Rates](harneys-hk-incorporation.md)
-* Word — [BVI All Options](harneys-uk-bvi-all-options.md)
-* Word — [Cayman All Options](harneys-uk-cayman-all-options.md)
-
 Originals: `references/examples/`. Layer 1 staging: `references/extractions/`.
 
-See [PII rules](/meta/type-vocabulary.md) and project skill `pii-and-extract-rules.md`.
+See [template catalog](/templates/index.md), [PII rules](/meta/type-vocabulary.md), and project skill `pii-and-extract-rules.md`.

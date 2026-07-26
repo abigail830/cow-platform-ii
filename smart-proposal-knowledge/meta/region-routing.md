@@ -33,8 +33,8 @@ sources:
 
 | Region | Default layout | Templates (planned) | Product catalog | Package catalog | Reference examples |
 |--------|----------------|---------------------|-----------------|-----------------|------------------|
-| SG | [oneoff-recurring](/layouts/oneoff-recurring.md) | sg-incorp, sp-flexible | [sg](/catalogs/products/sg.md) | [sg](/catalogs/packages/sg.md) | [incorp-sg-*](/examples/index.md) — immigration-only → [Rikvin](#rikvin--sg-immigration) |
-| AU | [multi-frequency](/layouts/multi-frequency.md) | au-advisory, sp-flexible | [au](/catalogs/products/au.md) | [au](/catalogs/packages/au.md) | incorp-au-* |
+| SG | [oneoff-recurring](/layouts/oneoff-recurring.md) | [sg-incorp](/templates/index.md#template-catalog) (+ `sg-audit` special) | [sg](/catalogs/products/sg.md) | [sg](/catalogs/packages/sg.md) | anchor: [cs-ep-accounting-payroll-tax](/examples/incorp-sg-cs-ep-accounting-payroll-tax.md); special: [internal-audit PPT](/examples/incorp-sg-internal-audit.md) |
+| AU | [multi-frequency](/layouts/multi-frequency.md) | [au-advisory](/templates/index.md#template-catalog) (+ `au-audit` special) | [au](/catalogs/products/au.md) | [au](/catalogs/packages/au.md) | anchor: [incorporation](/examples/incorp-au-incorporation.md); special: [audit PPT](/examples/incorp-au-audit.md) |
 | PH | [multi-frequency](/layouts/multi-frequency.md) | sp-flexible | [ph](/catalogs/products/ph.md) | [ph](/catalogs/packages/ph.md) | incorp-ph-* |
 | HK | TBD | sp-flexible | planned | planned | incorp-hk-cs-zh-cn |
 | VN | TBD | sp-flexible | planned | planned | incorp-vn-* |
@@ -57,7 +57,7 @@ Route here when `rikvin` is in tags, or scope is immigration-only — not the ge
 | Issuing region | SG (same office as InCorp SG) |
 | Entity jurisdiction | SG |
 | Default layout | [oneoff-recurring](/layouts/oneoff-recurring.md) |
-| Templates (planned) | sg-incorp / sp-flexible + Rikvin disclaimer blocks |
+| Templates (planned) | [sg-incorp](/templates/index.md#template-catalog) (+ Rikvin blocks; not separate template) |
 | Product catalog | [sg](/catalogs/products/sg.md) — immigration SKUs |
 | Package catalog | [sg](/catalogs/packages/sg.md) |
 | Reference examples | [incorp-sg-rikvin-employment-pass](/examples/incorp-sg-rikvin-employment-pass.md) |
@@ -73,11 +73,11 @@ Route here when `rikvin` is in tags, or scope is immigration-only — not the ge
 
 ## Harneys — issuing region × entity jurisdiction
 
-| Issuing region | Entity jurisdiction | Template (planned) | Reference examples |
-|----------------|---------------------|--------------------|--------------------|
-| UK | BVI | harneys-bvi | [harneys-uk-bvi-all-options](/examples/harneys-uk-bvi-all-options.md) |
-| UK | Cayman | harneys-cayman | [harneys-uk-cayman-all-options](/examples/harneys-uk-cayman-all-options.md) |
-| HK | HK | TBD | [harneys-hk-incorporation](/examples/harneys-hk-incorporation.md) |
+| Issuing region | Entity jurisdiction | Template | Reference examples |
+|----------------|---------------------|----------|-------------------|
+| UK | BVI | [harneys-bvi](/templates/index.md#template-catalog) | [harneys-uk-bvi-all-options](/examples/harneys-uk-bvi-all-options.md) |
+| UK | Cayman | [harneys-cayman](/templates/index.md#template-catalog) | [harneys-uk-cayman-all-options](/examples/harneys-uk-cayman-all-options.md) — ~same spine as BVI |
+| HK | HK | [harneys-hk](/templates/index.md#template-catalog) | [harneys-hk-incorporation](/examples/harneys-hk-incorporation.md) — own rates schedule |
 
 ## BU summary
 

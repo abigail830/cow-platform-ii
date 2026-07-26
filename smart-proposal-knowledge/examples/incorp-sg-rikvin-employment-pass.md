@@ -29,7 +29,7 @@ sources:
 
 ## Section spine
 
-Same SG Word envelope as [incorp-sg-cs-ep-accounting-payroll-tax](incorp-sg-cs-ep-accounting-payroll-tax.md) through credentials, then immigration-focused scope/fees.
+Same SG Word envelope as [incorp-sg-cs-ep-accounting-payroll-tax](incorp-sg-cs-ep-accounting-payroll-tax.md) through credentials — **subset** of [sg-incorp](/templates/index.md) template (immigration-only).
 
 ## Fee modules
 

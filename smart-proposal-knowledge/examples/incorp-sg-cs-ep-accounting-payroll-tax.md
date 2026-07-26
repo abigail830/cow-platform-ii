@@ -58,7 +58,7 @@ sources:
 ## Cross-links
 
 - Immigration fees → Rikvin disclaimer appears after EP table
-- Compare with [incorp-sg-rikvin-employment-pass](incorp-sg-rikvin-employment-pass.md) for immigration-only pattern
+- Compare with [incorp-sg-rikvin-employment-pass](incorp-sg-rikvin-employment-pass.md) for immigration-only subset of same [sg-incorp](/templates/sg-incorp.md) spine
 
 ## Section Block promotion notes
 

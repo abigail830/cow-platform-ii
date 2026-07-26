@@ -61,9 +61,10 @@ Payment schedule: 30% / 50% / balance on milestones. Year-on-year renewal. Exclu
 
 | Aspect | Word CS/EP samples | This deck |
 |--------|-------------------|-----------|
+| Template | [sg-incorp](/templates/index.md) | **sg-audit** |
 | Layout | `oneoff-recurring` 3-column fee tables | Year-based audit fee matrix |
 | Length | ~15 H1 sections | 60 slides |
-| Shell | In.Corp Word template | Standalone audit PPT |
+| Deliverable | Word | PPT |
 
 ## Section Block promotion notes
 

@@ -42,7 +42,7 @@ sources:
 
 ## Fee pattern
 
-USD blocks: incorporation one-off + annual maintenance + optional line items. Custom Harneys layout — links to [harneys-bvi](/templates/harneys-bvi.md) template (planned).
+USD blocks: incorporation one-off + annual maintenance + optional line items. Custom Harneys layout — [harneys-bvi](/templates/index.md) template (Phase 2).
 
 ## Section Block candidates
 

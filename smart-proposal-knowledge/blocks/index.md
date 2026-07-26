@@ -54,4 +54,18 @@ Audit / risk-assurance modules belong under the **issuing region**, e.g. `incorp
 
 ## Status
 
-*Phase 2 — migrate legacy `proposal-composer/.../blocks/` and promote candidates from [examples/](/examples/index.md).*
+### `incorp/regions/sg/` — [sg-incorp](/templates/sg-incorp.md)
+
+All prose extracted from [incorp-sg-cs-ep extraction](/references/extractions/incorp-sg-cs-ep-accounting-payroll-tax/text.txt) — **not** from legacy composer.
+
+| Block | `render` | Source in sample |
+|-------|----------|------------------|
+| [about-incorp](incorp/regions/sg/about-incorp.md) | text | Intro paragraphs only (lines 33–35) |
+| [credentials-visual](incorp/regions/sg/credentials-visual.md) | visual_pending | Snapshot / Locations / services map / accreditations — image-only |
+| [executive-summary](incorp/regions/sg/executive-summary.md) | text | Fee proposal letter (lines 69–81, PII → placeholders) |
+| [scope-of-service](incorp/regions/sg/scope-of-service.md) | text | Scope paragraph (line 85) |
+| [solution-pricing-intro](incorp/regions/sg/solution-pricing-intro.md) | text | Fees intro (line 90) |
+| [terms-incorp](incorp/regions/sg/terms-incorp.md) | text | T&C cluster (lines 127–144) |
+| [rikvin-disclaimer](incorp/regions/sg/rikvin-disclaimer.md) | text | After EP table (line 97) |
+
+Other regions and Harneys blocks: Phase 2 — promote from [examples](/examples/index.md).
