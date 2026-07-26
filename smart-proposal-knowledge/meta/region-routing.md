@@ -22,6 +22,8 @@ sources:
 
 **Region** = issuing office. **Layout** = fee-table shape ([catalog](/layouts/index.md)). Defaults are **per BU** (InCorp, Rikvin, Harneys) — not a single global region table.
 
+Example ↔ template mapping lives in [examples/index.md](/examples/index.md) only.
+
 ## Layout selection order
 
 1. Explicit user / agent request (any `layout_id` from [registry](/layouts/index.md))
@@ -31,17 +33,17 @@ sources:
 
 ## InCorp — by issuing region
 
-| Region | Default layout | Templates (planned) | Product catalog | Package catalog | Reference examples |
-|--------|----------------|---------------------|-----------------|-----------------|------------------|
-| SG | [oneoff-recurring](/layouts/oneoff-recurring.md) | [sg-incorp](/templates/index.md#template-catalog) (+ `sg-audit` special) | [sg](/catalogs/products/sg.md) | [sg](/catalogs/packages/sg.md) | anchor: [cs-ep-accounting-payroll-tax](/examples/incorp-sg-cs-ep-accounting-payroll-tax.md); special: [internal-audit PPT](/examples/incorp-sg-internal-audit.md) |
-| AU | [multi-frequency](/layouts/multi-frequency.md) | [au-advisory](/templates/index.md#template-catalog) (+ `au-audit` special) | [au](/catalogs/products/au.md) | [au](/catalogs/packages/au.md) | anchor: [incorporation](/examples/incorp-au-incorporation.md); special: [audit PPT](/examples/incorp-au-audit.md) |
-| PH | [multi-frequency](/layouts/multi-frequency.md) | sp-flexible | [ph](/catalogs/products/ph.md) | [ph](/catalogs/packages/ph.md) | incorp-ph-* |
-| HK | TBD | sp-flexible | planned | planned | incorp-hk-cs-zh-cn |
-| VN | TBD | sp-flexible | planned | planned | incorp-vn-* |
-| MY | [fee-billing](/layouts/fee-billing.md) | sp-flexible | [my](/catalogs/products/my.md) | [my](/catalogs/packages/my.md) | — |
-| ID | TBD | sp-flexible | planned | planned | — |
-| IN | TBD | sp-flexible | planned | planned | — |
-| CN | TBD | sp-flexible | planned | planned | — |
+| Region | Default layout | Default `template_id` | Product catalog | Package catalog |
+|--------|----------------|----------------------|-----------------|-----------------|
+| SG | [oneoff-recurring](/layouts/oneoff-recurring.md) | `sg-incorp` (+ `sg-audit` special) | [sg](/catalogs/products/sg.md) | [sg](/catalogs/packages/sg.md) |
+| AU | [multi-frequency](/layouts/multi-frequency.md) | `au-advisory` (+ `au-audit` special) | [au](/catalogs/products/au.md) | [au](/catalogs/packages/au.md) |
+| PH | [multi-frequency](/layouts/multi-frequency.md) | `ph-cs` (+ `ph-recruitment` special) | [ph](/catalogs/products/ph.md) | [ph](/catalogs/packages/ph.md) |
+| HK | TBD | `sp-flexible` | planned | planned |
+| VN | TBD | `vn-services` | planned | planned |
+| MY | [fee-billing](/layouts/fee-billing.md) | `sp-flexible` | [my](/catalogs/products/my.md) | [my](/catalogs/packages/my.md) |
+| ID | TBD | `sp-flexible` | planned | planned |
+| IN | TBD | `sp-flexible` | planned | planned |
+| CN | TBD | `sp-flexible` | planned | planned |
 
 Cells marked **planned** are filled in Phase 2+.
 
@@ -57,27 +59,26 @@ Route here when `rikvin` is in tags, or scope is immigration-only — not the ge
 | Issuing region | SG (same office as InCorp SG) |
 | Entity jurisdiction | SG |
 | Default layout | [oneoff-recurring](/layouts/oneoff-recurring.md) |
-| Templates (planned) | [sg-incorp](/templates/index.md#template-catalog) (+ Rikvin blocks; not separate template) |
+| Default `template_id` | `sg-incorp` (Rikvin blocks; not a separate template) |
 | Product catalog | [sg](/catalogs/products/sg.md) — immigration SKUs |
 | Package catalog | [sg](/catalogs/packages/sg.md) |
-| Reference examples | [incorp-sg-rikvin-employment-pass](/examples/incorp-sg-rikvin-employment-pass.md) |
 
 **Composition patterns**
 
-| Pattern | Example |
-|---------|---------|
+| Pattern | Notes |
+|---------|-------|
 | Standalone immigration proposal | Rikvin-branded fees + subsidiary disclaimer after each fee block |
-| EP module inside broader InCorp SG deck | [incorp-sg-cs-ep-accounting-payroll-tax](/examples/incorp-sg-cs-ep-accounting-payroll-tax.md) — CS/accounting + EP table + Rikvin disclaimer |
+| EP module inside broader InCorp SG deck | CS/accounting + EP table + Rikvin disclaimer on same `sg-incorp` spine |
 
-**Block candidates (Phase 2):** Rikvin disclaimer (UEN / EA licence) → `blocks/incorp/regions/sg/` or `blocks/incorp/shared/`.
+**Block candidates (Phase 2):** Rikvin disclaimer (UEN / EA licence) → `blocks/incorp/regions/sg/`.
 
 ## Harneys — issuing region × entity jurisdiction
 
-| Issuing region | Entity jurisdiction | Template | Reference examples |
-|----------------|---------------------|----------|-------------------|
-| UK | BVI | [harneys-bvi](/templates/index.md#template-catalog) | [harneys-uk-bvi-all-options](/examples/harneys-uk-bvi-all-options.md) |
-| UK | Cayman | [harneys-cayman](/templates/index.md#template-catalog) | [harneys-uk-cayman-all-options](/examples/harneys-uk-cayman-all-options.md) — ~same spine as BVI |
-| HK | HK | [harneys-hk](/templates/index.md#template-catalog) | [harneys-hk-incorporation](/examples/harneys-hk-incorporation.md) — own rates schedule |
+| Issuing region | Entity jurisdiction | `template_id` |
+|----------------|---------------------|---------------|
+| UK | BVI | `harneys-uk` |
+| UK | Cayman | `harneys-uk` |
+| HK | HK | `harneys-hk` |
 
 ## BU summary
 
@@ -93,4 +94,4 @@ Route here when `rikvin` is in tags, or scope is immigration-only — not the ge
 
 1. **Live** — [Data Adapter](/catalogs/adapters/) — MySQL per **issuing region**; PG MDM per **entity jurisdiction** (Harneys)
 2. **Seed** — `catalogs/products/{region}.md`
-3. **Structure only** — [Reference Proposal](/examples/index.md)
+3. **Structure only** — Reference Proposal concepts (`template_id` in frontmatter; catalog at [examples/index.md](/examples/index.md))

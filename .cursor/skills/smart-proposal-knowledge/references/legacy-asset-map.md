@@ -25,19 +25,21 @@ Base: `/Users/qianping/Documents/Source/ascentium/agent-platform/backend/agents/
 
 | Legacy path | OKF target |
 |-------------|------------|
-| `knowledge/templates/*/template.yaml` | `templates/{template_id}.md` |
-| `knowledge/templates/*/blocks/*.md` | `blocks/{template_id}/*.md` |
+| `knowledge/templates/*/template.yaml` | `templates/{template_id}.md` — **section IDs only**; prose from example `text.txt` |
+| `knowledge/templates/*/blocks/*.md` | **Do not copy verbatim** — use as dedup hint only; promote from [example extractions](../../../../smart-proposal-knowledge/references/extractions/) |
 | `knowledge/peripheral/required-docs/**/*.md` | `blocks/{scope}/*.md` (`Section Block` + `selection`) |
 | `skills/proposal-composer/references/required-docs-*-catalog.md` | `selection` on each block; compose in template |
 | `skills/proposal-composer/references/required-docs-compose.md` | `playbooks/required-docs-compose.md` |
 
 ## Region coverage (migration priority)
 
-| Region | Default layout | Catalog seeds | Reference samples |
-|--------|----------------|---------------|-------------------|
+See [examples/index.md](../../../../smart-proposal-knowledge/examples/index.md) for reference samples and `template_id` mapping. [region-routing.md](../../../../smart-proposal-knowledge/meta/region-routing.md) for default layout + template per BU/region.
+
+| Region | Default layout | Catalog seeds | Samples |
+|--------|----------------|---------------|---------|
 | MY | fee-billing | yes | — |
-| SG | oneoff-recurring | yes + live | 4 files |
-| PH | multi-frequency | yes | 2 docx |
-| AU | multi-frequency | placeholder | 2 files |
-| HK, VN | TBD | missing | samples only |
-| BVI, Cayman | fee-billing (or custom matrix) | MDM PG | harneys docx |
+| SG | oneoff-recurring | yes + live | examples index |
+| PH | multi-frequency | yes | examples index |
+| AU | multi-frequency | placeholder | examples index |
+| HK, VN | TBD | missing | examples index |
+| BVI, Cayman | custom (Harneys) | MDM PG | examples index |

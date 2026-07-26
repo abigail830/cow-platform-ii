@@ -6,6 +6,7 @@ description: >-
   for client, services, fees, and appendix tables. Shell-oriented sample.
 tags: [incorp, region:VN, jurisdiction:VN, PPT, zh-CN, template]
 status: draft
+template_id: vn-services
 resource: references/examples/incorp-vn-services.zh-CN.pptx
 generated:
   by: process:office-ingest/v1
@@ -50,7 +51,7 @@ sources:
 
 ## Role
 
-**Template / shell study** — not a filled reference proposal. Pair with [incorp-vn-cs-tax-payroll-tax-hr](incorp-vn-cs-tax-payroll-tax-hr.md) for concrete VN fee content.
+**Template / shell study** — not a filled reference proposal. Pair with the VN cs-tax-payroll anchor for concrete fee content.
 
 ## Language note
 

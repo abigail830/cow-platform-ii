@@ -28,4 +28,4 @@ Anchor sample H1 sections with **no extractable body text** (layout is image / t
 | 3 | Our Full Range of Corporate Services ACROSS ASIA PACIFIC |
 | 4 | Key Accreditations And Partners |
 
-Do not synthesize marketing copy for these pages. When assets are registered, link via `resource` on this concept or insert through [ascentium-word-shell](/brand/ascentium-word-shell.md) credentials zone.
+Do not synthesize marketing copy for these pages. When assets are registered, set `resource` on this concept or insert via the template `export` shell credentials zone.

@@ -6,6 +6,7 @@ description: >-
   with 3-year estimates, team bios, methodology, timeline, independence.
 tags: [incorp, region:AU, jurisdiction:AU, PPT, audit, assurance]
 status: draft
+template_id: au-audit
 resource: references/examples/incorp-au-audit.pptx
 generated:
   by: process:office-ingest/v1

@@ -6,6 +6,7 @@ description: >-
   for corporate services, accounting/tax, and HR/payroll modules.
 tags: [incorp, region:VN, jurisdiction:VN, PPT, corporate-services, tax, payroll, HR]
 status: draft
+template_id: vn-services
 resource: references/examples/incorp-vn-CS_TAX_PAYROLL_TAX_HR.pptx
 generated:
   by: process:office-ingest/v1
@@ -46,8 +47,8 @@ Three fee-schedule slides by service line. Supports ranges (`{{fee_amount}} – 
 
 ## Shell relationship
 
-Intro + sealed tail match [ascentium-pptx-shell](/brand/ascentium-pptx-shell.md) rhythm; content slides 6–9 are proposal-specific.
+Intro + sealed tail match Ascentium PPT shell rhythm; content slides 6–9 are proposal-specific.
 
-## Compare
+## zh-CN variant
 
-[incorp-vn-services-zh-cn](incorp-vn-services-zh-cn.md) — same structure but zh-CN with `[[placeholder]]` template rows instead of concrete fees.
+Same structure as unmapped zh-CN placeholder sample — `[[placeholder]]` template rows instead of concrete fees.

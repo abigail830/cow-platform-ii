@@ -1,71 +1,89 @@
 # Blocks
 
-All reusable proposal prose is **`Section Block`** — one type, optional `selection` for conditional chapters.
+Reusable proposal prose — **`Section Block`** concepts. Optional `selection` for conditional chapters. Promotion rules: [type-vocabulary](/meta/type-vocabulary.md).
 
-See [BU / region / jurisdiction](/meta/bu-region-jurisdiction.md) before choosing a path.
+## `incorp/regions/sg/`
 
-## Reference Proposal ≠ Section Block
+| Block | `render` |
+|-------|----------|
+| [about-incorp](incorp/regions/sg/about-incorp.md) | text |
+| [credentials-visual](incorp/regions/sg/credentials-visual.md) | visual_pending |
+| [executive-summary](incorp/regions/sg/executive-summary.md) | text |
+| [scope-of-service](incorp/regions/sg/scope-of-service.md) | text |
+| [solution-pricing-intro](incorp/regions/sg/solution-pricing-intro.md) | text |
+| [terms-incorp](incorp/regions/sg/terms-incorp.md) | text |
+| [rikvin-disclaimer](incorp/regions/sg/rikvin-disclaimer.md) | text |
 
-| Layer | What ingest produces | Contains prose? |
-|-------|---------------------|-----------------|
-| **Reference Proposal** (`examples/`) | Spine, fee shape, module list, **block candidates** | No — structure only |
-| **Section Block** (`blocks/`) | Placeholderized boilerplate ready for templates | Yes — client-facing copy |
+## `incorp/regions/au/`
 
-**Do not auto-extract blocks during reference ingest** — promote after dedup, placeholderize, and human `verified`. See promotion workflow in prior revision.
+| Block | `render` |
+|-------|----------|
+| [about-advisory](incorp/regions/au/about-advisory.md) | text |
+| [group-affiliation](incorp/regions/au/group-affiliation.md) | text |
+| [credentials-visual](incorp/regions/au/credentials-visual.md) | visual_pending |
+| [executive-summary](incorp/regions/au/executive-summary.md) | text |
+| [solution-pricing-intro](incorp/regions/au/solution-pricing-intro.md) | text |
+| [fee-summary-intro](incorp/regions/au/fee-summary-intro.md) | text |
+| [terms-appendix](incorp/regions/au/terms-appendix.md) | visual_pending |
 
-## Directory layout
+## `incorp/regions/ph/`
 
-Three levels under each **BU**:
+| Block | `render` |
+|-------|----------|
+| [about-incorp](incorp/regions/ph/about-incorp.md) | text |
+| [credentials-visual](incorp/regions/ph/credentials-visual.md) | visual_pending |
+| [executive-summary](incorp/regions/ph/executive-summary.md) | text |
+| [solution-pricing-intro](incorp/regions/ph/solution-pricing-intro.md) | text |
+| [service-slas-marker](incorp/regions/ph/service-slas-marker.md) | text |
+| [cs-scope](incorp/regions/ph/cs-scope.md) | text |
+| [cs-exclusions](incorp/regions/ph/cs-exclusions.md) | text |
+| [cs-service-terms](incorp/regions/ph/cs-service-terms.md) | text |
+| [indemnity](incorp/regions/ph/indemnity.md) | text |
+| [unified-terms](incorp/regions/ph/unified-terms.md) | text |
 
-```
-blocks/
-  incorp/
-    shared/                    # cross-region InCorp prose
-    regions/
-      sg/  au/  ph/  hk/  vn/  my/  id/  ...
-  harneys/
-    shared/                    # e.g. About Ascentium (fiduciary letters)
-    regions/
-      hk/  uk/                 # issuing office prose
-    jurisdictions/
-      bvi/  cayman/            # client domicile prose (UK region → BVI co)
-```
+## `incorp/regions/ph/recruitment/`
 
-| Path segment | Means | Example block |
-|--------------|-------|---------------|
-| `regions/{code}/` | Subsidiary that **sends** the proposal | `incorp/regions/au/payment-option-a.md` |
-| `jurisdictions/{code}/` | Where **client entity** is formed (mainly Harneys) | `harneys/jurisdictions/bvi/approved-manager-benefits.md` |
-| `shared/` | Same copy across regions/jurisdictions within BU | `incorp/shared/about-incorp.md` |
+| Block | `render` |
+|-------|----------|
+| [fee-proposal-letter](incorp/regions/ph/recruitment/fee-proposal-letter.md) | text |
+| [services-fees-intro](incorp/regions/ph/recruitment/services-fees-intro.md) | text |
+| [recruitment-fees-intro](incorp/regions/ph/recruitment/recruitment-fees-intro.md) | text |
+| [guarantee-period](incorp/regions/ph/recruitment/guarantee-period.md) | text |
+| [payment-terms](incorp/regions/ph/recruitment/payment-terms.md) | text |
+| [client-conforme](incorp/regions/ph/recruitment/client-conforme.md) | text |
+| [cdd-documents](incorp/regions/ph/recruitment/cdd-documents.md) | text |
+| [recruitment-terms](incorp/regions/ph/recruitment/recruitment-terms.md) | text |
 
-**Do not** put BVI/Cayman under `harneys/regions/` — those are **jurisdictions**, not operating regions.
+## `incorp/regions/vn/`
 
-Audit / risk-assurance modules belong under the **issuing region**, e.g. `incorp/regions/sg/internal-audit-methodology.md`, not a top-level `audit/` tree.
+| Block | `render` |
+|-------|----------|
+| [brand-intro-visual](incorp/regions/vn/brand-intro-visual.md) | visual_pending |
+| [fee-schedule-intro](incorp/regions/vn/fee-schedule-intro.md) | text |
+| [sealed-tail-visual](incorp/regions/vn/sealed-tail-visual.md) | visual_pending |
 
-## Promotion sources
+## `harneys/shared/`
 
-| Example pattern | Block target |
-|-----------------|--------------|
-| `incorp-sg-*` | `incorp/regions/sg/` or `incorp/shared/` |
-| `incorp-au-*` | `incorp/regions/au/` |
-| `harneys-uk-BVI_*` | `harneys/jurisdictions/bvi/` (+ `harneys/regions/uk/` for letter chrome) |
-| `harneys-hk-*` | `harneys/regions/hk/` |
+| Block |
+|-------|
+| [about-ascentium](harneys/shared/about-ascentium.md), [introduction-letter](harneys/shared/introduction-letter.md), [service-capabilities](harneys/shared/service-capabilities.md), [closing-general](harneys/shared/closing-general.md) |
 
-**Templates** (`templates/`) reference block paths; they declare both `region` and `jurisdiction` where applicable.
+## `harneys/jurisdictions/bvi/`
 
-## Status
+| Block |
+|-------|
+| [services-requested](harneys/jurisdictions/bvi/services-requested.md), [approved-manager-regime](harneys/jurisdictions/bvi/approved-manager-regime.md), [adhoc-excluded-services](harneys/jurisdictions/bvi/adhoc-excluded-services.md) |
 
-### `incorp/regions/sg/` — [sg-incorp](/templates/sg-incorp.md)
+## `harneys/jurisdictions/cayman/`
 
-All prose extracted from [incorp-sg-cs-ep extraction](/references/extractions/incorp-sg-cs-ep-accounting-payroll-tax/text.txt) — **not** from legacy composer.
+| Block |
+|-------|
+| [services-requested](harneys/jurisdictions/cayman/services-requested.md), [market-narrative](harneys/jurisdictions/cayman/market-narrative.md) |
 
-| Block | `render` | Source in sample |
-|-------|----------|------------------|
-| [about-incorp](incorp/regions/sg/about-incorp.md) | text | Intro paragraphs only (lines 33–35) |
-| [credentials-visual](incorp/regions/sg/credentials-visual.md) | visual_pending | Snapshot / Locations / services map / accreditations — image-only |
-| [executive-summary](incorp/regions/sg/executive-summary.md) | text | Fee proposal letter (lines 69–81, PII → placeholders) |
-| [scope-of-service](incorp/regions/sg/scope-of-service.md) | text | Scope paragraph (line 85) |
-| [solution-pricing-intro](incorp/regions/sg/solution-pricing-intro.md) | text | Fees intro (line 90) |
-| [terms-incorp](incorp/regions/sg/terms-incorp.md) | text | T&C cluster (lines 127–144) |
-| [rikvin-disclaimer](incorp/regions/sg/rikvin-disclaimer.md) | text | After EP table (line 97) |
+## `harneys/regions/hk/`
 
-Other regions and Harneys blocks: Phase 2 — promote from [examples](/examples/index.md).
+| Block | `render` |
+|-------|----------|
+| [rates-schedule-header](harneys/regions/hk/rates-schedule-header.md) | text |
+| [rates-schedule-table](harneys/regions/hk/rates-schedule-table.md) | visual_pending |
+| [rates-footnotes](harneys/regions/hk/rates-footnotes.md) | text |

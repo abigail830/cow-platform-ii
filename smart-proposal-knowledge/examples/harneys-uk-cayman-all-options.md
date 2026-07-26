@@ -6,6 +6,7 @@ description: >-
   annual fees, and optional items. Fund & fiduciary format.
 tags: [harneys, region:UK, jurisdiction:Cayman, Word, incorporation, foundation, fund-admin]
 status: draft
+template_id: harneys-uk
 resource: references/examples/harneys-uk-CAYMAN_All_Options.docx
 generated:
   by: process:office-ingest/v1
@@ -42,7 +43,7 @@ USD multi-product blocks. Fund administration annual fee matrix (year × descrip
 
 ## Distinction from BVI sample
 
-Adds **foundation** and **regulated fund transfer** modules absent in [harneys-uk-bvi-all-options](harneys-uk-bvi-all-options.md).
+Adds **foundation** and **regulated fund transfer** modules absent in the BVI anchor sample.
 
 ## Section Block candidates
 

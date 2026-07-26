@@ -6,6 +6,7 @@ description: >-
   and dual payment options (progressive billing vs tax monthly retainer).
 tags: [incorp, region:AU, jurisdiction:AU, Word, incorporation]
 status: draft
+template_id: au-advisory
 resource: references/examples/incorp-au-Incorporation.docx
 generated:
   by: process:office-ingest/v1
@@ -46,7 +47,7 @@ sources:
 
 ## Layout
 
-Maps to [multi-frequency](/layouts/multi-frequency.md).
+Maps to layout `multi-frequency`.
 
 ## Section Block candidates
 

@@ -3,10 +3,9 @@ name: smart-proposal-knowledge
 description: >-
   Smart Proposal OKF bundle domain rules for Ascentium multi-region proposals.
   Use when building or enriching the smart-proposal-knowledge bundle, importing
-  Word/PPT reference proposals or brand shells, migrating legacy axon-flow or
-  agent-platform assets, or applying PII redaction and type routing for proposal
-  concepts. Pair with the okf and docx skills — this skill adds domain vocabulary
-  only; OKF authoring uses okf skill, Office parsing uses docx skill.
+  Word/PPT reference proposals or brand shells, promoting Section Blocks from
+  example extractions, wiring Proposal Templates, or applying PII redaction.
+  Pair with okf and docx skills — domain vocabulary only.
 ---
 
 # Smart Proposal Knowledge
@@ -24,23 +23,34 @@ Domain layer for the `smart-proposal-knowledge/` OKF bundle in this repo. Spec: 
 
 | Reference | Use when |
 |-----------|----------|
+| [linking-policy.md](references/linking-policy.md) | **Creating/editing any concept** — avoid duplicate edges |
+| [example-to-block-pipeline.md](references/example-to-block-pipeline.md) | **Promoting blocks or templates from reference examples** |
+| [pii-and-extract-rules.md](references/pii-and-extract-rules.md) | Layer 1 staging, PII, text vs visual sections |
+| [ingest-routing.md](references/ingest-routing.md) | Routing inbox files → concept type |
 | [type-vocabulary.md](references/type-vocabulary.md) | Choosing `type`, tags, or concept paths |
-| [pii-and-extract-rules.md](references/pii-and-extract-rules.md) | Importing from reference docx/pptx |
-| [ingest-routing.md](references/ingest-routing.md) | Routing a source file to OKF concept type |
-| [legacy-asset-map.md](references/legacy-asset-map.md) | Migrating from axon-flow or agent-platform |
+| [legacy-asset-map.md](references/legacy-asset-map.md) | High-level migration map only — **not** block body source |
 
-## Two-layer import workflow
+## Knowledge pipeline (three layers)
 
-1. **Layer 1** — `docx` skill (or OfficeCLI `view outline` / `view text`): extract outline, tables, sections → `smart-proposal-knowledge/references/extractions/{hash}/`. Apply PII rules before staging.
-2. **Layer 2** — `okf` skill: `/okf export` or `/okf enrich` staging → concepts under `smart-proposal-knowledge/`. Run `okf-validate.mjs --strict` when available.
-3. **Review** — pipeline output defaults to `status: draft`; add `verified: human:<id>` before `stable`.
+1. **Layer 1 — Extract** — `docx` / officecli → `references/extractions/{slug}/` (`outline.json`, `text.txt`, `tables.json`, `spine.md`). PII-redact staging.
+2. **Layer 2a — Index** — `examples/{name}.md` (`Reference Proposal`): spine, fee pattern, block **candidates** — **no prose paste**. Set `template_id` when mapped; catalog in `examples/index.md` only.
+3. **Layer 2b — Contract** — `templates/{template_id}.md` (`Proposal Template`): `sections[]`, layout, export shell — `anchor_example` in frontmatter only (no spine table in body).
+4. **Layer 2c — Blocks** — `blocks/{bu}/regions/{region}/*.md` (`Section Block`): body **only** from Layer 1 `text.txt` (or `visual_pending` if image-only). Wire via template `sections[].block`.
 
-## Bundle root
+Load [linking-policy.md](references/linking-policy.md) before editing indexes or concept cross-references. Load [example-to-block-pipeline.md](references/example-to-block-pipeline.md) before creating Section Blocks.
 
-All concepts live under `smart-proposal-knowledge/` relative to repo root. Binary originals under `smart-proposal-knowledge/references/`; concepts link via `resource` and `sources`.
+## Bundle boundary
+
+- All concept `sources` and `resource` paths MUST stay inside `smart-proposal-knowledge/`.
+- Never cite `proposal-composer`, `axon-flow`, or other repos as block body provenance.
+- Legacy YAML/markdown informs **template section IDs** only after anchor example confirms the same spine.
 
 ## Do not
 
-- Copy client names, dates, fee figures, or PII from reference proposals into concept bodies.
+- Copy client names, dates, fee figures, or PII into concept bodies.
+- Promote Section Block prose from legacy composer `blocks/*.md` — use example `text.txt` only.
+- Synthesize marketing copy for image-only credentials pages — use `render: visual_pending`.
 - Treat brand shells as reference proposals (different `type` and extract path).
+- Mark block/template work complete without line-level extraction provenance.
 - Re-implement OKF validation — use the `okf` skill's validator.
+- Duplicate relationships in markdown links when frontmatter or an index already declares them — see [linking-policy.md](references/linking-policy.md).

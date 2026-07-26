@@ -6,6 +6,7 @@ description: >-
   client conforme, CDD document list, and extensive recruitment T&Cs.
 tags: [incorp, region:PH, jurisdiction:PH, Word, recruitment, executive-search]
 status: draft
+template_id: ph-recruitment
 resource: references/examples/incorp-ph-recruitment.docx
 generated:
   by: process:office-ingest/v1
@@ -50,8 +51,8 @@ sources:
 
 ## Fee pattern
 
-Recruitment fee percentage tables — not standard quotation layout.
+Recruitment fee percentage tables — layout `custom`, not catalog quotation layouts.
 
-## Distinct from
+## Distinct from `ph-cs`
 
-[incorp-ph-cs](incorp-ph-cs.md) — no SERVICE SLAs; recruitment legal framework instead.
+No SERVICE SLAs or CS scope modules — recruitment legal framework and ITS-specific guarantee / conforme / CDD instead.

@@ -6,6 +6,7 @@ description: >-
   Matrix-style fee tables — not a standard proposal letter.
 tags: [harneys, region:HK, jurisdiction:HK, Word, bilingual, rates-schedule]
 status: draft
+template_id: harneys-hk
 resource: references/examples/harneys-hk-Incorporation.docx
 generated:
   by: process:office-ingest/v1
@@ -38,7 +39,7 @@ sources:
 
 ## Fee pattern
 
-Multi-column **rates matrix** — not [oneoff-recurring](/layouts/oneoff-recurring.md) or standard 3-column quotation layout.
+Multi-column **rates matrix** — not `oneoff-recurring` or standard 3-column quotation layout.
 
 ## Notes
 

@@ -6,6 +6,7 @@ description: >-
   exclusions, and extended legal terms (indemnity, data privacy, freezework).
 tags: [incorp, region:PH, jurisdiction:PH, Word, company-secretary, SLA]
 status: draft
+template_id: ph-cs
 resource: references/examples/incorp-ph-CS.docx
 generated:
   by: process:office-ingest/v1
@@ -48,8 +49,8 @@ sources:
 
 ## Layout
 
-Maps to [multi-frequency](/layouts/multi-frequency.md).
+Maps to layout `multi-frequency`.
 
 ## Compare
 
-[incorp-ph-recruitment](incorp-ph-recruitment.md) shares PH credentials front-matter but replaces CS/SLA with recruitment T&Cs.
+Shares PH credentials front-matter with recruitment sample but replaces CS/SLA with recruitment T&Cs.

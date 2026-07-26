@@ -58,12 +58,6 @@ Optional section-level **Total** toggle (`data.show_total`).
 }
 ```
 
-## Common in reference samples
-
-- [incorp-ph-cs](/examples/incorp-ph-cs.md)
-- [incorp-ph-recruitment](/examples/incorp-ph-recruitment.md)
-- [incorp-au-incorporation](/examples/incorp-au-incorporation.md)
-
 ## Related layouts
 
 - [oneoff-recurring](/layouts/oneoff-recurring.md)

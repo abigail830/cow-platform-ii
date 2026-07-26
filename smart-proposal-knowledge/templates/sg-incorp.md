@@ -145,25 +145,11 @@ sections:
 
 # Template: `sg-incorp`
 
-Generic **InCorp SG Word** proposal. One template for CS, EP, tax, accounting, payroll, and combined packages — fee modules stack under `solution_and_fees`; layout stays [oneoff-recurring](/layouts/oneoff-recurring.md).
+Generic **InCorp SG Word** proposal — CS, EP, tax, accounting, payroll; fee modules stack under `solution_and_fees`; layout `oneoff-recurring`. Section spine and block refs are in frontmatter `sections[]`.
 
-**Not** for RA / internal audit — use `sg-audit` ([incorp-sg-internal-audit](/examples/incorp-sg-internal-audit.md)).
+**Not** for RA / internal audit — use `sg-audit`.
 
-## Anchor example
-
-Structural fallback: [incorp-sg-cs-ep-accounting-payroll-tax](/examples/incorp-sg-cs-ep-accounting-payroll-tax.md).
-
-| Anchor spine | Template section | Block |
-|--------------|------------------|-------|
-| Cover + TOC | export shell | [ascentium-word-shell](/brand/ascentium-word-shell.md) |
-| About In.Corp (intro text) | `about_incorp` | [about-incorp](/blocks/incorp/regions/sg/about-incorp.md) |
-| Snapshot → Accreditations (images) | `credentials_visual` | [credentials-visual](/blocks/incorp/regions/sg/credentials-visual.md) |
-| Fee Proposal letter | `executive_summary` | [executive-summary](/blocks/incorp/regions/sg/executive-summary.md) |
-| Scope of Services | `scope_of_service` | [scope-of-service](/blocks/incorp/regions/sg/scope-of-service.md) |
-| Fees — CS / EP / compliance / other | `solution_and_fees` | [solution-pricing-intro](/blocks/incorp/regions/sg/solution-pricing-intro.md) + fee tables |
-| Terms & Conditions | `terms` | [terms-incorp](/blocks/incorp/regions/sg/terms-incorp.md) |
-
-Immigration fees append [rikvin-disclaimer](/blocks/incorp/regions/sg/rikvin-disclaimer.md) after EP modules — see [incorp-sg-rikvin-employment-pass](/examples/incorp-sg-rikvin-employment-pass.md).
+Immigration fees append optional `rikvin_disclaimer` block after EP modules (`append_after_fee_modules`).
 
 ## Fee modules (typical)
 
@@ -176,10 +162,4 @@ Immigration fees append [rikvin-disclaimer](/blocks/incorp/regions/sg/rikvin-dis
 
 ## Catalog & routing
 
-- Products: [catalogs/products/sg.md](/catalogs/products/sg.md) (Phase 2)
-- Packages: [catalogs/packages/sg.md](/catalogs/packages/sg.md) (Phase 2)
-- Region default: [region-routing](/meta/region-routing.md#incorp--by-issuing-region)
-
-## Export
-
-New deliverables use [ascentium-word-shell](/brand/ascentium-word-shell.md). Body sections insert before shell back-cover anchor (`202EA4F9`).
+Products and packages catalogs are Phase 2 (`catalogs/products/sg.md`, `catalogs/packages/sg.md`). Region default: [region-routing](/meta/region-routing.md#incorp--by-issuing-region).

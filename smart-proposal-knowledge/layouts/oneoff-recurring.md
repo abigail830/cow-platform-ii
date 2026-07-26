@@ -61,11 +61,6 @@ Currency is per row/region (SGD, USD, …) — not fixed by layout.
 | `one_off_*` | `fees.one_off` |
 | `recurring_*` + period | `fees.recurring` |
 
-## Common in reference samples
-
-- [incorp-sg-cs-ep-accounting-payroll-tax](/examples/incorp-sg-cs-ep-accounting-payroll-tax.md)
-- [incorp-sg-rikvin-employment-pass](/examples/incorp-sg-rikvin-employment-pass.md)
-
 ## Related layouts
 
 - [multi-frequency](/layouts/multi-frequency.md) — multiple billing period columns

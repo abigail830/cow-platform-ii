@@ -91,13 +91,23 @@ Consumer resolves: load all `Section Block` concepts with `compose_group: harney
 
 Path pattern: `blocks/{bu}/regions/{region}/` or `blocks/{bu}/jurisdictions/{jurisdiction}/` — see [bu-region-jurisdiction.md](/meta/bu-region-jurisdiction.md).
 
+### Section Block `render`
+
+| Value | Body source |
+|-------|-------------|
+| `text` | `references/extractions/{slug}/text.txt` — placeholderize PII |
+| `visual_pending` | Image-only in sample — spine in body, no synthesized prose |
+| `visual_asset` | `resource: references/ux/...` when registered |
+
+Promotion workflow: extract from `references/extractions/{slug}/text.txt` per bundle conventions. Pilot path: `blocks/incorp/regions/sg/`.
+
 ## Legacy mapping
 
 | agent-platform | OKF (unified) |
 |----------------|---------------|
 | `blocks/introduction-bvi.md` | `Section Block` — no `selection` |
 | `knowledge.category: harneys` + catalog + `peripheral/required-docs/harneys/*.md` | Multiple `Section Block` under `blocks/harneys/` each with `selection` + shared `compose_group` |
-| `required-docs-harneys-catalog.md` | **Dissolved** — rules move onto each block's `selection`; compose list lives in [Proposal Template](/templates/harneys-bvi.md) |
+| `required-docs-harneys-catalog.md` | **Dissolved** — rules move onto each block's `selection`; compose list lives in Proposal Template `harneys-uk` |
 
 ## Removed types (do not use)
 
@@ -111,6 +121,15 @@ Path pattern: `blocks/{bu}/regions/{region}/` or `blocks/{bu}/jurisdictions/{jur
 ## Recommended frontmatter (v0.2)
 
 Beyond `type`, set when known: `title`, `description`, `tags`, `resource`, `sources`, `status`, `generated`, `verified`, `stale_after`.
+
+### Routing fields (do not duplicate in markdown links)
+
+| Concept | Field | Authoritative catalog |
+|---------|-------|----------------------|
+| `Reference Proposal` | `template_id` | [examples/index.md](/examples/index.md) |
+| `Proposal Template` | `template_id`, `anchor_example`, `sections[]` | [templates/index.md](/templates/index.md) |
+
+Each relationship is declared once — see project skill `linking-policy.md` under `.cursor/skills/smart-proposal-knowledge/references/`.
 
 ## Region tags
 

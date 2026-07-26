@@ -6,6 +6,7 @@ description: >-
   and annual compliance (accounting/tax/payroll). Structural index only.
 tags: [incorp, region:SG, jurisdiction:SG, Word, incorporation, employment-pass, accounting, payroll, tax]
 status: draft
+template_id: sg-incorp
 resource: references/examples/incorp-sg-CS_EP_Accounting_Payroll_TAX.docx
 generated:
   by: process:office-ingest/v1
@@ -40,7 +41,7 @@ sources:
 
 | Module | Table | Rows | Layout |
 |--------|-------|------|--------|
-| Corporate Secretarial / Incorporation | tbl[4] | 6 | [oneoff-recurring](/layouts/oneoff-recurring.md) |
+| Corporate Secretarial / Incorporation | tbl[4] | 6 | `oneoff-recurring` |
 | Employment Pass Application | tbl[5] | 3 | `oneoff-recurring` |
 | Annual Compliance — Accounting/Tax/Payroll | tbl[6] | 8 | `oneoff-recurring` |
 | Other Services | tbl[7] | 2 | `oneoff-recurring` |
@@ -54,11 +55,6 @@ sources:
 - Transaction-volume-based bookkeeping estimate (*)
 - Audit / consolidation surcharge clause (**)
 - Conditional XBRL filing block (#)
-
-## Cross-links
-
-- Immigration fees → Rikvin disclaimer appears after EP table
-- Compare with [incorp-sg-rikvin-employment-pass](incorp-sg-rikvin-employment-pass.md) for immigration-only subset of same [sg-incorp](/templates/sg-incorp.md) spine
 
 ## Section Block promotion notes
 

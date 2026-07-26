@@ -6,6 +6,7 @@ description: >-
   education verification). Structural index only.
 tags: [incorp, region:SG, jurisdiction:SG, Word, rikvin, employment-pass, immigration]
 status: draft
+template_id: sg-incorp
 resource: references/examples/incorp-sg-rikvin-Employment_Pass_Application.docx
 generated:
   by: process:office-ingest/v1
@@ -29,7 +30,7 @@ sources:
 
 ## Section spine
 
-Same SG Word envelope as [incorp-sg-cs-ep-accounting-payroll-tax](incorp-sg-cs-ep-accounting-payroll-tax.md) through credentials — **subset** of [sg-incorp](/templates/index.md) template (immigration-only).
+Same SG Word envelope through credentials as the cs-ep anchor sample — **immigration-only subset**.
 
 ## Fee modules
 
@@ -43,7 +44,7 @@ Same SG Word envelope as [incorp-sg-cs-ep-accounting-payroll-tax](incorp-sg-cs-e
 
 `Services` | `One-off Fee (SGD)` | `Recurring Fee (SGD)` — per-application one-off, recurring usually `-`.
 
-Maps to [oneoff-recurring](/layouts/oneoff-recurring.md).
+Maps to layout `oneoff-recurring`.
 
 ## Rikvin disclaimer pattern
 

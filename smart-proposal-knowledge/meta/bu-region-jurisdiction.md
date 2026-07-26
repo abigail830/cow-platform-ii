@@ -41,7 +41,7 @@ Scenario: PRC client → BVI holdco (tax) + SG/HK opco + VN factory.
 | Layer | Values | Proposal handling |
 |-------|--------|-------------------|
 | Client domicile | CN | Deal context only; do not copy PII into concepts |
-| Entity 1 — holdco | `entity_jurisdiction: BVI` | Harneys UK letter → [harneys-uk-bvi-all-options](/examples/harneys-uk-bvi-all-options.md) |
+| Entity 1 — holdco | `entity_jurisdiction: BVI` | Harneys UK letter — `template_id: harneys-uk` |
 | Entity 2 — trading | `entity_jurisdiction: SG` or `HK` | InCorp `region:SG` or `region:HK` proposal |
 | Entity 3 — factory | `entity_jurisdiction: VN` | InCorp `region:VN` — CS / tax / payroll / HR |
 | **Engagement** | `{BVI, SG, VN}` | **3 documents** or 1 master doc with 3 scoped fee modules |

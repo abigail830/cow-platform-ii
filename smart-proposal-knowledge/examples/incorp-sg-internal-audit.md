@@ -6,6 +6,7 @@ description: >-
   methodology, deliverables, and multi-year professional fees. Structural index only.
 tags: [incorp, region:SG, jurisdiction:SG, PPT, internal-audit, risk-assurance]
 status: draft
+template_id: sg-audit
 resource: references/examples/incorp-sg-InternalAudit.pptx
 generated:
   by: process:office-ingest/v1
@@ -61,7 +62,7 @@ Payment schedule: 30% / 50% / balance on milestones. Year-on-year renewal. Exclu
 
 | Aspect | Word CS/EP samples | This deck |
 |--------|-------------------|-----------|
-| Template | [sg-incorp](/templates/index.md) | **sg-audit** |
+| `template_id` | `sg-incorp` | `sg-audit` |
 | Layout | `oneoff-recurring` 3-column fee tables | Year-based audit fee matrix |
 | Length | ~15 H1 sections | 60 slides |
 | Deliverable | Word | PPT |

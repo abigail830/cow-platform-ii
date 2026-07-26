@@ -6,6 +6,7 @@ description: >-
   director services, and optional annual items. Harneys/Ascentium fiduciary format.
 tags: [harneys, region:UK, jurisdiction:BVI, Word, incorporation, approved-manager, compliance]
 status: draft
+template_id: harneys-uk
 resource: references/examples/harneys-uk-BVI_All_Options.docx
 generated:
   by: process:office-ingest/v1
@@ -42,7 +43,7 @@ sources:
 
 ## Fee pattern
 
-USD blocks: incorporation one-off + annual maintenance + optional line items. Custom Harneys layout — [harneys-bvi](/templates/index.md) template (Phase 2).
+USD blocks: incorporation one-off + annual maintenance + optional line items. Custom Harneys layout (not catalog SKU layouts).
 
 ## Section Block candidates
 
