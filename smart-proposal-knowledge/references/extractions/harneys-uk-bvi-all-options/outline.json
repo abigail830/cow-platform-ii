@@ -1,0 +1,94 @@
+{
+  "success": true,
+  "data": {
+    "fileName": "harneys-uk-BVI_All_Options.docx",
+    "paragraphs": 166,
+    "tables": 11,
+    "images": 17,
+    "equations": 0,
+    "footers": [
+      "[PAGE]",
+      "[PAGE]"
+    ],
+    "headings": [
+      {
+        "line": 4,
+        "text": "{. . .}",
+        "style": "Title",
+        "level": 0
+      },
+      {
+        "line": 5,
+        "text": "24 June 2026",
+        "style": "Title",
+        "level": 0
+      },
+      {
+        "line": 66,
+        "text": "Key benefits include:",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 87,
+        "text": "Company formation",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 90,
+        "text": "Registered agent/ registered office",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 93,
+        "text": "Compliance solutions",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 95,
+        "text": "AEOI compliance services",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 100,
+        "text": "Approved Manager: incorporation and annual fees* of a BVI Business Company Limited by Shares ",
+        "style": "Heading",
+        "level": 1
+      },
+      {
+        "line": 105,
+        "text": "Optional Items",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 106,
+        "text": "Annual fees ",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 146,
+        "text": "What we will need from you",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 149,
+        "text": "General",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 155,
+        "text": "Joe Cheung",
+        "style": "Heading",
+        "level": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,289 @@
+{
+  "success": true,
+  "data": {
+    "matches": 6,
+    "results": [
+      {
+        "path": "/body/tbl[1]",
+        "type": "table",
+        "childCount": 2,
+        "format": {
+          "cols": "9",
+          "rows": "2",
+          "_gridCols": "9",
+          "style": "TableGrid",
+          "border.top": "none",
+          "border.top.sz": 0,
+          "border.top.color": "auto",
+          "border.top.space": 0,
+          "border.bottom": "none",
+          "border.bottom.sz": 0,
+          "border.bottom.color": "auto",
+          "border.bottom.space": 0,
+          "border.insideH": "none",
+          "border.insideH.sz": 0,
+          "border.insideH.color": "auto",
+          "border.insideH.space": 0,
+          "border.insideV": "none",
+          "border.insideV.sz": 0,
+          "border.insideV.color": "auto",
+          "border.insideV.space": 0,
+          "border.left": "none",
+          "border.left.sz": 0,
+          "border.left.color": "auto",
+          "border.left.space": 0,
+          "border.right": "none",
+          "border.right.sz": 0,
+          "border.right.color": "auto",
+          "border.right.space": 0,
+          "width": "10749",
+          "align": "center",
+          "tblLook": "04A0",
+          "firstRow": true,
+          "firstCol": true,
+          "bandedRows": true,
+          "colWidths": "993dxa,1377dxa,1185dxa,1185dxa,1356dxa,1097dxa,1186dxa,1185dxa,1185dxa"
+        },
+        "children": [
+          {
+            "path": "/body/tbl[1]/tr[1]",
+            "type": "row",
+            "childCount": 9,
+            "format": {
+              "height": "498dxa",
+              "rowAlign": "center"
+            },
+            "children": []
+          },
+          {
+            "path": "/body/tbl[1]/tr[2]",
+            "type": "row",
+            "childCount": 9,
+            "format": {
+              "height": "243dxa",
+              "rowAlign": "center"
+            },
+            "children": []
+          }
+        ]
+      },
+      {
+        "path": "/body/tbl[2]",
+        "type": "table",
+        "childCount": 1,
+        "format": {
+          "cols": "4",
+          "rows": "1",
+          "_gridCols": "4",
+          "style": "TableGrid",
+          "border.top": "none",
+          "border.top.sz": 0,
+          "border.top.color": "auto",
+          "border.top.space": 0,
+          "border.bottom": "none",
+          "border.bottom.sz": 0,
+          "border.bottom.color": "auto",
+          "border.bottom.space": 0,
+          "border.insideH": "none",
+          "border.insideH.sz": 0,
+          "border.insideH.color": "auto",
+          "border.insideH.space": 0,
+          "border.insideV": "none",
+          "border.insideV.sz": 0,
+          "border.insideV.color": "auto",
+          "border.insideV.space": 0,
+          "border.left": "none",
+          "border.left.sz": 0,
+          "border.left.color": "auto",
+          "border.left.space": 0,
+          "border.right": "none",
+          "border.right.sz": 0,
+          "border.right.color": "auto",
+          "border.right.space": 0,
+          "width": "10490",
+          "layout": "fixed",
+          "tblLook": "04A0",
+          "firstRow": true,
+          "firstCol": true,
+          "bandedRows": true,
+          "colWidths": "5245dxa,1280dxa,2407dxa,1558dxa"
+        },
+        "children": [
+          {
+            "path": "/body/tbl[2]/tr[1]",
+            "type": "row",
+            "childCount": 4,
+            "format": {},
+            "children": []
+          }
+        ]
+      },
+      {
+        "path": "/body/tbl[3]",
+        "type": "table",
+        "childCount": 1,
+        "format": {
+          "cols": "5",
+          "rows": "1",
+          "_gridCols": "5",
+          "style": "TableGrid",
+          "border.top": "none",
+          "border.top.sz": 0,
+          "border.top.color": "auto",
+          "border.top.space": 0,
+          "border.bottom": "none",
+          "border.bottom.sz": 0,
+          "border.bottom.color": "auto",
+          "border.bottom.space": 0,
+          "border.insideH": "none",
+          "border.insideH.sz": 0,
+          "border.insideH.color": "auto",
+          "border.insideH.space": 0,
+          "border.insideV": "none",
+          "border.insideV.sz": 0,
+          "border.insideV.color": "auto",
+          "border.insideV.space": 0,
+          "border.left": "none",
+          "border.left.sz": 0,
+          "border.left.color": "auto",
+          "border.left.space": 0,
+          "border.right": "none",
+          "border.right.sz": 0,
+          "border.right.color": "auto",
+          "border.right.space": 0,
+          "width": "auto",
+          "layout": "fixed",
+          "tblLook": "04A0",
+          "firstRow": true,
+          "firstCol": true,
+          "bandedRows": true,
+          "colWidths": "1701dxa,2127dxa,2835dxa,2087dxa,1716dxa"
+        },
+        "children": [
+          {
+            "path": "/body/tbl[3]/tr[1]",
+            "type": "row",
+            "childCount": 5,
+            "format": {},
+            "children": []
+          }
+        ]
+      },
+      {
+        "path": "/body/tbl[4]",
+        "type": "table",
+        "childCount": 3,
+        "format": {
+          "cols": "5",
+          "rows": "3",
+          "_gridCols": "5",
+          "style": "TableGrid",
+          "width": "auto",
+          "tblLook": "04A0",
+          "firstRow": true,
+          "firstCol": true,
+          "bandedRows": true,
+          "colWidths": "3487dxa,1446dxa,1346dxa,2093dxa,2093dxa"
+        },
+        "children": [
+          {
+            "path": "/body/tbl[4]/tr[1]",
+            "type": "row",
+            "childCount": 3,
+            "format": {
+              "header": true,
+              "cantSplit": true
+            },
+            "children": []
+          },
+          {
+            "path": "/body/tbl[4]/tr[2]",
+            "type": "row",
+            "childCount": 3,
+            "format": {},
+            "children": []
+          },
+          {
+            "path": "/body/tbl[4]/tr[3]",
+            "type": "row",
+            "childCount": 3,
+            "format": {},
+            "children": []
+          }
+        ]
+      },
+      {
+        "path": "/body/tbl[5]",
+        "type": "table",
+        "childCount": 2,
+        "format": {
+          "cols": "5",
+          "rows": "2",
+          "_gridCols": "5",
+          "style": "TableGrid",
+          "width": "auto",
+          "tblLook": "04A0",
+          "firstRow": true,
+          "firstCol": true,
+          "bandedRows": true,
+          "colWidths": "3487dxa,1446dxa,1346dxa,2093dxa,2093dxa"
+        },
+        "children": [
+          {
+            "path": "/body/tbl[5]/tr[1]",
+            "type": "row",
+            "childCount": 3,
+            "format": {
+              "header": true,
+              "cantSplit": true
+            },
+            "children": []
+          },
+          {
+            "path": "/body/tbl[5]/tr[2]",
+            "type": "row",
+            "childCount": 3,
+            "format": {},
+            "children": []
+          }
+        ]
+      },
+      {
+        "path": "/body/tbl[6]",
+        "type": "table",
+        "childCount": 2,
+        "format": {
+          "cols": "5",
+          "rows": "2",
+          "_gridCols": "5",
+          "style": "TableGrid",
+          "width": "auto",
+          "tblLook": "04A0",
+          "firstRow": true,
+          "firstCol": true,
+          "bandedRows": true,
+          "colWidths": "3487dxa,1446dxa,1346dxa,2093dxa,2093dxa"
+        },
+        "children": [
+          {
+            "path": "/body/tbl[6]/tr[1]",
+            "type": "row",
+            "childCount": 3,
+            "format": {
+              "header": true,
+              "cantSplit": true
+            },
+            "children": []
+          },
+          {
+            "path": "/body/tbl[6]/tr[2]",
+            "type": "row",
+            "childCount": 3,
+            "format": {},
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

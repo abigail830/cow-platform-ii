@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "fileName": "ascentium-word-brand-shell.docx",
+    "paragraphs": 15,
+    "tables": 0,
+    "images": 6,
+    "equations": 0,
+    "headings": []
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "success": true,
+  "data": {
+    "fileName": "incorp-au-audit.pptx",
+    "totalSlides": 15,
+    "slides": [
+      {
+        "index": 1,
+        "title": null,
+        "textBoxes": 2,
+        "pictures": 3,
+        "oleObjects": 0
+      },
+      {
+        "index": 2,
+        "title": null,
+        "textBoxes": 2,
+        "pictures": 2,
+        "oleObjects": 0
+      },
+      {
+        "index": 3,
+        "title": null,
+        "textBoxes": 4,
+        "pictures": 2,
+        "oleObjects": 0
+      },
+      {
+        "index": 4,
+        "title": null,
+        "textBoxes": 7,
+        "pictures": 1,
+        "oleObjects": 0
+      },
+      {
+        "index": 5,
+        "title": null,
+        "textBoxes": 10,
+        "pictures": 5,
+        "oleObjects": 0
+      },
+      {
+        "index": 6,
+        "title": null,
+        "textBoxes": 7,
+        "pictures": 1,
+        "oleObjects": 0
+      },
+      {
+        "index": 7,
+        "title": null,
+        "textBoxes": 5,
+        "pictures": 1,
+        "oleObjects": 0
+      },
+      {
+        "index": 8,
+        "title": null,
+        "textBoxes": 12,
+        "pictures": 5,
+        "oleObjects": 0
+      },
+      {
+        "index": 9,
+        "title": null,
+        "textBoxes": 7,
+        "pictures": 2,
+        "oleObjects": 0
+      },
+      {
+        "index": 10,
+        "title": null,
+        "textBoxes": 4,
+        "pictures": 2,
+        "oleObjects": 0
+      },
+      {
+        "index": 11,
+        "title": null,
+        "textBoxes": 6,
+        "pictures": 1,
+        "oleObjects": 0
+      },
+      {
+        "index": 12,
+        "title": null,
+        "textBoxes": 5,
+        "pictures": 1,
+        "oleObjects": 0
+      },
+      {
+        "index": 13,
+        "title": null,
+        "textBoxes": 5,
+        "pictures": 1,
+        "oleObjects": 0
+      },
+      {
+        "index": 14,
+        "title": null,
+        "textBoxes": 6,
+        "pictures": 1,
+        "oleObjects": 0
+      },
+      {
+        "index": 15,
+        "title": null,
+        "textBoxes": 0,
+        "pictures": 1,
+        "oleObjects": 0
+      }
+    ]
+  }
+}

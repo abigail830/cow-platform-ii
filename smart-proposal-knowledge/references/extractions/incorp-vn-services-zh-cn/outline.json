@@ -1,0 +1,79 @@
+{
+  "success": true,
+  "data": {
+    "fileName": "incorp-vn-services.zh-CN.pptx",
+    "totalSlides": 10,
+    "slides": [
+      {
+        "index": 1,
+        "title": null,
+        "textBoxes": 1,
+        "pictures": 0,
+        "oleObjects": 0
+      },
+      {
+        "index": 2,
+        "title": null,
+        "textBoxes": 5,
+        "pictures": 4,
+        "oleObjects": 0
+      },
+      {
+        "index": 3,
+        "title": null,
+        "textBoxes": 13,
+        "pictures": 12,
+        "oleObjects": 0
+      },
+      {
+        "index": 4,
+        "title": null,
+        "textBoxes": 7,
+        "pictures": 6,
+        "oleObjects": 0
+      },
+      {
+        "index": 5,
+        "title": null,
+        "textBoxes": 7,
+        "pictures": 1,
+        "oleObjects": 0
+      },
+      {
+        "index": 6,
+        "title": null,
+        "textBoxes": 19,
+        "pictures": 9,
+        "oleObjects": 0
+      },
+      {
+        "index": 7,
+        "title": null,
+        "textBoxes": 2,
+        "pictures": 0,
+        "oleObjects": 0
+      },
+      {
+        "index": 8,
+        "title": null,
+        "textBoxes": 4,
+        "pictures": 0,
+        "oleObjects": 0
+      },
+      {
+        "index": 9,
+        "title": null,
+        "textBoxes": 4,
+        "pictures": 0,
+        "oleObjects": 0
+      },
+      {
+        "index": 10,
+        "title": null,
+        "textBoxes": 1,
+        "pictures": 0,
+        "oleObjects": 0
+      }
+    ]
+  }
+}

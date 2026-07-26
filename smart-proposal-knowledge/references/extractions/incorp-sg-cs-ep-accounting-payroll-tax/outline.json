@@ -1,0 +1,99 @@
+{
+  "success": true,
+  "data": {
+    "fileName": "incorp-sg-CS_EP_Accounting_Payroll_TAX.docx",
+    "paragraphs": 181,
+    "tables": 7,
+    "images": 39,
+    "equations": 0,
+    "footers": [
+      "www.incorp.asia    Page [PAGE] of [NUMPAGES] © In.Corp Global Pte Ltd. All Right Reserved. This document is being furnished to you on a confidential basis and solely for your information."
+    ],
+    "headings": [
+      {
+        "line": 20,
+        "text": "Table of Contents",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 31,
+        "text": "About In.Corp",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 36,
+        "text": "Snapshot",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 48,
+        "text": "Locations",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 52,
+        "text": "Our Full Range of Corporate Services ACROSS ASIA PACIFIC",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 56,
+        "text": "Key Accreditations And Partners",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 74,
+        "text": "RE: Fee Proposal ",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 84,
+        "text": "SCOPE OF SERVICES",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 86,
+        "text": "FEES",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 119,
+        "text": "Terms & Conditions",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 120,
+        "text": "Formal Service Agreements",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 126,
+        "text": "Termination",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 130,
+        "text": "MISC Terms",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 134,
+        "text": "Governing Law",
+        "style": "heading 1",
+        "level": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "docx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/docx/SKILL.md",
+      "computedHash": "59c70107f8eae818bdfca7da685a6e4111aa519638b667775b794cb74987ec47"
+    },
+    "okf": {
+      "source": "scaccogatto/okf-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okf/SKILL.md",
+      "computedHash": "32fd95e03e73ed45bf996976a00cbd195353af3ef1b5d849c6d57075e7f47489"
+    },
+    "pptx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pptx/SKILL.md",
+      "computedHash": "82eaf5daede5a1779aa17ccf06597cb209a0c2bd41d3a2f18bd45e0301a387fb"
+    },
+    "validate": {
+      "source": "scaccogatto/okf-skills",
+      "sourceType": "github",
+      "skillPath": "skills/validate/SKILL.md",
+      "computedHash": "fb6a412d9d80f5da4fff3e3557e1bc0007c4c6bada51d3f75acacccfc459d9a1"
+    },
+    "visualize": {
+      "source": "scaccogatto/okf-skills",
+      "sourceType": "github",
+      "skillPath": "skills/visualize/SKILL.md",
+      "computedHash": "d5fcffdf3e6355e45ff22fddea66fc58f3b8466ff7ca0405d95881c695773190"
+    }
+  }
+}

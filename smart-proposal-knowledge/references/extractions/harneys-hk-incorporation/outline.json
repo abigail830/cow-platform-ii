@@ -1,0 +1,29 @@
+{
+  "success": true,
+  "data": {
+    "fileName": "harneys-hk-Incorporation.docx",
+    "paragraphs": 207,
+    "tables": 19,
+    "images": 5,
+    "equations": 0,
+    "contentControls": 1,
+    "footers": [
+      "ascentium.com [PAGE]",
+      "[PAGE] ??:General Document (Level 1) (A4)"
+    ],
+    "headings": [
+      {
+        "line": 39,
+        "text": "Foot Notes 脚注",
+        "style": "Bold Heading",
+        "level": 1
+      },
+      {
+        "line": 171,
+        "text": "Notes 注",
+        "style": "Bold Heading",
+        "level": 1
+      }
+    ]
+  }
+}

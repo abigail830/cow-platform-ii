@@ -1,0 +1,112 @@
+{
+  "success": true,
+  "data": {
+    "fileName": "incorp-ph-recruitment.docx",
+    "paragraphs": 227,
+    "tables": 8,
+    "images": 44,
+    "equations": 0,
+    "contentControls": 5,
+    "footers": [
+      "www.kcrecruitment.com   Page [PAGE] of [NUMPAGES] Copyright © 2024\u00A0[HYPERLINK]. All rights reserved This document is being furnished to you on a confidential basis and solely for your information."
+    ],
+    "headings": [
+      {
+        "line": 14,
+        "text": "TABLE OF CONTENTS",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 26,
+        "text": "ABOUT INCORP",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 31,
+        "text": "Snapshot",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 44,
+        "text": "LOCATIONS",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 48,
+        "text": "OUR FULL RANGE OF CORPORATE SERVICES ACROSS ASIA PACIFIC",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 52,
+        "text": "INDUSTRY PARTNERS",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 67,
+        "text": "RE: FEE PROPOSAL",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 78,
+        "text": "SERVICES AND FEES",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 84,
+        "text": "Other Services",
+        "style": "Body Text",
+        "level": 2
+      },
+      {
+        "line": 86,
+        "text": "RECRUITMENT AND EXECUTIVE SEARCH",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 87,
+        "text": "FEES, MISCELLANEOUS EXPENSES AND SERVICE SCOPE",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 91,
+        "text": "RECRUITMENT AND EXECUTIVE SEARCH",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 96,
+        "text": "GUARANTEE PERIOD",
+        "style": "heading 1",
+        "level": 1
+      },
+      {
+        "line": 116,
+        "text": "CLIENT DETAILS",
+        "style": "heading 2",
+        "level": 2
+      },
+      {
+        "line": 119,
+        "text": "LIST OF DOCUMENTS FOR SUBMISSION TO ITS FOR CDD PURPOSES",
+        "style": "heading 2",
+        "level": 2
+      },
+      {
+        "line": 124,
+        "text": "GENERAL TERMS AND CONDITIONS",
+        "style": "heading 1",
+        "level": 1
+      }
+    ]
+  }
+}
