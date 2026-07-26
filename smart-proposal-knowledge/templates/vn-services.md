@@ -57,6 +57,6 @@ sections:
 
 # Template: `vn-services`
 
-**VN PPT** fee schedule deck. Section spine in frontmatter `sections[]`. A zh-CN placeholder variant shares this spine with different fee row placeholders (unmapped).
+**VN PPT** fee schedule deck. Section spine in frontmatter `sections[]`. zh-CN placeholder shell: locale reference only — see [locale-references](/meta/locale-references.md).
 
 Export shell in frontmatter `export`.

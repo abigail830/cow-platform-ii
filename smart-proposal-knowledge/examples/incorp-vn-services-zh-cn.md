@@ -7,6 +7,9 @@ description: >-
 tags: [incorp, region:VN, jurisdiction:VN, PPT, zh-CN, template]
 status: draft
 template_id: vn-services
+reference_role: locale
+locale: zh-CN
+content_mode: placeholder
 resource: references/examples/incorp-vn-services.zh-CN.pptx
 generated:
   by: process:office-ingest/v1
@@ -51,8 +54,4 @@ sources:
 
 ## Role
 
-**Template / shell study** — not a filled reference proposal. Pair with the VN cs-tax-payroll anchor for concrete fee content.
-
-## Language note
-
-zh-CN primary. Placeholders use `[[double_brackets]]` merge convention.
+**Locale reference** for `vn-services` — zh-CN placeholder PPT shell (`[[merge]]` rows). Canonical filled fees: anchor `incorp-vn-cs-tax-payroll-tax-hr`. See [locale references](/meta/locale-references.md).

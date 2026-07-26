@@ -127,6 +127,7 @@ Authoritative example ↔ `template_id` map: [examples/index.md](../../../../sma
 | `ph-cs` | `examples/incorp-ph-cs` | `incorp-ph-cs` |
 | `vn-services` | `examples/incorp-vn-cs-tax-payroll-tax-hr` | `incorp-vn-cs-tax-payroll-tax-hr` |
 | `ph-recruitment` | `examples/incorp-ph-recruitment` | `incorp-ph-recruitment` |
+| `hk-incorp` | `examples/incorp-hk-cs-zh-cn` | `incorp-hk-cs-zh-cn` |
 | `harneys-uk` | `examples/harneys-uk-bvi-all-options`, `examples/harneys-uk-cayman-all-options` | same slugs |
 | `harneys-hk` | `examples/harneys-hk-incorporation` | `harneys-hk-incorporation` |
 

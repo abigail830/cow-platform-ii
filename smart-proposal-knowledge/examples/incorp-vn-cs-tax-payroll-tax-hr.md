@@ -48,7 +48,3 @@ Three fee-schedule slides by service line. Supports ranges (`{{fee_amount}} – 
 ## Shell relationship
 
 Intro + sealed tail match Ascentium PPT shell rhythm; content slides 6–9 are proposal-specific.
-
-## zh-CN variant
-
-Same structure as unmapped zh-CN placeholder sample — `[[placeholder]]` template rows instead of concrete fees.

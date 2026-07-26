@@ -41,6 +41,20 @@ Reusable proposal prose — **`Section Block`** concepts. Optional `selection` f
 | [indemnity](incorp/regions/ph/indemnity.md) | text |
 | [unified-terms](incorp/regions/ph/unified-terms.md) | text |
 
+## `incorp/regions/hk/`
+
+| Block | `render` |
+|-------|----------|
+| [credentials-visual](incorp/regions/hk/credentials-visual.md) | visual_pending |
+| [proposal-letter](incorp/regions/hk/proposal-letter.md) | text |
+| [about-hk](incorp/regions/hk/about-hk.md) | text |
+| [project-team-structure](incorp/regions/hk/project-team-structure.md) | text |
+| [listing-core-team](incorp/regions/hk/listing-core-team.md) | text |
+| [compliance-and-timeline](incorp/regions/hk/compliance-and-timeline.md) | text |
+| [fee-proposal-intro](incorp/regions/hk/fee-proposal-intro.md) | text |
+| [terms-general](incorp/regions/hk/terms-general.md) | text |
+| [scope-of-services](incorp/regions/hk/scope-of-services.md) | text |
+
 ## `incorp/regions/ph/recruitment/`
 
 | Block | `render` |

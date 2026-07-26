@@ -35,7 +35,7 @@ smart-proposal-knowledge/references/
 
 | Step | Output | `type` | Source |
 |------|--------|--------|--------|
-| 2a Index | `examples/{name}.md` | `Reference Proposal` | `spine.md` + `outline.json`; add `template_id` + row in `examples/index.md` when mapped |
+| 2a Index | `examples/{name}.md` | `Reference Proposal` | `spine.md` + `outline.json`; `template_id` + row in `examples/index.md`; use `reference_role: locale` for extra languages |
 | 2b Contract | `templates/{template_id}.md` | `Proposal Template` | `anchor_example` + `sections[]` from anchor spine; legacy yaml for section IDs only |
 | 2c Blocks | `blocks/{bu}/regions/{region}/{name}.md` | `Section Block` | **`text.txt` only** — see [example-to-block-pipeline.md](example-to-block-pipeline.md) |
 

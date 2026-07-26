@@ -9,4 +9,6 @@
 * **Reference proposals batch (Phase 3/4)**: Ingested remaining 10 inbox samples → `references/examples/` + extractions + 10 draft `Reference Proposal` concepts (13 total with SG).
 * **Link dedup (OKF §8)**: Single authoritative example↔template map in `examples/index.md` + `template_id` frontmatter on Reference Proposals; removed bidirectional catalog links from templates, region-routing, layouts, and blocks index.
 * **PH recruitment (Special)**: `ph-recruitment` template + 8 blocks from `references/extractions/incorp-ph-recruitment/text.txt`; reuses PH `about-incorp` / `credentials-visual`.
+* **HK anchor**: `incorp-hk-cs-zh-cn` repositioned as InCorp HK generic anchor (`hk-incorp`); listed-co/IPO context is case-specific only.
+* **HK blocks**: 9 Section Blocks under `blocks/incorp/regions/hk/` from `incorp-hk-cs-zh-cn` extraction; `hk-incorp` template wired.
 * **Taxonomy**: Added [bu-region-jurisdiction.md](meta/bu-region-jurisdiction.md) — distinguish BU, issuing **region**, and client **jurisdiction**; fixed `region-routing.md` (BVI/Cayman are jurisdictions, not regions); reorganized `blocks/` to `regions/` vs `jurisdictions/`; updated example tags to `incorp|harneys`, `region:*`, `jurisdiction:*`.

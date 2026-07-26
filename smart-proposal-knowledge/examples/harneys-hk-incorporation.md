@@ -7,6 +7,7 @@ description: >-
 tags: [harneys, region:HK, jurisdiction:HK, Word, bilingual, rates-schedule]
 status: draft
 template_id: harneys-hk
+locale: bilingual
 resource: references/examples/harneys-hk-Incorporation.docx
 generated:
   by: process:office-ingest/v1

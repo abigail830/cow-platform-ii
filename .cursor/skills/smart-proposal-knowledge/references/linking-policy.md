@@ -30,6 +30,7 @@ Aligns with [SPEC.md](../../../../SPEC.md) §6 (directed edges) and §8 (`index.
 | Example ↔ example markdown links for subset/compare | One-line note in `examples/index.md` Notes column |
 | Block body links to template or Output Shell | Shell in template `export`; block cites extraction only |
 | `layout_id` as markdown link in example body | Plain text: `` `oneoff-recurring` `` |
+| Separate template per language | `template_id` + `reference_role: locale` + `locale` on Reference Proposal |
 | Bundle index linking to `.cursor/skills/...` | Skill is outside the bundle; cite bundle `meta/type-vocabulary.md` |
 
 ## Agent read order (minimal tokens)
@@ -65,3 +66,13 @@ Skip on routine compose: template body prose, `blocks/index.md` (unless discover
 
 - No frontmatter (OKF §8).
 - Short descriptions; enumerate children — not a second copy of frontmatter tables.
+
+## Locale / multilingual samples
+
+Bundle: [locale-references.md](../../../../smart-proposal-knowledge/meta/locale-references.md).
+
+- One `template_id` per product; extra languages → `reference_role: locale` on Reference Proposal
+- `anchor_example` on template → **filled** anchor only
+- Locale rows: `examples/index.md` § Locale references (not Unmapped)
+- `locale: bilingual` when both languages live in one file (e.g. `harneys-hk`)
+- `content_mode: placeholder` — shell / `[[merge]]` study; blocks promote from anchor extraction

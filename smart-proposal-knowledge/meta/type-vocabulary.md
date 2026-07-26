@@ -127,6 +127,7 @@ Beyond `type`, set when known: `title`, `description`, `tags`, `resource`, `sour
 | Concept | Field | Authoritative catalog |
 |---------|-------|----------------------|
 | `Reference Proposal` | `template_id` | [examples/index.md](/examples/index.md) |
+| `Reference Proposal` | `reference_role`, `locale`, `content_mode` | [locale-references.md](/meta/locale-references.md) |
 | `Proposal Template` | `template_id`, `anchor_example`, `sections[]` | [templates/index.md](/templates/index.md) |
 
 Each relationship is declared once — see project skill `linking-policy.md` under `.cursor/skills/smart-proposal-knowledge/references/`.

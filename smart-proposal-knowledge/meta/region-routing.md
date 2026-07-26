@@ -38,7 +38,7 @@ Example ↔ template mapping lives in [examples/index.md](/examples/index.md) on
 | SG | [oneoff-recurring](/layouts/oneoff-recurring.md) | `sg-incorp` (+ `sg-audit` special) | [sg](/catalogs/products/sg.md) | [sg](/catalogs/packages/sg.md) |
 | AU | [multi-frequency](/layouts/multi-frequency.md) | `au-advisory` (+ `au-audit` special) | [au](/catalogs/products/au.md) | [au](/catalogs/packages/au.md) |
 | PH | [multi-frequency](/layouts/multi-frequency.md) | `ph-cs` (+ `ph-recruitment` special) | [ph](/catalogs/products/ph.md) | [ph](/catalogs/packages/ph.md) |
-| HK | TBD | `sp-flexible` | planned | planned |
+| HK | TBD | `hk-incorp` | planned | planned |
 | VN | TBD | `vn-services` | planned | planned |
 | MY | [fee-billing](/layouts/fee-billing.md) | `sp-flexible` | [my](/catalogs/products/my.md) | [my](/catalogs/packages/my.md) |
 | ID | TBD | `sp-flexible` | planned | planned |
