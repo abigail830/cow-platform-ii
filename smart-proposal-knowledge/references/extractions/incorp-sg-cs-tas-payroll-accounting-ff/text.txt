@@ -14,7 +14,7 @@
 [/body/p[@paraId=65B20686]] 
 [/body/p[@paraId=35D15260]] LEADING ASIA PACIFIC CORPORATE SOLUTIONS PROVIDER
 [/body/p[@paraId=3A51F6E8]] IN.CORP GLOBAL PROPOSAL
-[/body/p[@paraId=50EAE2F2]] For Juuuno
+[/body/p[@paraId=50EAE2F2]] For Walkghost LTD
 [/body/p[@paraId=05601325]]  
 [/body/p[@paraId=503AA9A9]] 
 [/body/p[@paraId=3180F35E]] Table of Contents
@@ -66,14 +66,14 @@
 [/body/p[@paraId=0F7793C5]] 
 [/body/p[@paraId=71D04051]] 
 [/body/p[@paraId=08F05809]] 
-[/body/p[@paraId=3088701F]] 16 July 2026
+[/body/p[@paraId=3088701F]] 26 July 2026
 [/body/p[@paraId=70073F40]] 
-[/body/p[@paraId=4B5CFB2C]] Aritra Nandi
+[/body/p[@paraId=4B5CFB2C]] Sara
 [/body/p[@paraId=54E945CA]] 
-[/body/p[@paraId=491CA82B]] Juuuno
+[/body/p[@paraId=491CA82B]] Walkghost LTD
 [/body/p[@paraId=45671362]] 
 [/body/p[@paraId=7BF38721]] 
-[/body/p[@paraId=493382F0]] Dear Aritra Nandi,
+[/body/p[@paraId=493382F0]] Dear Sara,
 [/body/p[@paraId=72EC6756]] RE: Fee Proposal 
 [/body/p[75]] We are pleased to be presenting our proposal to you.
 [/body/p[76]] Our team of experienced professionals work very closely with clients on various corporate, accounting, compliance and governance matter and identify the unique requirements of individual organizations. As a strong believer of long-term partnerships, we are committed to providing tailored solutions that not only meet our clients’ objectives, but also giving them a peace of mind to focus on their core businesses. 
@@ -81,46 +81,46 @@
 [/body/p[@paraId=6D035C5A]] Yours Sincerely and on behalf of In.Corp,
 [/body/p[@paraId=567E1721]] 
 [/body/p[@paraId=068249A7]] 
-[/body/p[@paraId=2F5044A3]] Chloe Koo
-[/body/p[@paraId=7B2BBDD8]] Senior Manager - Business Development
+[/body/p[@paraId=2F5044A3]] Ping Qian
+[/body/p[@paraId=7B2BBDD8]] 
 [/body/p[@paraId=1F57FC0C]] 
 [/body/p[@paraId=7D24F78B]] SCOPE OF SERVICES
-[/body/p[85]] InCorp offers a complete, end-to-end solution to establish and maintain your corporate presence in Singapore. Our proposed solution includes providing Singapore Corporate Secretarial Compliance Services (Incorporation), Employment Pass Application Services, Annual Compliance Services - Accounting/Tax/Payroll, Other Services.
+[/body/p[85]] InCorp offers a complete, end-to-end solution to establish and maintain your corporate presence in Singapore. Our proposed solution includes providing Annual Compliance Services - Accounting/Tax/Payroll, Full Finance Function Support Package.
 [/body/p[@paraId=7B4FE5A3]] FEES
 [/body/p[@paraId=594F3BE1]] This section outlines the estimated fees for In.Corp's services. Our fee structure includes initial setup fees, as well as ongoing charges that may be billed monthly, quarterly, or annually. Additionally, fees may be incurred based on the time spent on specific tasks or on a per-instance basis. For any additional services not encompassed by this proposal that may incur, additional charges, we will receive your approval before any work commences. Please note that all fees mentioned are in Singapore Dollars unless otherwise stated, exclusive of the prevailing Goods and Services Tax (GST).
 [/body/p[@paraId=78F73C25]] 
-[/body/p[89]] Singapore Corporate Secretarial Compliance Services (Incorporation)
-[/body/tbl[4]] [Table: 6 rows]
-[/body/p[90]] 
-[/body/p[91]] Employment Pass Application Services
-[/body/tbl[5]] [Table: 3 rows]
-[/body/p[92]] Immigration-related services referenced in this proposal will be provided exclusively by RIKVIN PTE. LTD., a fully owned subsidiary of InCorp Group, acting as an independent service provider. RIKVIN PTE. LTD. is registered under UEN: 200708442E and holds an Employment Agency Licence No.: 11C3030, issued by the Ministry of Manpower, Singapore.
-[/body/p[93]] 
-[/body/p[94]] Annual Compliance Services - Accounting/Tax/Payroll
-[/body/tbl[6]] [Table: 8 rows]
-[/body/p[95]] * Our Bookkeeping fees are based on the estimated transaction volume, comprising income, expenditure and bank movements, as well as the nature and complexity of the Client's transactions, based on information made available to us at the date of this engagement.
-[/body/p[96]] Fees are subject to review and adjustment should the actual transaction volumes, scope of services, or complexity of the engagement differ materially from our initial estimate.
-[/body/p[97]] ** Fee is quoted with the understanding that the Company (& the Group) is not eligible to be exempt from audit in Singapore & will be getting the books of accounts audited for filing in Singapore. Should the company have subsidiaries / investments - additional fees starting from 1,200/- will be applicable for consolidation / complexity in reporting requirements.
-[/body/p[98]] # XBRL Filing Requirements (Conditional — billed only if and when applicable)
-[/body/p[99]] Companies incorporated in Singapore that qualify as Exempt Private Companies (EPCs) — defined as companies with fewer than 20 individual shareholders and no corporate shareholders — are generally exempt from filing financial statements with ACRA.  However, where the financial statements reflect negative equity (net liabilities), the EPC exemption ceases to apply and XBRL filing becomes mandatory.
-[/body/p[100]] The applicable fee will be confirmed and billed upon finalisation of the Balance Sheet and Profit & Loss Account by our Accounting & Finance Operations team. All fees exclude prevailing GST and disbursements.
-[/body/p[101]] 
-[/body/p[102]] Other Services
-[/body/tbl[7]] [Table: 2 rows]
+[/body/p[89]] Annual Compliance Services - Accounting/Tax/Payroll
+[/body/tbl[4]] [Table: 19 rows]
+[/body/p[90]] * Our Bookkeeping fees are based on the estimated transaction volume, comprising income, expenditure and bank movements, as well as the nature and complexity of the Client's transactions, based on information made available to us at the date of this engagement.
+[/body/p[91]] Fees are subject to review and adjustment should the actual transaction volumes, scope of services, or complexity of the engagement differ materially from our initial estimate.
+[/body/p[92]] ** Fee is quoted with the understanding that the Company (& the Group) is not eligible to be exempt from audit in Singapore & will be getting the books of accounts audited for filing in Singapore. Should the company have subsidiaries / investments - additional fees starting from 1,200/- will be applicable for consolidation / complexity in reporting requirements.
+[/body/p[93]] # XBRL Filing Requirements (Conditional — billed only if and when applicable)
+[/body/p[94]] Companies incorporated in Singapore that qualify as Exempt Private Companies (EPCs) — defined as companies with fewer than 20 individual shareholders and no corporate shareholders — are generally exempt from filing financial statements with ACRA.  However, where the financial statements reflect negative equity (net liabilities), the EPC exemption ceases to apply and XBRL filing becomes mandatory.
+[/body/p[95]] The applicable fee will be confirmed and billed upon finalisation of the Balance Sheet and Profit & Loss Account by our Accounting & Finance Operations team. All fees exclude prevailing GST and disbursements.
+[/body/p[96]] 
+[/body/p[97]] Full Finance Function Support Package
+[/body/tbl[5]] [Table: 9 rows]
+[/body/p[98]] * Our Bookkeeping fees are based on the estimated transaction volume, comprising income, expenditure and bank movements, as well as the nature and complexity of the Client's transactions, based on information made available to us at the date of this engagement.
+[/body/p[99]] Fees are subject to review and adjustment should the actual transaction volumes, scope of services, or complexity of the engagement differ materially from our initial estimate.
+[/body/p[100]] # XBRL Filing Requirements (Conditional — billed only if and when applicable)
+[/body/p[101]] Companies incorporated in Singapore that qualify as Exempt Private Companies (EPCs) — defined as companies with fewer than 20 individual shareholders and no corporate shareholders — are generally exempt from filing financial statements with ACRA.  However, where the financial statements reflect negative equity (net liabilities), the EPC exemption ceases to apply and XBRL filing becomes mandatory.
+[/body/p[102]] The applicable fee will be confirmed and billed upon finalisation of the Balance Sheet and Profit & Loss Account by our Accounting & Finance Operations team. All fees exclude prevailing GST and disbursements.
 [/body/p[103]] 
 [/body/p[@paraId=6532946C]] In.Corp Global Pte Ltd.    	                         
 [/body/p[@paraId=6074D7B6]] 36 Robinson Road, #20-01 City House, Singapore 068877.	
 [/body/p[@paraId=7D845135]] Reg No: 201504530W
 [/body/p[@paraId=582C5444]] 				                                                                  
 [/body/p[@paraId=7588654F]] Presented to:
-[/body/p[@paraId=5E3D001A]] Aritra Nandi
+[/body/p[@paraId=5E3D001A]] Sara
 [/body/p[@paraId=45432D6F]] 
-[/body/p[@paraId=4A3A2D05]] aritra.nandi@juuuno.com
-[/body/p[@paraId=6539D323]] Juuuno
+[/body/p[@paraId=4A3A2D05]] sara@abc.com
+[/body/p[@paraId=6539D323]] Walkghost LTD
 [/body/p[@paraId=4CE6C9C9]] 
 [/body/p[@paraId=0CA37F4A]] 
 [/body/p[@paraId=7756E976]] Terms & Conditions All prices and services correct at the time the proposal was created.
 [/body/p[@paraId=7E01E30E]]  
+[/body/p[@paraId=48E4F35F]] ESTIMATED FIRST INVOICE VALUE
+[/body/tbl[6]] [Table: 28 rows]
 [/body/p[@paraId=1BF4D475]] 
 [/body/p[@paraId=24AAFC6C]] 
 [/body/p[@paraId=6478F8C5]] Terms & Conditions

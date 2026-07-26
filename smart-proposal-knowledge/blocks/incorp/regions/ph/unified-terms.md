@@ -2,7 +2,7 @@
 type: Section Block
 title: Unified Terms and Conditions (PH)
 description: Unified T&C cluster from PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs, terms]
+tags: [incorp, region:PH, template:ph-incorp, terms]
 render: text
 status: draft
 generated:

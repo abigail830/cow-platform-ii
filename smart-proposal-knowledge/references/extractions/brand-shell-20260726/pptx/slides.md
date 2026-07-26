@@ -1,7 +1,29 @@
+---
+type: Shell Zone Map
+title: "Layer 1 slide map — Ascentium PPT shell"
+description: PPT Output Shell slide roles, merge keys, and content-insert rules from office ingest.
+status: draft
+generated:
+  by: process:office-ingest/v1
+  at: 2026-07-26T12:30:00Z
+sources:
+  - id: output-shell
+    resource: brand/ascentium-pptx-shell.md
+    title: Ascentium PPT brand shell
+  - id: binary
+    resource: references/templates/ascentium-pptx-brand-shell.pptx
+    title: PPT brand shell template
+  - id: anchors
+    resource: references/templates/ascentium-pptx-brand-shell.anchors.json
+    title: PPT shell anchor map
+---
+
 # PPT brand shell — slide map (Layer 1)
 
 Source: `references/templates/ascentium-pptx-brand-shell.pptx`  
 Extractor: `officecli view text` + `outline` (2026-07-26)
+
+Promoted to [Ascentium PPT brand shell](/brand/ascentium-pptx-shell.md).
 
 ## Slide zones
 

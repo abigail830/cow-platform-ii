@@ -2,7 +2,7 @@
 type: Section Block
 title: About InCorp (PH)
 description: Intro credentials prose from PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs]
+tags: [incorp, region:PH, template:ph-incorp]
 render: text
 status: draft
 generated:

@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/harneys-uk-cayman-all-options/spine.md
     title: Layer 1 spine extraction
+
 ---
 
 # Reference: Harneys Cayman All Options
+
+Layer 1 extraction: [extraction spine](/references/extractions/harneys-uk-cayman-all-options/spine.md).
+
 
 ## Format
 

@@ -16,9 +16,13 @@ sources:
   - id: extraction
     resource: references/extractions/harneys-hk-incorporation/spine.md
     title: Layer 1 spine extraction
+
 ---
 
 # Reference: Harneys HK Incorporation Rates
+
+Layer 1 extraction: [extraction spine](/references/extractions/harneys-hk-incorporation/spine.md).
+
 
 ## Format
 

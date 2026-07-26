@@ -2,7 +2,7 @@
 type: Section Block
 title: Credentials visual pages (PH)
 description: Image-only credentials spine from PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs, credentials, visual]
+tags: [incorp, region:PH, template:ph-incorp, credentials, visual]
 render: visual_pending
 status: draft
 generated:
@@ -22,3 +22,5 @@ sources:
 | Key Accreditations And Partners |
 
 Image/table art only in anchor sample. Do not synthesize marketing copy.
+
+Source spine: [Layer 1 spine](/references/extractions/incorp-ph-cs/spine.md).

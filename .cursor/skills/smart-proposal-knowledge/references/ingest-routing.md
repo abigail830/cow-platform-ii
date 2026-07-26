@@ -29,7 +29,7 @@ smart-proposal-knowledge/references/
     spine.md          # PII-redacted structural index
 ```
 
-`{slug}` aligns with example id (e.g. `incorp-sg-cs-ep-accounting-payroll-tax`).
+`{slug}` aligns with example id (e.g. `incorp-sg-cs-tas-payroll-accounting-ff`).
 
 ## Layer 2 routing
 

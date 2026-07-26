@@ -99,7 +99,23 @@ sections:
 
 # Template: `harneys-uk`
 
-Unified **Harneys UK-issued** options letter for **BVI** and **Cayman** entity jurisdictions. Custom fee layout (not catalog SKU layouts). Section spine in frontmatter `sections[]`.
+Unified **Harneys UK-issued** options letter for **BVI** and **Cayman** entity jurisdictions. Custom fee layout (not catalog SKU layouts). Compose contract: frontmatter `sections[]`.
+
+## Composition
+
+OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
+
+* [Cover letter](/blocks/harneys/shared/introduction-letter.md)
+* [Services requested (BVI)](/blocks/harneys/jurisdictions/bvi/services-requested.md)
+* [Services requested (Cayman)](/blocks/harneys/jurisdictions/cayman/services-requested.md)
+* [About Ascentium](/blocks/harneys/shared/about-ascentium.md)
+* [Ad-hoc services (BVI)](/blocks/harneys/jurisdictions/bvi/adhoc-excluded-services.md)
+* [Approved Manager (BVI)](/blocks/harneys/jurisdictions/bvi/approved-manager-regime.md)
+* [Cayman market narrative](/blocks/harneys/jurisdictions/cayman/market-narrative.md)
+* [Service capabilities](/blocks/harneys/shared/service-capabilities.md)
+* [What we need / General](/blocks/harneys/shared/closing-general.md)
+* Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)
+* Anchor lineage (§5.1): [BVI All Options](/examples/harneys-uk-bvi-all-options.md), [Cayman All Options](/examples/harneys-uk-cayman-all-options.md)
 
 ## Shared vs jurisdiction-specific
 

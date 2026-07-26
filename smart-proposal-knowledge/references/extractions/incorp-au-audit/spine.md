@@ -1,3 +1,20 @@
+---
+type: Extraction Spine
+title: "Layer 1 spine — incorp-au-audit"
+description: PII-redacted section index from office ingest (Layer 1 staging).
+status: draft
+generated:
+  by: process:office-ingest/v1
+  at: 2026-07-26T12:00:00Z
+sources:
+  - id: reference-proposal
+    resource: examples/incorp-au-audit.md
+    title: InCorp AU — Audit & Assurance
+  - id: binary
+    resource: references/examples/incorp-au-audit.pptx
+    title: Original sample document
+---
+
 # Spine (PII-redacted)
 
 Source: `incorp-au-audit.pptx`

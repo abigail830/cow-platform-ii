@@ -1,3 +1,20 @@
+---
+type: Extraction Spine
+title: "Layer 1 spine — incorp-vn-services-zh-cn"
+description: PII-redacted section index from office ingest (Layer 1 staging).
+status: draft
+generated:
+  by: process:office-ingest/v1
+  at: 2026-07-26T12:00:00Z
+sources:
+  - id: reference-proposal
+    resource: examples/incorp-vn-services-zh-cn.md
+    title: Ascentium VN — Services Template (zh-CN)
+  - id: binary
+    resource: references/examples/incorp-vn-services.zh-CN.pptx
+    title: Original sample document
+---
+
 # Spine (PII-redacted)
 
 Source: `incorp-vn-services.zh-CN.pptx`

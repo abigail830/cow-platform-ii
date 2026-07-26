@@ -1,8 +1,8 @@
 ---
 type: Proposal Template
-template_id: vn-services
-title: Vietnam Services (PPT)
-description: Ascentium VN services fee schedule deck. Anchor incorp-vn-cs-tax-payroll-tax-hr.
+template_id: vn-incorp
+title: Vietnam Incorp
+description: Ascentium VN fee schedule PPT deck. Anchor incorp-vn-cs-tax-payroll-tax-hr.
 tags: [incorp, region:VN, jurisdiction:VN, PPT, template]
 status: draft
 deliverable: pptx
@@ -55,8 +55,16 @@ sections:
     block: blocks/incorp/regions/vn/sealed-tail-visual.md
 ---
 
-# Template: `vn-services`
+# Template: `vn-incorp`
 
-**VN PPT** fee schedule deck. Section spine in frontmatter `sections[]`. zh-CN placeholder shell: locale reference only — see [locale-references](/meta/locale-references.md).
+**VN PPT** fee schedule deck. Compose contract: frontmatter `sections[]`. zh-CN placeholder shell: locale reference only — see [locale-references](/meta/locale-references.md).
 
-Export shell in frontmatter `export`.
+## Composition
+
+OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
+
+* [Brand intro](/blocks/incorp/regions/vn/brand-intro-visual.md)
+* [Fee schedule intro](/blocks/incorp/regions/vn/fee-schedule-intro.md)
+* [Contact / brand close](/blocks/incorp/regions/vn/sealed-tail-visual.md)
+* Export shell: [Ascentium PPTX shell](/brand/ascentium-pptx-shell.md)
+* Anchor lineage (§5.1): [VN CS / Tax / Payroll / HR (PPT)](/examples/incorp-vn-cs-tax-payroll-tax-hr.md)

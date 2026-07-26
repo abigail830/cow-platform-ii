@@ -1,7 +1,29 @@
+---
+type: Shell Zone Map
+title: "Layer 1 zone map — Ascentium Word shell"
+description: Word Output Shell page zones, merge keys, and body-insert anchors from office ingest.
+status: draft
+generated:
+  by: process:office-ingest/v1
+  at: 2026-07-26T12:30:00Z
+sources:
+  - id: output-shell
+    resource: brand/ascentium-word-shell.md
+    title: Ascentium Word brand shell
+  - id: binary
+    resource: references/templates/ascentium-word-brand-shell.docx
+    title: Word brand shell template
+  - id: anchors
+    resource: references/templates/ascentium-word-brand-shell.anchors.json
+    title: Word shell anchor map
+---
+
 # Word brand shell — zone map (Layer 1)
 
 Source: `references/templates/ascentium-word-brand-shell.docx`  
 Extractor: `officecli view text` + `query p` (2026-07-26)
+
+Promoted to [Ascentium Word brand shell](/brand/ascentium-word-shell.md).
 
 ## Page zones
 

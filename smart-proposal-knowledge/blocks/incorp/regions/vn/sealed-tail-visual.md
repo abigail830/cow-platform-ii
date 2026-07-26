@@ -2,7 +2,7 @@
 type: Section Block
 title: Sealed tail (VN PPT)
 description: Closing slides 10–11 — brand seal; handled by Output Shell where possible.
-tags: [incorp, region:VN, template:vn-services, visual]
+tags: [incorp, region:VN, template:vn-incorp, visual]
 render: visual_pending
 status: draft
 generated:

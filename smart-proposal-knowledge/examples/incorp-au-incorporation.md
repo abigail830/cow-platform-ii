@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-au-incorporation/spine.md
     title: Layer 1 spine extraction
+
 ---
 
 # Reference: InCorp AU Incorporation
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-au-incorporation/spine.md).
+
 
 ## Format
 

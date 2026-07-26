@@ -62,3 +62,8 @@ Optional section-level **Total** toggle (`data.show_total`).
 
 - [oneoff-recurring](/layouts/oneoff-recurring.md)
 - [fee-billing](/layouts/fee-billing.md)
+
+## Templates using this layout
+
+* [au-advisory](/templates/au-advisory.md) — InCorp AU Word
+* [ph-incorp](/templates/ph-incorp.md) — InCorp PH corporate secretarial

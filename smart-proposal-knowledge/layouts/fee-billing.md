@@ -51,3 +51,7 @@ Describes **column shape**, not a region. Legacy id was `malaysia` (used as glob
 
 - [oneoff-recurring](/layouts/oneoff-recurring.md)
 - [multi-frequency](/layouts/multi-frequency.md)
+
+## Templates using this layout
+
+*(No draft template yet — default for InCorp MY per [region routing](/meta/region-routing.md).)*

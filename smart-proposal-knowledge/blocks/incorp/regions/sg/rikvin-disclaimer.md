@@ -15,11 +15,11 @@ generated:
   at: 2026-07-26T14:45:00Z
 sources:
   - id: extraction-text
-    resource: references/extractions/incorp-sg-cs-ep-accounting-payroll-tax/text.txt
-    title: Layer 1 text extraction (line 97)
+    resource: references/extractions/incorp-sg-employment-pass/text.txt
+    title: Layer 1 text extraction (line 94)
   - id: anchor-example
-    resource: examples/incorp-sg-cs-ep-accounting-payroll-tax.md
-    title: Reference Proposal — CS + EP + Accounting / Payroll / Tax
+    resource: examples/incorp-sg-rikvin-employment-pass.md
+    title: Reference Proposal — Rikvin Employment Pass Application
 ---
 
 Immigration-related services referenced in this proposal will be provided exclusively by RIKVIN PTE. LTD., a fully owned subsidiary of InCorp Group, acting as an independent service provider. RIKVIN PTE. LTD. is registered under UEN: 200708442E and holds an Employment Agency Licence No.: 11C3030, issued by the Ministry of Manpower, Singapore.

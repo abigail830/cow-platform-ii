@@ -1,0 +1,19 @@
+{
+  "success": false,
+  "error": {
+    "error": "Unknown mode: tables. Available: text, annotated, outline, stats, issues, html, svg, screenshot, forms",
+    "code": "invalid_value",
+    "validValues": [
+      "text",
+      "annotated",
+      "outline",
+      "stats",
+      "issues",
+      "html",
+      "svg",
+      "screenshot",
+      "pdf",
+      "forms"
+    ]
+  }
+}

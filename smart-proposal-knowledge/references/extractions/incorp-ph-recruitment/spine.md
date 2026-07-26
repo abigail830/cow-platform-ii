@@ -1,3 +1,20 @@
+---
+type: Extraction Spine
+title: "Layer 1 spine — incorp-ph-recruitment"
+description: PII-redacted section index from office ingest (Layer 1 staging).
+status: draft
+generated:
+  by: process:office-ingest/v1
+  at: 2026-07-26T12:00:00Z
+sources:
+  - id: reference-proposal
+    resource: examples/incorp-ph-recruitment.md
+    title: InCorp PH — Recruitment & Executive Search
+  - id: binary
+    resource: references/examples/incorp-ph-recruitment.docx
+    title: Original sample document
+---
+
 # Spine (PII-redacted)
 
 Source: `incorp-ph-recruitment.docx`

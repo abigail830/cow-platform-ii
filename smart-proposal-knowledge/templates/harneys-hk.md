@@ -47,4 +47,14 @@ sections:
 
 # Template: `harneys-hk`
 
-**Harneys HK** bilingual administration rates schedule — not the UK options-letter pattern (`harneys-uk`). Section spine in frontmatter `sections[]`.
+**Harneys HK** bilingual administration rates schedule — not the UK options-letter pattern (`harneys-uk`). Compose contract: frontmatter `sections[]`.
+
+## Composition
+
+OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
+
+* [Rates schedule title](/blocks/harneys/regions/hk/rates-schedule-header.md)
+* [Master rates table](/blocks/harneys/regions/hk/rates-schedule-table.md)
+* [Footnotes](/blocks/harneys/regions/hk/rates-footnotes.md)
+* Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)
+* Anchor lineage (§5.1): [HK Incorporation Rates](/examples/harneys-hk-incorporation.md)

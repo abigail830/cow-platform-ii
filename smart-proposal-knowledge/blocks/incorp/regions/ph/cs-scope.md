@@ -2,7 +2,7 @@
 type: Section Block
 title: Corporate Secretarial Scope (PH)
 description: CS scope of service bullets from PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs]
+tags: [incorp, region:PH, template:ph-incorp]
 render: text
 status: draft
 generated:

@@ -1,3 +1,20 @@
+---
+type: Extraction Spine
+title: "Layer 1 spine — incorp-hk-cs-zh-cn"
+description: PII-redacted section index from office ingest (Layer 1 staging).
+status: draft
+generated:
+  by: process:office-ingest/v1
+  at: 2026-07-26T12:00:00Z
+sources:
+  - id: reference-proposal
+    resource: examples/incorp-hk-cs-zh-cn.md
+    title: InCorp HK — Corporate Secretarial (zh-CN)
+  - id: binary
+    resource: references/examples/incorp-hk-CS.zh-CN.docx
+    title: Original sample document
+---
+
 # Spine (PII-redacted)
 
 Source: `incorp-hk-CS.zh-CN.docx`

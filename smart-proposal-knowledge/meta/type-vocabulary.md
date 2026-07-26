@@ -19,6 +19,8 @@ Canonical spec: [SPEC.md](../../SPEC.md). Only `type` is required per concept.
 
 | `type` | Concept path pattern | Purpose |
 |--------|---------------------|---------|
+| `Extraction Spine` | `references/extractions/{slug}/spine.md` | Layer 1 PII-redacted section index from office ingest |
+| `Shell Zone Map` | `references/extractions/{run}/word/zones.md`, `.../pptx/slides.md` | Layer 1 Output Shell zone/slide map from brand shell ingest |
 | `Proposal Template` | `templates/{id}.md` | Section spine, block references, fee_layout, export config |
 | `Section Block` | `blocks/{bu}/regions/{region}/{name}.md` or `blocks/{bu}/jurisdictions/{jurisdiction}/{name}.md` | Reusable chapter prose **with optional inclusion rules** |
 | `Quotation Layout` | `layouts/{layout_id}.md` | Fee table columns and formatting |

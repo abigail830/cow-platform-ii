@@ -2,7 +2,7 @@
 type: Section Block
 title: Corporate Secretarial Exclusions (PH)
 description: CS exclusions from PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs]
+tags: [incorp, region:PH, template:ph-incorp]
 render: text
 status: draft
 generated:

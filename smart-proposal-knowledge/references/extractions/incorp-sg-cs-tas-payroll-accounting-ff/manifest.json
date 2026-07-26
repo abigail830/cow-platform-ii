@@ -1,0 +1,8 @@
+{
+  "extracted_at": "2026-07-26T23:05:00Z",
+  "extractor": "officecli",
+  "source": {
+    "file": "incorp-sg-CS_TAS_Payroll_Accounting_ff.docx",
+    "resource": "references/examples/incorp-sg-CS_TAS_Payroll_Accounting_ff.docx"
+  }
+}

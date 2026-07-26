@@ -6,7 +6,7 @@ description: >-
   for corporate services, accounting/tax, and HR/payroll modules.
 tags: [incorp, region:VN, jurisdiction:VN, PPT, corporate-services, tax, payroll, HR]
 status: draft
-template_id: vn-services
+template_id: vn-incorp
 resource: references/examples/incorp-vn-CS_TAX_PAYROLL_TAX_HR.pptx
 generated:
   by: process:office-ingest/v1
@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-vn-cs-tax-payroll-tax-hr/spine.md
     title: Layer 1 slide spine extraction
+
 ---
 
 # Reference: Ascentium VN CS / Tax / Payroll / HR
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-vn-cs-tax-payroll-tax-hr/spine.md).
+
 
 ## Format
 

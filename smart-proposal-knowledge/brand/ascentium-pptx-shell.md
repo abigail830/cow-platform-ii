@@ -21,6 +21,8 @@ sources:
 
 # Ascentium PPT brand shell
 
+Layer 1 extraction: [slide map](/references/extractions/brand-shell-20260726/pptx/slides.md).
+
 ## Purpose
 
 Fallback **output chrome** for pitch decks, audit decks, and service overviews. Intro slides 1–4 are fixed brand content; proposal slides insert after slide 4; slides 5–6 are sealed.

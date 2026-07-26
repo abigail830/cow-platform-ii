@@ -20,3 +20,5 @@ sources:
 Master administration rates schedule is **table art** in anchor sample (`tbl[1]`, 37 rows). Fee rows materialize from catalog/MDM at compose time — do not transcribe amounts into this block.
 
 Supporting tables `tbl[2]`–`tbl[19]` are reference schedules in sample.
+
+Source spine: [Layer 1 spine](/references/extractions/harneys-hk-incorporation/spine.md).

@@ -1,3 +1,20 @@
+---
+type: Extraction Spine
+title: "Layer 1 spine — incorp-sg-employment-pass"
+description: PII-redacted section index from office ingest (Layer 1 staging).
+status: draft
+generated:
+  by: process:office-ingest/v1
+  at: 2026-07-26T12:00:00Z
+sources:
+  - id: reference-proposal
+    resource: examples/incorp-sg-rikvin-employment-pass.md
+    title: InCorp SG — Rikvin Employment Pass Application
+  - id: binary
+    resource: references/examples/incorp-sg-rikvin-Employment_Pass_Application.docx
+    title: Original sample document
+---
+
 # Spine (PII-redacted)
 
 Source: `incorp-sg-rikvin-Employment_Pass_Application.docx`

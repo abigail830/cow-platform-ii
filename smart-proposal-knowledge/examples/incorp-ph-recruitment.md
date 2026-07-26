@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-ph-recruitment/spine.md
     title: Layer 1 spine extraction
+
 ---
 
 # Reference: InCorp PH Recruitment
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-ph-recruitment/spine.md).
+
 
 ## Format
 
@@ -53,6 +57,6 @@ sources:
 
 Recruitment fee percentage tables — layout `custom`, not catalog quotation layouts.
 
-## Distinct from `ph-cs`
+## Distinct from `ph-incorp`
 
 No SERVICE SLAs or CS scope modules — recruitment legal framework and ITS-specific guarantee / conforme / CDD instead.

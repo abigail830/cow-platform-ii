@@ -97,10 +97,27 @@ sections:
 
 # Template: `ph-recruitment`
 
-InCorp **Philippines recruitment & executive search** (ITS) Word proposal. Layout `custom` — recruitment fee percentage tables, not catalog SKU layouts. Section spine in frontmatter `sections[]`.
+InCorp **Philippines recruitment & executive search** (ITS) Word proposal. Layout `custom` — recruitment fee percentage tables, not catalog SKU layouts. Compose contract: frontmatter `sections[]`.
 
-**Not** corporate secretarial — use `ph-cs`.
+**Not** corporate secretarial — use `ph-incorp`.
 
-Shared PH credentials front-matter reuses `about-incorp` and `credentials-visual` blocks (identical spine to `ph-cs` anchor).
+## Composition
+
+OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
+
+* [About InCorp](/blocks/incorp/regions/ph/about-incorp.md)
+* [Credentials (visual)](/blocks/incorp/regions/ph/credentials-visual.md)
+* [Fee proposal letter](/blocks/incorp/regions/ph/recruitment/fee-proposal-letter.md)
+* [Services and fees](/blocks/incorp/regions/ph/recruitment/services-fees-intro.md)
+* [Recruitment fees intro](/blocks/incorp/regions/ph/recruitment/recruitment-fees-intro.md)
+* [Guarantee period](/blocks/incorp/regions/ph/recruitment/guarantee-period.md)
+* [Payment](/blocks/incorp/regions/ph/recruitment/payment-terms.md)
+* [Client conforme](/blocks/incorp/regions/ph/recruitment/client-conforme.md)
+* [CDD documents](/blocks/incorp/regions/ph/recruitment/cdd-documents.md)
+* [General terms and conditions](/blocks/incorp/regions/ph/recruitment/recruitment-terms.md)
+* Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)
+* Anchor lineage (§5.1): [Recruitment & Executive Search (PH)](/examples/incorp-ph-recruitment.md)
+
+Shared PH credentials front-matter reuses `about-incorp` and `credentials-visual` blocks (identical spine to `ph-incorp` anchor).
 
 Fee tables (tbl[4]–tbl[5]), client details (tbl[6]), CDD checklist (tbl[7]), and annex (tbl[8]) materialize via `solution_and_fees` / form materializers — amounts not stored in blocks.

@@ -27,3 +27,5 @@ Anchor sample H1 sections with **no extractable body text** after group affiliat
 | Key Accreditations And Partners |
 
 Table art at tbl[1]–tbl[3] during affiliation section. Do not synthesize marketing copy.
+
+Source spine: [Layer 1 spine](/references/extractions/incorp-au-incorporation/spine.md).

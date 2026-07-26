@@ -2,7 +2,7 @@
 type: Section Block
 title: Vietnam Fee Schedule Intro
 description: Fee schedule disclaimer from VN anchor PPT slide 6.
-tags: [incorp, region:VN, template:vn-services, fees]
+tags: [incorp, region:VN, template:vn-incorp, fees]
 render: text
 status: draft
 generated:

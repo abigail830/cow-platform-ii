@@ -6,7 +6,7 @@ description: >-
   exclusions, and extended legal terms (indemnity, data privacy, freezework).
 tags: [incorp, region:PH, jurisdiction:PH, Word, company-secretary, SLA]
 status: draft
-template_id: ph-cs
+template_id: ph-incorp
 resource: references/examples/incorp-ph-CS.docx
 generated:
   by: process:office-ingest/v1
@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-ph-cs/spine.md
     title: Layer 1 spine extraction
+
 ---
 
 # Reference: InCorp PH Corporate Secretarial
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-ph-cs/spine.md).
+
 
 ## Format
 

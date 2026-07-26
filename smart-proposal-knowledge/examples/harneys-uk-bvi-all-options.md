@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/harneys-uk-bvi-all-options/spine.md
     title: Layer 1 spine extraction
+
 ---
 
 # Reference: Harneys BVI All Options
+
+Layer 1 extraction: [extraction spine](/references/extractions/harneys-uk-bvi-all-options/spine.md).
+
 
 ## Format
 

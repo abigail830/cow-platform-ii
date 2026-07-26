@@ -2,7 +2,7 @@
 type: Section Block
 title: Executive Summary (PH)
 description: Minimal fee proposal letter closing from PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs]
+tags: [incorp, region:PH, template:ph-incorp]
 render: text
 status: draft
 generated:

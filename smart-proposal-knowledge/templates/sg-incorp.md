@@ -4,7 +4,8 @@ template_id: sg-incorp
 title: Singapore Incorp
 description: >-
   Generic InCorp SG Word proposal — CS, EP, tax, accounting, payroll, and
-  multi-service packages. Anchor spine from cs-ep-accounting-payroll-tax sample.
+  multi-service packages. Anchor spine from cs-tas-payroll-accounting-ff sample
+  (includes optional first invoice).
 tags: [incorp, region:SG, jurisdiction:SG, Word, template]
 status: draft
 deliverable: word
@@ -13,14 +14,14 @@ catalog_filter:
   region: SG
   jurisdiction: SG
 default_layout: oneoff-recurring
-anchor_example: examples/incorp-sg-cs-ep-accounting-payroll-tax.md
+anchor_example: examples/incorp-sg-cs-tas-payroll-accounting-ff.md
 generated:
   by: human:qianping
   at: 2026-07-26T14:15:00Z
 sources:
   - id: anchor-example
-    resource: examples/incorp-sg-cs-ep-accounting-payroll-tax.md
-    title: Reference Proposal — CS + EP + Accounting / Payroll / Tax
+    resource: examples/incorp-sg-cs-tas-payroll-accounting-ff.md
+    title: Reference Proposal — CS / TAS / Payroll / Accounting (first invoice)
 export:
   word:
     enabled: true
@@ -132,8 +133,9 @@ sections:
         pattern: '(?i)(?<![a-z-])ad[\s-]?hoc(?![a-z])'
         fields: [preview_primary, scope_of_work_display, service_name, description, scope_of_work]
     agent_guidance: >
-      Enable for first-invoice summary from solution_and_fees rows. Excludes ad-hoc
-      services. One-off plus first recurring period only (not annualised).
+      Enable for first-invoice summary from solution_and_fees rows. Anchor sample
+      (incorp-sg-cs-tas-payroll-accounting-ff) places tbl[6] before T&C. Excludes
+      ad-hoc services. One-off plus first recurring period only (not annualised).
 
   - id: terms
     title: Terms and conditions
@@ -145,9 +147,24 @@ sections:
 
 # Template: `sg-incorp`
 
-Generic **InCorp SG Word** proposal — CS, EP, tax, accounting, payroll; fee modules stack under `solution_and_fees`; layout `oneoff-recurring`. Section spine and block refs are in frontmatter `sections[]`.
+Generic **InCorp SG Word** proposal — CS, EP, tax, accounting, payroll; fee modules stack under `solution_and_fees`; layout `oneoff-recurring`. Compose contract: frontmatter `sections[]`.
 
 **Not** for RA / internal audit — use `sg-audit`.
+
+## Composition
+
+OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
+
+* [About Incorp](/blocks/incorp/regions/sg/about-incorp.md)
+* [Credentials (visual)](/blocks/incorp/regions/sg/credentials-visual.md)
+* [Executive Summary](/blocks/incorp/regions/sg/executive-summary.md)
+* [Scope of service](/blocks/incorp/regions/sg/scope-of-service.md)
+* [Solution and pricing intro](/blocks/incorp/regions/sg/solution-pricing-intro.md)
+* [Rikvin disclaimer](/blocks/incorp/regions/sg/rikvin-disclaimer.md) (optional)
+* [Terms and conditions](/blocks/incorp/regions/sg/terms-incorp.md)
+* Fee layout: [oneoff-recurring](/layouts/oneoff-recurring.md)
+* Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)
+* Anchor lineage (§5.1): [CS / TAS / Payroll / Accounting + first invoice (SG)](/examples/incorp-sg-cs-tas-payroll-accounting-ff.md)
 
 Immigration fees append optional `rikvin_disclaimer` block after EP modules (`append_after_fee_modules`).
 

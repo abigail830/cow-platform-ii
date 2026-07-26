@@ -21,6 +21,8 @@ sources:
 
 # Ascentium Word brand shell
 
+Layer 1 extraction: [zone map](/references/extractions/brand-shell-20260726/word/zones.md).
+
 ## Purpose
 
 Fallback **output chrome** for Word proposals, letters, fee schedules, and SOWs. The shell carries brand art and merge placeholders only — proposal body is inserted at runtime.

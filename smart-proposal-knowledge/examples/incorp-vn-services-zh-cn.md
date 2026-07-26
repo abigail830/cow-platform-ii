@@ -6,7 +6,7 @@ description: >-
   for client, services, fees, and appendix tables. Shell-oriented sample.
 tags: [incorp, region:VN, jurisdiction:VN, PPT, zh-CN, template]
 status: draft
-template_id: vn-services
+template_id: vn-incorp
 reference_role: locale
 locale: zh-CN
 content_mode: placeholder
@@ -18,9 +18,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-vn-services-zh-cn/spine.md
     title: Layer 1 slide spine extraction
+
 ---
 
 # Reference: Ascentium VN Services Template (zh-CN)
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-vn-services-zh-cn/spine.md).
+
 
 ## Format
 
@@ -54,4 +58,4 @@ sources:
 
 ## Role
 
-**Locale reference** for `vn-services` — zh-CN placeholder PPT shell (`[[merge]]` rows). Canonical filled fees: anchor `incorp-vn-cs-tax-payroll-tax-hr`. See [locale references](/meta/locale-references.md).
+**Locale reference** for `vn-incorp` — zh-CN placeholder PPT shell (`[[merge]]` rows). Canonical filled fees: anchor `incorp-vn-cs-tax-payroll-tax-hr`. See [locale references](/meta/locale-references.md).

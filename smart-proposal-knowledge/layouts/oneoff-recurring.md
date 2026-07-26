@@ -15,9 +15,9 @@ sources:
   - id: legacy-layout
     resource: file:///Users/qianping/Documents/Source/ascentium/axon-flow/backend/agent_platform/agents/x-proposal/skills/sp-proposal-builder/references/quotation-layout-singapore.md
     title: Legacy quotation-layout-singapore.md (layout_id singapore)
-  - id: ref-cs-ep
-    resource: references/examples/incorp-sg-CS_EP_Accounting_Payroll_TAX.docx
-    title: Reference sample — multi-module SG Word proposal
+  - id: ref-cs-tas-ff
+    resource: references/examples/incorp-sg-CS_TAS_Payroll_Accounting_ff.docx
+    title: Reference sample — sg-incorp anchor (TAS + first invoice)
 ---
 
 # Layout: `oneoff-recurring`
@@ -65,3 +65,7 @@ Currency is per row/region (SGD, USD, …) — not fixed by layout.
 
 - [multi-frequency](/layouts/multi-frequency.md) — multiple billing period columns
 - [fee-billing](/layouts/fee-billing.md) — Service · Fee · Billing Frequency
+
+## Templates using this layout
+
+* [sg-incorp](/templates/sg-incorp.md) — default for InCorp SG

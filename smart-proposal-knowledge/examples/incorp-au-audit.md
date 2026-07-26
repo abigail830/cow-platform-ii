@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-au-audit/spine.md
     title: Layer 1 slide spine extraction
+
 ---
 
 # Reference: InCorp AU Audit & Assurance
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-au-audit/spine.md).
+
 
 ## Format
 

@@ -97,6 +97,21 @@ sections:
 
 # Template: `au-advisory`
 
-Generic **InCorp AU Word** proposal. Layout `multi-frequency`. Section spine in frontmatter `sections[]`.
+Generic **InCorp AU Word** proposal. Layout `multi-frequency`. Compose contract: frontmatter `sections[]`.
 
 **Not** for audit PPT — use `au-audit`.
+
+## Composition
+
+OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
+
+* [About InCorp Advisory](/blocks/incorp/regions/au/about-advisory.md)
+* [InCorp Group & International Affiliation](/blocks/incorp/regions/au/group-affiliation.md)
+* [Credentials (visual)](/blocks/incorp/regions/au/credentials-visual.md)
+* [Executive Summary](/blocks/incorp/regions/au/executive-summary.md)
+* [Solution and pricing intro](/blocks/incorp/regions/au/solution-pricing-intro.md)
+* [Fee summary intro](/blocks/incorp/regions/au/fee-summary-intro.md)
+* [Terms and conditions](/blocks/incorp/regions/au/terms-appendix.md)
+* Fee layout: [multi-frequency](/layouts/multi-frequency.md)
+* Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)
+* Anchor lineage (§5.1): [Incorporation (AU)](/examples/incorp-au-incorporation.md)

@@ -20,7 +20,7 @@ One **Proposal Template** per product spine. Language variants are extra **Refer
 
 | Field | When | Values |
 |-------|------|--------|
-| `template_id` | Always (when mapped) | Same as anchor — e.g. `vn-services` |
+| `template_id` | Always (when mapped) | Same as anchor — e.g. `vn-incorp` |
 | `reference_role` | Non-anchor samples | `locale` (omit on anchor = default anchor) |
 | `locale` | Language of this file | `zh-CN`, `en`, `bilingual`, … |
 | `content_mode` | Optional | `filled` (default), `placeholder` (`[[merge]]` shell study) |
@@ -32,12 +32,12 @@ Template `anchor_example` always points to the **primary anchor** (usually `cont
 | Pattern | Example | Blocks |
 |---------|---------|--------|
 | **Anchor in locale X** | `hk-incorp` anchor is zh-CN | Promote blocks from anchor extraction; `locale` tags which language this anchor uses |
-| **Locale reference** | `vn-services` + zh-CN placeholder PPT | Same `sections[]` as template; compose picks block text by `locale` at runtime (future) or separate block paths per locale when promoted |
+| **Locale reference** | `vn-incorp` + zh-CN placeholder PPT | Same `sections[]` as template; compose picks block text by `locale` at runtime (future) or separate block paths per locale when promoted |
 | **Bilingual single file** | `harneys-hk` EN + zh-CN in one docx | One block per section; body contains both languages |
 
 ## Do not
 
-- Create `vn-services-zh-cn` template_id — use `vn-services` + `reference_role: locale`
+- Create `vn-incorp-zh-cn` template_id — use `vn-incorp` + `reference_role: locale`
 - List locale samples under Unmapped when `template_id` is known
 - Duplicate spine tables between anchor and locale concepts — index table is enough
 - Promote locale placeholder prose into blocks when anchor `text.txt` has the canonical wording

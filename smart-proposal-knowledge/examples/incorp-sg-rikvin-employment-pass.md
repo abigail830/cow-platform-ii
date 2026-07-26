@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-sg-employment-pass/spine.md
     title: Layer 1 spine extraction
+
 ---
 
 # Reference: Rikvin Employment Pass (SG)
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-sg-employment-pass/spine.md).
+
 
 ## Format
 

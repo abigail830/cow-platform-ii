@@ -2,7 +2,7 @@
 type: Section Block
 title: Service SLAs marker (PH)
 description: Section heading before CS module in PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs]
+tags: [incorp, region:PH, template:ph-incorp]
 render: text
 status: draft
 generated:

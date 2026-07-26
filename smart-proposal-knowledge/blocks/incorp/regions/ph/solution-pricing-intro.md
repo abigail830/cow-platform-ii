@@ -2,7 +2,7 @@
 type: Section Block
 title: Services and Fees Intro (PH)
 description: Fees section opening from PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs, fees]
+tags: [incorp, region:PH, template:ph-incorp, fees]
 render: text
 status: draft
 generated:

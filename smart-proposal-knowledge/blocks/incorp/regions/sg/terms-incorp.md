@@ -10,11 +10,11 @@ generated:
   at: 2026-07-26T14:45:00Z
 sources:
   - id: extraction-text
-    resource: references/extractions/incorp-sg-cs-ep-accounting-payroll-tax/text.txt
-    title: Layer 1 text extraction (lines 127–144)
+    resource: references/extractions/incorp-sg-cs-tas-payroll-accounting-ff/text.txt
+    title: Layer 1 text extraction (lines 127–142)
   - id: anchor-example
-    resource: examples/incorp-sg-cs-ep-accounting-payroll-tax.md
-    title: Reference Proposal — CS + EP + Accounting / Payroll / Tax
+    resource: examples/incorp-sg-cs-tas-payroll-accounting-ff.md
+    title: Reference Proposal — CS / TAS / Payroll / Accounting (first invoice)
 ---
 
 ## Formal Service Agreements

@@ -15,9 +15,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-sg-internal-audit/spine.md
     title: Layer 1 slide spine extraction
+
 ---
 
 # Reference: Internal Audit Services (SG)
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-sg-internal-audit/spine.md).
+
 
 ## Format
 

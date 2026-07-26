@@ -109,9 +109,25 @@ sections:
 
 # Template: `hk-incorp`
 
-Generic **InCorp HK Word** proposal — company secretarial and compliance. Section spine in frontmatter `sections[]`.
+Generic **InCorp HK Word** proposal — company secretarial and compliance. Compose contract: frontmatter `sections[]`.
 
 Layout `custom` — HK fee-table shape still TBD in layouts registry. Anchor sample language is **zh-CN**; English deliverables may share the same spine.
+
+## Composition
+
+OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
+
+* [Credentials (visual)](/blocks/incorp/regions/hk/credentials-visual.md)
+* [Proposal letter](/blocks/incorp/regions/hk/proposal-letter.md)
+* [About Ascentium HK](/blocks/incorp/regions/hk/about-hk.md)
+* [Project team structure](/blocks/incorp/regions/hk/project-team-structure.md) (optional)
+* [Listing services core team](/blocks/incorp/regions/hk/listing-core-team.md) (optional)
+* [Compliance and timeline](/blocks/incorp/regions/hk/compliance-and-timeline.md)
+* [Fee proposal intro](/blocks/incorp/regions/hk/fee-proposal-intro.md)
+* [Terms and conditions](/blocks/incorp/regions/hk/terms-general.md)
+* [Scope of services (appendix)](/blocks/incorp/regions/hk/scope-of-services.md)
+* Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)
+* Anchor lineage (§5.1): [Corporate Secretarial (HK, zh-CN)](/examples/incorp-hk-cs-zh-cn.md)
 
 **Not** Harneys HK rates schedule — use `harneys-hk`.
 

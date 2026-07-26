@@ -2,7 +2,7 @@
 type: Section Block
 title: CS Service Terms (PH)
 description: CS-specific TERMS from PH anchor sample.
-tags: [incorp, region:PH, template:ph-cs, terms]
+tags: [incorp, region:PH, template:ph-incorp, terms]
 render: text
 status: draft
 generated:

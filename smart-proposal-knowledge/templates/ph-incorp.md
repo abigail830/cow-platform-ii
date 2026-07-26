@@ -1,8 +1,8 @@
 ---
 type: Proposal Template
-template_id: ph-cs
-title: Philippines Corporate Secretarial
-description: InCorp PH CS proposal with SERVICE SLAs module. Anchor incorp-ph-cs.
+template_id: ph-incorp
+title: Philippines Incorp
+description: InCorp PH corporate secretarial Word proposal with SERVICE SLAs module. Anchor incorp-ph-cs.
 tags: [incorp, region:PH, jurisdiction:PH, Word, template]
 status: draft
 deliverable: word
@@ -88,8 +88,26 @@ sections:
     block: blocks/incorp/regions/ph/unified-terms.md
 ---
 
-# Template: `ph-cs`
+# Template: `ph-incorp`
 
-InCorp **Philippines corporate secretarial** Word proposal. Layout `multi-frequency`. Section spine in frontmatter `sections[]`.
+InCorp **Philippines corporate secretarial** Word proposal. Layout `multi-frequency`. Compose contract: frontmatter `sections[]`.
 
 Recruitment-only proposals use `ph-recruitment` — not this template.
+
+## Composition
+
+OKF §6.1 graph edges (one-way). Machine compose contract remains `sections[]`.
+
+* [About InCorp](/blocks/incorp/regions/ph/about-incorp.md)
+* [Credentials (visual)](/blocks/incorp/regions/ph/credentials-visual.md)
+* [Fee Proposal](/blocks/incorp/regions/ph/executive-summary.md)
+* [Solution and pricing intro](/blocks/incorp/regions/ph/solution-pricing-intro.md)
+* [Service SLAs](/blocks/incorp/regions/ph/service-slas-marker.md)
+* [Corporate secretarial scope](/blocks/incorp/regions/ph/cs-scope.md)
+* [Exclusions](/blocks/incorp/regions/ph/cs-exclusions.md)
+* [CS terms](/blocks/incorp/regions/ph/cs-service-terms.md)
+* [Indemnity](/blocks/incorp/regions/ph/indemnity.md)
+* [Unified terms and conditions](/blocks/incorp/regions/ph/unified-terms.md)
+* Fee layout: [multi-frequency](/layouts/multi-frequency.md)
+* Export shell: [Ascentium Word shell](/brand/ascentium-word-shell.md)
+* Anchor lineage (§5.1): [Corporate Secretarial (PH)](/examples/incorp-ph-cs.md)

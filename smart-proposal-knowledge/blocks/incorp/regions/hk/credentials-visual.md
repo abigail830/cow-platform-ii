@@ -25,3 +25,5 @@ Anchor sample sections with **no extractable body text** before the proposal let
 | 2 | 上市公司秘书及合规服务费用提案 (title art) |
 
 Do not synthesize marketing copy. Insert via template `export` shell or future `references/ux/` assets.
+
+Source spine: [Layer 1 spine](/references/extractions/incorp-hk-cs-zh-cn/spine.md).

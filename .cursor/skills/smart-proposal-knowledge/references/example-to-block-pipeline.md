@@ -80,7 +80,7 @@ Record provenance in `sources`:
 ```yaml
 sources:
   - id: extraction-text
-    resource: references/extractions/incorp-sg-cs-ep-accounting-payroll-tax/text.txt
+    resource: references/extractions/incorp-sg-cs-tas-payroll-accounting-ff/text.txt
     title: Layer 1 text extraction (lines 85)
 ```
 
@@ -122,10 +122,10 @@ Authoritative example ↔ `template_id` map: [examples/index.md](../../../../sma
 
 | `template_id` | Anchor example (concept id) | Extraction slug |
 |---------------|----------------------------|-----------------|
-| `sg-incorp` | `examples/incorp-sg-cs-ep-accounting-payroll-tax` | `incorp-sg-cs-ep-accounting-payroll-tax` |
+| `sg-incorp` | `examples/incorp-sg-cs-tas-payroll-accounting-ff` | `incorp-sg-cs-tas-payroll-accounting-ff` |
 | `au-advisory` | `examples/incorp-au-incorporation` | `incorp-au-incorporation` |
-| `ph-cs` | `examples/incorp-ph-cs` | `incorp-ph-cs` |
-| `vn-services` | `examples/incorp-vn-cs-tax-payroll-tax-hr` | `incorp-vn-cs-tax-payroll-tax-hr` |
+| `ph-incorp` | `examples/incorp-ph-cs` | `incorp-ph-cs` |
+| `vn-incorp` | `examples/incorp-vn-cs-tax-payroll-tax-hr` | `incorp-vn-cs-tax-payroll-tax-hr` |
 | `ph-recruitment` | `examples/incorp-ph-recruitment` | `incorp-ph-recruitment` |
 | `hk-incorp` | `examples/incorp-hk-cs-zh-cn` | `incorp-hk-cs-zh-cn` |
 | `harneys-uk` | `examples/harneys-uk-bvi-all-options`, `examples/harneys-uk-cayman-all-options` | same slugs |

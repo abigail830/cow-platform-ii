@@ -16,9 +16,13 @@ sources:
   - id: extraction
     resource: references/extractions/incorp-hk-cs-zh-cn/spine.md
     title: Layer 1 spine extraction
+
 ---
 
 # Reference: InCorp HK Corporate Secretarial (zh-CN)
+
+Layer 1 extraction: [extraction spine](/references/extractions/incorp-hk-cs-zh-cn/spine.md).
+
 
 ## Format
 

@@ -2,7 +2,7 @@
 type: Section Block
 title: Brand intro (VN PPT)
 description: Slides 2–5 — credentials / footprint / offerings; mostly visual in anchor sample.
-tags: [incorp, region:VN, template:vn-services, visual]
+tags: [incorp, region:VN, template:vn-incorp, visual]
 render: visual_pending
 status: draft
 generated:
@@ -27,3 +27,5 @@ Anchor PPT slides (visual / stats — not full prose blocks):
 | 5 | Our Service Offerings |
 
 Sparse text in extraction; layout is chart/image heavy. Use template `export` shell intro zones or register `references/ux/` assets.
+
+Source spine: [Layer 1 spine](/references/extractions/incorp-vn-cs-tax-payroll-tax-hr/spine.md).
