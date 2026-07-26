@@ -16,4 +16,6 @@ Enterprise proposal knowledge for multi-region, multi-BU Ascentium services.
 * [computations](computations/index.md) — Attested fee and tax calculations
 * [playbooks](playbooks/index.md) — Catalog matching and document compose rules
 
+Consumer agent (streaming CLI): sibling repo folder [`../proposal-agent`](../proposal-agent/).
+
 Binary originals and extraction staging: `references/` (not indexed as concepts).

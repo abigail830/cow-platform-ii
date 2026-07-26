@@ -2,3 +2,23 @@
 *.swp
 *.swo
 *~
+
+# Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.Python
+
+# uv / tooling
+.uv/
+*.egg-info/
+dist/
+build/
