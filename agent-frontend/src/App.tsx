@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { getToken } from './api/auth.ts';
+import { AppLayout } from './layouts/AppLayout.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
+import { PermissionsPage } from './pages/PermissionsPage.tsx';
+import { RolesPage } from './pages/RolesPage.tsx';
+import { UsersPage } from './pages/UsersPage.tsx';
 import { FlueAuthProvider } from './providers/FlueAuthProvider.tsx';
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -17,21 +21,18 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
-          path="/chat"
           element={
             <RequireAuth>
-              <ChatPage />
+              <AppLayout />
             </RequireAuth>
           }
-        />
-        <Route
-          path="/admin/models"
-          element={
-            <RequireAuth>
-              <ModelsConfigPage />
-            </RequireAuth>
-          }
-        />
+        >
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/admin/models" element={<ModelsConfigPage />} />
+          <Route path="/admin/users" element={<UsersPage />} />
+          <Route path="/admin/roles" element={<RolesPage />} />
+          <Route path="/admin/permissions" element={<PermissionsPage />} />
+        </Route>
         <Route path="*" element={<Navigate to={getToken() ? '/chat' : '/login'} replace />} />
       </Routes>
     </FlueAuthProvider>

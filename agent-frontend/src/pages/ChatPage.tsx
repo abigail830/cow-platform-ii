@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthUser } from '../api/auth.ts';
 import { AgentChatPanel } from '../components/AgentChatPanel.tsx';
-import { AppShell } from '../components/AppShell.tsx';
+import { useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { ChatComposer } from '../components/ChatComposer.tsx';
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel.tsx';
 import { AgentMenuIcon } from '../components/icons/AgentIcons.tsx';
@@ -175,18 +175,14 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
 }
 
 export function ChatPage() {
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const { user, agents, selectedAgent, setSelectedAgent } = useAppOutletContext();
 
   return (
-    <AppShell activePath="/chat" selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent}>
-      {({ user, agents }) => (
-        <ChatPageContent
-          user={user}
-          agents={agents}
-          selectedAgent={selectedAgent}
-          onSelectAgent={setSelectedAgent}
-        />
-      )}
-    </AppShell>
+    <ChatPageContent
+      user={user}
+      agents={agents}
+      selectedAgent={selectedAgent}
+      onSelectAgent={setSelectedAgent}
+    />
   );
 }

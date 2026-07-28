@@ -2,6 +2,7 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { appAgentPermissions, appUsers, db } from '../src/db/index.ts';
+import { syncRbac } from '../src/db/sync-rbac.ts';
 import { closePool } from '../src/db/pool.ts';
 
 const SEED_USERS = [
@@ -52,6 +53,8 @@ async function main() {
       }
     }
   }
+
+  await syncRbac();
 }
 
 main()

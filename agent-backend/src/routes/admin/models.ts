@@ -1,11 +1,13 @@
 import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { appModelConfigs, db, MODEL_API_TYPES, type ModelApiType } from '../../db/index.ts';
-import { requireAuth, requireRole } from '../../auth/jwt.ts';
+import { ADMIN_RESOURCES } from '../../auth/rbac-catalog.ts';
+import { requireAuth } from '../../auth/jwt.ts';
+import { requireResourcePermission } from '../../auth/require-permission.ts';
 
 const models = new Hono();
 
-models.use('*', requireAuth, requireRole('admin', 'operator'));
+models.use('*', requireAuth);
 
 type ModelRow = typeof appModelConfigs.$inferSelect;
 
@@ -36,7 +38,7 @@ function parseCapabilities(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
 }
 
-models.get('/', async (c) => {
+models.get('/', requireResourcePermission('admin', ADMIN_RESOURCES.MODELS, 'read'), async (c) => {
   const apiType = c.req.query('apiType');
   const search = c.req.query('search')?.trim();
   const page = Math.max(Number(c.req.query('page') ?? 1), 1);
@@ -84,7 +86,7 @@ models.get('/', async (c) => {
   });
 });
 
-models.post('/', async (c) => {
+models.post('/', requireResourcePermission('admin', ADMIN_RESOURCES.MODELS, 'write'), async (c) => {
   const body = await c.req.json<{
     name?: string;
     modelId?: string;
@@ -135,7 +137,7 @@ models.post('/', async (c) => {
   return c.json({ model: toPublicModel(row) }, 201);
 });
 
-models.patch('/:id', async (c) => {
+models.patch('/:id', requireResourcePermission('admin', ADMIN_RESOURCES.MODELS, 'write'), async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json<{
     name?: string;
@@ -200,7 +202,7 @@ models.patch('/:id', async (c) => {
   return c.json({ model: toPublicModel(row) });
 });
 
-models.post('/:id/set-default', async (c) => {
+models.post('/:id/set-default', requireResourcePermission('admin', ADMIN_RESOURCES.MODELS, 'write'), async (c) => {
   const id = c.req.param('id');
   const [existing] = await db.select().from(appModelConfigs).where(eq(appModelConfigs.id, id)).limit(1);
   if (!existing) return c.json({ error: 'Not found' }, 404);
@@ -219,7 +221,7 @@ models.post('/:id/set-default', async (c) => {
   return c.json({ model: toPublicModel(row!) });
 });
 
-models.delete('/:id', async (c) => {
+models.delete('/:id', requireResourcePermission('admin', ADMIN_RESOURCES.MODELS, 'write'), async (c) => {
   const id = c.req.param('id');
   const [row] = await db
     .delete(appModelConfigs)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   createModelConfig,
@@ -10,8 +10,12 @@ import {
   type ModelApiType,
   type ModelConfig,
 } from '../api/models.ts';
-import { AppShell } from '../components/AppShell.tsx';
+import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { ModelConfigForm } from '../components/ModelConfigForm.tsx';
+import { ADMIN_PAGES } from '../shared/admin-nav.ts';
+import { hasPermission } from '../shared/permissions.ts';
+
+const PAGE = ADMIN_PAGES.find((item) => item.path === '/admin/models')!;
 
 const API_TYPE_FILTERS: Array<{ id: 'all' | ModelApiType; label: string }> = [
   { id: 'all', label: 'All' },
@@ -23,6 +27,8 @@ const API_TYPE_FILTERS: Array<{ id: 'all' | ModelApiType; label: string }> = [
 ];
 
 export function ModelsConfigPage() {
+  const { user } = useAppOutletContext();
+  const canWrite = useMemo(() => hasPermission(user, 'admin:models', 'write'), [user]);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -90,14 +96,13 @@ export function ModelsConfigPage() {
   }
 
   return (
-    <AppShell activePath="/admin/models">
+    <>
       <main className="admin-page">
         <header className="admin-header">
-          <h1>
-            <span className="admin-title-main">Model</span>{' '}
-            <span className="admin-title-accent">configuration</span>
-          </h1>
-          <p>Manage model connections from different providers for use across the platform.</p>
+          <AdminPageTitle main={PAGE.titleMain} accent={PAGE.titleAccent} />
+          <AdminPageDescription>
+            Manage model connections from different providers for use across the platform.
+          </AdminPageDescription>
         </header>
 
         <div className="admin-toolbar">
@@ -139,6 +144,8 @@ export function ModelsConfigPage() {
               setEditing(null);
               setFormOpen(true);
             }}
+            disabled={!canWrite}
+            title={canWrite ? undefined : 'Read-only access'}
           >
             + Add model
           </button>
@@ -281,6 +288,6 @@ export function ModelsConfigPage() {
           }}
         />
       )}
-    </AppShell>
+    </>
   );
 }

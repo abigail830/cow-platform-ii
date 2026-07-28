@@ -2,11 +2,22 @@ import { formatApiError } from './http.ts';
 
 export type UserRole = 'user' | 'operator' | 'admin';
 
+export type PermissionGrant = {
+  key: string;
+  label: string;
+  category: string;
+  accessLevel: 'read' | 'write';
+  routePatterns: string[];
+  apiPatterns: string[];
+};
+
 export type AuthUser = {
   id: string;
   email: string;
   displayName: string | null;
   role: UserRole;
+  roles?: string[];
+  permissions?: PermissionGrant[];
 };
 
 const TOKEN_KEY = 'agent_platform_token';

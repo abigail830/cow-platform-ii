@@ -40,3 +40,11 @@ Use `var(--app-page-bg)` for chat layout, header, body, and admin pages — not 
 - Reuse `.btn-primary`, `.admin-filter.active`, `.btn-link` for orange styling.
 - Keep admin UI **compact**: base `0.8125rem`, table headers `0.75rem`, tighter padding on rows/toolbar.
 - Table/action patterns live in `ModelsConfigPage.tsx` — match its English copy style.
+
+## RBAC (users / roles / permissions)
+
+- **Permission**: registry entry with `key`, route/API patterns, category; role grants use `read` or `write`.
+- **Role**: predefined bundle of permission grants (`app_role_permissions`).
+- **User**: assigned one or more roles (`app_user_roles`); `/api/auth/me` returns `permissions[]`.
+- Gate admin nav and APIs with granular permission keys (`admin:models:read`, `admin:models:write`, etc.). Resource shorthand `admin:models` + level checks read or write keys.
+- System `admin` role has write on all catalog permissions; extend catalog in `rbac-catalog.ts` + `seed:rbac`.

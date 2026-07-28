@@ -10,7 +10,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:reset-flue": "tsx scripts/reset-flue-tables.ts",
+    "setup": "npm run db:migrate && npm run seed",
     "seed": "tsx scripts/seed-users.ts",
+    "seed:rbac": "tsx scripts/seed-rbac.ts",
     "verify": "tsx scripts/verify-smoke.ts"
   },
   "keywords": [],

@@ -1060,11 +1060,200 @@ textarea {
   color: var(--brand-orange);
 }
 
-.admin-header p {
+.admin-header p,
+.admin-header-desc {
   margin: 0 0 0.875rem;
   color: #64748b;
   font-size: 0.8125rem;
   line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-form-hint {
+  margin: 0 0 0.75rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.danger-link {
+  color: #dc2626 !important;
+}
+
+.role-picker {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.role-picker-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: #334155;
+  cursor: pointer;
+}
+
+.role-picker-option input {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  width: auto;
+}
+
+.role-picker-option span {
+  flex: 1;
+  min-width: 0;
+  color: #334155;
+  font-size: 0.8125rem;
+}
+
+.form-field textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  outline: none;
+  font-size: 0.8125rem;
+  resize: vertical;
+  min-height: 4.5rem;
+  font-family: inherit;
+}
+
+.form-field textarea:focus {
+  border-color: var(--brand-orange);
+}
+
+.roles-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.roles-list .admin-table tbody tr {
+  cursor: pointer;
+}
+
+.roles-row-active {
+  background: #fff7ed;
+}
+
+.roles-detail {
+  min-width: 0;
+}
+
+.roles-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.roles-detail-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.roles-system-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.role-perm-matrix th:nth-child(2),
+.role-perm-matrix th:nth-child(3),
+.role-perm-matrix td:nth-child(2),
+.role-perm-matrix td:nth-child(3) {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.role-perm-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--brand-orange);
+  cursor: pointer;
+}
+
+.brand-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.admin-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-drawer {
+  width: min(480px, 100%);
+  height: 100%;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(15, 23, 42, 0.12);
+}
+
+.admin-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1.25rem 1.25rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.admin-drawer-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.admin-drawer-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.admin-drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem 1.25rem;
+}
+
+.admin-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 900px) {
+  .roles-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-toolbar {
@@ -1355,12 +1544,13 @@ textarea {
   grid-column: 1 / -1;
 }
 
-.form-field span {
+.form-field > span,
+.form-field-label {
   font-size: 0.75rem;
   color: #64748b;
 }
 
-.form-field input,
+.form-field input:not([type='checkbox']):not([type='radio']),
 .form-field select {
   width: 100%;
   padding: 0.5rem 0.65rem;

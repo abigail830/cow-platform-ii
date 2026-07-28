@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import type { AuthUser } from '../api/auth.ts';
 import type { AgentInfo } from '../api/conversations.ts';
-import type { UserRole } from '../api/auth.ts';
+import { ADMIN_PAGES } from '../shared/admin-nav.ts';
+import { canSeeAdminSection, hasPermission } from '../shared/permissions.ts';
 import { AgentMenuIcon, IconSidenavCollapse, IconSidenavExpand } from './icons/AgentIcons.tsx';
 
 type AppSideNavProps = {
   agents: AgentInfo[];
   selectedAgent: string | null;
   onSelectAgent: (name: string) => void;
+  user: AuthUser;
   userLabel: string;
-  userRole: UserRole;
   activePath: string;
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -16,7 +18,34 @@ type AppSideNavProps = {
   onNavigate: (path: string) => void;
 };
 
-function IconModels() {
+function AdminNavIcon({ name }: { name: (typeof ADMIN_PAGES)[number]['icon'] }) {
+  if (name === 'users') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+        <circle cx="6" cy="5.5" r="2" stroke="currentColor" strokeWidth="1.25" />
+        <path d="M2.5 13c0-2 1.8-3.5 3.5-3.5S9.5 11 9.5 13" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M11 6.5h3M12.5 5v3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === 'roles') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+        <rect x="3" y="3" width="4.5" height="4.5" rx="0.75" stroke="currentColor" strokeWidth="1.25" />
+        <rect x="8.5" y="3" width="4.5" height="4.5" rx="0.75" stroke="currentColor" strokeWidth="1.25" />
+        <rect x="3" y="8.5" width="4.5" height="4.5" rx="0.75" stroke="currentColor" strokeWidth="1.25" />
+        <rect x="8.5" y="8.5" width="4.5" height="4.5" rx="0.75" stroke="currentColor" strokeWidth="1.25" />
+      </svg>
+    );
+  }
+  if (name === 'permissions') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+        <path d="M4 3.5h8v9H4z" stroke="currentColor" strokeWidth="1.25" />
+        <path d="M6.5 7h3M6.5 9.5h3M6.5 12h2" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    );
+  }
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
       <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
@@ -29,8 +58,8 @@ export function AppSideNav({
   agents,
   selectedAgent,
   onSelectAgent,
+  user,
   userLabel,
-  userRole,
   activePath,
   collapsed,
   onToggleCollapse,
@@ -39,7 +68,8 @@ export function AppSideNav({
 }: AppSideNavProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const showAdmin = userRole === 'admin' || userRole === 'operator';
+  const adminItems = ADMIN_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
+  const showAdmin = canSeeAdminSection(user) && adminItems.length > 0;
 
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -93,19 +123,21 @@ export function AppSideNav({
           <>
             {!collapsed && <div className="sidenav-category">Administration</div>}
             <ul className="sidenav-menu">
-              <li>
-                <button
-                  type="button"
-                  className={`sidenav-item${activePath.startsWith('/admin/models') ? ' active' : ''}`}
-                  onClick={() => onNavigate('/admin/models')}
-                  title={collapsed ? 'Model configuration' : undefined}
-                >
-                  <span className="sidenav-item-icon">
-                    <IconModels />
-                  </span>
-                  {!collapsed && <span className="sidenav-item-label">Model configuration</span>}
-                </button>
-              </li>
+              {adminItems.map((item) => (
+                <li key={item.path}>
+                  <button
+                    type="button"
+                    className={`sidenav-item${activePath.startsWith(item.path) ? ' active' : ''}`}
+                    onClick={() => onNavigate(item.path)}
+                    title={collapsed ? item.navLabel : undefined}
+                  >
+                    <span className="sidenav-item-icon">
+                      <AdminNavIcon name={item.icon} />
+                    </span>
+                    {!collapsed && <span className="sidenav-item-label">{item.navLabel}</span>}
+                  </button>
+                </li>
+              ))}
             </ul>
           </>
         )}
