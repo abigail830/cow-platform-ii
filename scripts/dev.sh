@@ -29,7 +29,7 @@ Targets: all | backend | frontend
 
 Environment:
   BACKEND_PORT   default 8787
-  FRONTEND_PORT  default 5173
+  FRONTEND_PORT  default 5180
 
 Examples:
   $(basename "$0") start

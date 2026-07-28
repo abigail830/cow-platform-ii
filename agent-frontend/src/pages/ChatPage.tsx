@@ -1,63 +1,42 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AppSideNav } from '../components/AppSideNav.tsx';
+import type { AuthUser } from '../api/auth.ts';
 import { AgentChatPanel } from '../components/AgentChatPanel.tsx';
+import { AppShell } from '../components/AppShell.tsx';
 import { ChatComposer } from '../components/ChatComposer.tsx';
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel.tsx';
 import { AgentMenuIcon } from '../components/icons/AgentIcons.tsx';
 import { IconNewSession, IconSessionHistory } from '../components/icons/ChatIcons.tsx';
-import { clearSession, fetchMe, getToken, type AuthUser } from '../api/auth.ts';
 import {
   createConversation,
-  listAgents,
   listConversations,
   patchConversation,
   type AgentInfo,
   type Conversation,
 } from '../api/conversations.ts';
 
-export function ChatPage() {
-  const navigate = useNavigate();
+type ChatPageContentProps = {
+  user: AuthUser;
+  agents: AgentInfo[];
+  selectedAgent: string | null;
+  onSelectAgent: (name: string) => void;
+};
+
+function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPageContentProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState('');
-  const [booting, setBooting] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [navCollapsed, setNavCollapsed] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pendingInitialMessage, setPendingInitialMessage] = useState<string | null>(null);
 
   const selectedAgentInfo = agents.find((agent) => agent.name === selectedAgent) ?? null;
 
   useEffect(() => {
-    if (!getToken()) {
-      navigate('/login', { replace: true });
-      return;
+    if (!selectedAgent && agents[0]) {
+      onSelectAgent(agents[0].name);
     }
-    void (async () => {
-      try {
-        const me = await fetchMe();
-        setUser(me);
-        const agentList = await listAgents();
-        setAgents(agentList);
-        const first = agentList[0]?.name ?? null;
-        setSelectedAgent(first);
-        if (first) {
-          const convs = await listConversations(first);
-          setConversations(convs);
-        }
-      } catch {
-        clearSession();
-        navigate('/login', { replace: true });
-      } finally {
-        setBooting(false);
-      }
-    })();
-  }, [navigate]);
+  }, [agents, onSelectAgent, selectedAgent]);
 
   useEffect(() => {
     if (!selectedAgent) return;
@@ -114,106 +93,100 @@ export function ChatPage() {
     setActiveId(id);
   }
 
-  function logout() {
-    clearSession();
-    navigate('/login', { replace: true });
-  }
+  return (
+    <div className="chat-shell">
+      <main className="chat-main">
+        <header className="chat-header">
+          <div className="chat-header-title">
+            {selectedAgent && <AgentMenuIcon name={selectedAgent} className="chat-header-icon" />}
+            <h2>{selectedAgentInfo?.displayName ?? 'Chat'}</h2>
+          </div>
+          <div className="chat-header-actions">
+            <button
+              type="button"
+              className="chat-icon-btn"
+              onClick={() => void startNewChat()}
+              title="New session"
+              aria-label="New session"
+            >
+              <IconNewSession />
+            </button>
+            <button
+              type="button"
+              className={`chat-icon-btn${historyOpen ? ' active' : ''}`}
+              onClick={() => setHistoryOpen((open) => !open)}
+              title="Session history"
+              aria-label="Session history"
+            >
+              <IconSessionHistory />
+            </button>
+          </div>
+        </header>
 
-  if (booting) {
-    return <div className="boot">Loading…</div>;
-  }
+        <div className="chat-body">
+          <div className="chat-stage">
+            {selectedAgent && activeId ? (
+              <AgentChatPanel
+                key={`${selectedAgent}:${activeId}`}
+                agentName={selectedAgent}
+                conversationId={activeId}
+                userId={user.id}
+                initialMessage={pendingInitialMessage}
+                onInitialMessageSent={() => {
+                  setPendingInitialMessage(null);
+                  void refreshConversations();
+                }}
+                onTitleFromMessage={(title) => void onTitleFromMessage(title)}
+                input={input}
+                onInputChange={setInput}
+                onBusyChange={setBusy}
+                messagesEndRef={messagesEndRef}
+              />
+            ) : (
+              <>
+                <div className="chat-messages">
+                  <div className="chat-column">
+                    <p className="empty">Start a conversation</p>
+                    <div ref={messagesEndRef} />
+                  </div>
+                </div>
+                <ChatComposer
+                  value={input}
+                  onChange={setInput}
+                  onSend={() => void onSendNewChat()}
+                  busy={busy}
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {historyOpen && (
+        <ChatHistoryPanel
+          conversations={recentConversations}
+          activeId={activeId}
+          onSelect={selectConversation}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+export function ChatPage() {
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   return (
-    <div className={`chat-layout${navCollapsed ? ' nav-collapsed' : ''}`}>
-      <AppSideNav
-        agents={agents}
-        selectedAgent={selectedAgent}
-        onSelectAgent={setSelectedAgent}
-        userLabel={user?.displayName ?? user?.email ?? ''}
-        collapsed={navCollapsed}
-        onToggleCollapse={() => setNavCollapsed((value) => !value)}
-        onLogout={logout}
-      />
-
-      <div className="chat-shell">
-        <main className="chat-main">
-          <header className="chat-header">
-            <div className="chat-header-title">
-              {selectedAgent && <AgentMenuIcon name={selectedAgent} className="chat-header-icon" />}
-              <h2>{selectedAgentInfo?.displayName ?? 'Chat'}</h2>
-            </div>
-            <div className="chat-header-actions">
-              <button
-                type="button"
-                className="chat-icon-btn"
-                onClick={() => void startNewChat()}
-                title="New session"
-                aria-label="New session"
-              >
-                <IconNewSession />
-              </button>
-              <button
-                type="button"
-                className={`chat-icon-btn${historyOpen ? ' active' : ''}`}
-                onClick={() => setHistoryOpen((open) => !open)}
-                title="Session history"
-                aria-label="Session history"
-              >
-                <IconSessionHistory />
-              </button>
-            </div>
-          </header>
-
-          <div className="chat-body">
-            <div className="chat-stage">
-              {selectedAgent && user && activeId ? (
-                <AgentChatPanel
-                  key={`${selectedAgent}:${activeId}`}
-                  agentName={selectedAgent}
-                  conversationId={activeId}
-                  userId={user.id}
-                  initialMessage={pendingInitialMessage}
-                  onInitialMessageSent={() => {
-                    setPendingInitialMessage(null);
-                    void refreshConversations();
-                  }}
-                  onTitleFromMessage={(title) => void onTitleFromMessage(title)}
-                  input={input}
-                  onInputChange={setInput}
-                  onBusyChange={setBusy}
-                  messagesEndRef={messagesEndRef}
-                />
-              ) : (
-                <>
-                  <div className="chat-messages">
-                    <div className="chat-column">
-                      <p className="empty">
-                        Start a conversation
-                      </p>
-                      <div ref={messagesEndRef} />
-                    </div>
-                  </div>
-                  <ChatComposer
-                    value={input}
-                    onChange={setInput}
-                    onSend={() => void onSendNewChat()}
-                    busy={busy}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        </main>
-
-        {historyOpen && (
-          <ChatHistoryPanel
-            conversations={recentConversations}
-            activeId={activeId}
-            onSelect={selectConversation}
-            onClose={() => setHistoryOpen(false)}
-          />
-        )}
-      </div>
-    </div>
+    <AppShell activePath="/chat" selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent}>
+      {({ user, agents }) => (
+        <ChatPageContent
+          user={user}
+          agents={agents}
+          selectedAgent={selectedAgent}
+          onSelectAgent={setSelectedAgent}
+        />
+      )}
+    </AppShell>
   );
 }

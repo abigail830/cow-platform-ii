@@ -1,0 +1,42 @@
+---
+description: Agent Platform frontend UI — English copy, orange theme, sidenav spacing
+globs: agent-frontend/**/*
+alwaysApply: false
+---
+
+# Agent Platform UI conventions
+
+## Language
+
+- All user-facing copy in `agent-frontend` must be **English** (labels, buttons, placeholders, errors, empty states, confirmations).
+- Do not add Chinese UI strings unless the user explicitly requests localization.
+
+## Theme color
+
+Primary brand color is **orange**. Use CSS variables from `index.css`:
+
+- `--brand-orange: #ff6611` — primary actions, active filters, links
+- `--brand-orange-hover: #e85c0f` — hover states
+- `--brand-orange-soft: #fff0e7` — active nav items, soft highlights
+- `--brand-orange-muted: #ffe8d9` — badges, tags
+- `--app-page-bg: #f8fafb` — page background for chat shell and admin pages
+
+Do not introduce teal/green as the primary accent in new admin or chat UI.
+
+## Left sidenav spacing
+
+- **Between categories** (e.g. Agents → Administration): use `.sidenav-menu + .sidenav-category { margin-top: 1.25rem; }`
+- **Category label → items**: keep tight (`margin-bottom: ~0.3rem` on `.sidenav-category`)
+- **Between sub-menu items**: compact — `.sidenav-menu { gap: 0 }`, `.sidenav-item { padding: 0.375rem 0.625rem }`, `line-height: 1.3`
+
+When adding new nav sections, follow the existing pattern: category label + `ul.sidenav-menu`.
+
+## Page background
+
+Use `var(--app-page-bg)` for chat layout, header, body, and admin pages — not the older warm gray `#f3f4f2`.
+
+## Admin pages
+
+- Reuse `.btn-primary`, `.admin-filter.active`, `.btn-link` for orange styling.
+- Keep admin UI **compact**: base `0.8125rem`, table headers `0.75rem`, tighter padding on rows/toolbar.
+- Table/action patterns live in `ModelsConfigPage.tsx` — match its English copy style.

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentInfo } from '../api/conversations.ts';
+import type { UserRole } from '../api/auth.ts';
 import { AgentMenuIcon, IconSidenavCollapse, IconSidenavExpand } from './icons/AgentIcons.tsx';
 
 type AppSideNavProps = {
@@ -7,22 +8,38 @@ type AppSideNavProps = {
   selectedAgent: string | null;
   onSelectAgent: (name: string) => void;
   userLabel: string;
+  userRole: UserRole;
+  activePath: string;
   collapsed: boolean;
   onToggleCollapse: () => void;
   onLogout: () => void;
+  onNavigate: (path: string) => void;
 };
+
+function IconModels() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+      <path d="M5 7h6M5 9.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export function AppSideNav({
   agents,
   selectedAgent,
   onSelectAgent,
   userLabel,
+  userRole,
+  activePath,
   collapsed,
   onToggleCollapse,
   onLogout,
+  onNavigate,
 }: AppSideNavProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const showAdmin = userRole === 'admin' || userRole === 'operator';
 
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -55,7 +72,7 @@ export function AppSideNav({
         {!collapsed && <div className="sidenav-category">Agents</div>}
         <ul className="sidenav-menu">
           {agents.map((agent) => {
-            const active = selectedAgent === agent.name;
+            const active = activePath.startsWith('/chat') && selectedAgent === agent.name;
             return (
               <li key={agent.name}>
                 <button
@@ -71,6 +88,27 @@ export function AppSideNav({
             );
           })}
         </ul>
+
+        {showAdmin && (
+          <>
+            {!collapsed && <div className="sidenav-category">Administration</div>}
+            <ul className="sidenav-menu">
+              <li>
+                <button
+                  type="button"
+                  className={`sidenav-item${activePath.startsWith('/admin/models') ? ' active' : ''}`}
+                  onClick={() => onNavigate('/admin/models')}
+                  title={collapsed ? 'Model configuration' : undefined}
+                >
+                  <span className="sidenav-item-icon">
+                    <IconModels />
+                  </span>
+                  {!collapsed && <span className="sidenav-item-label">Model configuration</span>}
+                </button>
+              </li>
+            </ul>
+          </>
+        )}
       </nav>
 
       <div className="sidenav-footer">
