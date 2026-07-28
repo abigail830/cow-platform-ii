@@ -73,7 +73,7 @@ export function RolePermissionsDrawer({
             <h2>{role.label}</h2>
             <p className="admin-drawer-subtitle">{role.description ?? role.key}</p>
             {isSystemAdmin && (
-              <p className="roles-system-note">System role — all admin read and write permissions.</p>
+              <p className="roles-system-note">System role — all platform and admin permissions.</p>
             )}
           </div>
           <button type="button" className="icon-btn" title="Close" onClick={onClose}>

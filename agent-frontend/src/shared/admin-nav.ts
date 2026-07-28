@@ -1,37 +1,69 @@
-export const ADMIN_PAGES = [
+export type NavPageIcon = 'models' | 'storage' | 'users' | 'roles' | 'permissions';
+
+export type NavPage = {
+  path: string;
+  navLabel: string;
+  titleMain: string;
+  titleAccent: string;
+  permissionKey: string;
+  icon: NavPageIcon;
+};
+
+export const PLATFORM_BASIC_CATEGORY = 'Platform basic';
+
+export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
   {
     path: '/admin/models',
     navLabel: 'Model configuration',
     titleMain: 'Model',
     titleAccent: 'Configuration',
-    permissionKey: 'admin:models',
-    icon: 'models' as const,
+    permissionKey: 'platform-basic:models',
+    icon: 'models',
   },
   {
+    path: '/admin/storage',
+    navLabel: 'Object storage',
+    titleMain: 'Object',
+    titleAccent: 'Storage',
+    permissionKey: 'platform-basic:storage',
+    icon: 'storage',
+  },
+];
+
+export const ADMINISTRATION_CATEGORY = 'Administration';
+
+export const ADMIN_PAGES: readonly NavPage[] = [
+  {
     path: '/admin/users',
-    navLabel: 'User configuration',
+    navLabel: 'User',
     titleMain: 'User',
-    titleAccent: 'Configuration',
+    titleAccent: '',
     permissionKey: 'admin:users',
-    icon: 'users' as const,
+    icon: 'users',
   },
   {
     path: '/admin/roles',
-    navLabel: 'Role configuration',
+    navLabel: 'Role',
     titleMain: 'Role',
-    titleAccent: 'Configuration',
+    titleAccent: '',
     permissionKey: 'admin:roles',
-    icon: 'roles' as const,
+    icon: 'roles',
   },
   {
     path: '/admin/permissions',
-    navLabel: 'Permission catalog',
+    navLabel: 'Permission',
     titleMain: 'Permission',
-    titleAccent: 'Catalog',
+    titleAccent: '',
     permissionKey: 'admin:permissions',
-    icon: 'permissions' as const,
+    icon: 'permissions',
   },
-] as const;
+];
+
+export const ALL_NAV_PAGES: readonly NavPage[] = [...PLATFORM_BASIC_PAGES, ...ADMIN_PAGES];
+
+export function getNavPage(path: string): NavPage | undefined {
+  return ALL_NAV_PAGES.find((item) => item.path === path);
+}
 
 /** @deprecated use ADMIN_PAGES */
 export const ADMIN_NAV_ITEMS = ADMIN_PAGES;

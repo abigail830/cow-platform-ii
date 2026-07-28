@@ -10,13 +10,14 @@ import {
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { IconDelete, IconEdit, IconView } from '../components/AdminActionIcons.tsx';
 import { PermissionForm } from '../components/PermissionForm.tsx';
-import { ADMIN_PAGES } from '../shared/admin-nav.ts';
+import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
-const PAGE = ADMIN_PAGES.find((item) => item.path === '/admin/permissions')!;
+const PAGE = getNavPage('/admin/permissions')!;
 
 const CATEGORY_FILTERS = [
   { id: 'all', label: 'All' },
+  { id: 'platform-basic', label: 'Platform basic' },
   { id: 'admin', label: 'Admin' },
   { id: 'agent', label: 'Agent' },
 ] as const;

@@ -12,6 +12,7 @@ import {
   accessFromPermissionKey,
   ADMIN_RESOURCES,
   canSeeAdminNav,
+  PLATFORM_BASIC_RESOURCES,
   hasPermissionKey,
   hasResourcePermission,
   type ResolvedPermissionGrant,
@@ -115,4 +116,4 @@ export async function userCanSeeAdmin(userId: string): Promise<boolean> {
   return user?.role === 'admin' || user?.role === 'operator';
 }
 
-export { hasPermissionKey, hasResourcePermission, canSeeAdminNav, ADMIN_RESOURCES };
+export { hasPermissionKey, hasResourcePermission, canSeeAdminNav, ADMIN_RESOURCES, PLATFORM_BASIC_RESOURCES };

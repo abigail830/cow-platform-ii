@@ -33,7 +33,7 @@ function hasResourcePermission(
 }
 
 /**
- * Check permission by resource shorthand (`admin:models`) or full key (`admin:models:write`).
+ * Check permission by resource shorthand (`platform-basic:models`, `admin:users`) or full key.
  */
 export function hasPermission(
   user: AuthUser | null | undefined,

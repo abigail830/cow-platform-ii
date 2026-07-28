@@ -19,7 +19,7 @@ export const MODEL_API_TYPES = [
 
 export type ModelApiType = (typeof MODEL_API_TYPES)[number];
 
-export const PERMISSION_CATEGORIES = ['admin', 'agent'] as const;
+export const PERMISSION_CATEGORIES = ['platform-basic', 'admin', 'agent'] as const;
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
 
 export const ACCESS_LEVELS = ['read', 'write'] as const;

@@ -102,6 +102,14 @@ type AdminPageTitleProps = {
 };
 
 export function AdminPageTitle({ main, accent }: AdminPageTitleProps) {
+  if (!accent) {
+    return (
+      <h1>
+        <span className="admin-title-accent">{main}</span>
+      </h1>
+    );
+  }
+
   return (
     <h1>
       <span className="admin-title-main">{main}</span>{' '}

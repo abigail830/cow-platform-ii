@@ -6,6 +6,7 @@ import auth from './routes/auth.ts';
 import agents from './routes/agents.ts';
 import conversations from './routes/conversations.ts';
 import admin from './routes/admin/index.ts';
+import consoleRoutes from './routes/console/index.ts';
 
 registerModelProviders();
 
@@ -26,6 +27,7 @@ app.route('/api/auth', auth);
 app.route('/api/agents', agents);
 app.route('/api/conversations', conversations);
 app.route('/api/admin', admin);
+app.route('/api/console', consoleRoutes);
 app.route('/api', flue());
 
 export default app;

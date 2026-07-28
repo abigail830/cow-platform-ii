@@ -12,10 +12,10 @@ import {
 } from '../api/models.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { ModelConfigForm } from '../components/ModelConfigForm.tsx';
-import { ADMIN_PAGES } from '../shared/admin-nav.ts';
+import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
-const PAGE = ADMIN_PAGES.find((item) => item.path === '/admin/models')!;
+const PAGE = getNavPage('/admin/models')!;
 
 const API_TYPE_FILTERS: Array<{ id: 'all' | ModelApiType; label: string }> = [
   { id: 'all', label: 'All' },
@@ -28,7 +28,7 @@ const API_TYPE_FILTERS: Array<{ id: 'all' | ModelApiType; label: string }> = [
 
 export function ModelsConfigPage() {
   const { user } = useAppOutletContext();
-  const canWrite = useMemo(() => hasPermission(user, 'admin:models', 'write'), [user]);
+  const canWrite = useMemo(() => hasPermission(user, 'platform-basic:models', 'write'), [user]);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);

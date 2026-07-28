@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PermissionInput, PermissionRecord } from '../api/permissions.ts';
 
-const CATEGORIES = ['admin', 'agent'] as const;
+const CATEGORIES = ['platform-basic', 'admin', 'agent'] as const;
 
 type PermissionFormProps = {
   initial?: PermissionRecord | null;
@@ -73,7 +73,7 @@ export function PermissionForm({ initial, onSubmit, onCancel, readOnly }: Permis
               <input
                 value={key}
                 onChange={(event) => setKey(event.target.value)}
-                placeholder="e.g. admin:users:read"
+                placeholder="e.g. platform-basic:models:read"
                 required
                 disabled={Boolean(initial) || readOnly}
               />

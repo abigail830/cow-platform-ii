@@ -1,8 +1,15 @@
 import type { AccessLevel, PermissionCategory } from '../db/schema.ts';
 
-/** Admin feature resources — each generates read + write permission keys. */
-export const ADMIN_RESOURCES = {
+export const PLATFORM_BASIC_CATEGORY = 'platform-basic' as const;
+
+export const PLATFORM_BASIC_RESOURCES = {
   MODELS: 'models',
+  STORAGE: 'storage',
+} as const;
+
+export type PlatformBasicResource = (typeof PLATFORM_BASIC_RESOURCES)[keyof typeof PLATFORM_BASIC_RESOURCES];
+
+export const ADMIN_RESOURCES = {
   USERS: 'users',
   ROLES: 'roles',
   PERMISSIONS: 'permissions',
@@ -11,21 +18,31 @@ export const ADMIN_RESOURCES = {
 export type AdminResource = (typeof ADMIN_RESOURCES)[keyof typeof ADMIN_RESOURCES];
 
 type ResourceDefinition = {
-  resource: AdminResource;
+  resource: string;
   label: string;
   description: string;
   routePatterns: string[];
   apiPatterns: string[];
 };
 
-const ADMIN_RESOURCE_DEFS: ResourceDefinition[] = [
+const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
   {
-    resource: ADMIN_RESOURCES.MODELS,
+    resource: PLATFORM_BASIC_RESOURCES.MODELS,
     label: 'Model configuration',
     description: 'LLM provider connections and defaults.',
     routePatterns: ['/admin/models'],
     apiPatterns: ['/api/admin/models', '/api/admin/models/*'],
   },
+  {
+    resource: PLATFORM_BASIC_RESOURCES.STORAGE,
+    label: 'Object storage',
+    description: 'S3-compatible bucket browser and object moves.',
+    routePatterns: ['/admin/storage'],
+    apiPatterns: ['/api/console/storage', '/api/console/storage/*'],
+  },
+];
+
+const ADMIN_RESOURCE_DEFS: ResourceDefinition[] = [
   {
     resource: ADMIN_RESOURCES.USERS,
     label: 'Users',
@@ -61,34 +78,39 @@ export type PermissionDefinition = {
   isSystem: boolean;
 };
 
-function buildPermission(
+function buildPermissions(
   category: PermissionCategory,
-  def: ResourceDefinition,
-  access: AccessLevel,
-): PermissionDefinition {
-  const accessLabel = access === 'read' ? 'Read' : 'Write';
-  return {
-    key: `${category}:${def.resource}:${access}`,
-    label: `${def.label} — ${accessLabel}`,
-    description: `${accessLabel} access to ${def.description.charAt(0).toLowerCase()}${def.description.slice(1)}`,
-    category,
-    resource: def.resource,
-    access,
-    routePatterns: def.routePatterns,
-    apiPatterns: def.apiPatterns,
-    isSystem: true,
-  };
+  defs: ResourceDefinition[],
+): PermissionDefinition[] {
+  return defs.flatMap((def) =>
+    (['read', 'write'] as const).map((access) => {
+      const accessLabel = access === 'read' ? 'Read' : 'Write';
+      return {
+        key: `${category}:${def.resource}:${access}`,
+        label: `${def.label} — ${accessLabel}`,
+        description: `${accessLabel} access to ${def.description.charAt(0).toLowerCase()}${def.description.slice(1)}`,
+        category,
+        resource: def.resource,
+        access,
+        routePatterns: def.routePatterns,
+        apiPatterns: def.apiPatterns,
+        isSystem: true,
+      };
+    }),
+  );
 }
 
-export const PERMISSION_CATALOG: PermissionDefinition[] = ADMIN_RESOURCE_DEFS.flatMap((def) => [
-  buildPermission('admin', def, 'read'),
-  buildPermission('admin', def, 'write'),
-]);
+export const PERMISSION_CATALOG: PermissionDefinition[] = [
+  ...buildPermissions(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCE_DEFS),
+  ...buildPermissions('admin', ADMIN_RESOURCE_DEFS),
+];
 
-/** Keys superseded by granular read/write permissions. */
+/** Keys superseded by granular read/write permissions or category moves. */
 export const OBSOLETE_PERMISSION_KEYS = [
   'admin:all',
   'admin:models',
+  'admin:models:read',
+  'admin:models:write',
   'admin:users',
   'admin:roles',
   'admin:permissions',
@@ -149,7 +171,7 @@ export function hasPermissionKey(keys: Set<string>, key: string, required: Acces
 }
 
 export function canSeeAdminNav(keys: Set<string>): boolean {
-  return PERMISSION_CATALOG.some(
-    (def) => def.category === 'admin' && hasResourcePermission(keys, 'admin', def.resource, 'read'),
+  return PERMISSION_CATALOG.some((def) =>
+    hasResourcePermission(keys, def.category, def.resource, 'read'),
   );
 }

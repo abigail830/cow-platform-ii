@@ -5,10 +5,10 @@ import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../la
 import { IconDelete, IconEdit } from '../components/AdminActionIcons.tsx';
 import { UserForm } from '../components/UserForm.tsx';
 import { UserRolesForm } from '../components/UserRolesForm.tsx';
-import { ADMIN_PAGES } from '../shared/admin-nav.ts';
+import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
-const PAGE = ADMIN_PAGES.find((item) => item.path === '/admin/users')!;
+const PAGE = getNavPage('/admin/users')!;
 
 export function UsersPage() {
   const { user } = useAppOutletContext();

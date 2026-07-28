@@ -6,10 +6,10 @@ import { listAdminRoles, type AdminRole } from '../api/users.ts';
 import { IconEdit } from '../components/AdminActionIcons.tsx';
 import { RolePermissionsDrawer } from '../components/RolePermissionsDrawer.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
-import { ADMIN_PAGES } from '../shared/admin-nav.ts';
+import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
-const PAGE = ADMIN_PAGES.find((item) => item.path === '/admin/roles')!;
+const PAGE = getNavPage('/admin/roles')!;
 
 type RoleSummary = AdminRole & {
   grantCount: number;
@@ -41,7 +41,7 @@ export function RolesPage() {
     try {
       const [roleRows, permissionRows] = await Promise.all([
         listAdminRoles(),
-        listPermissions({ category: 'admin' }),
+        listPermissions(),
       ]);
       setCatalog(permissionRows);
 
