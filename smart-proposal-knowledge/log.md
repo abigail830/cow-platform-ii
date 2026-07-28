@@ -1,5 +1,11 @@
 # Update Log
 
+## 2026-07-27
+
+* **Proposal state**: [proposal-state](meta/proposal-state.md) revised — optional minimal session (catalog/facts/rows/tables only); [proposal-state-operations](playbooks/proposal-state-operations.md) aligned; blocks/examples/template read at export.
+* **Catalog adapters (Phase 2a)**: Discovery-first routing for InCorp [incorp-sg](catalogs/adapters/incorp-sg.md) / [incorp-au](catalogs/adapters/incorp-au.md); [catalog-search-and-matching](playbooks/catalog-search-and-matching.md) — `list_tables` / `describe_table` / flexible SELECT (no fixed schema in OKF).
+* **Region routing**: InCorp SG/AU rows point to live adapters; data source priority updated (PostgreSQL, not MySQL).
+
 ## 2026-07-26
 
 * **sg-incorp cleanup**: Removed superseded `CS_EP_Accounting_Payroll_TAX` (inbox, examples binary, extraction, example concept). Anchor is `incorp-sg-cs-tax-payroll-accounting-ff`; Rikvin disclaimer sources `incorp-sg-employment-pass` extraction.

@@ -23,3 +23,6 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# Agent platform runtime (PID + logs)
+.run/

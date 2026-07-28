@@ -1,0 +1,2 @@
+DROP INDEX "idx_app_messages_conversation_flue_event";--> statement-breakpoint
+CREATE UNIQUE INDEX "idx_app_messages_dedup" ON "app_messages" USING btree ("conversation_id","turn_id","flue_event_type","flue_event_index");

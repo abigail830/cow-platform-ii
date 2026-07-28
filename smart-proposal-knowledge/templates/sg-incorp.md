@@ -182,4 +182,4 @@ Immigration fees append optional `rikvin_disclaimer` block after EP modules (`ap
 
 ## Catalog & routing
 
-Products and packages catalogs are Phase 2 (`catalogs/products/sg.md`, `catalogs/packages/sg.md`). Region default: [region-routing](/meta/region-routing.md#incorp--by-issuing-region).
+Products and packages catalogs are Phase 2 live adapters — [incorp-sg](/catalogs/adapters/incorp-sg.md). Search playbook: [catalog-search-and-matching](/playbooks/catalog-search-and-matching.md). Region default: [region-routing](/meta/region-routing.md#incorp--by-issuing-region).

@@ -33,17 +33,17 @@ Example ↔ template mapping lives in [examples/index.md](/examples/index.md) on
 
 ## InCorp — by issuing region
 
-| Region | Default layout | Default `template_id` | Product catalog | Package catalog |
-|--------|----------------|----------------------|-----------------|-----------------|
-| SG | [oneoff-recurring](/layouts/oneoff-recurring.md) | `sg-incorp` (+ `sg-audit` special) | [sg](/catalogs/products/sg.md) | [sg](/catalogs/packages/sg.md) |
-| AU | [multi-frequency](/layouts/multi-frequency.md) | `au-advisory` (+ `au-audit` special) | [au](/catalogs/products/au.md) | [au](/catalogs/packages/au.md) |
-| PH | [multi-frequency](/layouts/multi-frequency.md) | `ph-incorp` (+ `ph-recruitment` special) | [ph](/catalogs/products/ph.md) | [ph](/catalogs/packages/ph.md) |
-| HK | TBD | `hk-incorp` | planned | planned |
-| VN | TBD | `vn-incorp` | planned | planned |
-| MY | [fee-billing](/layouts/fee-billing.md) | `sp-flexible` | [my](/catalogs/products/my.md) | [my](/catalogs/packages/my.md) |
-| ID | TBD | `sp-flexible` | planned | planned |
-| IN | TBD | `sp-flexible` | planned | planned |
-| CN | TBD | `sp-flexible` | planned | planned |
+| Region | Default layout | Default `template_id` | Live catalog adapter |
+|--------|----------------|----------------------|----------------------|
+| SG | [oneoff-recurring](/layouts/oneoff-recurring.md) | `sg-incorp` (+ `sg-audit` special) | [incorp-sg](/catalogs/adapters/incorp-sg.md) |
+| AU | [multi-frequency](/layouts/multi-frequency.md) | `au-advisory` (+ `au-audit` special) | [incorp-au](/catalogs/adapters/incorp-au.md) |
+| PH | [multi-frequency](/layouts/multi-frequency.md) | `ph-incorp` (+ `ph-recruitment` special) | planned |
+| HK | TBD | `hk-incorp` | planned |
+| VN | TBD | `vn-incorp` | planned |
+| MY | [fee-billing](/layouts/fee-billing.md) | `sp-flexible` | planned |
+| ID | TBD | `sp-flexible` | planned |
+| IN | TBD | `sp-flexible` | planned |
+| CN | TBD | `sp-flexible` | planned |
 
 Cells marked **planned** are filled in Phase 2+.
 
@@ -60,8 +60,8 @@ Route here when `rikvin` is in tags, or scope is immigration-only — not the ge
 | Entity jurisdiction | SG |
 | Default layout | [oneoff-recurring](/layouts/oneoff-recurring.md) |
 | Default `template_id` | `sg-incorp` (Rikvin blocks; not a separate template) |
-| Product catalog | [sg](/catalogs/products/sg.md) — immigration SKUs |
-| Package catalog | [sg](/catalogs/packages/sg.md) |
+| Product catalog | [sg adapter](/catalogs/adapters/incorp-sg.md) — immigration SKUs |
+| Package catalog | same table (`is_package = true`) |
 
 **Composition patterns**
 
@@ -92,6 +92,8 @@ Route here when `rikvin` is in tags, or scope is immigration-only — not the ge
 
 ## Data source priority
 
-1. **Live** — [Data Adapter](/catalogs/adapters/) — MySQL per **issuing region**; PG MDM per **entity jurisdiction** (Harneys)
-2. **Seed** — `catalogs/products/{region}.md`
+1. **Live** — [Data Adapter](/catalogs/adapters/) — PostgreSQL per **InCorp issuing region** (SG, AU); PG MDM per **entity jurisdiction** (Harneys, planned)
+2. **Seed** — `catalogs/products/{region}.md` (optional offline fallback; not required when live adapter exists)
 3. **Structure only** — Reference Proposal concepts (`template_id` in frontmatter; catalog at [examples/index.md](/examples/index.md))
+
+Catalog search and matching: [playbook](/playbooks/catalog-search-and-matching.md).

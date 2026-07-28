@@ -32,8 +32,9 @@ Canonical spec: [SPEC.md](../../SPEC.md). Only `type` is required per concept.
 | `Reference Proposal` | `examples/{name}.md` | Structure index from sample docx/pptx (no PII) |
 | `Brand Guideline` | `brand/*.md` | Colors, fonts, UX constraints |
 | `Attested Computation` | `computations/*.md` | Verifiable fee or tax logic |
+| `Proposal State Contract` | `meta/proposal-state.md` | Optional compose session — catalog picks, fee rows, facts, table views only (instances not in OKF) |
 | `Playbook` | `playbooks/*.md` | Matching, compose, assembly rules |
-| `Reference` | `meta/*.md` | Bundle meta documentation |
+| `Reference` | `meta/*.md` (except proposal-state) | Bundle meta documentation |
 
 ## Section Block model (unified)
 

@@ -14,7 +14,7 @@ Enterprise proposal knowledge for multi-region, multi-BU Ascentium services.
 * [brand](brand/index.md) — Brand guidelines and output shells
 * [examples](examples/index.md) — Reference proposals (structural indexes)
 * [computations](computations/index.md) — Attested fee and tax calculations
-* [playbooks](playbooks/index.md) — Catalog matching and document compose rules
+* [playbooks](playbooks/index.md) — Catalog matching, **proposal state operations**, document compose rules
 
 Consumer agent (streaming CLI): sibling repo folder [`../proposal-agent`](../proposal-agent/).
 

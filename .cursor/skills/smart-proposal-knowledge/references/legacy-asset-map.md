@@ -13,7 +13,7 @@ Base: `/Users/qianping/Documents/Source/ascentium/axon-flow/backend/agent_platfo
 | `x-flexon/skills/proposal-writing/references/*.md` | `brand/` or `playbooks/` |
 | `x-proposal/skills/sp-proposal-builder/references/quotation-layout-*.md` | `layouts/*.md` |
 | `x-proposal/skills/sp-proposal-builder/references/quotation-layout-registry.md` | `layouts/index.md` |
-| `x-proposal/skills/sp-proposal-builder/references/proposal-state-flexible.md` | `meta/proposal-state-schema.md` (if needed) |
+| `x-proposal/skills/sp-proposal-builder/references/proposal-state-flexible.md` | `meta/proposal-state.md` + `playbooks/proposal-state-operations.md` |
 | `x-proposal/skills/sp-proposal-builder/references/matching-and-recommendation.md` | `playbooks/catalog-matching.md` |
 | `x-proposal/skills/product-catalog-explorer/references/*-products.md` | `catalogs/products/{region}.md` |
 | `x-proposal/skills/package-catalog-explorer/references/*-packages.md` | `catalogs/packages/{region}.md` |
