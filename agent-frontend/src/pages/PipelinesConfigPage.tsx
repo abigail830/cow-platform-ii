@@ -120,7 +120,16 @@ export function PipelinesConfigPage() {
         {error && <p className="error inline">{error}</p>}
 
         <div className="admin-table-wrap">
-          <table className="admin-table">
+          <table className="admin-table pipelines-config-table">
+            <colgroup>
+              <col className="pipelines-col-name" />
+              <col className="pipelines-col-desc" />
+              <col className="pipelines-col-model" />
+              <col className="pipelines-col-command" />
+              <col className="pipelines-col-updated" />
+              <col className="pipelines-col-enabled" />
+              <col className="pipelines-col-actions" />
+            </colgroup>
             <thead>
               <tr>
                 <th>Name</th>
@@ -156,9 +165,13 @@ export function PipelinesConfigPage() {
                         <div className="model-cell-name">{pipeline.name}</div>
                       </div>
                     </td>
-                    <td>{pipeline.description ?? '—'}</td>
+                    <td className="pipeline-desc-cell pipeline-multiline-cell" title={pipeline.description ?? undefined}>
+                      {pipeline.description ?? '—'}
+                    </td>
                     <td>{pipeline.modelConfigName ?? '—'}</td>
-                    <td className="mono-cell pipeline-command-cell">{pipeline.commandTemplate}</td>
+                    <td className="pipeline-command-cell pipeline-multiline-cell" title={pipeline.commandTemplate}>
+                      {pipeline.commandTemplate}
+                    </td>
                     <td>{new Date(pipeline.updatedAt).toLocaleDateString()}</td>
                     <td>
                       <label className="form-checkbox pipeline-enabled-toggle">
@@ -172,7 +185,7 @@ export function PipelinesConfigPage() {
                         />
                       </label>
                     </td>
-                    <td>
+                    <td className="pipeline-actions-cell">
                       <div className="row-actions">
                         <button
                           type="button"

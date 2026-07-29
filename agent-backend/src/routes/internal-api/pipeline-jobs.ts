@@ -7,7 +7,7 @@ import {
   updatePipelineJob,
   type PipelineJobStage,
 } from '../../services/pipeline-jobs.ts';
-import { spawnAsyncPipelineFinalize } from '../../services/pipeline-runner.ts';
+import { spawnAsyncPipelineFinalize, spawnAsyncPipelineExtractMetadata } from '../../services/pipeline-runner.ts';
 
 const pipelineJobs = new Hono();
 
@@ -75,6 +75,16 @@ pipelineJobs.patch('/:id', async (c) => {
 
   if (body.stage) {
     await markDocumentForJobStage(job.documentId, body.stage);
+  }
+
+  if (body.stage === 'parsed') {
+    const current = updated ?? job;
+    if (current.extractionArgs?.trim()) {
+      await spawnAsyncPipelineExtractMetadata(current.id, current.pipelineName);
+    } else {
+      await updatePipelineJob(current.id, { stage: 'done' });
+      await markDocumentForJobStage(current.documentId, 'done');
+    }
   }
 
   return c.json({ ok: true, job: updated });

@@ -580,6 +580,24 @@ def _save_block_image(
     return name, f"{file_hash}/markdown_out/{name}"
 
 
+def _flatten_baidu_layouts(baidu_json: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten pages[].layouts for page_index baidu-layouts strategy."""
+    flat: list[dict[str, Any]] = []
+    for page in baidu_json.get("pages") or []:
+        if not isinstance(page, dict):
+            continue
+        page_num = page.get("page_num")
+        for index, layout in enumerate(page.get("layouts") or []):
+            if not isinstance(layout, dict):
+                continue
+            entry = dict(layout)
+            if page_num is not None:
+                entry["page_num"] = page_num
+            entry["index"] = index
+            flat.append(entry)
+    return flat
+
+
 def _build_result_from_baidu_json(
     baidu_json: dict[str, Any],
     markdown: str,
@@ -705,6 +723,7 @@ def _build_result_from_baidu_json(
             "parser": "baidu-cloud-paddle-vl",
             "baidu_file_id": baidu_json.get("file_id"),
             "baidu_file_name": baidu_json.get("file_name"),
+            "baidu_layouts": _flatten_baidu_layouts(baidu_json),
         }
     )
 

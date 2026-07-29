@@ -8,10 +8,12 @@ from typing import Any
 
 from .page_index_aliyun_layout import STRATEGY_NAME as ALIYUN_STRATEGY
 from .page_index_aliyun_layout import write_page_index_from_aliyun_layouts
+from .page_index_baidu_layout import STRATEGY_NAME as BAIDU_STRATEGY
+from .page_index_baidu_layout import write_page_index_from_baidu_layouts
 from .page_index_markdown import STRATEGY_NAME as MARKDOWN_STRATEGY
 from .page_index_markdown import write_page_index_from_markdown
 
-SUPPORTED_STRATEGIES = (MARKDOWN_STRATEGY, ALIYUN_STRATEGY)
+SUPPORTED_STRATEGIES = (MARKDOWN_STRATEGY, ALIYUN_STRATEGY, BAIDU_STRATEGY)
 
 
 def normalize_strategy(name: str | None) -> str:
@@ -27,6 +29,8 @@ def normalize_strategy(name: str | None) -> str:
 def default_page_index_strategy(*, provider: str | None = None) -> str:
     if provider == "aliyun":
         return ALIYUN_STRATEGY
+    if provider == "baidu":
+        return BAIDU_STRATEGY
     return MARKDOWN_STRATEGY
 
 
@@ -50,6 +54,7 @@ def write_page_index(
     """
     Write hash_dir/page_index.json using the selected strategy.
     For aliyun-layouts, rewrites markdown.md with layout anchors when layouts are provided.
+  For baidu-layouts, uses Baidu parse_result pages[].layouts title types.
     """
     output_path = hash_dir / "page_index.json"
     md_path = hash_dir / "markdown.md"
@@ -70,6 +75,15 @@ def write_page_index(
             markdown_path=md_path if md_path.parent.exists() else None,
         )
 
+    if strategy == BAIDU_STRATEGY:
+        if not layouts:
+            raise ValueError("baidu-layouts strategy requires layout list")
+        return write_page_index_from_baidu_layouts(
+            layouts,
+            doc_name=doc_name or hash_dir.name,
+            output_path=output_path,
+        )
+
     raise ValueError(f"Unhandled strategy: {strategy}")
 
 
@@ -77,9 +91,10 @@ def load_layouts_from_result_json(result_path: Path) -> list[dict[str, Any]]:
     data = json.loads(result_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         return []
-    raw = data.get("aliyun_layouts")
-    if isinstance(raw, list):
-        return [item for item in raw if isinstance(item, dict)]
+    for key in ("baidu_layouts", "aliyun_layouts"):
+        raw = data.get(key)
+        if isinstance(raw, list):
+            return [item for item in raw if isinstance(item, dict)]
     layouts: list[dict[str, Any]] = []
     for block in data.get("parsing_res_list") or []:
         if isinstance(block, dict):

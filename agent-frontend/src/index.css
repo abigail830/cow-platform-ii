@@ -1632,6 +1632,138 @@ textarea {
   margin-top: 0.35rem;
 }
 
+.pipeline-command-field {
+  position: relative;
+}
+
+.pipeline-command-header {
+  position: relative;
+}
+
+.pipeline-command-header:hover .pipeline-command-tooltip,
+.pipeline-command-header:focus-within .pipeline-command-tooltip {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.pipeline-config-modal .pipeline-command-tooltip {
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: 100%;
+  max-width: none;
+  padding: 0.75rem 0.9rem;
+}
+
+.form-field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.field-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.field-tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: help;
+  line-height: 0;
+}
+
+.field-tooltip-trigger:hover,
+.field-tooltip-trigger:focus-visible {
+  color: var(--brand-orange);
+}
+
+.field-tooltip-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 30;
+  width: min(22rem, 70vw);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #475569;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+
+.field-tooltip:hover .field-tooltip-panel,
+.field-tooltip:focus-within .field-tooltip-panel {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.field-tooltip-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.field-tooltip-title + .field-tooltip-title {
+  margin-top: 0.5rem;
+}
+
+.field-tooltip-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.field-tooltip-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 10.5rem) minmax(0, 1fr);
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+  padding: 0.25rem 0;
+}
+
+.field-tooltip-list-compact li {
+  padding: 0.15rem 0;
+}
+
+.field-tooltip-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6875rem;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.pipeline-config-modal .pipeline-command-tooltip .field-tooltip-list code {
+  font-size: 0.75rem;
+}
+
+.field-tooltip-foot {
+  margin: 0.5rem 0 0;
+  padding-top: 0.45rem;
+  border-top: 1px solid #f1f5f9;
+  color: #64748b;
+  font-size: 0.6875rem;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1974,10 +2106,76 @@ textarea {
 }
 
 .pipeline-command-cell {
-  max-width: 22rem;
-  white-space: nowrap;
+  vertical-align: top;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.6875rem;
+  color: #64748b;
+}
+
+.pipelines-config-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.pipelines-config-table .pipeline-multiline-cell {
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+  vertical-align: top;
+}
+
+.pipelines-config-table .pipeline-desc-cell {
+  color: #64748b;
+}
+
+.pipelines-config-table .pipeline-command-cell {
+  white-space: pre-wrap;
+}
+
+.pipelines-config-table col.pipelines-col-name {
+  width: 14%;
+}
+
+.pipelines-config-table col.pipelines-col-desc {
+  width: 20%;
+}
+
+.pipelines-config-table col.pipelines-col-model {
+  width: 11%;
+}
+
+.pipelines-config-table col.pipelines-col-command {
+  width: 26%;
+}
+
+.pipelines-config-table col.pipelines-col-updated {
+  width: 9%;
+}
+
+.pipelines-config-table col.pipelines-col-enabled {
+  width: 5%;
+}
+
+.pipelines-config-table col.pipelines-col-actions {
+  width: 4.5rem;
+}
+
+.pipelines-config-table td.pipeline-desc-cell,
+.pipelines-config-table td.pipeline-command-cell {
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+.pipelines-config-table td.pipeline-actions-cell {
+  width: 4.5rem;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .pipeline-enabled-toggle {

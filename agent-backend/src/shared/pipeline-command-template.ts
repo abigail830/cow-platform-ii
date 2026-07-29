@@ -2,10 +2,11 @@ export function renderCommandTemplate(template: string, values: Record<string, s
   return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, key: string) => values[key] ?? '');
 }
 
-/** Async pipelines may list submit + finalize commands on separate lines. */
+/** Async pipelines may list submit + finalize + extract-metadata commands on separate lines. */
 export function parseAsyncPipelineCommandTemplate(commandTemplate: string): {
   submitTemplate: string;
   finalizeTemplate: string | null;
+  extractMetadataTemplate: string | null;
 } {
   const lines = commandTemplate
     .split('\n')
@@ -14,8 +15,9 @@ export function parseAsyncPipelineCommandTemplate(commandTemplate: string): {
 
   const submitTemplate = lines.find((line) => /\bpipeline\s+submit\b/.test(line)) ?? lines[0] ?? '';
   const finalizeTemplate = lines.find((line) => /\bpipeline\s+finalize\b/.test(line)) ?? null;
+  const extractMetadataTemplate = lines.find((line) => /\bpipeline\s+extract-metadata\b/.test(line)) ?? null;
 
-  return { submitTemplate, finalizeTemplate };
+  return { submitTemplate, finalizeTemplate, extractMetadataTemplate };
 }
 
 export function pipelineTemplateToCliArgs(
@@ -64,7 +66,13 @@ export function defaultFinalizeTemplate(pipelineName: string): string {
   if (pipelineName === 'aliyun-docmind-parse') {
     return 'openkms-cli pipeline finalize --job-id {job_id} --page-index-strategy aliyun-layouts';
   }
+  if (pipelineName === 'baidu-doc-parse') {
+    return 'openkms-cli pipeline finalize --job-id {job_id} --page-index-strategy baidu-layouts';
+  }
   return 'openkms-cli pipeline finalize --job-id {job_id}';
 }
 
 export const DEFAULT_ASYNC_SUBMIT_TEMPLATE = 'openkms-cli pipeline submit --job-id {job_id}';
+
+export const DEFAULT_ASYNC_EXTRACT_METADATA_TEMPLATE =
+  'openkms-cli pipeline extract-metadata --job-id {job_id}';

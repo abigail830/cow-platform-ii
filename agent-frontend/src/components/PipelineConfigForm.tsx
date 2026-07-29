@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { CircleHelp } from 'lucide-react';
 import { listModelConfigs, type ModelConfig } from '../api/models.ts';
+import { iconProps } from './icons/icon-props.ts';
 import {
   DEFAULT_ALIYUN_PIPELINE_COMMAND_TEMPLATE,
   DEFAULT_BAIDU_PIPELINE_COMMAND_TEMPLATE,
@@ -7,6 +9,25 @@ import {
   type PipelineConfig,
   type PipelineConfigInput,
 } from '../api/pipelines.ts';
+
+/** Async template commands (cloud pipelines). */
+const PIPELINE_TEMPLATE_COMMANDS = [
+  {
+    command: 'pipeline submit',
+    summary: 'Line 1 — submit cloud parse job when processing starts.',
+  },
+  {
+    command: 'pipeline finalize',
+    summary:
+      'Line 2 — fetch results, PageIndex, upload. --page-index-strategy: baidu-layouts | aliyun-layouts | markdown-headings.',
+  },
+  {
+    command: 'pipeline extract-metadata',
+    summary: 'Line 3 — LLM metadata when channel has extraction model (job extraction_args).',
+  },
+] as const;
+
+const ASYNC_TEMPLATE_PLACEHOLDERS = [{ token: '{job_id}', summary: 'Pipeline job UUID on each async line.' }] as const;
 
 function defaultTemplateForPipelineName(pipelineName: string): string {
   if (pipelineName === 'aliyun-docmind-parse') return DEFAULT_ALIYUN_PIPELINE_COMMAND_TEMPLATE;
@@ -121,18 +142,53 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
                 ))}
               </select>
             </label>
-            <label className="form-field form-field-wide">
-              <span>Command template</span>
+            <label className="form-field form-field-wide pipeline-command-field">
+              <div className="pipeline-command-header">
+                <span className="form-field-label-row">
+                  <span>Command template</span>
+                  <span className="field-tooltip">
+                    <button
+                      type="button"
+                      className="field-tooltip-trigger"
+                      aria-label="Template commands and placeholders"
+                    >
+                      <CircleHelp {...iconProps({ size: 14 })} />
+                    </button>
+                  </span>
+                </span>
+                <div className="field-tooltip-panel pipeline-command-tooltip" role="tooltip">
+                  <p className="field-tooltip-title">Commands (template)</p>
+                  <ul className="field-tooltip-list">
+                    {PIPELINE_TEMPLATE_COMMANDS.map((item) => (
+                      <li key={item.command}>
+                        <code>{item.command}</code>
+                        <span>{item.summary}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="field-tooltip-title">Placeholders</p>
+                  <ul className="field-tooltip-list field-tooltip-list-compact">
+                    {ASYNC_TEMPLATE_PLACEHOLDERS.map((item) => (
+                      <li key={item.token}>
+                        <code>{item.token}</code>
+                        <span>{item.summary}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="field-tooltip-foot">
+                    Three lines: submit → finalize → extract-metadata. Backend polls between submit and finalize.
+                    Lines starting with # are ignored.
+                  </p>
+                </div>
+              </div>
               <textarea
                 value={commandTemplate}
                 onChange={(event) => setCommandTemplate(event.target.value)}
-                rows={3}
+                rows={4}
                 required
               />
               <span className="admin-form-hint">
-                Placeholders: {'{input}'}, {'{s3_prefix}'}, {'{document_id}'}, {'{api_url}'}, {'{vlm_args}'},{' '}
-                {'{extraction_args}'}, {'{job_id}'} (async). Async pipelines: one command per line (submit, then
-                finalize).
+                Cloud pipelines: submit → finalize → extract-metadata (one command per line).
               </span>
             </label>
             <label className="form-checkbox">

@@ -78,6 +78,20 @@
       "when": 1785167000000,
       "tag": "0010_aliyun_pipeline_template",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785168000000,
+      "tag": "0011_baidu_pipeline_template",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785169000000,
+      "tag": "0012_async_pipeline_three_step_templates",
+      "breakpoints": true
     }
   ]
 }

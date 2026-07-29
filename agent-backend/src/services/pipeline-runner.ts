@@ -7,6 +7,7 @@ import { fetchModelCliParams, formatExtractionCliArgs, formatVlmCliArgs } from '
 import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../shared/pipeline-config-store.ts';
 import {
   DEFAULT_ASYNC_SUBMIT_TEMPLATE,
+  DEFAULT_ASYNC_EXTRACT_METADATA_TEMPLATE,
   defaultFinalizeTemplate,
   parseAsyncPipelineCommandTemplate,
   pipelineTemplateToCliArgs,
@@ -102,6 +103,22 @@ export async function spawnAsyncPipelineFinalize(
   const args = pipelineTemplateToCliArgs(template, { job_id: jobId });
   if (args.length === 0) {
     spawnPipelineCli(['pipeline', 'finalize', '--job-id', jobId], apiUrl);
+    return;
+  }
+  spawnPipelineCli(args, apiUrl);
+}
+
+export async function spawnAsyncPipelineExtractMetadata(
+  jobId: string,
+  pipelineName: string,
+  apiUrl?: string,
+): Promise<void> {
+  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
+  const { extractMetadataTemplate } = parseAsyncPipelineCommandTemplate(pipeline?.commandTemplate ?? '');
+  const template = extractMetadataTemplate ?? DEFAULT_ASYNC_EXTRACT_METADATA_TEMPLATE;
+  const args = pipelineTemplateToCliArgs(template, { job_id: jobId });
+  if (args.length === 0) {
+    spawnPipelineCli(['pipeline', 'extract-metadata', '--job-id', jobId], apiUrl);
     return;
   }
   spawnPipelineCli(args, apiUrl);

@@ -337,7 +337,7 @@ def finalize_job(
     work = Path(tempfile.mkdtemp(prefix="openkms-finalize-"))
     out_base = work / "parsed"
     out_base.mkdir(parents=True, exist_ok=True)
-    aliyun_layouts: list[dict[str, Any]] | None = None
+    provider_layouts: list[dict[str, Any]] | None = None
 
     try:
         from .page_index_strategy import effective_page_index_strategy
@@ -349,8 +349,11 @@ def finalize_job(
 
         if provider == "baidu":
             result, hash_dir = _finalize_baidu(ctx, external_id, out_base, work)
+            raw_layouts = result.get("baidu_layouts")
+            if isinstance(raw_layouts, list):
+                provider_layouts = [item for item in raw_layouts if isinstance(item, dict)]
         elif provider == "aliyun":
-            result, hash_dir, aliyun_layouts = _finalize_aliyun(
+            result, hash_dir, provider_layouts = _finalize_aliyun(
                 ctx,
                 external_id,
                 out_base,
@@ -363,7 +366,7 @@ def finalize_job(
         _build_page_index(
             hash_dir,
             provider=provider,
-            layouts=aliyun_layouts,
+            layouts=provider_layouts,
             page_index_strategy=resolved_page_index_strategy,
             doc_name=doc.get("name"),
         )
@@ -382,12 +385,12 @@ def finalize_job(
         if markdown:
             _sync_markdown_and_version(api, document_id, markdown)
 
-        patch_job(api, job_id, stage="parsed")
-
         extraction_args = (ctx.get("extraction_args") or "").strip()
         if extraction_args:
-            console.print("[dim]Running metadata extraction[/dim]")
-            extract_metadata_job(job_id, api)
+            patch_job(api, job_id, stage="parsed")
+            console.print(
+                "[dim]Parse complete; metadata extraction runs via pipeline extract-metadata (template step 3)[/dim]"
+            )
         else:
             patch_job(api, job_id, stage="done")
             console.print(f"[green]Job {job_id} done[/green]")

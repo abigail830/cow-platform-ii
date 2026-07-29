@@ -34,10 +34,10 @@ export const DEFAULT_PIPELINE_COMMAND_TEMPLATE =
   'openkms-cli pipeline run --pipeline-name paddleocr-doc-parse --input {input} --s3-prefix {s3_prefix} --document-id {document_id} --api-url {api_url}{vlm_args}{extraction_args}';
 
 export const DEFAULT_BAIDU_PIPELINE_COMMAND_TEMPLATE =
-  'openkms-cli pipeline submit --job-id {job_id}\nopenkms-cli pipeline finalize --job-id {job_id} --page-index-strategy markdown-headings';
+  'openkms-cli pipeline submit --job-id {job_id}\nopenkms-cli pipeline finalize --job-id {job_id} --page-index-strategy baidu-layouts\nopenkms-cli pipeline extract-metadata --job-id {job_id}';
 
 export const DEFAULT_ALIYUN_PIPELINE_COMMAND_TEMPLATE =
-  'openkms-cli pipeline submit --job-id {job_id}\nopenkms-cli pipeline finalize --job-id {job_id} --page-index-strategy aliyun-layouts';
+  'openkms-cli pipeline submit --job-id {job_id}\nopenkms-cli pipeline finalize --job-id {job_id} --page-index-strategy aliyun-layouts\nopenkms-cli pipeline extract-metadata --job-id {job_id}';
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
