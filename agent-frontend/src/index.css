@@ -1870,6 +1870,10 @@ textarea {
 }
 
 .document-upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
   border: 1px dashed #cbd5e1;
   border-radius: 10px;
   background: #f8fafc;
@@ -1883,10 +1887,43 @@ textarea {
   background: #fff7f2;
 }
 
-.document-upload-dropzone p {
-  margin: 0 0 0.35rem;
+.document-upload-plus-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 2.75rem;
+  margin-top: 0.35rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--brand-orange);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.document-upload-dropzone:hover .document-upload-plus-box,
+.document-upload-dropzone.drag-over .document-upload-plus-box {
+  border-color: #fdba74;
+  background: #fff7f2;
+}
+
+.document-upload-dropzone-title {
+  margin: 0;
   color: #334155;
   font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.document-upload-dropzone-hint {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  max-width: 28rem;
 }
 
 .document-upload-file-list {

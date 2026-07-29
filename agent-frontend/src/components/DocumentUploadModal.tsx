@@ -57,8 +57,15 @@ export function DocumentUploadModal({ channelName, onCancel, onUpload }: Documen
             }}
             onClick={() => inputRef.current?.click()}
           >
-            <p>Drag and drop files here, or click to browse.</p>
-            <p className="admin-form-hint">PDF, images, DOCX, PPTX, XLSX, EPUB, XMind. Large files upload in chunks.</p>
+            <p className="document-upload-dropzone-title">Drag and drop files here, or click to browse.</p>
+            <p className="document-upload-dropzone-hint">
+              PDF, images, DOCX, PPTX, XLSX, EPUB, XMind. Large files upload in chunks.
+            </p>
+            <div className="document-upload-plus-box" aria-hidden>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M10 4.5v11M4.5 10h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              </svg>
+            </div>
             <input
               ref={inputRef}
               type="file"
