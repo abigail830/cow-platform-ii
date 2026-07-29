@@ -42,6 +42,11 @@ Use `var(--app-page-bg)` for chat layout, header, body, and admin pages — not 
 - Keep admin UI **compact**: base `0.8125rem`, table headers `0.75rem`, tighter padding on rows/toolbar.
 - Table/action patterns live in `ModelsConfigPage.tsx` — match its English copy style.
 
+## Icons
+
+- Use **Lucide React** for all UI icons — see workspace rule `.cursor/rules/lucide-icons.mdc`.
+- Shared sizing/stroke: `agent-frontend/src/components/icons/icon-props.ts`.
+
 ## RBAC (users / roles / permissions)
 
 - **Permission**: registry entry with `key`, route/API patterns, category; role grants use `read` or `write`.

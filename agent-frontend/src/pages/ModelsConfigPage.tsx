@@ -10,8 +10,10 @@ import {
   type ModelApiType,
   type ModelConfig,
 } from '../api/models.ts';
+import { Bot, Pencil, Search, Trash2 } from 'lucide-react';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { ModelConfigForm } from '../components/ModelConfigForm.tsx';
+import { iconProps } from '../components/icons/icon-props.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
@@ -108,10 +110,7 @@ export function ModelsConfigPage() {
         <div className="admin-toolbar">
           <div className="admin-toolbar-left">
             <div className="admin-search">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.25" />
-                <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-              </svg>
+              <Search {...iconProps()} />
               <input
                 value={search}
                 onChange={(event) => {
@@ -185,10 +184,7 @@ export function ModelsConfigPage() {
                     <td>
                       <div className="model-cell">
                         <span className="model-cell-icon" aria-hidden>
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <rect x="2" y="4" width="12" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
-                            <path d="M5 8h6M5 10h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-                          </svg>
+                          <Bot {...iconProps()} />
                         </span>
                         <div>
                           <div className="model-cell-name">{model.name}</div>
@@ -232,14 +228,7 @@ export function ModelsConfigPage() {
                             setFormOpen(true);
                           }}
                         >
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path
-                              d="M11.5 2.5l2 2L5.5 12.5H3.5v-2L11.5 2.5z"
-                              stroke="currentColor"
-                              strokeWidth="1.25"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
+                          <Pencil {...iconProps()} />
                         </button>
                         <button
                           type="button"
@@ -247,10 +236,7 @@ export function ModelsConfigPage() {
                           title="Delete"
                           onClick={() => void handleDelete(model)}
                         >
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path d="M3.5 5.5h9M6 5.5V4h4v1.5M6 8v3.5M10 8v3.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-                            <path d="M4.5 5.5l.5 7h6l.5-7" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
-                          </svg>
+                          <Trash2 {...iconProps()} />
                         </button>
                       </div>
                     </td>

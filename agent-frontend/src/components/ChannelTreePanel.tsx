@@ -1,4 +1,6 @@
+import { Folder, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
+import { iconProps } from './icons/icon-props.ts';
 
 type ChannelTreePanelProps = {
   channels: DocumentChannel[];
@@ -36,7 +38,7 @@ function ChannelTreeNode({
     <li className="channel-tree-item">
       <div className={`channel-tree-row${active ? ' active' : ''}`} style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}>
         <button type="button" className="channel-tree-select" onClick={() => onSelect(channel.id)}>
-          <span className="storage-icon folder" aria-hidden />
+          <Folder {...iconProps({ className: 'storage-icon' })} />
           <span className="channel-tree-name" title={channel.name}>
             {channel.name}
           </span>
@@ -44,13 +46,13 @@ function ChannelTreeNode({
         {canWrite && (
           <div className="channel-tree-actions">
             <button type="button" className="icon-btn" title="Add sub-channel" onClick={() => onCreateChild(channel.id)}>
-              +
+              <Plus {...iconProps()} />
             </button>
             <button type="button" className="icon-btn" title="Rename" onClick={() => onRename(channel)}>
-              ✎
+              <Pencil {...iconProps()} />
             </button>
-            <button type="button" className="icon-btn" title="Delete" onClick={() => onDelete(channel)}>
-              ×
+            <button type="button" className="icon-btn danger" title="Delete" onClick={() => onDelete(channel)}>
+              <Trash2 {...iconProps()} />
             </button>
           </div>
         )}

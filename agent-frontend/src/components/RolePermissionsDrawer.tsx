@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { X } from 'lucide-react';
 import type { PermissionRecord } from '../api/permissions.ts';
 import type { AdminRole } from '../api/users.ts';
+import { iconProps } from './icons/icon-props.ts';
 
 type ResourceGroup = {
   resource: string;
@@ -77,9 +79,7 @@ export function RolePermissionsDrawer({
             )}
           </div>
           <button type="button" className="icon-btn" title="Close" onClick={onClose}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-            </svg>
+            <X {...iconProps()} />
           </button>
         </header>
 

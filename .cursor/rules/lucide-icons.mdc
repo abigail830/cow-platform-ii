@@ -1,0 +1,48 @@
+---
+description: Use Lucide React for all UI icons across the workspace
+alwaysApply: true
+---
+
+# Icons — Lucide React
+
+All UI icons in this workspace must come from **`lucide-react`**.
+
+## Do
+
+- Import icons from `lucide-react`: `import { Search, Trash2 } from 'lucide-react'`
+- Use shared defaults from `agent-frontend/src/components/icons/icon-props.ts` when sizing/stroke should match the app shell
+- Reuse existing mapping helpers (`NavPageIcon`, `AgentMenuIcon`, `AdminActionIcons`) when they already wrap Lucide icons
+- Set `aria-hidden` on decorative icons; pair with visible text or `title` on the control
+
+## Don't
+
+- Hand-write inline `<svg>` paths for UI icons
+- Add other icon libraries (Heroicons, react-icons, Font Awesome, etc.)
+- Use text characters as icons (`+`, `×`, `✎`) in buttons — use Lucide instead
+- Use CSS mask sprites for icons when a Lucide equivalent exists
+
+## Defaults
+
+```tsx
+import { Pencil } from 'lucide-react';
+import { iconProps } from '../components/icons/icon-props';
+
+<Pencil {...iconProps()} />
+<Pencil {...iconProps({ size: 18 })} />
+```
+
+- Default size: **16** (`ICON_SIZE`), large controls: **18** (`ICON_SIZE_LG`)
+- Default stroke: **1.5** (`ICON_STROKE`)
+
+## Common mappings
+
+| Use case | Lucide icon |
+|----------|-------------|
+| Edit | `Pencil` |
+| Delete | `Trash2` |
+| View | `Eye` |
+| Download | `Download` |
+| Move to folder | `FolderInput` |
+| Search | `Search` |
+| Close | `X` |
+| Folder / file | `Folder`, `File` |

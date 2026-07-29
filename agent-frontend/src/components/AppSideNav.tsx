@@ -11,8 +11,10 @@ import {
   type NavPage,
 } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
+import { User } from 'lucide-react';
 import { NavPageIcon } from './icons/NavIcons.tsx';
 import { AgentMenuIcon, IconSidenavCollapse, IconSidenavExpand } from './icons/AgentIcons.tsx';
+import { iconProps } from './icons/icon-props.ts';
 
 type AppSideNavProps = {
   agents: AgentInfo[];
@@ -169,15 +171,7 @@ export function AppSideNav({
               title={userLabel}
             >
               <span className="sidenav-avatar" aria-hidden>
-                <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="5.5" r="2.25" stroke="currentColor" strokeWidth="1.25" />
-                  <path
-                    d="M3.5 13c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"
-                    stroke="currentColor"
-                    strokeWidth="1.25"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <User {...iconProps()} />
               </span>
               <span className="sidenav-user-email" title={userLabel}>
                 {userLabel}

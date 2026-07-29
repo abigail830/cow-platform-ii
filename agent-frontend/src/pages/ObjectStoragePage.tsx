@@ -13,8 +13,10 @@ import {
   type StorageFolder,
   type StorageObject,
 } from '../api/storage.ts';
+import { File, Folder } from 'lucide-react';
 import { MoveItemsModal } from '../components/MoveItemsModal.tsx';
 import { NewFolderModal } from '../components/NewFolderModal.tsx';
+import { iconProps } from '../components/icons/icon-props.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
@@ -292,12 +294,12 @@ export function ObjectStoragePage() {
                             className="storage-name-link"
                             onClick={() => setPrefix(row.prefix)}
                           >
-                            <span className="storage-icon folder" aria-hidden />
+                            <Folder {...iconProps({ className: 'storage-icon' })} />
                             {row.name}
                           </button>
                         ) : (
                           <span className="storage-name-static">
-                            <span className="storage-icon file" aria-hidden />
+                            <File {...iconProps({ className: 'storage-icon' })} />
                             {row.name}
                           </span>
                         )}

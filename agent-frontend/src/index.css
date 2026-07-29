@@ -1693,22 +1693,8 @@ textarea {
 }
 
 .storage-icon {
-  width: 1rem;
-  height: 1rem;
   flex-shrink: 0;
-  display: inline-block;
-  background: #cbd5e1;
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-}
-
-.storage-icon.folder {
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M1.5 4.5h5l1.25 1.5H14.5v7h-13z'/%3E%3C/svg%3E");
-}
-
-.storage-icon.file {
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M4 1.5h5.5L13 5v9.5H4z'/%3E%3C/svg%3E");
+  color: #cbd5e1;
 }
 
 .storage-load-more {

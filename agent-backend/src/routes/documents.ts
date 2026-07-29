@@ -10,6 +10,7 @@ import {
   deleteDocumentStorage,
   extensionFromFilename,
   fileTypeFromExtension,
+  getDocumentDownloadUrl,
   MAX_DOCUMENT_BYTES,
   sha256Hex,
   StorageNotConfiguredError,
@@ -23,6 +24,7 @@ import {
   getDocumentById,
   getDocumentStats,
   listDocuments,
+  moveDocument,
 } from '../services/documents.ts';
 
 const documents = new Hono();
@@ -94,6 +96,44 @@ documents.get(
       return c.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to list documents';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+documents.get(
+  '/:id/download',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const row = await getDocumentById(c.req.param('id'));
+    if (!row) return c.json({ error: 'Document not found' }, 404);
+
+    try {
+      const url = await getDocumentDownloadUrl(row.s3Key, row.name);
+      return c.json({ url, filename: row.name });
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: error instanceof Error ? error.message : 'Download failed' }, 400);
+    }
+  },
+);
+
+documents.put(
+  '/:id',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
+  async (c) => {
+    const body = await c.req.json<{ channel_id?: string }>().catch(() => ({}));
+    const channelId = body.channel_id;
+    if (!channelId) return c.json({ error: 'channel_id is required' }, 400);
+
+    try {
+      const document = await moveDocument(c.req.param('id'), channelId);
+      return c.json(document);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to move document';
       const status = message.includes('not found') ? 404 : 400;
       return c.json({ error: message }, status);
     }

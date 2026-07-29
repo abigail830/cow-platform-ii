@@ -240,6 +240,29 @@ export async function deleteDocument(id: string): Promise<DocumentRow> {
   return existing;
 }
 
+export async function moveDocument(
+  id: string,
+  channelId: string,
+): Promise<ReturnType<typeof toDocumentPublic>> {
+  const existing = await getDocumentById(id);
+  if (!existing) throw new Error('Document not found');
+
+  const channel = await getChannelById(channelId);
+  if (!channel) throw new Error('Channel not found');
+
+  if (existing.channelId === channelId) {
+    return toDocumentPublic(existing);
+  }
+
+  const [row] = await db
+    .update(appDocuments)
+    .set({ channelId, updatedAt: new Date() })
+    .where(eq(appDocuments.id, id))
+    .returning();
+
+  return toDocumentPublic(row!);
+}
+
 export async function getDocumentStats(): Promise<{ channels: number; documents: number }> {
   const [channelRow] = await db.select({ count: sql<number>`count(*)::int` }).from(appDocumentChannels);
   const [docRow] = await db.select({ count: sql<number>`count(*)::int` }).from(appDocuments);

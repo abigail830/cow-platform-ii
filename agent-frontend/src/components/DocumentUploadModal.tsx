@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { ICON_SIZE_LG, iconProps } from './icons/icon-props.ts';
 
 const ACCEPTED_TYPES = '.pdf,.png,.jpg,.jpeg,.webp,.docx,.pptx,.xlsx,.epub,.xmind';
 
@@ -62,9 +64,7 @@ export function DocumentUploadModal({ channelName, onCancel, onUpload }: Documen
               PDF, images, DOCX, PPTX, XLSX, EPUB, XMind. Large files upload in chunks.
             </p>
             <div className="document-upload-plus-box" aria-hidden>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M10 4.5v11M4.5 10h11" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-              </svg>
+              <Plus {...iconProps({ size: ICON_SIZE_LG })} />
             </div>
             <input
               ref={inputRef}

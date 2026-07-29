@@ -10,15 +10,20 @@ import {
 } from '../api/documentChannels.ts';
 import {
   deleteDocument,
+  downloadDocument,
   formatDocumentBytes,
   listDocuments,
+  moveDocument,
   uploadDocument,
   type DocumentRecord,
 } from '../api/documents.ts';
 import { ChannelFormModal } from '../components/ChannelFormModal.tsx';
 import { ChannelTreePanel } from '../components/ChannelTreePanel.tsx';
+import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
 import { DocumentUploadModal } from '../components/DocumentUploadModal.tsx';
-import { IconDelete } from '../components/AdminActionIcons.tsx';
+import { IconDelete, IconDownload, IconMove } from '../components/AdminActionIcons.tsx';
+import { Search } from 'lucide-react';
+import { iconProps } from '../components/icons/icon-props.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
@@ -44,6 +49,7 @@ export function DocumentsPage() {
   const [forbidden, setForbidden] = useState(false);
   const [channelModal, setChannelModal] = useState<ChannelModalState | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [moveDocumentTarget, setMoveDocumentTarget] = useState<DocumentRecord | null>(null);
 
   const flatChannels = useMemo(() => flattenChannels(channels), [channels]);
   const selectedChannel = flatChannels.find((channel) => channel.id === selectedChannelId) ?? null;
@@ -147,6 +153,21 @@ export function DocumentsPage() {
     }
   }
 
+  async function handleDownloadDocument(document: DocumentRecord) {
+    try {
+      await downloadDocument(document.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download document');
+    }
+  }
+
+  async function handleMoveDocument(channelId: string) {
+    if (!moveDocumentTarget) return;
+    await moveDocument(moveDocumentTarget.id, channelId);
+    setMoveDocumentTarget(null);
+    await loadDocuments();
+  }
+
   if (forbidden) return <Navigate to="/chat" replace />;
 
   return (
@@ -175,10 +196,7 @@ export function DocumentsPage() {
             <div className="admin-toolbar">
               <div className="admin-toolbar-left">
                 <div className="admin-search">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                    <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.25" />
-                    <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-                  </svg>
+                  <Search {...iconProps()} />
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
@@ -225,25 +243,25 @@ export function DocumentsPage() {
                     <th>Size</th>
                     <th>Status</th>
                     <th>Uploaded</th>
-                    {canWrite && <th className="admin-table-actions-col">Actions</th>}
+                    <th className="admin-table-actions-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {!selectedChannelId ? (
                     <tr>
-                      <td colSpan={canWrite ? 6 : 5} className="admin-table-empty">
+                      <td colSpan={6} className="admin-table-empty">
                         Select or create a channel to manage documents.
                       </td>
                     </tr>
                   ) : loadingChannels || loadingDocuments ? (
                     <tr>
-                      <td colSpan={canWrite ? 6 : 5} className="admin-table-empty">
+                      <td colSpan={6} className="admin-table-empty">
                         Loading…
                       </td>
                     </tr>
                   ) : documents.length === 0 ? (
                     <tr>
-                      <td colSpan={canWrite ? 6 : 5} className="admin-table-empty">
+                      <td colSpan={6} className="admin-table-empty">
                         No documents in this channel yet.
                       </td>
                     </tr>
@@ -257,18 +275,38 @@ export function DocumentsPage() {
                           <span className="document-status-badge">{document.status}</span>
                         </td>
                         <td>{new Date(document.created_at).toLocaleString()}</td>
-                        {canWrite && (
-                          <td className="admin-table-actions">
+                        <td>
+                          <div className="row-actions">
                             <button
                               type="button"
-                              className="icon-btn danger"
-                              title="Delete"
-                              onClick={() => void handleDeleteDocument(document)}
+                              className="icon-btn"
+                              title="Download"
+                              onClick={() => void handleDownloadDocument(document)}
                             >
-                              <IconDelete />
+                              <IconDownload />
                             </button>
-                          </td>
-                        )}
+                            {canWrite && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  title="Move to channel"
+                                  onClick={() => setMoveDocumentTarget(document)}
+                                >
+                                  <IconMove />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="icon-btn danger"
+                                  title="Delete"
+                                  onClick={() => void handleDeleteDocument(document)}
+                                >
+                                  <IconDelete />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -308,6 +346,15 @@ export function DocumentsPage() {
           channelName={selectedChannel.name}
           onCancel={() => setUploadOpen(false)}
           onUpload={handleUpload}
+        />
+      )}
+      {moveDocumentTarget && (
+        <DocumentMoveModal
+          documentName={moveDocumentTarget.name}
+          currentChannelId={moveDocumentTarget.channel_id}
+          channels={channels}
+          onCancel={() => setMoveDocumentTarget(null)}
+          onSubmit={handleMoveDocument}
         />
       )}
     </>

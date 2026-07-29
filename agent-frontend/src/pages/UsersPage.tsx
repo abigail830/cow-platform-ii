@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { createAdminUser, deleteAdminUser, listAdminRoles, listAdminUsers, updateAdminUserRoles, type AdminRole, type AdminUser } from '../api/users.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
+import { Search } from 'lucide-react';
+import { iconProps } from '../components/icons/icon-props.ts';
 import { IconDelete, IconEdit } from '../components/AdminActionIcons.tsx';
 import { UserForm } from '../components/UserForm.tsx';
 import { UserRolesForm } from '../components/UserRolesForm.tsx';
@@ -55,10 +57,7 @@ export function UsersPage() {
         <div className="admin-toolbar">
           <div className="admin-toolbar-left">
             <div className="admin-search">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.25" />
-                <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-              </svg>
+              <Search {...iconProps()} />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}

@@ -56,6 +56,29 @@ export async function deleteDocument(id: string): Promise<void> {
   await authFetch(`/api/documents/${id}`, { method: 'DELETE' });
 }
 
+export async function downloadDocument(id: string): Promise<void> {
+  const data = await authFetch(`/api/documents/${id}/download`);
+  const url = data.url as string;
+  const filename = (data.filename as string) || 'download';
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = 'noopener noreferrer';
+  anchor.target = '_blank';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+export async function moveDocument(id: string, channelId: string): Promise<DocumentRecord> {
+  const data = await authFetch(`/api/documents/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel_id: channelId }),
+  });
+  return data as DocumentRecord;
+}
+
 async function uploadSingleFile(channelId: string, file: File): Promise<DocumentRecord> {
   const form = new FormData();
   form.append('channel_id', channelId);

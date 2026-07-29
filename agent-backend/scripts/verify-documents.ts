@@ -209,6 +209,35 @@ async function main() {
         fail('list_documents_after_upload', JSON.stringify(listed.body));
       }
 
+      const download = await authJson(adminToken, `/api/documents/${documentId}/download`);
+      if (download.status === 200 && typeof download.body.url === 'string') {
+        pass('download_document', download.body.filename as string);
+      } else {
+        fail('download_document', JSON.stringify(download.body));
+      }
+
+      const moved = await authJson(adminToken, `/api/documents/${documentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: childChannelId }),
+      });
+      if (moved.status === 200 && moved.body.channel_id === childChannelId) {
+        pass('move_document', childChannelId);
+      } else {
+        fail('move_document', JSON.stringify(moved.body));
+      }
+
+      const movedBack = await authJson(adminToken, `/api/documents/${documentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: rootChannelId }),
+      });
+      if (movedBack.status === 200 && movedBack.body.channel_id === rootChannelId) {
+        pass('move_document_back', rootChannelId);
+      } else {
+        fail('move_document_back', JSON.stringify(movedBack.body));
+      }
+
       const deleted = await authJson(adminToken, `/api/documents/${documentId}`, { method: 'DELETE' });
       if (deleted.status === 200) pass('delete_document');
       else fail('delete_document', JSON.stringify(deleted.body));

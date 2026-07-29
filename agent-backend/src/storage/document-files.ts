@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   assertStorageClient,
   DeleteObjectCommand,
+  GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   StorageNotConfiguredError,
@@ -79,6 +81,21 @@ export function buildDocumentS3Key(fileHash: string, ext: string): string {
   const key = `${DOCUMENTS_PREFIX}${fileHash}/original.${ext}`;
   validateKey(key);
   return key;
+}
+
+export async function getDocumentDownloadUrl(
+  s3Key: string,
+  filename: string,
+  expiresIn = 900,
+): Promise<string> {
+  const { client, config } = assertStorageClient();
+  const safeFilename = filename.replace(/[^\w.\-() ]/g, '_');
+  const command = new GetObjectCommand({
+    Bucket: config.bucket,
+    Key: s3Key,
+    ResponseContentDisposition: `attachment; filename="${safeFilename}"`,
+  });
+  return getSignedUrl(client, command, { expiresIn });
 }
 
 export async function uploadDocumentObject(
