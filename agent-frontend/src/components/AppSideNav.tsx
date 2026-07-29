@@ -135,16 +135,16 @@ export function AppSideNav({
         </ul>
 
         <NavSection
-          category={PLATFORM_BASIC_CATEGORY}
-          items={platformBasicItems}
+          category={KNOWLEDGE_MANAGEMENT_CATEGORY}
+          items={knowledgeItems}
           activePath={activePath}
           collapsed={collapsed}
           onNavigate={onNavigate}
         />
 
         <NavSection
-          category={KNOWLEDGE_MANAGEMENT_CATEGORY}
-          items={knowledgeItems}
+          category={PLATFORM_BASIC_CATEGORY}
+          items={platformBasicItems}
           activePath={activePath}
           collapsed={collapsed}
           onNavigate={onNavigate}

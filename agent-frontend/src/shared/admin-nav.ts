@@ -73,8 +73,8 @@ export const ADMIN_PAGES: readonly NavPage[] = [
 ];
 
 export const ALL_NAV_PAGES: readonly NavPage[] = [
-  ...PLATFORM_BASIC_PAGES,
   ...KNOWLEDGE_MANAGEMENT_PAGES,
+  ...PLATFORM_BASIC_PAGES,
   ...ADMIN_PAGES,
 ];
 

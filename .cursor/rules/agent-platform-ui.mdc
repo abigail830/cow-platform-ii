@@ -25,7 +25,7 @@ Do not introduce teal/green as the primary accent in new admin or chat UI.
 
 ## Left sidenav spacing
 
-- **Nav order**: Agents → **Platform basic** (e.g. model configuration) → **Administration** (users, roles, permissions).
+- **Nav order**: Agents → **Knowledge Management** → **Platform basic** → **Administration** (users, roles, permissions).
 - **Between categories**: use `.sidenav-menu + .sidenav-category { margin-top: 1.25rem; }`
 - **Category label → items**: keep tight (`margin-bottom: ~0.3rem` on `.sidenav-category`)
 - **Between sub-menu items**: compact — `.sidenav-menu { gap: 0 }`, `.sidenav-item { padding: 0.375rem 0.625rem }`, `line-height: 1.3`
