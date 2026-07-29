@@ -5,6 +5,7 @@ import { AppLayout } from './layouts/AppLayout.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
+import { DocumentsPage } from './pages/DocumentsPage.tsx';
 import { ObjectStoragePage } from './pages/ObjectStoragePage.tsx';
 import { PermissionsPage } from './pages/PermissionsPage.tsx';
 import { RolesPage } from './pages/RolesPage.tsx';
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/admin/models" element={<ModelsConfigPage />} />
           <Route path="/admin/storage" element={<ObjectStoragePage />} />
+          <Route path="/knowledge/documents" element={<DocumentsPage />} />
           <Route path="/admin/users" element={<UsersPage />} />
           <Route path="/admin/roles" element={<RolesPage />} />
           <Route path="/admin/permissions" element={<PermissionsPage />} />

@@ -7,6 +7,8 @@ import agents from './routes/agents.ts';
 import conversations from './routes/conversations.ts';
 import admin from './routes/admin/index.ts';
 import consoleRoutes from './routes/console/index.ts';
+import documentChannels from './routes/document-channels.ts';
+import documents from './routes/documents.ts';
 
 registerModelProviders();
 
@@ -17,7 +19,7 @@ app.use(
   cors({
     origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5180').split(','),
     allowHeaders: ['Authorization', 'Content-Type'],
-    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
 );
 
@@ -28,6 +30,8 @@ app.route('/api/agents', agents);
 app.route('/api/conversations', conversations);
 app.route('/api/admin', admin);
 app.route('/api/console', consoleRoutes);
+app.route('/api/document-channels', documentChannels);
+app.route('/api/documents', documents);
 app.route('/api', flue());
 
 export default app;

@@ -15,6 +15,15 @@ export const ADMIN_RESOURCES = {
   PERMISSIONS: 'permissions',
 } as const;
 
+export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'knowledge-management' as const;
+
+export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
+  DOCUMENTS: 'documents',
+} as const;
+
+export type KnowledgeManagementResource =
+  (typeof KNOWLEDGE_MANAGEMENT_RESOURCES)[keyof typeof KNOWLEDGE_MANAGEMENT_RESOURCES];
+
 export type AdminResource = (typeof ADMIN_RESOURCES)[keyof typeof ADMIN_RESOURCES];
 
 type ResourceDefinition = {
@@ -39,6 +48,21 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
     description: 'S3-compatible bucket browser and object moves.',
     routePatterns: ['/admin/storage'],
     apiPatterns: ['/api/console/storage', '/api/console/storage/*'],
+  },
+];
+
+const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
+  {
+    resource: KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS,
+    label: 'Documents',
+    description: 'Channel folders and document uploads.',
+    routePatterns: ['/knowledge/documents'],
+    apiPatterns: [
+      '/api/document-channels',
+      '/api/document-channels/*',
+      '/api/documents',
+      '/api/documents/*',
+    ],
   },
 ];
 
@@ -102,6 +126,7 @@ function buildPermissions(
 
 export const PERMISSION_CATALOG: PermissionDefinition[] = [
   ...buildPermissions(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCE_DEFS),
+  ...buildPermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS),
   ...buildPermissions('admin', ADMIN_RESOURCE_DEFS),
 ];
 

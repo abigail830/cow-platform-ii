@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PermissionInput, PermissionRecord } from '../api/permissions.ts';
 
-const CATEGORIES = ['platform-basic', 'admin', 'agent'] as const;
+const CATEGORIES = ['platform-basic', 'knowledge-management', 'admin', 'agent'] as const;
 
 type PermissionFormProps = {
   initial?: PermissionRecord | null;

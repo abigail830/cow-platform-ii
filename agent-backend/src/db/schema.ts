@@ -1,5 +1,6 @@
 import {
   boolean,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -19,7 +20,7 @@ export const MODEL_API_TYPES = [
 
 export type ModelApiType = (typeof MODEL_API_TYPES)[number];
 
-export const PERMISSION_CATEGORIES = ['platform-basic', 'admin', 'agent'] as const;
+export const PERMISSION_CATEGORIES = ['platform-basic', 'knowledge-management', 'admin', 'agent'] as const;
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
 
 export const ACCESS_LEVELS = ['read', 'write'] as const;
@@ -124,6 +125,9 @@ export const appRolePermissions = pgTable(
   (t) => [primaryKey({ columns: [t.roleId, t.permissionId] })],
 );
 
+export const DOCUMENT_STATUSES = ['uploaded'] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+
 export const appUserRoles = pgTable(
   'app_user_roles',
   {
@@ -135,5 +139,44 @@ export const appUserRoles = pgTable(
       .references(() => appRoles.id, { onDelete: 'cascade' }),
   },
   (t) => [primaryKey({ columns: [t.userId, t.roleId] })],
+);
+
+export const appDocumentChannels = pgTable(
+  'app_document_channels',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    parentId: uuid('parent_id'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_document_channels_parent').on(t.parentId, t.sortOrder)],
+);
+
+export const appDocuments = pgTable(
+  'app_documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => appDocumentChannels.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    fileType: text('file_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull().default(0),
+    fileHash: text('file_hash').notNull(),
+    s3Key: text('s3_key').notNull(),
+    status: text('status').notNull().default('uploaded'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+    uploadedBy: uuid('uploaded_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_documents_channel').on(t.channelId, t.updatedAt),
+    index('idx_documents_hash').on(t.fileHash),
+  ],
 );
 

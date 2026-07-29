@@ -18,6 +18,7 @@ const PAGE = getNavPage('/admin/permissions')!;
 const CATEGORY_FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'platform-basic', label: 'Platform basic' },
+  { id: 'knowledge-management', label: 'Knowledge Management' },
   { id: 'admin', label: 'Admin' },
   { id: 'agent', label: 'Agent' },
 ] as const;

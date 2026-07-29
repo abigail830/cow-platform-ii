@@ -19,6 +19,16 @@ function IconModels(props: IconProps) {
   );
 }
 
+function IconDocuments(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden {...props}>
+      <path d="M4 1.5h5.5L13 5v9.5H4z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="M8.5 2.5V5.5H12" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      <path d="M6 8.5h4M6 10.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function IconStorage(props: IconProps) {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden {...props}>
@@ -101,6 +111,7 @@ function IconPermissions(props: IconProps) {
 const NAV_ICONS: Record<NavPageIcon, ComponentType<IconProps>> = {
   models: IconModels,
   storage: IconStorage,
+  documents: IconDocuments,
   users: IconUsers,
   roles: IconRoles,
   permissions: IconPermissions,

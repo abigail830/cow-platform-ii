@@ -4,6 +4,8 @@ import type { AgentInfo } from '../api/conversations.ts';
 import {
   ADMIN_PAGES,
   ADMINISTRATION_CATEGORY,
+  KNOWLEDGE_MANAGEMENT_CATEGORY,
+  KNOWLEDGE_MANAGEMENT_PAGES,
   PLATFORM_BASIC_CATEGORY,
   PLATFORM_BASIC_PAGES,
   type NavPage,
@@ -79,6 +81,7 @@ export function AppSideNav({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const platformBasicItems = PLATFORM_BASIC_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
+  const knowledgeItems = KNOWLEDGE_MANAGEMENT_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
   const adminItems = ADMIN_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
 
   useEffect(() => {
@@ -132,6 +135,14 @@ export function AppSideNav({
         <NavSection
           category={PLATFORM_BASIC_CATEGORY}
           items={platformBasicItems}
+          activePath={activePath}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        />
+
+        <NavSection
+          category={KNOWLEDGE_MANAGEMENT_CATEGORY}
+          items={knowledgeItems}
           activePath={activePath}
           collapsed={collapsed}
           onNavigate={onNavigate}

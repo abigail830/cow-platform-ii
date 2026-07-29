@@ -1,4 +1,4 @@
-export type NavPageIcon = 'models' | 'storage' | 'users' | 'roles' | 'permissions';
+export type NavPageIcon = 'models' | 'storage' | 'documents' | 'users' | 'roles' | 'permissions';
 
 export type NavPage = {
   path: string;
@@ -27,6 +27,19 @@ export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
     titleAccent: 'Storage',
     permissionKey: 'platform-basic:storage',
     icon: 'storage',
+  },
+];
+
+export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'Knowledge Management';
+
+export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
+  {
+    path: '/knowledge/documents',
+    navLabel: 'Document',
+    titleMain: 'Document',
+    titleAccent: '',
+    permissionKey: 'knowledge-management:documents',
+    icon: 'documents',
   },
 ];
 
@@ -59,7 +72,11 @@ export const ADMIN_PAGES: readonly NavPage[] = [
   },
 ];
 
-export const ALL_NAV_PAGES: readonly NavPage[] = [...PLATFORM_BASIC_PAGES, ...ADMIN_PAGES];
+export const ALL_NAV_PAGES: readonly NavPage[] = [
+  ...PLATFORM_BASIC_PAGES,
+  ...KNOWLEDGE_MANAGEMENT_PAGES,
+  ...ADMIN_PAGES,
+];
 
 export function getNavPage(path: string): NavPage | undefined {
   return ALL_NAV_PAGES.find((item) => item.path === path);
