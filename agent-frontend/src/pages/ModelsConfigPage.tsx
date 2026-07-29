@@ -23,6 +23,7 @@ const API_TYPE_FILTERS: Array<{ id: 'all' | ModelApiType; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'chat-completions', label: 'Chat completions' },
   { id: 'embeddings', label: 'Embeddings' },
+  { id: 'vlm', label: 'Vision language (VLM)' },
   { id: 'custom-endpoint', label: 'Custom endpoint' },
   { id: 'image-generation', label: 'Image generation' },
   { id: 'video-generation', label: 'Video generation' },

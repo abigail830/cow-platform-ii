@@ -4,6 +4,7 @@ import { formatApiError } from './http.ts';
 export const MODEL_API_TYPES = [
   'chat-completions',
   'embeddings',
+  'vlm',
   'custom-endpoint',
   'image-generation',
   'video-generation',
@@ -14,6 +15,7 @@ export type ModelApiType = (typeof MODEL_API_TYPES)[number];
 export const MODEL_API_TYPE_LABELS: Record<ModelApiType, string> = {
   'chat-completions': 'Chat completions',
   embeddings: 'Embeddings',
+  vlm: 'Vision language (VLM)',
   'custom-endpoint': 'Custom endpoint',
   'image-generation': 'Image generation',
   'video-generation': 'Video generation',

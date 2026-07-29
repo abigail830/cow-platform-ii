@@ -13,6 +13,7 @@ import {
 export const MODEL_API_TYPES = [
   'chat-completions',
   'embeddings',
+  'vlm',
   'custom-endpoint',
   'image-generation',
   'video-generation',

@@ -14,6 +14,24 @@ type ModelConfigFormProps = {
 };
 
 const CAPABILITY_SUGGESTIONS = ['Vision', 'Document parse', 'Function calling', 'JSON mode', 'Streaming'];
+const VLM_CAPABILITY_SUGGESTIONS = ['Vision', 'OCR', 'Layout detection', 'Document parse'];
+
+function placeholdersForApiType(apiType: ModelApiType) {
+  if (apiType === 'vlm') {
+    return {
+      name: 'PaddleOCR-VL-1.5',
+      modelId: 'PaddlePaddle/PaddleOCR-VL-1.5',
+      provider: 'PaddlePaddle',
+      baseUrl: 'http://localhost:8101/',
+    };
+  }
+  return {
+    name: 'My model',
+    modelId: 'provider/model-name',
+    provider: 'Provider',
+    baseUrl: 'https://api.example.com/v1',
+  };
+}
 
 export function ModelConfigForm({ initial, onSubmit, onCancel }: ModelConfigFormProps) {
   const [name, setName] = useState(initial?.name ?? '');
@@ -74,6 +92,12 @@ export function ModelConfigForm({ initial, onSubmit, onCancel }: ModelConfigForm
     }
   }
 
+  const fieldPlaceholders = placeholdersForApiType(apiType);
+  const capabilitySuggestions =
+    apiType === 'vlm'
+      ? [...new Set([...VLM_CAPABILITY_SUGGESTIONS, ...CAPABILITY_SUGGESTIONS])]
+      : CAPABILITY_SUGGESTIONS;
+
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal-card model-config-form" onClick={(event) => event.stopPropagation()}>
@@ -82,20 +106,30 @@ export function ModelConfigForm({ initial, onSubmit, onCancel }: ModelConfigForm
           <div className="form-grid">
             <label className="form-field">
               <span>Display name</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="PaddleOCR-VL-1.5" required />
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={fieldPlaceholders.name}
+                required
+              />
             </label>
             <label className="form-field">
               <span>Model ID</span>
               <input
                 value={modelId}
                 onChange={(event) => setModelId(event.target.value)}
-                placeholder="PaddlePaddle/PaddleOCR-VL-1.5"
+                placeholder={fieldPlaceholders.modelId}
                 required
               />
             </label>
             <label className="form-field">
               <span>Provider</span>
-              <input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="PaddlePaddle" required />
+              <input
+                value={provider}
+                onChange={(event) => setProvider(event.target.value)}
+                placeholder={fieldPlaceholders.provider}
+                required
+              />
             </label>
             <label className="form-field">
               <span>API format</span>
@@ -112,8 +146,11 @@ export function ModelConfigForm({ initial, onSubmit, onCancel }: ModelConfigForm
               <input
                 value={baseUrl}
                 onChange={(event) => setBaseUrl(event.target.value)}
-                placeholder="http://localhost:8101/"
+                placeholder={fieldPlaceholders.baseUrl}
               />
+              {apiType === 'vlm' && (
+                <span className="admin-form-hint">VLM inference server endpoint (e.g. mlx-vlm-server).</span>
+              )}
             </label>
             <label className="form-field form-field-wide">
               <span>API Key {initial?.hasApiKey ? '(leave blank to keep current)' : ''}</span>
@@ -152,7 +189,7 @@ export function ModelConfigForm({ initial, onSubmit, onCancel }: ModelConfigForm
                   </button>
                 </div>
                 <div className="capability-suggestions">
-                  {CAPABILITY_SUGGESTIONS.filter((item) => !capabilities.includes(item)).map((item) => (
+                  {capabilitySuggestions.filter((item) => !capabilities.includes(item)).map((item) => (
                     <button key={item} type="button" className="capability-suggestion" onClick={() => addCapability(item)}>
                       + {item}
                     </button>
