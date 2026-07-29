@@ -9,8 +9,11 @@ import admin from './routes/admin/index.ts';
 import consoleRoutes from './routes/console/index.ts';
 import documentChannels from './routes/document-channels.ts';
 import documents from './routes/documents.ts';
+import internalApi from './routes/internal-api/index.ts';
+import { startPipelinePollScheduler } from './services/pipeline-poller.ts';
 
 registerModelProviders();
+startPipelinePollScheduler();
 
 const app = new Hono();
 
@@ -32,6 +35,7 @@ app.route('/api/admin', admin);
 app.route('/api/console', consoleRoutes);
 app.route('/api/document-channels', documentChannels);
 app.route('/api/documents', documents);
+app.route('/internal-api', internalApi);
 app.route('/api', flue());
 
 export default app;

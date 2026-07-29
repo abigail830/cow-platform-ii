@@ -1,5 +1,7 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { appDocumentChannels, appDocuments, db } from '../db/index.ts';
+import { getModelConfigById } from '../shared/model-config-store.ts';
+import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { buildChannelTree, collectDescendantIds } from './channel-tree.ts';
 
 export type ChannelRow = typeof appDocumentChannels.$inferSelect;
@@ -11,6 +13,8 @@ export type ChannelNode = {
   description: string | null;
   parent_id: string | null;
   sort_order: number;
+  pipeline_id: string | null;
+  metadata_extraction_model_id: string | null;
   created_at: string;
   updated_at: string;
   children: ChannelNode[];
@@ -23,6 +27,8 @@ function toChannelPublic(row: ChannelRow) {
     description: row.description,
     parent_id: row.parentId,
     sort_order: row.sortOrder,
+    pipeline_id: row.pipelineId,
+    metadata_extraction_model_id: row.metadataExtractionModelId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -104,10 +110,32 @@ export async function updateChannel(
     name?: string;
     description?: string | null;
     parentId?: string | null;
+    metadataExtractionModelId?: string | null;
+    pipelineId?: string | null;
   },
 ): Promise<ReturnType<typeof toChannelPublic>> {
   const existing = await getChannelById(id);
   if (!existing) throw new Error('Channel not found');
+
+  if (input.pipelineId !== undefined && input.pipelineId !== null) {
+    const pipeline = await getPipelineConfigById(input.pipelineId);
+    if (!pipeline) throw new Error('Pipeline not found');
+    if (!pipeline.isEnabled) throw new Error('Pipeline is disabled');
+  }
+
+  if (input.metadataExtractionModelId !== undefined && input.metadataExtractionModelId !== null) {
+    const modelId = input.metadataExtractionModelId.trim();
+    if (!modelId) {
+      input.metadataExtractionModelId = null;
+    } else {
+      const model = await getModelConfigById(modelId);
+      if (!model) throw new Error('Extraction model not found');
+      if (model.apiType !== 'chat-completions') {
+        throw new Error('Extraction model must be a chat-completions model');
+      }
+      input.metadataExtractionModelId = modelId;
+    }
+  }
 
   if (input.parentId !== undefined && input.parentId !== null) {
     if (input.parentId === id) throw new Error('Channel cannot be its own parent');
@@ -131,6 +159,10 @@ export async function updateChannel(
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
       ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+      ...(input.metadataExtractionModelId !== undefined
+        ? { metadataExtractionModelId: input.metadataExtractionModelId }
+        : {}),
+      ...(input.pipelineId !== undefined ? { pipelineId: input.pipelineId } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appDocumentChannels.id, id))
@@ -269,5 +301,54 @@ export async function getDocumentStats(): Promise<{ channels: number; documents:
   return {
     channels: channelRow?.count ?? 0,
     documents: docRow?.count ?? 0,
+  };
+}
+
+export type DocumentContentResponse = {
+  id: string;
+  name: string;
+  file_type: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  markdown: string | null;
+  page_index: Record<string, unknown> | null;
+  has_markdown: boolean;
+  has_page_index: boolean;
+};
+
+export async function getDocumentContent(id: string): Promise<DocumentContentResponse> {
+  const doc = await getDocumentById(id);
+  if (!doc) throw new Error('Document not found');
+
+  const { readStorageText, storagePrefixFromS3Key } = await import('../storage/document-content.ts');
+  const prefix = storagePrefixFromS3Key(doc.s3Key);
+
+  const [markdown, pageIndexRaw] = await Promise.all([
+    readStorageText(`${prefix}/markdown.md`),
+    readStorageText(`${prefix}/page_index.json`),
+  ]);
+
+  let page_index: Record<string, unknown> | null = null;
+  if (pageIndexRaw) {
+    try {
+      const parsed = JSON.parse(pageIndexRaw) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        page_index = parsed as Record<string, unknown>;
+      }
+    } catch {
+      page_index = null;
+    }
+  }
+
+  return {
+    id: doc.id,
+    name: doc.name,
+    file_type: doc.fileType,
+    status: doc.status,
+    metadata: doc.metadata ?? {},
+    markdown,
+    page_index,
+    has_markdown: Boolean(markdown?.trim()),
+    has_page_index: page_index !== null,
   };
 }

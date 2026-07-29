@@ -1,0 +1,6 @@
+**/output
+
+*.egg-info/
+
+.venv/
+.pytest_cache/

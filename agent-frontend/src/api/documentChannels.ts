@@ -7,9 +7,16 @@ export type DocumentChannel = {
   description: string | null;
   parent_id: string | null;
   sort_order: number;
+  pipeline_id: string | null;
+  metadata_extraction_model_id: string | null;
   created_at: string;
   updated_at: string;
   children: DocumentChannel[];
+};
+
+export type ChannelProcessingOptions = {
+  pipelines: Array<{ id: string; name: string; pipelineName: string }>;
+  extractionModels: Array<{ id: string; name: string; isDefault: boolean }>;
 };
 
 async function authFetch(path: string, init?: RequestInit) {
@@ -28,6 +35,11 @@ async function authFetch(path: string, init?: RequestInit) {
 export async function listDocumentChannels(): Promise<DocumentChannel[]> {
   const data = await authFetch('/api/document-channels');
   return (data.channels as DocumentChannel[]) ?? [];
+}
+
+export async function fetchChannelProcessingOptions(): Promise<ChannelProcessingOptions> {
+  const data = await authFetch('/api/document-channels/processing-options');
+  return data as ChannelProcessingOptions;
 }
 
 export async function createDocumentChannel(input: {
@@ -49,7 +61,13 @@ export async function createDocumentChannel(input: {
 
 export async function updateDocumentChannel(
   id: string,
-  input: { name?: string; description?: string | null; parentId?: string | null },
+  input: {
+    name?: string;
+    description?: string | null;
+    parentId?: string | null;
+    pipelineId?: string | null;
+    metadataExtractionModelId?: string | null;
+  },
 ): Promise<DocumentChannel> {
   const data = await authFetch(`/api/document-channels/${id}`, {
     method: 'PUT',
@@ -58,6 +76,8 @@ export async function updateDocumentChannel(
       name: input.name,
       description: input.description,
       parent_id: input.parentId,
+      pipeline_id: input.pipelineId,
+      metadata_extraction_model_id: input.metadataExtractionModelId,
     }),
   });
   return data as DocumentChannel;

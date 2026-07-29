@@ -37,6 +37,28 @@ async function authFetch(path: string, init?: RequestInit) {
   return data;
 }
 
+export type DocumentContentResponse = {
+  id: string;
+  name: string;
+  file_type: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  markdown: string | null;
+  page_index: Record<string, unknown> | null;
+  has_markdown: boolean;
+  has_page_index: boolean;
+};
+
+export async function getDocument(id: string): Promise<DocumentRecord> {
+  const data = await authFetch(`/api/documents/${id}`);
+  return data as DocumentRecord;
+}
+
+export async function fetchDocumentContent(id: string): Promise<DocumentContentResponse> {
+  const data = await authFetch(`/api/documents/${id}/content`);
+  return data as DocumentContentResponse;
+}
+
 export async function listDocuments(params: {
   channelId: string;
   search?: string;
@@ -77,6 +99,11 @@ export async function moveDocument(id: string, channelId: string): Promise<Docum
     body: JSON.stringify({ channel_id: channelId }),
   });
   return data as DocumentRecord;
+}
+
+export async function runDocumentPipeline(id: string): Promise<{ status: string }> {
+  const data = await authFetch(`/api/documents/${id}/run-pipeline`, { method: 'POST' });
+  return data as { status: string };
 }
 
 async function uploadSingleFile(channelId: string, file: File): Promise<DocumentRecord> {

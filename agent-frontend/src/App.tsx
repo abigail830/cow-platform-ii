@@ -5,7 +5,10 @@ import { AppLayout } from './layouts/AppLayout.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
-import { DocumentsPage } from './pages/DocumentsPage.tsx';
+import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
+import { DocumentsLayout } from './pages/DocumentsLayout.tsx';
+import { DocumentDetailPage } from './pages/DocumentDetailPage.tsx';
+import { DocumentsListPage } from './pages/DocumentsListPage.tsx';
 import { ObjectStoragePage } from './pages/ObjectStoragePage.tsx';
 import { PermissionsPage } from './pages/PermissionsPage.tsx';
 import { RolesPage } from './pages/RolesPage.tsx';
@@ -31,8 +34,12 @@ export default function App() {
         >
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/admin/models" element={<ModelsConfigPage />} />
+          <Route path="/admin/pipelines" element={<PipelinesConfigPage />} />
           <Route path="/admin/storage" element={<ObjectStoragePage />} />
-          <Route path="/knowledge/documents" element={<DocumentsPage />} />
+          <Route path="/knowledge/documents" element={<DocumentsLayout />}>
+            <Route index element={<DocumentsListPage />} />
+            <Route path=":documentId" element={<DocumentDetailPage />} />
+          </Route>
           <Route path="/admin/users" element={<UsersPage />} />
           <Route path="/admin/roles" element={<RolesPage />} />
           <Route path="/admin/permissions" element={<PermissionsPage />} />

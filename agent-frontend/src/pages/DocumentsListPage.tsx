@@ -1,0 +1,305 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { flattenChannels } from '../api/documentChannels.ts';
+import {
+  deleteDocument,
+  downloadDocument,
+  formatDocumentBytes,
+  listDocuments,
+  moveDocument,
+  runDocumentPipeline,
+  uploadDocument,
+  type DocumentRecord,
+} from '../api/documents.ts';
+import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
+import { DocumentUploadModal } from '../components/DocumentUploadModal.tsx';
+import { IconDelete, IconDownload, IconMove, IconRun } from '../components/AdminActionIcons.tsx';
+import { Search } from 'lucide-react';
+import { iconProps } from '../components/icons/icon-props.ts';
+import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
+
+export function DocumentsListPage() {
+  const {
+    channels,
+    selectedChannelId,
+    canWrite,
+    loadingChannels,
+  } = useDocumentsOutletContext();
+
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [error, setError] = useState('');
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [moveDocumentTarget, setMoveDocumentTarget] = useState<DocumentRecord | null>(null);
+  const [runningDocumentIds, setRunningDocumentIds] = useState<Set<string>>(new Set());
+
+  const flatChannels = useMemo(() => flattenChannels(channels), [channels]);
+  const selectedChannel = flatChannels.find((channel) => channel.id === selectedChannelId) ?? null;
+  const channelHasPipeline = Boolean(selectedChannel?.pipeline_id);
+
+  const loadDocuments = useCallback(async (options?: { silent?: boolean }) => {
+    if (!selectedChannelId) {
+      setDocuments([]);
+      setTotal(0);
+      return;
+    }
+    if (!options?.silent) setLoadingDocuments(true);
+    setError('');
+    try {
+      const result = await listDocuments({ channelId: selectedChannelId, search });
+      setDocuments(result.items);
+      setTotal(result.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load documents');
+    } finally {
+      if (!options?.silent) setLoadingDocuments(false);
+    }
+  }, [search, selectedChannelId]);
+
+  useEffect(() => {
+    void loadDocuments();
+  }, [loadDocuments]);
+
+  async function handleUpload(files: File[]) {
+    if (!selectedChannelId) throw new Error('Select a channel first');
+    for (const file of files) {
+      await uploadDocument(selectedChannelId, file);
+    }
+    setUploadOpen(false);
+    await loadDocuments();
+  }
+
+  async function handleDeleteDocument(document: DocumentRecord) {
+    if (!window.confirm(`Delete "${document.name}"?`)) return;
+    try {
+      await deleteDocument(document.id);
+      await loadDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete document');
+    }
+  }
+
+  async function handleDownloadDocument(document: DocumentRecord) {
+    try {
+      await downloadDocument(document.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download document');
+    }
+  }
+
+  async function handleMoveDocument(channelId: string) {
+    if (!moveDocumentTarget) return;
+    await moveDocument(moveDocumentTarget.id, channelId);
+    setMoveDocumentTarget(null);
+    await loadDocuments();
+  }
+
+  async function handleRunPipeline(document: DocumentRecord) {
+    if (!channelHasPipeline) return;
+    setRunningDocumentIds((current) => new Set(current).add(document.id));
+    setError('');
+    try {
+      await runDocumentPipeline(document.id);
+      setDocuments((current) =>
+        current.map((item) => (item.id === document.id ? { ...item, status: 'running' } : item)),
+      );
+      await loadDocuments({ silent: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start pipeline');
+    } finally {
+      setRunningDocumentIds((current) => {
+        const next = new Set(current);
+        next.delete(document.id);
+        return next;
+      });
+    }
+  }
+
+  function formatDocumentStatus(status: string): string {
+    switch (status) {
+      case 'uploaded':
+        return 'Uploaded';
+      case 'running':
+        return 'Running';
+      case 'completed':
+        return 'Completed';
+      case 'failed':
+        return 'Failed';
+      default:
+        return status;
+    }
+  }
+
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div className="admin-toolbar-left">
+          <div className="admin-search">
+            <Search {...iconProps()} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search documents…"
+              disabled={!selectedChannelId}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => void loadDocuments()}
+            disabled={!selectedChannelId || loadingDocuments}
+          >
+            Refresh
+          </button>
+        </div>
+        {canWrite && (
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!selectedChannelId}
+            onClick={() => setUploadOpen(true)}
+          >
+            + Upload
+          </button>
+        )}
+      </div>
+
+      {selectedChannel && (
+        <p className="documents-channel-context">
+          Channel: <strong>{selectedChannel.name}</strong>
+          {selectedChannel.description ? ` — ${selectedChannel.description}` : ''}
+        </p>
+      )}
+
+      {error && <p className="error inline">{error}</p>}
+
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Size</th>
+              <th>Status</th>
+              <th>Uploaded</th>
+              <th className="admin-table-actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!selectedChannelId ? (
+              <tr>
+                <td colSpan={6} className="admin-table-empty">
+                  Select or create a channel to manage documents.
+                </td>
+              </tr>
+            ) : loadingChannels || loadingDocuments ? (
+              <tr>
+                <td colSpan={6} className="admin-table-empty">
+                  Loading…
+                </td>
+              </tr>
+            ) : documents.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="admin-table-empty">
+                  No documents in this channel yet.
+                </td>
+              </tr>
+            ) : (
+              documents.map((document) => (
+                <tr key={document.id}>
+                  <td>
+                    <Link to={`/knowledge/documents/${document.id}`} className="document-name-link">
+                      {document.name}
+                    </Link>
+                  </td>
+                  <td>{document.file_type}</td>
+                  <td>{formatDocumentBytes(document.size_bytes)}</td>
+                  <td>
+                    <span className={`document-status-badge status-${document.status}`}>
+                      {formatDocumentStatus(document.status)}
+                    </span>
+                  </td>
+                  <td>{new Date(document.created_at).toLocaleString()}</td>
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Download"
+                        onClick={() => void handleDownloadDocument(document)}
+                      >
+                        <IconDownload />
+                      </button>
+                      {canWrite && (
+                        <>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title={
+                              channelHasPipeline
+                                ? 'Run pipeline'
+                                : 'Configure a pipeline on this channel first'
+                            }
+                            disabled={
+                              !channelHasPipeline ||
+                              document.status === 'running' ||
+                              runningDocumentIds.has(document.id)
+                            }
+                            onClick={() => void handleRunPipeline(document)}
+                          >
+                            <IconRun />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Move to channel"
+                            onClick={() => setMoveDocumentTarget(document)}
+                          >
+                            <IconMove />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn danger"
+                            title="Delete"
+                            onClick={() => void handleDeleteDocument(document)}
+                          >
+                            <IconDelete />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedChannelId && total > documents.length && (
+        <p className="documents-list-meta">
+          Showing {documents.length} of {total} documents
+        </p>
+      )}
+
+      {uploadOpen && selectedChannel && (
+        <DocumentUploadModal
+          channelName={selectedChannel.name}
+          onCancel={() => setUploadOpen(false)}
+          onUpload={handleUpload}
+        />
+      )}
+      {moveDocumentTarget && (
+        <DocumentMoveModal
+          documentName={moveDocumentTarget.name}
+          currentChannelId={moveDocumentTarget.channel_id}
+          channels={channels}
+          onCancel={() => setMoveDocumentTarget(null)}
+          onSubmit={handleMoveDocument}
+        />
+      )}
+    </>
+  );
+}

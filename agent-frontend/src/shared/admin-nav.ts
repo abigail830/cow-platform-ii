@@ -1,4 +1,4 @@
-export type NavPageIcon = 'models' | 'storage' | 'documents' | 'users' | 'roles' | 'permissions';
+export type NavPageIcon = 'models' | 'pipelines' | 'storage' | 'documents' | 'users' | 'roles' | 'permissions';
 
 export type NavPage = {
   path: string;
@@ -19,6 +19,14 @@ export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
     titleAccent: 'Configuration',
     permissionKey: 'platform-basic:models',
     icon: 'models',
+  },
+  {
+    path: '/admin/pipelines',
+    navLabel: 'Pipelines',
+    titleMain: 'Pipeline',
+    titleAccent: 'Configuration',
+    permissionKey: 'platform-basic:pipelines',
+    icon: 'pipelines',
   },
   {
     path: '/admin/storage',

@@ -6,6 +6,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/agent-backend"
 FRONTEND_DIR="$ROOT_DIR/agent-frontend"
+OPENKMS_CLI_DIR="$ROOT_DIR/openkms-cli"
 RUN_DIR="$ROOT_DIR/.run/agent-platform"
 
 BACKEND_PORT="${BACKEND_PORT:-8787}"
@@ -132,4 +133,36 @@ wait_for_url() {
   done
   echo "Warning: $label did not become ready in ${tries}s (check logs)" >&2
   return 1
+}
+
+migrate_backend_db() {
+  use_node_22
+  echo "Applying database migrations..."
+  (
+    cd "$BACKEND_DIR"
+    load_nvm && [[ -f .nvmrc ]] && nvm use >/dev/null
+    npm run db:migrate
+  )
+}
+
+ensure_openkms_cli() {
+  local python_bin="$OPENKMS_CLI_DIR/.venv/bin/python"
+  if [[ ! -x "$python_bin" ]]; then
+    echo "Warning: openkms-cli venv missing ($OPENKMS_CLI_DIR/.venv). Pipeline runs will fail." >&2
+    return 0
+  fi
+  if "$python_bin" -c "import boto3, baidubce, pydantic_ai" >/dev/null 2>&1; then
+    if "$python_bin" -c "import alibabacloud_docmind_api20220711" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "Warning: openkms-cli extras missing and uv not installed. Run: cd openkms-cli && uv pip install -e \".[pipeline,baidu,metadata,aliyun]\" --python .venv/bin/python" >&2
+    return 0
+  fi
+  echo "Installing openkms-cli[pipeline,baidu,metadata,aliyun]..."
+  (
+    cd "$OPENKMS_CLI_DIR"
+    uv pip install -e ".[pipeline,baidu,metadata,aliyun]" --python .venv/bin/python
+  )
 }

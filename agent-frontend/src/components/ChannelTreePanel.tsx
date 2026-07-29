@@ -1,4 +1,4 @@
-import { Folder, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Folder, Plus, Settings, Trash2 } from 'lucide-react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
 import { iconProps } from './icons/icon-props.ts';
 
@@ -9,7 +9,7 @@ type ChannelTreePanelProps = {
   onSelect: (channelId: string) => void;
   onCreateRoot: () => void;
   onCreateChild: (parentId: string) => void;
-  onRename: (channel: DocumentChannel) => void;
+  onSettings: (channel: DocumentChannel) => void;
   onDelete: (channel: DocumentChannel) => void;
 };
 
@@ -20,7 +20,7 @@ function ChannelTreeNode({
   canWrite,
   onSelect,
   onCreateChild,
-  onRename,
+  onSettings,
   onDelete,
 }: {
   channel: DocumentChannel;
@@ -29,7 +29,7 @@ function ChannelTreeNode({
   canWrite: boolean;
   onSelect: (channelId: string) => void;
   onCreateChild: (parentId: string) => void;
-  onRename: (channel: DocumentChannel) => void;
+  onSettings: (channel: DocumentChannel) => void;
   onDelete: (channel: DocumentChannel) => void;
 }) {
   const active = selectedId === channel.id;
@@ -48,8 +48,8 @@ function ChannelTreeNode({
             <button type="button" className="icon-btn" title="Add sub-channel" onClick={() => onCreateChild(channel.id)}>
               <Plus {...iconProps()} />
             </button>
-            <button type="button" className="icon-btn" title="Rename" onClick={() => onRename(channel)}>
-              <Pencil {...iconProps()} />
+            <button type="button" className="icon-btn" title="Settings" onClick={() => onSettings(channel)}>
+              <Settings {...iconProps()} />
             </button>
             <button type="button" className="icon-btn danger" title="Delete" onClick={() => onDelete(channel)}>
               <Trash2 {...iconProps()} />
@@ -68,7 +68,7 @@ function ChannelTreeNode({
               canWrite={canWrite}
               onSelect={onSelect}
               onCreateChild={onCreateChild}
-              onRename={onRename}
+              onSettings={onSettings}
               onDelete={onDelete}
             />
           ))}
@@ -85,7 +85,7 @@ export function ChannelTreePanel({
   onSelect,
   onCreateRoot,
   onCreateChild,
-  onRename,
+  onSettings,
   onDelete,
 }: ChannelTreePanelProps) {
   return (
@@ -111,7 +111,7 @@ export function ChannelTreePanel({
               canWrite={canWrite}
               onSelect={onSelect}
               onCreateChild={onCreateChild}
-              onRename={onRename}
+              onSettings={onSettings}
               onDelete={onDelete}
             />
           ))}

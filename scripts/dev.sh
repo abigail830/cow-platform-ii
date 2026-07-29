@@ -47,6 +47,9 @@ start_backend() {
     return 0
   fi
 
+  migrate_backend_db
+  ensure_openkms_cli
+
   echo "Starting backend on :$BACKEND_PORT ..."
   (
     cd "$BACKEND_DIR"

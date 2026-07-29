@@ -22,10 +22,12 @@ import {
   createDocumentRecord,
   deleteDocument,
   getDocumentById,
+  getDocumentContent,
   getDocumentStats,
   listDocuments,
   moveDocument,
 } from '../services/documents.ts';
+import { startDocumentPipeline } from '../services/pipeline-runner.ts';
 
 const documents = new Hono();
 
@@ -141,6 +143,23 @@ documents.put(
 );
 
 documents.get(
+  '/:id/content',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    try {
+      const content = await getDocumentContent(c.req.param('id'));
+      return c.json(content);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load document content';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+documents.get(
   '/:id',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
@@ -248,6 +267,21 @@ documents.post(
     } catch (error) {
       if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
       return c.json({ error: error instanceof Error ? error.message : 'Chunk upload failed' }, 400);
+    }
+  },
+);
+
+documents.post(
+  '/:id/run-pipeline',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
+  async (c) => {
+    try {
+      const result = await startDocumentPipeline(c.req.param('id'));
+      return c.json(result, 202);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start pipeline';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
     }
   },
 );

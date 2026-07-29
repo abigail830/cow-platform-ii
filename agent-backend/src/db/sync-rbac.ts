@@ -93,13 +93,19 @@ export async function syncRbac(): Promise<{ permissionCount: number }> {
     console.log(`  created role: ${ADMIN_ROLE.key}`);
   }
 
-  await db.delete(appRolePermissions).where(eq(appRolePermissions.roleId, role.id));
   for (const permission of permissions) {
-    await db.insert(appRolePermissions).values({
-      roleId: role.id,
-      permissionId: permission.id,
-      accessLevel: accessFromPermissionKey(permission.key),
-    });
+    const accessLevel = accessFromPermissionKey(permission.key);
+    await db
+      .insert(appRolePermissions)
+      .values({
+        roleId: role.id,
+        permissionId: permission.id,
+        accessLevel,
+      })
+      .onConflictDoUpdate({
+        target: [appRolePermissions.roleId, appRolePermissions.permissionId],
+        set: { accessLevel },
+      });
   }
 
   const legacyAdmins = await db

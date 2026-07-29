@@ -40,12 +40,14 @@ npm run dev
 From repo root you can orchestrate backend + frontend together:
 
 ```bash
-./scripts/start.sh              # start both (backend :8787, frontend :5180)
+./scripts/start.sh              # migrate DB, then start both (backend :8787, frontend :5180)
 ./scripts/stop.sh               # stop both
-./scripts/restart.sh            # stop then start both
+./scripts/restart.sh            # stop then start both (runs migrate before backend)
 ./scripts/status.sh             # show running state and log paths
 ./scripts/logs.sh backend       # tail backend log (or: frontend)
 ```
+
+`start` / `restart` with backend run `npm run db:migrate` first (idempotent — no-op when schema is up to date).
 
 Targets `backend` or `frontend` work for start/stop/restart, e.g. `./scripts/restart.sh backend`.
 

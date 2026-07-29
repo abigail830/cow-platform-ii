@@ -126,8 +126,24 @@ export const appRolePermissions = pgTable(
   (t) => [primaryKey({ columns: [t.roleId, t.permissionId] })],
 );
 
-export const DOCUMENT_STATUSES = ['uploaded'] as const;
+export const DOCUMENT_STATUSES = ['uploaded', 'running', 'completed', 'failed'] as const;
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+
+export const appPipelineConfigs = pgTable(
+  'app_pipeline_configs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    pipelineName: text('pipeline_name').notNull(),
+    commandTemplate: text('command_template').notNull(),
+    modelConfigId: uuid('model_config_id').references(() => appModelConfigs.id, { onDelete: 'set null' }),
+    isEnabled: boolean('is_enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_pipeline_configs_enabled').on(t.isEnabled)],
+);
 
 export const appUserRoles = pgTable(
   'app_user_roles',
@@ -150,6 +166,10 @@ export const appDocumentChannels = pgTable(
     description: text('description'),
     parentId: uuid('parent_id'),
     sortOrder: integer('sort_order').notNull().default(0),
+    metadataExtractionModelId: uuid('metadata_extraction_model_id').references(() => appModelConfigs.id, {
+      onDelete: 'set null',
+    }),
+    pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -178,6 +198,40 @@ export const appDocuments = pgTable(
   (t) => [
     index('idx_documents_channel').on(t.channelId, t.updatedAt),
     index('idx_documents_hash').on(t.fileHash),
+  ],
+);
+
+export const PIPELINE_JOB_STAGES = [
+  'submitted',
+  'parsed',
+  'extracted_metadata',
+  'done',
+  'failed',
+] as const;
+export type PipelineJobStage = (typeof PIPELINE_JOB_STAGES)[number];
+
+export const PIPELINE_PROVIDERS = ['baidu', 'aliyun'] as const;
+export type PipelineProvider = (typeof PIPELINE_PROVIDERS)[number];
+
+export const appPipelineJobs = pgTable(
+  'app_pipeline_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => appDocuments.id, { onDelete: 'cascade' }),
+    pipelineName: text('pipeline_name').notNull(),
+    provider: text('provider').notNull(),
+    stage: text('stage').notNull().default('submitted'),
+    externalJobId: text('external_job_id'),
+    extractionArgs: text('extraction_args'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_pipeline_jobs_document').on(t.documentId, t.createdAt),
+    index('idx_pipeline_jobs_stage').on(t.stage, t.provider),
   ],
 );
 

@@ -1,0 +1,87 @@
+"""Dispatch page-index builders by strategy name."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from .page_index_aliyun_layout import STRATEGY_NAME as ALIYUN_STRATEGY
+from .page_index_aliyun_layout import write_page_index_from_aliyun_layouts
+from .page_index_markdown import STRATEGY_NAME as MARKDOWN_STRATEGY
+from .page_index_markdown import write_page_index_from_markdown
+
+SUPPORTED_STRATEGIES = (MARKDOWN_STRATEGY, ALIYUN_STRATEGY)
+
+
+def normalize_strategy(name: str | None) -> str:
+    value = (name or MARKDOWN_STRATEGY).strip().lower()
+    if value not in SUPPORTED_STRATEGIES:
+        raise ValueError(
+            f"Unsupported page-index strategy '{name}'. "
+            f"Choose one of: {', '.join(SUPPORTED_STRATEGIES)}"
+        )
+    return value
+
+
+def default_page_index_strategy(*, provider: str | None = None) -> str:
+    if provider == "aliyun":
+        return ALIYUN_STRATEGY
+    return MARKDOWN_STRATEGY
+
+
+def effective_page_index_strategy(
+    *,
+    provider: str | None,
+    override: str | None = None,
+) -> str:
+    if override and override.strip():
+        return normalize_strategy(override)
+    return default_page_index_strategy(provider=provider)
+
+
+def write_page_index(
+    *,
+    strategy: str,
+    hash_dir: Path,
+    layouts: list[dict[str, Any]] | None = None,
+    doc_name: str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Write hash_dir/page_index.json using the selected strategy.
+    For aliyun-layouts, rewrites markdown.md with layout anchors when layouts are provided.
+    """
+    output_path = hash_dir / "page_index.json"
+    md_path = hash_dir / "markdown.md"
+    strategy = normalize_strategy(strategy)
+
+    if strategy == MARKDOWN_STRATEGY:
+        if not md_path.is_file():
+            return None
+        return write_page_index_from_markdown(md_path, output_path)
+
+    if strategy == ALIYUN_STRATEGY:
+        if not layouts:
+            raise ValueError("aliyun-layouts strategy requires layout list")
+        return write_page_index_from_aliyun_layouts(
+            layouts,
+            doc_name=doc_name or hash_dir.name,
+            output_path=output_path,
+            markdown_path=md_path if md_path.parent.exists() else None,
+        )
+
+    raise ValueError(f"Unhandled strategy: {strategy}")
+
+
+def load_layouts_from_result_json(result_path: Path) -> list[dict[str, Any]]:
+    data = json.loads(result_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return []
+    raw = data.get("aliyun_layouts")
+    if isinstance(raw, list):
+        return [item for item in raw if isinstance(item, dict)]
+    layouts: list[dict[str, Any]] = []
+    for block in data.get("parsing_res_list") or []:
+        if isinstance(block, dict):
+            layouts.append(block)
+    return layouts

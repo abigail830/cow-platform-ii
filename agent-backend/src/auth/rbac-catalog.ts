@@ -5,6 +5,7 @@ export const PLATFORM_BASIC_CATEGORY = 'platform-basic' as const;
 export const PLATFORM_BASIC_RESOURCES = {
   MODELS: 'models',
   STORAGE: 'storage',
+  PIPELINES: 'pipelines',
 } as const;
 
 export type PlatformBasicResource = (typeof PLATFORM_BASIC_RESOURCES)[keyof typeof PLATFORM_BASIC_RESOURCES];
@@ -48,6 +49,13 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
     description: 'S3-compatible bucket browser and object moves.',
     routePatterns: ['/admin/storage'],
     apiPatterns: ['/api/console/storage', '/api/console/storage/*'],
+  },
+  {
+    resource: PLATFORM_BASIC_RESOURCES.PIPELINES,
+    label: 'Pipelines',
+    description: 'Document processing pipeline templates for openkms-cli.',
+    routePatterns: ['/admin/pipelines'],
+    apiPatterns: ['/api/admin/pipelines', '/api/admin/pipelines/*'],
   },
 ];
 

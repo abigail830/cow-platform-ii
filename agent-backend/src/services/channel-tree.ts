@@ -6,6 +6,8 @@ export type ChannelTreeRow = {
   description: string | null;
   parent_id: string | null;
   sort_order: number;
+  pipeline_id: string | null;
+  metadata_extraction_model_id: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -15,6 +15,34 @@ const channels = new Hono();
 channels.use('*', requireAuth);
 
 channels.get(
+  '/processing-options',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    const { listPipelineConfigs } = await import('../shared/pipeline-config-store.ts');
+    const { listRuntimeModelConfigs } = await import('../shared/model-config-store.ts');
+
+    const [{ pipelines }, models] = await Promise.all([
+      listPipelineConfigs({ enabledOnly: true, limit: 100 }),
+      listRuntimeModelConfigs(),
+    ]);
+
+    const extractionModels = models
+      .filter((model) => model.apiType === 'chat-completions')
+      .map((model) => ({ id: model.id, name: model.name, isDefault: model.isDefault }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+    return c.json({
+      pipelines: pipelines.map((pipeline) => ({
+        id: pipeline.id,
+        name: pipeline.name,
+        pipelineName: pipeline.pipelineName,
+      })),
+      extractionModels,
+    });
+  },
+);
+
+channels.get(
   '/',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
@@ -35,6 +63,8 @@ channels.get(
       description: row.description,
       parent_id: row.parentId,
       sort_order: row.sortOrder,
+      metadata_extraction_model_id: row.metadataExtractionModelId,
+      pipeline_id: row.pipelineId,
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
     });
@@ -71,13 +101,25 @@ channels.put(
       name?: string;
       description?: string | null;
       parent_id?: string | null;
+      metadata_extraction_model_id?: string | null;
+      pipeline_id?: string | null;
     }>();
 
     try {
+      const metadataExtractionModelId =
+        body.metadata_extraction_model_id === undefined
+          ? undefined
+          : body.metadata_extraction_model_id?.trim() || null;
+
+      const pipelineId =
+        body.pipeline_id === undefined ? undefined : body.pipeline_id?.trim() || null;
+
       const channel = await updateChannel(c.req.param('id'), {
         name: body.name,
         description: body.description,
         parentId: body.parent_id,
+        metadataExtractionModelId,
+        pipelineId,
       });
       return c.json(channel);
     } catch (error) {

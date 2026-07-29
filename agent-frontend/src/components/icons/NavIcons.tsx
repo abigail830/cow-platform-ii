@@ -2,6 +2,7 @@ import {
   Boxes,
   Database,
   FileText,
+  GitBranch,
   KeyRound,
   ShieldCheck,
   Users,
@@ -13,6 +14,7 @@ import { iconProps } from './icon-props.ts';
 
 const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   models: Boxes,
+  pipelines: GitBranch,
   storage: Database,
   documents: FileText,
   users: Users,

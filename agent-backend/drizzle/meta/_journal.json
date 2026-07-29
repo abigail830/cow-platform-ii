@@ -43,6 +43,41 @@
       "when": 1785162000000,
       "tag": "0005_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785163000000,
+      "tag": "0006_channel_metadata_extraction_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785164000000,
+      "tag": "0007_pipelines",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785165000000,
+      "tag": "0008_baidu_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785166000000,
+      "tag": "0009_pipeline_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785167000000,
+      "tag": "0010_aliyun_pipeline_template",
+      "breakpoints": true
     }
   ]
 }
