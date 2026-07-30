@@ -43,6 +43,11 @@ if (size < 100_000) {
 }
 
 writeFileSync(
+  path.join(funcDir, 'package.json'),
+  `${JSON.stringify({ type: 'module' }, null, 2)}\n`,
+);
+
+writeFileSync(
   path.join(funcDir, '.vc-config.json'),
   `${JSON.stringify(
     {
