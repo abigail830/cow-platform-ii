@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
+import { routeParam } from '../../http/route-param.ts';
 import {
   createPipelineConfig,
   deletePipelineConfig,
@@ -31,7 +32,10 @@ pipelines.get(
   '/:id',
   requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.PIPELINES, 'read'),
   async (c) => {
-    const pipeline = await getPipelineConfigById(c.req.param('id'));
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Not found' }, 404);
+
+    const pipeline = await getPipelineConfigById(id);
     if (!pipeline) return c.json({ error: 'Not found' }, 404);
     return c.json({ pipeline });
   },
@@ -84,7 +88,10 @@ pipelines.patch(
     }>();
 
     try {
-      const pipeline = await updatePipelineConfig(c.req.param('id'), body);
+      const id = routeParam(c, 'id');
+      if (!id) return c.json({ error: 'Not found' }, 404);
+
+      const pipeline = await updatePipelineConfig(id, body);
       return c.json({ pipeline });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update pipeline';
@@ -99,7 +106,10 @@ pipelines.delete(
   requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.PIPELINES, 'write'),
   async (c) => {
     try {
-      await deletePipelineConfig(c.req.param('id'));
+      const id = routeParam(c, 'id');
+      if (!id) return c.json({ error: 'Not found' }, 404);
+
+      await deletePipelineConfig(id);
       return c.json({ ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete pipeline';

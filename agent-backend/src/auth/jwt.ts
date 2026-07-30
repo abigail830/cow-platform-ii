@@ -1,5 +1,5 @@
 import type { Context, Next } from 'hono';
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 
 export type UserRole = 'user' | 'operator' | 'admin';
 
@@ -19,9 +19,8 @@ function jwtSecret(): string {
 }
 
 export function signToken(user: AuthUser): string {
-  return jwt.sign(user, jwtSecret(), {
-    expiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
-  });
+  const expiresIn = (process.env.JWT_EXPIRES_IN ?? '7d') as SignOptions['expiresIn'];
+  return jwt.sign(user, jwtSecret(), { expiresIn });
 }
 
 export function verifyToken(token: string): AuthUser {

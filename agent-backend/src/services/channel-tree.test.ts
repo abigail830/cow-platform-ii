@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildChannelTree, collectDescendantIds } from './channel-tree.ts';
+import { buildChannelTree, collectDescendantIds, type ChannelTreeRow } from './channel-tree.ts';
 
 const ts = '2026-01-01T00:00:00.000Z';
 
@@ -9,21 +9,16 @@ function row(
   name: string,
   parentId: string | null,
   sortOrder = 0,
-): {
-  id: string;
-  name: string;
-  description: string | null;
-  parent_id: string | null;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-} {
+): ChannelTreeRow {
   return {
     id,
     name,
     description: null,
     parent_id: parentId,
     sort_order: sortOrder,
+    pipeline_id: null,
+    metadata_extraction_model_id: null,
+    auto_start_pipeline: false,
     created_at: ts,
     updated_at: ts,
   };

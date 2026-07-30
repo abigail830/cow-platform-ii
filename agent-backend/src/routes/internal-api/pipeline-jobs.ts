@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
+import { routeParam } from '../../http/route-param.ts';
 import {
   buildPipelineJobContext,
   getPipelineJobById,
@@ -13,7 +14,10 @@ const pipelineJobs = new Hono();
 
 /** Aliyun Document Mind event callback — provider cannot send CLI Basic auth. */
 pipelineJobs.post('/:id/aliyun-callback', async (c) => {
-  const job = await getPipelineJobById(c.req.param('id'));
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Pipeline job id is required' }, 400);
+
+  const job = await getPipelineJobById(id);
   if (!job) return c.json({ error: 'Pipeline job not found' }, 404);
 
   let payload: Record<string, unknown> = {};
@@ -47,8 +51,11 @@ pipelineJobs.post('/:id/aliyun-callback', async (c) => {
 pipelineJobs.use('*', requireCliInternalAuth);
 
 pipelineJobs.get('/:id', async (c) => {
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Pipeline job id is required' }, 400);
+
   try {
-    const ctx = await buildPipelineJobContext(c.req.param('id'));
+    const ctx = await buildPipelineJobContext(id);
     return c.json(ctx);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load job';
@@ -58,13 +65,16 @@ pipelineJobs.get('/:id', async (c) => {
 });
 
 pipelineJobs.patch('/:id', async (c) => {
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Pipeline job id is required' }, 400);
+
   const body = await c.req.json<{
     stage?: PipelineJobStage;
     external_job_id?: string | null;
     error_message?: string | null;
   }>();
 
-  const job = await getPipelineJobById(c.req.param('id'));
+  const job = await getPipelineJobById(id);
   if (!job) return c.json({ error: 'Pipeline job not found' }, 404);
 
   const updated = await updatePipelineJob(job.id, {
@@ -81,8 +91,11 @@ pipelineJobs.patch('/:id', async (c) => {
 });
 
 pipelineJobs.post('/:id/events', async (c) => {
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Pipeline job id is required' }, 400);
+
   const body = await c.req.json<{ event?: string; provider?: string; external_job_id?: string }>();
-  const job = await getPipelineJobById(c.req.param('id'));
+  const job = await getPipelineJobById(id);
   if (!job) return c.json({ error: 'Pipeline job not found' }, 404);
 
   if (body.event !== 'provider_ready') {

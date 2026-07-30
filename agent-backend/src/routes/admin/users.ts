@@ -5,6 +5,7 @@ import { appRoles, appUserRoles, appUsers, db } from '../../db/index.ts';
 import { ADMIN_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { getUser, requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
+import { routeParam } from '../../http/route-param.ts';
 
 const users = new Hono();
 
@@ -94,7 +95,8 @@ users.post('/', requireResourcePermission('admin', ADMIN_RESOURCES.USERS, 'write
 });
 
 users.patch('/:id/roles', requireResourcePermission('admin', ADMIN_RESOURCES.USERS, 'write'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const body = await c.req.json<{ roleIds?: string[] }>();
   const roleIds = body.roleIds ?? [];
 
@@ -121,7 +123,8 @@ users.patch('/:id/roles', requireResourcePermission('admin', ADMIN_RESOURCES.USE
 });
 
 users.delete('/:id', requireResourcePermission('admin', ADMIN_RESOURCES.USERS, 'write'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const currentUser = getUser(c);
   if (id === currentUser.id) return c.json({ error: 'Cannot delete your own account' }, 400);
 

@@ -9,6 +9,7 @@ import {
 import { accessFromPermissionKey, ADMIN_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
+import { routeParam } from '../../http/route-param.ts';
 
 const roles = new Hono();
 
@@ -20,7 +21,8 @@ roles.get('/', requireResourcePermission('admin', ADMIN_RESOURCES.ROLES, 'read')
 });
 
 roles.get('/:id', requireResourcePermission('admin', ADMIN_RESOURCES.ROLES, 'read'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const [role] = await db.select().from(appRoles).where(eq(appRoles.id, id)).limit(1);
   if (!role) return c.json({ error: 'Not found' }, 404);
 
@@ -40,7 +42,8 @@ roles.get('/:id', requireResourcePermission('admin', ADMIN_RESOURCES.ROLES, 'rea
 });
 
 roles.patch('/:id/permissions', requireResourcePermission('admin', ADMIN_RESOURCES.ROLES, 'write'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const body = await c.req.json<{
     permissionIds?: string[];
     grants?: Array<{ permissionId: string; accessLevel: 'read' | 'write' }>;

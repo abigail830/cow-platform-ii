@@ -4,6 +4,7 @@ import { appPermissions, db, PERMISSION_CATEGORIES } from '../../db/index.ts';
 import { ADMIN_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
+import { routeParam } from '../../http/route-param.ts';
 
 const permissions = new Hono();
 
@@ -93,7 +94,8 @@ permissions.post('/', requireResourcePermission('admin', ADMIN_RESOURCES.PERMISS
 });
 
 permissions.patch('/:id', requireResourcePermission('admin', ADMIN_RESOURCES.PERMISSIONS, 'write'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const body = await c.req.json<{
     label?: string;
     description?: string | null;
@@ -130,7 +132,8 @@ permissions.patch('/:id', requireResourcePermission('admin', ADMIN_RESOURCES.PER
 });
 
 permissions.delete('/:id', requireResourcePermission('admin', ADMIN_RESOURCES.PERMISSIONS, 'write'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const [existing] = await db.select().from(appPermissions).where(eq(appPermissions.id, id)).limit(1);
   if (!existing) return c.json({ error: 'Not found' }, 404);
   if (existing.isSystem) return c.json({ error: 'System permissions cannot be deleted' }, 400);

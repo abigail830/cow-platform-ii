@@ -7,6 +7,7 @@ import {
   moveStorageItems,
   StorageNotConfiguredError,
   StorageValidationError,
+  type MoveItem,
 } from '../../storage/object-storage.ts';
 import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth } from '../../auth/jwt.ts';
@@ -118,7 +119,7 @@ storage.post(
       return c.json({ error: 'destination_prefix is required' }, 400);
     }
 
-    const normalizedItems = [];
+    const normalizedItems: MoveItem[] = [];
     for (const item of items) {
       if (item.type !== 'prefix' && item.type !== 'object') {
         return c.json({ error: 'items[].type must be prefix or object' }, 400);
@@ -126,7 +127,7 @@ storage.post(
       if (!item.key?.trim()) {
         return c.json({ error: 'items[].key is required' }, 400);
       }
-      normalizedItems.push({ type: item.type, key: item.key });
+      normalizedItems.push({ type: item.type, key: item.key.trim() });
     }
 
     try {

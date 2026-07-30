@@ -60,12 +60,13 @@ async function upsertPermission(def: (typeof PERMISSION_CATALOG)[number]) {
 }
 
 async function removeObsoletePermissions() {
-  if (OBSOLETE_PERMISSION_KEYS.length === 0) return;
+  const keys = [...OBSOLETE_PERMISSION_KEYS];
+  if (keys.length === 0) return;
 
   const obsolete = await db
     .select({ id: appPermissions.id, key: appPermissions.key })
     .from(appPermissions)
-    .where(inArray(appPermissions.key, [...OBSOLETE_PERMISSION_KEYS]));
+    .where(inArray(appPermissions.key, keys));
 
   for (const perm of obsolete) {
     await db.delete(appRolePermissions).where(eq(appRolePermissions.permissionId, perm.id));

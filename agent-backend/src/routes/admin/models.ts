@@ -4,6 +4,7 @@ import { appModelConfigs, db, MODEL_API_TYPES, type ModelApiType } from '../../d
 import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
+import { routeParam } from '../../http/route-param.ts';
 
 const models = new Hono();
 
@@ -138,7 +139,8 @@ models.post('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BAS
 });
 
 models.patch('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.MODELS, 'write'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const body = await c.req.json<{
     name?: string;
     modelId?: string;
@@ -203,7 +205,8 @@ models.patch('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM
 });
 
 models.post('/:id/set-default', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.MODELS, 'write'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const [existing] = await db.select().from(appModelConfigs).where(eq(appModelConfigs.id, id)).limit(1);
   if (!existing) return c.json({ error: 'Not found' }, 404);
 
@@ -222,7 +225,8 @@ models.post('/:id/set-default', requireResourcePermission(PLATFORM_BASIC_CATEGOR
 });
 
 models.delete('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.MODELS, 'write'), async (c) => {
-  const id = c.req.param('id');
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
   const [row] = await db
     .delete(appModelConfigs)
     .where(eq(appModelConfigs.id, id))

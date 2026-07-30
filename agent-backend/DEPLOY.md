@@ -21,7 +21,7 @@ If you use a separate frontend project, do not expect `/health` on the frontend 
 
 ## Build
 
-`npm run build:vercel` bundles the app into `api/index.js` (~10 MB), then swaps in `tsconfig.vercel.json` so Vercel does not typecheck all of `src/` (esbuild already bundled the app). Use modern `vercel.json` **without** legacy `builds`/`routes` — those skip `buildCommand` and produce empty output in ~4s.
+`npm run build:vercel` bundles the app into `api/index.js` (~10 MB). Use modern `vercel.json` **without** legacy `builds`/`routes` — those skip `buildCommand` and produce empty output in ~4s. Run `npx tsc --noEmit` locally before deploy to catch type errors Vercel will also report.
 
 ## Required environment variables
 

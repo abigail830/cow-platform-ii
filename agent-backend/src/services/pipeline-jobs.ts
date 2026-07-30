@@ -6,6 +6,8 @@ import {
   type PipelineJobStage,
   type PipelineProvider,
 } from '../db/index.ts';
+
+export type { PipelineJobStage };
 import { getChannelById } from './documents.ts';
 import { getS3Config } from '../storage/s3-config.ts';
 

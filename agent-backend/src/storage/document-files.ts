@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   assertStorageClient,
@@ -119,7 +119,7 @@ export async function createDocumentBundleArchive(fileHash: string): Promise<Rea
     throw new Error('No stored artifacts found for this document');
   }
 
-  const archive = archiver('zip', { zlib: { level: 5 } });
+  const archive = new ZipArchive({ zlib: { level: 5 } });
 
   for (const key of objectKeys) {
     const relativePath = key.slice(prefix.length);

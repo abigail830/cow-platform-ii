@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
+import { routeParam } from '../http/route-param.ts';
 import {
   createChannel,
   deleteChannel,
@@ -55,7 +56,10 @@ channels.get(
   '/:id',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
-    const row = await getChannelById(c.req.param('id'));
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Channel id is required' }, 400);
+
+    const row = await getChannelById(id);
     if (!row) return c.json({ error: 'Channel not found' }, 404);
     return c.json({
       id: row.id,
@@ -119,7 +123,10 @@ channels.put(
       const autoStartPipeline =
         body.auto_start_pipeline === undefined ? undefined : Boolean(body.auto_start_pipeline);
 
-      const channel = await updateChannel(c.req.param('id'), {
+      const id = routeParam(c, 'id');
+      if (!id) return c.json({ error: 'Channel id is required' }, 400);
+
+      const channel = await updateChannel(id, {
         name: body.name,
         description: body.description,
         parentId: body.parent_id,
@@ -141,7 +148,10 @@ channels.delete(
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
   async (c) => {
     try {
-      await deleteChannel(c.req.param('id'));
+      const id = routeParam(c, 'id');
+      if (!id) return c.json({ error: 'Channel id is required' }, 400);
+
+      await deleteChannel(id);
       return c.json({ ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete channel';
