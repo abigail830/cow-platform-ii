@@ -70,6 +70,7 @@ export function DocumentsLayout() {
     name: string;
     description: string;
     pipelineId: string | null;
+    autoStartPipeline: boolean;
     metadataExtractionModelId: string | null;
   }) {
     if (!channelModal || channelModal.mode !== 'settings') return;
@@ -77,6 +78,7 @@ export function DocumentsLayout() {
       name: input.name,
       description: input.description || null,
       pipelineId: input.pipelineId,
+      autoStartPipeline: input.autoStartPipeline,
       metadataExtractionModelId: input.metadataExtractionModelId,
     });
     setChannelModal(null);
@@ -146,6 +148,7 @@ export function DocumentsLayout() {
           initialName={channelModal.channel.name}
           initialDescription={channelModal.channel.description ?? ''}
           initialPipelineId={channelModal.channel.pipeline_id}
+          initialAutoStartPipeline={channelModal.channel.auto_start_pipeline}
           initialMetadataExtractionModelId={channelModal.channel.metadata_extraction_model_id}
           onCancel={() => setChannelModal(null)}
           onSubmit={handleUpdateChannel}

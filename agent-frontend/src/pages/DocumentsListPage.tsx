@@ -12,6 +12,7 @@ import {
   type DocumentRecord,
 } from '../api/documents.ts';
 import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
+import { DocumentPipelineStatus } from '../components/DocumentPipelineStatus.tsx';
 import { DocumentUploadModal } from '../components/DocumentUploadModal.tsx';
 import { IconDelete, IconDownload, IconMove, IconRun } from '../components/AdminActionIcons.tsx';
 import { Search } from 'lucide-react';
@@ -61,6 +62,17 @@ export function DocumentsListPage() {
   useEffect(() => {
     void loadDocuments();
   }, [loadDocuments]);
+
+  useEffect(() => {
+    const hasRunning = documents.some((document) => document.status === 'running');
+    if (!hasRunning || !selectedChannelId) return;
+
+    const intervalId = window.setInterval(() => {
+      void loadDocuments({ silent: true });
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [documents, loadDocuments, selectedChannelId]);
 
   async function handleUpload(files: File[]) {
     if (!selectedChannelId) throw new Error('Select a channel first');
@@ -117,21 +129,6 @@ export function DocumentsListPage() {
     }
   }
 
-  function formatDocumentStatus(status: string): string {
-    switch (status) {
-      case 'uploaded':
-        return 'Uploaded';
-      case 'running':
-        return 'Running';
-      case 'completed':
-        return 'Completed';
-      case 'failed':
-        return 'Failed';
-      default:
-        return status;
-    }
-  }
-
   return (
     <>
       <div className="admin-toolbar">
@@ -182,7 +179,7 @@ export function DocumentsListPage() {
               <th>Name</th>
               <th>Type</th>
               <th>Size</th>
-              <th>Status</th>
+              <th className="documents-status-col">Status</th>
               <th>Uploaded</th>
               <th className="admin-table-actions-col">Actions</th>
             </tr>
@@ -216,10 +213,8 @@ export function DocumentsListPage() {
                   </td>
                   <td>{document.file_type}</td>
                   <td>{formatDocumentBytes(document.size_bytes)}</td>
-                  <td>
-                    <span className={`document-status-badge status-${document.status}`}>
-                      {formatDocumentStatus(document.status)}
-                    </span>
+                  <td className="documents-status-col">
+                    <DocumentPipelineStatus document={document} />
                   </td>
                   <td>{new Date(document.created_at).toLocaleString()}</td>
                   <td>

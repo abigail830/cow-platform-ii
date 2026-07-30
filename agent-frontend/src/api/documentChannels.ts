@@ -8,6 +8,7 @@ export type DocumentChannel = {
   parent_id: string | null;
   sort_order: number;
   pipeline_id: string | null;
+  auto_start_pipeline: boolean;
   metadata_extraction_model_id: string | null;
   created_at: string;
   updated_at: string;
@@ -67,6 +68,7 @@ export async function updateDocumentChannel(
     parentId?: string | null;
     pipelineId?: string | null;
     metadataExtractionModelId?: string | null;
+    autoStartPipeline?: boolean;
   },
 ): Promise<DocumentChannel> {
   const data = await authFetch(`/api/document-channels/${id}`, {
@@ -78,6 +80,7 @@ export async function updateDocumentChannel(
       parent_id: input.parentId,
       pipeline_id: input.pipelineId,
       metadata_extraction_model_id: input.metadataExtractionModelId,
+      auto_start_pipeline: input.autoStartPipeline,
     }),
   });
   return data as DocumentChannel;

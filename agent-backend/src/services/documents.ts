@@ -1,8 +1,13 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
-import { appDocumentChannels, appDocuments, db } from '../db/index.ts';
+import { appDocumentChannels, appDocuments, appPipelineJobs, db } from '../db/index.ts';
 import { getModelConfigById } from '../shared/model-config-store.ts';
 import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { buildChannelTree, collectDescendantIds } from './channel-tree.ts';
+import {
+  getLatestPipelineJobForDocument,
+  getLatestPipelineJobsForDocuments,
+  pipelineJobToPublic,
+} from './pipeline-jobs.ts';
 
 export type ChannelRow = typeof appDocumentChannels.$inferSelect;
 export type DocumentRow = typeof appDocuments.$inferSelect;
@@ -14,10 +19,20 @@ export type ChannelNode = {
   parent_id: string | null;
   sort_order: number;
   pipeline_id: string | null;
+  auto_start_pipeline: boolean;
   metadata_extraction_model_id: string | null;
   created_at: string;
   updated_at: string;
   children: ChannelNode[];
+};
+
+export type DocumentPipelineJobPublic = {
+  id: string;
+  stage: string;
+  pipeline_name: string;
+  error_message: string | null;
+  external_job_id: string | null;
+  updated_at: string;
 };
 
 function toChannelPublic(row: ChannelRow) {
@@ -28,13 +43,17 @@ function toChannelPublic(row: ChannelRow) {
     parent_id: row.parentId,
     sort_order: row.sortOrder,
     pipeline_id: row.pipelineId,
+    auto_start_pipeline: row.autoStartPipeline,
     metadata_extraction_model_id: row.metadataExtractionModelId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
 }
 
-function toDocumentPublic(row: DocumentRow) {
+function toDocumentPublic(
+  row: DocumentRow,
+  job?: typeof appPipelineJobs.$inferSelect | null,
+) {
   return {
     id: row.id,
     channel_id: row.channelId,
@@ -48,6 +67,7 @@ function toDocumentPublic(row: DocumentRow) {
     uploaded_by: row.uploadedBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
+    pipeline_job: job ? pipelineJobToPublic(job) : null,
   };
 }
 
@@ -112,6 +132,7 @@ export async function updateChannel(
     parentId?: string | null;
     metadataExtractionModelId?: string | null;
     pipelineId?: string | null;
+    autoStartPipeline?: boolean;
   },
 ): Promise<ReturnType<typeof toChannelPublic>> {
   const existing = await getChannelById(id);
@@ -153,6 +174,10 @@ export async function updateChannel(
     }
   }
 
+  if (input.pipelineId !== undefined && input.pipelineId === null) {
+    input.autoStartPipeline = false;
+  }
+
   const [row] = await db
     .update(appDocumentChannels)
     .set({
@@ -163,6 +188,7 @@ export async function updateChannel(
         ? { metadataExtractionModelId: input.metadataExtractionModelId }
         : {}),
       ...(input.pipelineId !== undefined ? { pipelineId: input.pipelineId } : {}),
+      ...(input.autoStartPipeline !== undefined ? { autoStartPipeline: input.autoStartPipeline } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appDocumentChannels.id, id))
@@ -225,8 +251,10 @@ export async function listDocuments(input: {
     .limit(limit)
     .offset(offset);
 
+  const jobMap = await getLatestPipelineJobsForDocuments(rows.map((row) => row.id));
+
   return {
-    items: rows.map(toDocumentPublic),
+    items: rows.map((row) => toDocumentPublic(row, jobMap.get(row.id))),
     total: countRow?.count ?? 0,
   };
 }
@@ -234,6 +262,13 @@ export async function listDocuments(input: {
 export async function getDocumentById(id: string): Promise<DocumentRow | null> {
   const [row] = await db.select().from(appDocuments).where(eq(appDocuments.id, id)).limit(1);
   return row ?? null;
+}
+
+export async function getDocumentPublicById(id: string): Promise<ReturnType<typeof toDocumentPublic> | null> {
+  const row = await getDocumentById(id);
+  if (!row) return null;
+  const job = await getLatestPipelineJobForDocument(id);
+  return toDocumentPublic(row, job);
 }
 
 export async function createDocumentRecord(input: {

@@ -170,6 +170,7 @@ export const appDocumentChannels = pgTable(
       onDelete: 'set null',
     }),
     pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
+    autoStartPipeline: boolean('auto_start_pipeline').notNull().default(false),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

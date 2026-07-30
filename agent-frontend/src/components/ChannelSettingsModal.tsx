@@ -8,12 +8,14 @@ type ChannelSettingsModalProps = {
   initialName: string;
   initialDescription: string;
   initialPipelineId: string | null;
+  initialAutoStartPipeline: boolean;
   initialMetadataExtractionModelId: string | null;
   onCancel: () => void;
   onSubmit: (input: {
     name: string;
     description: string;
     pipelineId: string | null;
+    autoStartPipeline: boolean;
     metadataExtractionModelId: string | null;
   }) => Promise<void>;
 };
@@ -24,6 +26,7 @@ export function ChannelSettingsModal({
   initialName,
   initialDescription,
   initialPipelineId,
+  initialAutoStartPipeline,
   initialMetadataExtractionModelId,
   onCancel,
   onSubmit,
@@ -32,6 +35,7 @@ export function ChannelSettingsModal({
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [pipelineId, setPipelineId] = useState(initialPipelineId ?? '');
+  const [autoStartPipeline, setAutoStartPipeline] = useState(initialAutoStartPipeline);
   const [extractionModelId, setExtractionModelId] = useState(initialMetadataExtractionModelId ?? '');
   const [options, setOptions] = useState<ChannelProcessingOptions | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
@@ -43,10 +47,17 @@ export function ChannelSettingsModal({
     setName(initialName);
     setDescription(initialDescription);
     setPipelineId(initialPipelineId ?? '');
+    setAutoStartPipeline(initialAutoStartPipeline);
     setExtractionModelId(initialMetadataExtractionModelId ?? '');
     setError('');
     setTab('general');
-  }, [initialDescription, initialMetadataExtractionModelId, initialName, initialPipelineId]);
+  }, [
+    initialAutoStartPipeline,
+    initialDescription,
+    initialMetadataExtractionModelId,
+    initialName,
+    initialPipelineId,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,6 +116,7 @@ export function ChannelSettingsModal({
         name: name.trim(),
         description: description.trim(),
         pipelineId: pipelineId || null,
+        autoStartPipeline: pipelineId ? autoStartPipeline : false,
         metadataExtractionModelId: extractionModelId || null,
       });
     } catch (err) {
@@ -171,7 +183,14 @@ export function ChannelSettingsModal({
                 <>
                   <label className="form-field form-field-wide">
                     <span>Pipeline (optional)</span>
-                    <select value={pipelineId} onChange={(event) => setPipelineId(event.target.value)}>
+                    <select
+                      value={pipelineId}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setPipelineId(value);
+                        if (!value) setAutoStartPipeline(false);
+                      }}
+                    >
                       <option value="">— None —</option>
                       {options?.pipelines.map((pipeline) => (
                         <option key={pipeline.id} value={pipeline.id}>
@@ -187,6 +206,22 @@ export function ChannelSettingsModal({
                         : ''}
                     </span>
                   </label>
+                  {pipelineId && (
+                    <label className="form-field form-field-wide channel-auto-start-field">
+                      <span className="checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={autoStartPipeline}
+                          onChange={(event) => setAutoStartPipeline(event.target.checked)}
+                        />
+                        Auto-start pipeline after upload
+                      </span>
+                      <span className="admin-form-hint">
+                        When enabled, each new upload to this channel starts the selected pipeline immediately
+                        after the file is stored in object storage.
+                      </span>
+                    </label>
+                  )}
                   <label className="form-field form-field-wide">
                     <span>Metadata extraction model (optional)</span>
                     <select

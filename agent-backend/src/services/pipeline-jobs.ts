@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import {
   appDocuments,
   appPipelineJobs,
@@ -79,6 +79,35 @@ export async function getLatestPipelineJobForDocument(
     .orderBy(desc(appPipelineJobs.createdAt))
     .limit(1);
   return row ?? null;
+}
+
+export async function getLatestPipelineJobsForDocuments(
+  documentIds: string[],
+): Promise<Map<string, typeof appPipelineJobs.$inferSelect>> {
+  if (documentIds.length === 0) return new Map();
+
+  const rows = await db
+    .select()
+    .from(appPipelineJobs)
+    .where(inArray(appPipelineJobs.documentId, documentIds))
+    .orderBy(desc(appPipelineJobs.createdAt));
+
+  const map = new Map<string, typeof appPipelineJobs.$inferSelect>();
+  for (const row of rows) {
+    if (!map.has(row.documentId)) map.set(row.documentId, row);
+  }
+  return map;
+}
+
+export function pipelineJobToPublic(job: typeof appPipelineJobs.$inferSelect) {
+  return {
+    id: job.id,
+    stage: job.stage,
+    pipeline_name: job.pipelineName,
+    error_message: job.errorMessage,
+    external_job_id: job.externalJobId,
+    updated_at: job.updatedAt.toISOString(),
+  };
 }
 
 export async function updatePipelineJob(

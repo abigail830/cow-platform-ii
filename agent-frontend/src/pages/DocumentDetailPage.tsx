@@ -8,26 +8,12 @@ import {
   type DocumentRecord,
 } from '../api/documents.ts';
 import { DocumentMetadataBar } from '../components/DocumentMetadataBar.tsx';
+import { formatDocumentStatusLabel } from '../components/DocumentPipelineStatus.tsx';
 import { PageIndexTreePanel, slugifyHeading, type PageIndexNode, type PageIndexTree } from '../components/PageIndexTree.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { Markdown } from '../chat/Markdown.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
-
-function formatDocumentStatus(status: string): string {
-  switch (status) {
-    case 'uploaded':
-      return 'Uploaded';
-    case 'running':
-      return 'Running';
-    case 'completed':
-      return 'Completed';
-    case 'failed':
-      return 'Failed';
-    default:
-      return status;
-  }
-}
 
 export function DocumentDetailPage() {
   const { documentId } = useParams<{ documentId: string }>();
@@ -64,6 +50,16 @@ export function DocumentDetailPage() {
     void loadDetail();
   }, [loadDetail]);
 
+  useEffect(() => {
+    if (!documentId || document?.status !== 'running') return;
+    const intervalId = window.setInterval(() => {
+      void getDocument(documentId)
+        .then((doc) => setDocument(doc))
+        .catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [documentId, document?.status]);
+
   function handleSelectNode(node: PageIndexNode) {
     setActiveNodeId(node.node_id);
     const slug = slugifyHeading(node.title);
@@ -91,7 +87,7 @@ export function DocumentDetailPage() {
           <div className="document-detail-title-row">
             <h2 className="document-detail-title">{document.name}</h2>
             <span className={`document-status-badge status-${document.status}`}>
-              {formatDocumentStatus(document.status)}
+              {formatDocumentStatusLabel(document.status)}
             </span>
           </div>
         )}

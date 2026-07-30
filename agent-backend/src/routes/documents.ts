@@ -23,10 +23,12 @@ import {
   deleteDocument,
   getDocumentById,
   getDocumentContent,
+  getDocumentPublicById,
   getDocumentStats,
   listDocuments,
   moveDocument,
 } from '../services/documents.ts';
+import { autoStartPipelineAfterUpload } from '../services/auto-pipeline.ts';
 import { startDocumentPipeline } from '../services/pipeline-runner.ts';
 
 const documents = new Hono();
@@ -56,7 +58,7 @@ async function persistUploadedFile(input: {
 
   await uploadDocumentObject(s3Key, input.buffer, input.contentType);
 
-  return createDocumentRecord({
+  const document = await createDocumentRecord({
     channelId: input.channelId,
     name: filename,
     fileType: fileTypeFromExtension(ext),
@@ -65,6 +67,11 @@ async function persistUploadedFile(input: {
     s3Key,
     uploadedBy: input.uploadedBy,
   });
+
+  await autoStartPipelineAfterUpload(document.id, input.channelId);
+
+  const refreshed = await getDocumentPublicById(document.id);
+  return refreshed ?? document;
 }
 
 function fileFromFormValue(value: unknown): File | null {
@@ -165,20 +172,9 @@ documents.get(
   async (c) => {
     const row = await getDocumentById(c.req.param('id'));
     if (!row) return c.json({ error: 'Document not found' }, 404);
-    return c.json({
-      id: row.id,
-      channel_id: row.channelId,
-      name: row.name,
-      file_type: row.fileType,
-      size_bytes: row.sizeBytes,
-      file_hash: row.fileHash,
-      s3_key: row.s3Key,
-      status: row.status,
-      metadata: row.metadata ?? {},
-      uploaded_by: row.uploadedBy,
-      created_at: row.createdAt.toISOString(),
-      updated_at: row.updatedAt.toISOString(),
-    });
+    const document = await getDocumentPublicById(row.id);
+    if (!document) return c.json({ error: 'Document not found' }, 404);
+    return c.json(document);
   },
 );
 

@@ -10,10 +10,15 @@ import consoleRoutes from './routes/console/index.ts';
 import documentChannels from './routes/document-channels.ts';
 import documents from './routes/documents.ts';
 import internalApi from './routes/internal-api/index.ts';
-import { startPipelinePollScheduler } from './services/pipeline-poller.ts';
+import { recoverOrphanedPipelineWorkOnStartup, startPipelinePollScheduler } from './services/pipeline-poller.ts';
 
 registerModelProviders();
-startPipelinePollScheduler();
+void recoverOrphanedPipelineWorkOnStartup()
+  .then(() => startPipelinePollScheduler())
+  .catch((error) => {
+    console.error('[pipeline] startup recovery failed:', error);
+    startPipelinePollScheduler();
+  });
 
 const app = new Hono();
 

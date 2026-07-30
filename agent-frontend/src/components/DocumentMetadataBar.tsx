@@ -14,6 +14,20 @@ function formatMetadataValue(value: unknown): string {
   return String(value);
 }
 
+function metadataListValues(metadata: Record<string, unknown>, key: string): string[] {
+  const raw = metadata[key];
+  if (Array.isArray(raw)) {
+    return raw.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw
+      .split(/[,;]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 function metadataField(
   metadata: Record<string, unknown>,
   key: string,
@@ -22,6 +36,22 @@ function metadataField(
     label: METADATA_LABELS[key] ?? key,
     value: formatMetadataValue(metadata[key]),
   };
+}
+
+function MetadataBagels({ items }: { items: string[] }) {
+  if (items.length === 0) {
+    return <span className="document-metadata-value-muted">—</span>;
+  }
+
+  return (
+    <div className="document-metadata-bagels">
+      {items.map((item) => (
+        <span key={item} className="metadata-bagel" title={item}>
+          {item}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 type DocumentMetadataBarProps = {
@@ -33,12 +63,16 @@ export function DocumentMetadataBar({ metadata }: DocumentMetadataBarProps) {
   const author = metadataField(metadata, 'author');
   const publishDate = metadataField(metadata, 'publish_date');
   const source = metadataField(metadata, 'source');
-  const categories = metadataField(metadata, 'categories');
-  const tags = metadataField(metadata, 'tags');
+  const tagItems = metadataListValues(metadata, 'tags');
+  const categoryItems = metadataListValues(metadata, 'categories');
 
-  const hasAnyValue = [abstract, author, publishDate, source, categories, tags].some(
-    (field) => field.value !== '—',
-  );
+  const hasAnyValue =
+    abstract.value !== '—' ||
+    author.value !== '—' ||
+    publishDate.value !== '—' ||
+    source.value !== '—' ||
+    tagItems.length > 0 ||
+    categoryItems.length > 0;
 
   if (!hasAnyValue && Object.keys(metadata).length === 0) {
     return (
@@ -58,37 +92,35 @@ export function DocumentMetadataBar({ metadata }: DocumentMetadataBarProps) {
         </div>
       </div>
 
-      <div className="document-metadata-row document-metadata-row-fields">
-        <div className="document-metadata-item">
-          <span className="document-metadata-key">{author.label}</span>
-          <span className="document-metadata-value" title={author.value}>
-            {author.value}
-          </span>
+      <div className="document-metadata-row document-metadata-row-bagels">
+        <div className="document-metadata-bagel-group">
+          <span className="document-metadata-key">Tags</span>
+          <MetadataBagels items={tagItems} />
         </div>
-        <div className="document-metadata-item">
-          <span className="document-metadata-key">{publishDate.label}</span>
-          <span className="document-metadata-value" title={publishDate.value}>
-            {publishDate.value}
-          </span>
-        </div>
-        <div className="document-metadata-item">
-          <span className="document-metadata-key">{source.label}</span>
-          <span className="document-metadata-value" title={source.value}>
-            {source.value}
-          </span>
-        </div>
-        <div className="document-metadata-item">
-          <span className="document-metadata-key">{categories.label}</span>
-          <span className="document-metadata-value" title={categories.value}>
-            {categories.value}
-          </span>
+        <div className="document-metadata-bagel-group">
+          <span className="document-metadata-key">Categories</span>
+          <MetadataBagels items={categoryItems} />
         </div>
       </div>
 
-      <div className="document-metadata-row document-metadata-row-tags">
-        <span className="document-metadata-key">{tags.label}</span>
-        <div className="document-metadata-tags-value" title={tags.value}>
-          {tags.value}
+      <div className="document-metadata-row document-metadata-row-inline">
+        <div className="document-metadata-inline-item">
+          <span className="document-metadata-key">{author.label}</span>
+          <span className="document-metadata-inline-value" title={author.value}>
+            {author.value}
+          </span>
+        </div>
+        <div className="document-metadata-inline-item">
+          <span className="document-metadata-key">{publishDate.label}</span>
+          <span className="document-metadata-inline-value" title={publishDate.value}>
+            {publishDate.value}
+          </span>
+        </div>
+        <div className="document-metadata-inline-item">
+          <span className="document-metadata-key">{source.label}</span>
+          <span className="document-metadata-inline-value" title={source.value}>
+            {source.value}
+          </span>
         </div>
       </div>
     </section>

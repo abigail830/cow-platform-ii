@@ -65,6 +65,7 @@ channels.get(
       sort_order: row.sortOrder,
       metadata_extraction_model_id: row.metadataExtractionModelId,
       pipeline_id: row.pipelineId,
+      auto_start_pipeline: row.autoStartPipeline,
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
     });
@@ -103,6 +104,7 @@ channels.put(
       parent_id?: string | null;
       metadata_extraction_model_id?: string | null;
       pipeline_id?: string | null;
+      auto_start_pipeline?: boolean;
     }>();
 
     try {
@@ -114,12 +116,16 @@ channels.put(
       const pipelineId =
         body.pipeline_id === undefined ? undefined : body.pipeline_id?.trim() || null;
 
+      const autoStartPipeline =
+        body.auto_start_pipeline === undefined ? undefined : Boolean(body.auto_start_pipeline);
+
       const channel = await updateChannel(c.req.param('id'), {
         name: body.name,
         description: body.description,
         parentId: body.parent_id,
         metadataExtractionModelId,
         pipelineId,
+        autoStartPipeline,
       });
       return c.json(channel);
     } catch (error) {

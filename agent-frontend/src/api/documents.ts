@@ -1,6 +1,15 @@
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
 
+export type DocumentPipelineJob = {
+  id: string;
+  stage: string;
+  pipeline_name: string;
+  error_message: string | null;
+  external_job_id: string | null;
+  updated_at: string;
+};
+
 export type DocumentRecord = {
   id: string;
   channel_id: string;
@@ -14,6 +23,7 @@ export type DocumentRecord = {
   uploaded_by: string | null;
   created_at: string;
   updated_at: string;
+  pipeline_job: DocumentPipelineJob | null;
 };
 
 export type DocumentListResponse = {
