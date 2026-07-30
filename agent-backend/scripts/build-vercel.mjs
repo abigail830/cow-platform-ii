@@ -21,7 +21,7 @@ const external = [
 
 await esbuild.build({
   entryPoints: [path.join(root, 'scripts/vercel-entry.ts')],
-  outfile: path.join(outDir, 'index.mjs'),
+  outfile: path.join(outDir, 'index.js'),
   bundle: true,
   platform: 'node',
   target: 'node22',
@@ -33,4 +33,4 @@ await esbuild.build({
   },
 });
 
-console.log('Vercel serverless bundle: api/index.mjs');
+console.log('Vercel serverless bundle: api/index.js');

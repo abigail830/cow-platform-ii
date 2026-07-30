@@ -21,7 +21,7 @@ If you use a separate frontend project, do not expect `/health` on the frontend 
 
 ## Build
 
-Vercel compiles `api/index.ts` as the single Serverless Function. No esbuild prebuild step.
+`npm run build:vercel` bundles the app with esbuild into `api/index.js`. Vercel `builds`/`routes` in `vercel.json` register that file after the build step (no TypeScript compile of `src/**/*.ts`).
 
 ## Required environment variables
 
@@ -56,7 +56,7 @@ curl https://<backend>/health
 
 ## SSE / agent streaming
 
-`maxDuration: 300` is exported from `api/index.ts`. Vercel **Hobby** still caps execution at **10s**; **Pro** is required for longer agent SSE streams.
+`maxDuration: 300` is exported from the esbuild bundle (`scripts/vercel-entry.ts`). Vercel **Hobby** still caps execution at **10s**; **Pro** is required for longer agent SSE streams.
 
 ## Known serverless limits
 

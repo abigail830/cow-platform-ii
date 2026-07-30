@@ -1,19 +1,21 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
   "installCommand": "npm ci",
-  "buildCommand": "mkdir -p public && touch public/.gitkeep",
-  "rewrites": [
+  "buildCommand": "npm run build:vercel",
+  "builds": [
     {
-      "source": "/api/:path*",
-      "destination": "/api"
+      "src": "api/index.js",
+      "use": "@vercel/node"
     },
     {
-      "source": "/internal-api/:path*",
-      "destination": "/api"
-    },
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
     {
-      "source": "/health",
-      "destination": "/api"
+      "src": "/(.*)",
+      "dest": "/api/index.js"
     }
   ]
 }

@@ -4,6 +4,7 @@ node_modules/
 data/
 dist/
 .flue/
+api/index.js
 api/index.mjs
 api/index.cjs
 public/
