@@ -141,6 +141,32 @@ class CliSettings(BaseSettings):
         validation_alias="OPENKMS_ASYNC_MAX_WAIT_SECONDS",
     )
 
+    # --- Adobe PDF Services (paddle pipeline: office → PDF) ---
+    adobe_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("OPENKMS_ADOBE_CLIENT_ID", "ADOBE_CLIENT_ID"),
+    )
+    adobe_client_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("OPENKMS_ADOBE_CLIENT_SECRET", "ADOBE_CLIENT_SECRET"),
+    )
+    adobe_api_base: str = Field(
+        default="https://pdf-services.adobe.io",
+        validation_alias="OPENKMS_ADOBE_API_BASE",
+    )
+    adobe_poll_interval_seconds: int = Field(
+        default=3,
+        ge=1,
+        le=60,
+        validation_alias="OPENKMS_ADOBE_POLL_INTERVAL_SECONDS",
+    )
+    adobe_max_wait_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        validation_alias="OPENKMS_ADOBE_MAX_WAIT_SECONDS",
+    )
+
     # --- AWS / S3 (standard names) ---
     aws_access_key_id: str = Field(default="", validation_alias="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = Field(default="", validation_alias="AWS_SECRET_ACCESS_KEY")

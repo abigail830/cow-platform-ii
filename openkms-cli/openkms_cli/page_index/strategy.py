@@ -44,6 +44,19 @@ def effective_page_index_strategy(
     return default_page_index_strategy(provider=provider)
 
 
+def strategy_for_markdown_ingest(override: str | None = None) -> str:
+    """
+    Markdown ingest has no cloud layout JSON.
+
+    Pipeline templates often pass aliyun-layouts / baidu-layouts; those require
+    layouts from DocMind/Baidu parse and would fail for plain .md files.
+    """
+    name = (override or "").strip().lower()
+    if name in (ALIYUN_STRATEGY, BAIDU_STRATEGY) or not name:
+        return MARKDOWN_STRATEGY
+    return normalize_strategy(name)
+
+
 def write_page_index(
     *,
     strategy: str,

@@ -10,9 +10,10 @@ const ACTIVE_JOB_STAGES = PIPELINE_JOB_STAGES.filter(
 const STARTUP_RECOVERY_MESSAGE =
   'Pipeline interrupted because the server restarted. Re-run pipeline from the document list.';
 
-/** Re-spawn CLI if a job is stuck in submitted (CLI crash / missed spawn). Not the poll loop. */
+/** Re-spawn CLI if a job is stuck (CLI crash / missed spawn / metadata interrupted). */
 const WATCHDOG_INTERVAL_MS = Number(process.env.PIPELINE_JOB_WATCHDOG_INTERVAL_MS ?? 60_000);
 const SUBMIT_STALE_MS = Number(process.env.PIPELINE_SUBMIT_STALE_MS ?? 15 * 60 * 1000);
+const PARSED_STALE_MS = Number(process.env.PIPELINE_PARSED_STALE_MS ?? 5 * 60 * 1000);
 
 let watchdogTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -59,25 +60,26 @@ export function startPipelinePollScheduler(): void {
   if (watchdogTimer) return;
 
   watchdogTimer = setInterval(() => {
-    void watchdogSubmittedJobs();
+    void watchdogStuckJobs();
   }, WATCHDOG_INTERVAL_MS);
 
   console.info(`[pipeline] job watchdog started (interval=${WATCHDOG_INTERVAL_MS}ms)`);
 }
 
-async function watchdogSubmittedJobs(): Promise<void> {
+async function watchdogStuckJobs(): Promise<void> {
   try {
-    const rows = await db
+    const submittedRows = await db
       .select()
       .from(appPipelineJobs)
       .where(eq(appPipelineJobs.stage, 'submitted'));
 
-    for (const job of rows) {
-      if (job.provider !== 'baidu' && job.provider !== 'aliyun') continue;
+    for (const job of submittedRows) {
+      const isCloudProvider = job.provider === 'baidu' || job.provider === 'aliyun';
+      if (!isCloudProvider) continue;
 
       const externalId = job.externalJobId?.trim();
       const ageMs = Date.now() - new Date(job.createdAt).getTime();
-      if (!externalId && ageMs > SUBMIT_STALE_MS) {
+      if (isCloudProvider && !externalId && ageMs > SUBMIT_STALE_MS) {
         const message =
           'Submit never received external_job_id from the cloud provider (timed out). ' +
           'Check CLI logs and cloud credentials in openkms-cli/.env.';
@@ -87,6 +89,19 @@ async function watchdogSubmittedJobs(): Promise<void> {
         continue;
       }
 
+      await spawnAsyncPipelineWorker(job.id, job.pipelineName);
+    }
+
+    const parsedRows = await db
+      .select()
+      .from(appPipelineJobs)
+      .where(eq(appPipelineJobs.stage, 'parsed'));
+
+    for (const job of parsedRows) {
+      if (!job.extractionArgs?.trim()) continue;
+      const staleMs = Date.now() - new Date(job.updatedAt).getTime();
+      if (staleMs < PARSED_STALE_MS) continue;
+      console.info(`[pipeline] re-spawn metadata resume for job ${job.id} (parsed stale ${staleMs}ms)`);
       await spawnAsyncPipelineWorker(job.id, job.pipelineName);
     }
   } catch (error) {

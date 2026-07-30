@@ -14,6 +14,7 @@ from typing import Any
 from rich.console import Console
 
 from openkms_cli.core.settings import get_cli_settings
+from openkms_cli.parse.markdown_ingest import is_markdown_job_context
 from openkms_cli.pipeline.api_client import (
     post_pipeline_version,
     put_document_markdown,
@@ -185,13 +186,14 @@ def _submit_baidu(ctx: dict[str, Any], api_url: str, job_id: str, work: Path) ->
     stored, _content, ext = _download_input_to_temp(ctx, work)
     parse_path, hash_src = prepare_for_baidu_parse(stored, work / "baidu_stage")
     file_bytes = parse_path.read_bytes()
-    file_hash = hashlib.sha256((hash_src if hash_src != parse_path else parse_path).read_bytes()).hexdigest()
+    file_hash = hashlib.sha256(hash_src.read_bytes()).hexdigest()
     file_name = parse_path.name
+    upload_ext = parse_path.suffix.lower().lstrip(".") or ext
 
     import requests
 
     session = requests.Session()
-    bos_key, _ = stage_file_on_bos(file_bytes, file_hash, ext, file_name)
+    bos_key, _ = stage_file_on_bos(file_bytes, file_hash, upload_ext, file_name)
     try:
         token = get_access_token(cfg.baidu_cloud_api_key, cfg.baidu_cloud_secret_key, session=session)
         get_file_url = make_presign_refresher(bos_key)
@@ -340,7 +342,9 @@ def run_async_job(
     max_wait: int | None = None,
 ) -> None:
     """
-    Platform async orchestration in one CLI process: submit → poll cloud → finalize worker.
+    Platform async orchestration in one CLI process.
+
+    Cloud (baidu/aliyun): submit → poll → finalize (+ metadata).
 
     Backend only spawns this command and receives PATCH stage updates — no backend poll loop.
     """
@@ -358,6 +362,32 @@ def run_async_job(
     stage = str(ctx.get("stage") or "")
     if stage in {"done", "failed"}:
         console.print(f"[dim]Job {job_id} already terminal ({stage})[/dim]")
+        return
+
+    provider = ctx.get("provider")
+    if is_markdown_job_context(ctx):
+        from openkms_cli.pipeline.markdown_ingest_job import run_markdown_ingest_async_job
+
+        run_markdown_ingest_async_job(
+            job_id,
+            api,
+            ctx,
+            page_index_strategy=page_index_strategy,
+        )
+        return
+
+    if stage == "parsed":
+        extraction_args = (ctx.get("extraction_args") or "").strip()
+        if extraction_args:
+            _run_metadata_extraction_from_ctx(ctx, api, job_id)
+        else:
+            patch_job(api, job_id, stage="done")
+            console.print(f"[green]Job {job_id} done[/green]")
+        return
+
+    if stage == "extracted_metadata":
+        patch_job(api, job_id, stage="done")
+        console.print(f"[green]Job {job_id} done[/green]")
         return
 
     if stage != "submitted":

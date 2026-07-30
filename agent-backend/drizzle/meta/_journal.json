@@ -120,6 +120,20 @@
       "when": 1785173000000,
       "tag": "0016_channel_auto_start_pipeline",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1785174000000,
+      "tag": "0017_paddle_async_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785175000000,
+      "tag": "0018_paddleocr_baidu_api",
+      "breakpoints": true
     }
   ]
 }

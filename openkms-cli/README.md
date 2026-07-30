@@ -10,20 +10,16 @@ Copy **`openkms-cli/.env.example`** and adjust. For auth against the API, match 
 
 **Embeddings (kb-index):** With **`OPENKMS_API_URL`** and the same auth as other CLI calls, **`kb-index`** calls **`GET {OPENKMS_API_URL}/internal-api/models/kb-embedding-credentials?knowledge_base_id=…`** (same pattern as **`document-parse-defaults`**) and receives **`base_url`**, **`model_name`**, and **`api_key`**. There are **no** `--embedding-model-*` CLI flags. Optional **`OPENKMS_EMBEDDING_MODEL_*`** in this `.env` override those values when needed.
 
-**VLM (document parse / paddleocr pipeline):** Standalone mode — pass **`--vlm-url`** and **`--model`** (and optional **`--vlm-api-key`**, **`--max-concurrency`**) on `parse run` or `pipeline run`, or set **`OPENKMS_VLM_*`** in `.env`, or use a JSON file (`parse run -c vlm.json`; `pipeline run --vlm-config vlm.json`). No backend required.
+**Baidu Cloud (baidu-doc-parse / paddleocr-doc-parse):** Set **`OPENKMS_BAIDU_CLOUD_API_KEY`**, **`OPENKMS_BAIDU_CLOUD_SECRET_KEY`**, and **`OPENKMS_BAIDU_BOS_BUCKET`**. The CLI uploads to BOS, submits a **presigned `file_url`** to **paddle-vl-parser** (Baidu Cloud API — no local `paddleocr`). `paddleocr-doc-parse` is a deprecated alias of the same flow. Install: `pip install -e ".[baidu,pipeline]"`.
 
-Optional backend lookup — when **`--vlm-config-name`** or **`OPENKMS_VLM_CONFIG_NAME`** is set (or legacy: **`OPENKMS_VLM_MODEL`** env when URL/key are still missing), the CLI calls **`GET {OPENKMS_API_URL}/internal-api/models/document-parse-defaults?model_name=...`** with CLI auth and merges **`base_url`**, **`model_name`**, and **`api_key`**. CLI flags and env overrides win over fetched values. Passing both **`--vlm-url`** and **`--model`** skips backend lookup entirely.
-
-**Baidu Cloud (baidu-doc-parse pipeline):** Set **`OPENKMS_BAIDU_CLOUD_API_KEY`**, **`OPENKMS_BAIDU_CLOUD_SECRET_KEY`**, and **`OPENKMS_BAIDU_BOS_BUCKET`** (private bucket; disable hotlink protection). The CLI uploads each document to BOS, submits a **presigned `file_url`** to paddle-vl-parser, then deletes the staged object. Optional: **`OPENKMS_BAIDU_BOS_ENDPOINT`**, **`OPENKMS_BAIDU_BOS_PREFIX`**, **`OPENKMS_BAIDU_BOS_PRESIGN_TTL_SECONDS`**, **`BAIDU_*_URL`**. Install the **`baidu`** extra: `pip install -e ".[baidu,pipeline]"`.
+**Adobe PDF Services:** Office formats (**DOC/DOCX/PPT/PPTX/XLS/XLSX/TXT/RTF**) may be converted to PDF via **Adobe Create PDF** before Baidu upload. Set **`OPENKMS_ADOBE_CLIENT_ID`** and **`OPENKMS_ADOBE_CLIENT_SECRET`**.
 
 ## Install
 
 ```bash
 cd openkms-cli
 pip install -e .                    # CLI only
-pip install -e ".[parse]"           # + PaddleOCR-VL parsing (needs mlx-vlm-server)
-pip install -e ".[pipeline]"        # + S3 upload/download
-pip install -e ".[parse,pipeline,metadata]"   # + metadata extraction
+pip install -e ".[pipeline,baidu,aliyun,metadata]"   # platform pipelines
 pip install -e ".[kb]"              # + knowledge-base indexing
 ```
 
@@ -45,7 +41,7 @@ Covers **`backend_defaults`** merge / fetch behavior (mocked HTTP), **`parser`**
 
 **Parse** (local files → `parsed/{file_hash}/…`):
 
-Supported inputs: **PDF**, **PNG/JPG/JPEG/WEBP**, **DOCX**, **PPTX** (needs **LibreOffice** `soffice` or `libreoffice` on `PATH`), **EPUB** (needs **MuPDF** `mutool`, e.g. package **mupdf-tools**).
+Supported inputs: **PDF**, **PNG/JPG/JPEG/WEBP/GIF/BMP/TIFF** (direct); **DOC/DOCX/PPT/PPTX/XLS/XLSX/TXT/RTF** (Adobe PDF Services → PDF, needs **`OPENKMS_ADOBE_*`** credentials). **EPUB** is not supported on paddle — use **`baidu-doc-parse`** (Baidu accepts EPUB natively; CLI converts EPUB via **mutool** only for Baidu upload).
 
 ```bash
 openkms-cli parse run document.pdf -o ./parsed

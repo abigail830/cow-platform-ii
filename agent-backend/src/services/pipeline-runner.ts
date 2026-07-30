@@ -171,7 +171,12 @@ async function executeLegacyPipelineRun(documentId: string): Promise<void> {
   }
 
   let vlmArgs = '';
-  if (pipeline.pipelineName !== 'baidu-doc-parse' && pipeline.modelConfigId) {
+  if (
+    pipeline.pipelineName !== 'baidu-doc-parse' &&
+    pipeline.pipelineName !== 'paddleocr-doc-parse' &&
+    pipeline.pipelineName !== 'aliyun-docmind-parse' &&
+    pipeline.modelConfigId
+  ) {
     const vlm = await fetchModelCliParams(apiUrl, {
       modelId: pipeline.modelConfigId,
       apiType: 'vlm',
@@ -254,6 +259,7 @@ async function startAsyncPipelineJob(documentId: string): Promise<{ jobId: strin
     pipelineName: pipeline.pipelineName,
     provider,
     extractionArgs: extractionArgs || null,
+    vlmArgs: null,
   });
 
   await spawnAsyncPipelineWorker(job.id, pipeline.pipelineName, apiUrl);

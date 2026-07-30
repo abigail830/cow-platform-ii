@@ -35,6 +35,8 @@ _BAIDU_IMAGE_EXT = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"})
 _BAIDU_STREAMING_EXT = frozenset({".doc", ".docx", ".txt", ".wps"})
 _BAIDU_LAYOUT_EXT = frozenset({".pdf", ".ofd", ".ppt", ".pptx"})
 _BAIDU_NATIVE_EXT = _BAIDU_IMAGE_EXT | _BAIDU_STREAMING_EXT | _BAIDU_LAYOUT_EXT
+# Spreadsheet formats: convert to PDF via Adobe before Baidu upload (cloud API has no native xlsx).
+_BAIDU_ADOBE_EXT = frozenset({".xls", ".xlsx"})
 
 
 class BaiduParseError(RuntimeError):
@@ -729,19 +731,27 @@ def _build_result_from_baidu_json(
 
 
 def prepare_for_baidu_parse(stored_input: Path, convert_parent: Path) -> tuple[Path, Path]:
-    """Return (path to upload, path for content hash). Only EPUB needs conversion."""
-    from openkms_cli.parse.office_convert import convert_epub_to_pdf
+    """Return (path to upload, path for content hash).
+
+    EPUB → mutool PDF. XLS/XLSX → Adobe PDF. Other native formats pass through.
+    """
+    from openkms_cli.parse.epub_convert import prepare_for_baidu_epub
+    from openkms_cli.parse.input_prepare import InputPrepareError, convert_via_adobe
 
     suf = stored_input.suffix.lower()
     if suf == ".epub":
-        work = convert_parent / "mupdf_out"
-        work.mkdir(parents=True, exist_ok=True)
-        pdf = convert_epub_to_pdf(stored_input, work)
+        return prepare_for_baidu_epub(stored_input, convert_parent)
+    if suf in _BAIDU_ADOBE_EXT:
+        try:
+            pdf = convert_via_adobe(stored_input, convert_parent)
+        except InputPrepareError as e:
+            raise BaiduParseError(str(e)) from e
         return pdf, stored_input
     if suf not in _BAIDU_NATIVE_EXT:
         raise BaiduParseError(
             f"Unsupported file type for Baidu parse: {suf}. "
-            f"Supported: {', '.join(sorted(_BAIDU_NATIVE_EXT))} (EPUB is converted to PDF)."
+            f"Supported: {', '.join(sorted(_BAIDU_NATIVE_EXT | _BAIDU_ADOBE_EXT))} "
+            f"(EPUB→mutool PDF, XLS/XLSX→Adobe PDF)."
         )
     return stored_input, stored_input
 

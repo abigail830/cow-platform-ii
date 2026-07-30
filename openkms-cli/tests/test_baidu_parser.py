@@ -1,5 +1,6 @@
 """Tests for Baidu Cloud document parser helpers."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -299,3 +300,24 @@ def test_submit_file_url_exhausted_retries_raises():
                         file_size=100,
                         session=session,
                     )
+
+
+def test_prepare_for_baidu_parse_xlsx_via_adobe(tmp_path: Path) -> None:
+    from openkms_cli.providers.baidu.parser import prepare_for_baidu_parse
+
+    xlsx = tmp_path / "sheet.xlsx"
+    xlsx.write_bytes(b"xlsx-bytes")
+    pdf = tmp_path / "work" / "sheet.pdf"
+    pdf.parent.mkdir(parents=True)
+    pdf.write_bytes(b"%PDF-1.4")
+
+    with patch(
+        "openkms_cli.parse.input_prepare.convert_via_adobe",
+        return_value=pdf,
+    ) as mock_adobe:
+        parse_path, hash_src = prepare_for_baidu_parse(xlsx, tmp_path / "work")
+
+    mock_adobe.assert_called_once()
+    assert parse_path == pdf
+    assert hash_src == xlsx
+

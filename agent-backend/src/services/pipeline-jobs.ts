@@ -9,10 +9,14 @@ import {
 import { getChannelById } from './documents.ts';
 import { getS3Config } from '../storage/s3-config.ts';
 
-export const ASYNC_PIPELINE_NAMES = new Set(['baidu-doc-parse', 'aliyun-docmind-parse']);
+export const ASYNC_PIPELINE_NAMES = new Set([
+  'baidu-doc-parse',
+  'aliyun-docmind-parse',
+  'paddleocr-doc-parse',
+]);
 
 export function pipelineProviderForName(pipelineName: string): PipelineProvider | null {
-  if (pipelineName === 'baidu-doc-parse') return 'baidu';
+  if (pipelineName === 'baidu-doc-parse' || pipelineName === 'paddleocr-doc-parse') return 'baidu';
   if (pipelineName === 'aliyun-docmind-parse') return 'aliyun';
   return null;
 }
@@ -31,6 +35,7 @@ export type PipelineJobContext = {
   stage: PipelineJobStage;
   external_job_id: string | null;
   extraction_args: string | null;
+  vlm_args: string | null;
   error_message: string | null;
   document: {
     id: string;
@@ -50,6 +55,7 @@ export async function createPipelineJob(input: {
   pipelineName: string;
   provider: PipelineProvider;
   extractionArgs?: string | null;
+  vlmArgs?: string | null;
 }): Promise<typeof appPipelineJobs.$inferSelect> {
   const [row] = await db
     .insert(appPipelineJobs)
@@ -59,6 +65,7 @@ export async function createPipelineJob(input: {
       provider: input.provider,
       stage: 'submitted',
       extractionArgs: input.extractionArgs ?? null,
+      vlmArgs: input.vlmArgs ?? null,
     })
     .returning();
   return row!;
@@ -116,6 +123,7 @@ export async function updatePipelineJob(
     stage?: PipelineJobStage;
     externalJobId?: string | null;
     errorMessage?: string | null;
+    vlmArgs?: string | null;
   },
 ): Promise<typeof appPipelineJobs.$inferSelect | null> {
   const [row] = await db
@@ -124,6 +132,7 @@ export async function updatePipelineJob(
       ...(input.stage !== undefined ? { stage: input.stage } : {}),
       ...(input.externalJobId !== undefined ? { externalJobId: input.externalJobId } : {}),
       ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
+      ...(input.vlmArgs !== undefined ? { vlmArgs: input.vlmArgs } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appPipelineJobs.id, id))
@@ -163,6 +172,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     stage: job.stage as PipelineJobStage,
     external_job_id: job.externalJobId,
     extraction_args: job.extractionArgs,
+    vlm_args: job.vlmArgs,
     error_message: job.errorMessage,
     document: {
       id: doc.id,

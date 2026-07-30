@@ -15,7 +15,7 @@ import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
 import { DocumentPipelineStatus } from '../components/DocumentPipelineStatus.tsx';
 import { DocumentUploadModal } from '../components/DocumentUploadModal.tsx';
 import { IconDelete, IconMove, IconRun } from '../components/AdminActionIcons.tsx';
-import { Search } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
 
@@ -196,7 +196,11 @@ export function DocumentsListPage() {
                 </td>
               </tr>
             ) : (
-              documents.map((document) => (
+              documents.map((document) => {
+                const isPipelineBusy =
+                  runningDocumentIds.has(document.id) || document.status === 'running';
+
+                return (
                 <tr key={document.id}>
                   <td>
                     <Link to={`/knowledge/documents/${document.id}`} className="document-name-link">
@@ -220,20 +224,23 @@ export function DocumentsListPage() {
                         <>
                           <button
                             type="button"
-                            className="icon-btn"
+                            className={`icon-btn icon-btn--run${isPipelineBusy ? ' is-busy' : ''}`}
                             title={
                               channelHasPipeline
-                                ? 'Run pipeline'
+                                ? isPipelineBusy
+                                  ? 'Pipeline running…'
+                                  : 'Run pipeline'
                                 : 'Configure a pipeline on this channel first'
                             }
-                            disabled={
-                              !channelHasPipeline ||
-                              document.status === 'running' ||
-                              runningDocumentIds.has(document.id)
-                            }
+                            disabled={!channelHasPipeline || isPipelineBusy}
+                            aria-busy={isPipelineBusy}
                             onClick={() => void handleRunPipeline(document)}
                           >
-                            <IconRun />
+                            {isPipelineBusy ? (
+                              <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                            ) : (
+                              <IconRun />
+                            )}
                           </button>
                           <button
                             type="button"
@@ -256,7 +263,8 @@ export function DocumentsListPage() {
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

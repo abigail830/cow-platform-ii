@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { ICON_SIZE_LG, iconProps } from './icons/icon-props.ts';
 
-const ACCEPTED_TYPES = '.pdf,.png,.jpg,.jpeg,.webp,.docx,.pptx,.xlsx,.epub,.xmind';
+const ACCEPTED_TYPES = '.pdf,.png,.jpg,.jpeg,.webp,.docx,.pptx,.xlsx,.epub,.xmind,.md,.markdown';
 
 type DocumentUploadModalProps = {
   channelName: string;

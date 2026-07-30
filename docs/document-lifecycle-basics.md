@@ -47,7 +47,7 @@ Channel ACL: visibility and write follow **document channel** resource ACL (`RT_
 | Delete document | DB row + all objects under document prefix |
 | File access | Presigned redirect / `url_only` JSON for parsing artifacts |
 
-Accepted upload types (SPA): PDF, images, DOCX, PPTX, XLSX, EPUB, XMind. **XLSX / XMind** get in-process preview at upload (`completed` or `failed`); other types stay `uploaded` until processed (pipeline — out of scope here).
+Accepted upload types (SPA): PDF, images, DOCX, PPTX, XLSX, EPUB, XMind, MD/MARKDOWN. **XLSX / XMind** may get in-process preview at upload; **MD/MARKDOWN** can be ingested via doc-parse pipelines without VLM. Other types stay `uploaded` until processed (pipeline — out of scope here).
 
 ### Processing status (maintenance only)
 

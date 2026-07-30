@@ -151,11 +151,18 @@ ensure_openkms_cli() {
     echo "Warning: openkms-cli venv missing ($OPENKMS_CLI_DIR/.venv). Pipeline runs will fail." >&2
     return 0
   fi
-  if "$python_bin" -c "import boto3, baidubce, pydantic_ai" >/dev/null 2>&1; then
-    if "$python_bin" -c "import alibabacloud_docmind_api20220711" >/dev/null 2>&1; then
-      return 0
-    fi
+
+  local need_install=0
+  if ! "$python_bin" -c "import importlib.util; import sys; sys.exit(0 if importlib.util.find_spec('boto3') and importlib.util.find_spec('baidubce') and importlib.util.find_spec('pydantic_ai') else 1)" >/dev/null 2>&1; then
+    need_install=1
   fi
+  if ! "$python_bin" -c "import importlib.util; import sys; sys.exit(0 if importlib.util.find_spec('alibabacloud_docmind_api20220711') else 1)" >/dev/null 2>&1; then
+    need_install=1
+  fi
+  if [[ "$need_install" -eq 0 ]]; then
+    return 0
+  fi
+
   if ! command -v uv >/dev/null 2>&1; then
     echo "Warning: openkms-cli extras missing and uv not installed. Run: cd openkms-cli && uv pip install -e \".[pipeline,baidu,metadata,aliyun]\" --python .venv/bin/python" >&2
     return 0

@@ -12,7 +12,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from openkms_cli.core.auth import try_api_request_auth
-from openkms_cli.core.backend_defaults import resolve_vlm_config
 from openkms_cli.core.settings import get_cli_settings
 from openkms_cli.pipeline.api_client import (
     load_cached_parse_from_storage,
@@ -32,8 +31,8 @@ console = Console(stderr=True)
 
 SUPPORTED_PIPELINES: dict[str, tuple[str, str]] = {
     "paddleocr-doc-parse": (
-        "PaddleOCR Document Parse",
-        "Parse PDF/document with PaddleOCR-VL; output markdown and images to S3.",
+        "PaddleOCR Document Parse (Baidu API)",
+        "Deprecated alias: same Baidu Cloud PaddleOCR-VL API as baidu-doc-parse.",
     ),
     "baidu-doc-parse": (
         "Baidu Cloud Document Parse",
@@ -63,12 +62,11 @@ def pipeline_list() -> None:
         table.add_row(name, f"{display}: {desc}")
     console.print(table)
     console.print(
-        "\n[dim]Doc parse (local VLM): pipeline run --pipeline-name paddleocr-doc-parse "
-        "--input <uri> --s3-prefix <prefix>[/dim]"
+        "\n[dim]Doc parse (Baidu Cloud API): pipeline run --pipeline-name baidu-doc-parse "
+        "(or deprecated paddleocr-doc-parse) --input <uri> --s3-prefix <prefix>[/dim]"
     )
     console.print(
-        "[dim]Doc parse (Baidu Cloud): pipeline run --pipeline-name baidu-doc-parse "
-        "--input <uri> --s3-prefix <prefix>[/dim]"
+        "[dim]Async cloud jobs: pipeline run-async --job-id <id> (baidu / aliyun)[/dim]"
     )
     console.print("[dim]KB index:  pipeline run --pipeline-name kb-index --knowledge-base-id <id> [--wiki-space-id <id>] --api-url <url>[/dim]")
 
@@ -308,35 +306,24 @@ def pipeline_run(
                 raise typer.Exit(1)
         return
 
-    # --- doc-parse pipelines (paddleocr-doc-parse, baidu-doc-parse) ---
-    use_baidu = pipeline_name == "baidu-doc-parse"
-
-    vlm_runtime = None
-    if not use_baidu:
-        vlm_file_config: dict | None = None
-        if vlm_config_path:
-            try:
-                vlm_file_config = json.loads(vlm_config_path.read_text())
-            except Exception as e:
-                console.print(f"[red]Failed to load --vlm-config: {e}[/red]")
-                raise typer.Exit(1)
-
-        vlm_runtime = resolve_vlm_config(
-            cfg,
-            cli_vlm_url=vlm_url,
-            cli_model=vlm_model,
-            cli_vlm_api_key=vlm_api_key,
-            cli_max_concurrency=vlm_max_concurrency,
-            cli_config_lookup_name=vlm_config_name,
-            file_config=vlm_file_config,
+    # --- doc-parse pipelines (Baidu Cloud API; paddleocr-doc-parse is deprecated alias) ---
+    use_baidu = pipeline_name in ("baidu-doc-parse", "paddleocr-doc-parse")
+    if pipeline_name == "paddleocr-doc-parse":
+        console.print(
+            "[yellow]pipeline-name paddleocr-doc-parse is deprecated; "
+            "use baidu-doc-parse (same Baidu Cloud API).[/yellow]"
         )
-    else:
+
+    if use_baidu:
         if not cfg.baidu_cloud_api_key or not cfg.baidu_cloud_secret_key:
             console.print(
-                "[red]baidu-doc-parse requires OPENKMS_BAIDU_CLOUD_API_KEY and "
+                "[red]Baidu doc-parse requires OPENKMS_BAIDU_CLOUD_API_KEY and "
                 "OPENKMS_BAIDU_CLOUD_SECRET_KEY[/red]"
             )
             raise typer.Exit(1)
+    elif pipeline_name != "aliyun-docmind-parse":
+        console.print(f"[red]Unsupported doc-parse pipeline: {pipeline_name}[/red]")
+        raise typer.Exit(1)
 
     if not input_uri:
         console.print("[red]Document parse pipelines require --input (S3 URI or local file)[/red]")
@@ -396,26 +383,34 @@ def pipeline_run(
         stored_path.write_bytes(content)
         console.print(f"[dim]Input: s3://{input_bucket}/{input_key}[/dim]")
 
+    from openkms_cli.parse.markdown_ingest import is_markdown_suffix, materialize_markdown_ingest
+
+    is_markdown_input = is_markdown_suffix(stored_path.suffix)
+
     try:
         from openkms_cli.providers.baidu.parser import BaiduParseError
-        from openkms_cli.parse.office_convert import OfficeConvertError
+        from openkms_cli.parse.input_prepare import InputPrepareError
 
         if use_baidu:
             from openkms_cli.providers.baidu.parser import prepare_for_baidu_parse
-        else:
-            from openkms_cli.parse.office_convert import prepare_for_vlm_parse
+        elif pipeline_name == "aliyun-docmind-parse":
+            console.print("[red]aliyun-docmind-parse requires async pipeline run-async, not pipeline run[/red]")
+            raise typer.Exit(1)
     except ImportError:
         console.print("[red]Required parser module missing[/red]")
         raise typer.Exit(1)
-    try:
-        if use_baidu:
-            parse_path, hash_src = prepare_for_baidu_parse(stored_path, work / "baidu_stage")
-        else:
-            parse_path, hash_src = prepare_for_vlm_parse(stored_path, work / "office_stage")
-    except (OfficeConvertError, BaiduParseError) as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1)
-    ch_source = None if parse_path.resolve() == hash_src.resolve() else hash_src
+
+    parse_path = stored_path
+    hash_src = stored_path
+    ch_source = None
+    if not is_markdown_input:
+        try:
+            if use_baidu:
+                parse_path, hash_src = prepare_for_baidu_parse(stored_path, work / "baidu_stage")
+        except (InputPrepareError, BaiduParseError) as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1)
+        ch_source = None if parse_path.resolve() == hash_src.resolve() else hash_src
 
     baidu_auth_headers: dict[str, str] = {}
     baidu_basic_auth: Optional[tuple[str, str]] = None
@@ -461,7 +456,15 @@ def pipeline_run(
             console.print(f"[dim]Skipped parse: reusing s3://{bucket}/{prefix}/[/dim]")
         else:
             try:
-                if use_baidu:
+                if is_markdown_input:
+                    progress.update(task, description="Ingesting markdown...")
+                    result, hash_dir = materialize_markdown_ingest(
+                        stored_input=stored_path,
+                        original_content=content,
+                        out_base=out_base,
+                    )
+                    prefix = storage_prefix or result["file_hash"]
+                elif use_baidu:
                     from openkms_cli.providers.baidu.parser import run_baidu_parser
 
                     def _baidu_status(status: str) -> None:
@@ -484,21 +487,8 @@ def pipeline_run(
                         max_wait=baidu_max_wait,
                         on_status=_baidu_status,
                     )
-                else:
-                    from openkms_cli.parse.parser import run_parser
-
-                    result, _, _ = run_parser(
-                        input_path=parse_path,
-                        output_dir=out_base,
-                        vlm_url=vlm_runtime.base_url,
-                        vlm_api_key=vlm_runtime.api_key,
-                        model=vlm_runtime.model_name,
-                        max_concurrency=vlm_runtime.max_concurrency,
-                        content_hash_source=ch_source,
-                    )
             except ImportError:
-                dep = "requests (base)" if use_baidu else "openkms-cli[parse]"
-                console.print(f"[red]Parser not available. pip install {dep}[/red]")
+                console.print("[red]Parser not available. pip install openkms-cli (requests)[/red]")
                 raise typer.Exit(1)
             except BaiduParseError as e:
                 console.print(f"[red]Baidu parse failed: {e}[/red]")
@@ -507,31 +497,40 @@ def pipeline_run(
                 console.print(f"[red]Baidu parse failed: network error ({e})[/red]")
                 raise typer.Exit(1)
 
-            file_hash = result["file_hash"]
-            hash_dir = out_base / file_hash
-            prefix = storage_prefix or file_hash
+            if not is_markdown_input:
+                file_hash = result["file_hash"]
+                hash_dir = out_base / file_hash
+                prefix = storage_prefix or file_hash
 
-            ext = Path(hash_src).suffix.lower().lstrip(".") or "pdf"
-            (hash_dir / f"original.{ext}").write_bytes(content)
-            result_json = json.dumps(result, indent=2, ensure_ascii=False)
-            (hash_dir / "result.json").write_text(result_json, encoding="utf-8")
-            if result.get("markdown"):
-                (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
+                ext = Path(hash_src).suffix.lower().lstrip(".") or "pdf"
+                (hash_dir / f"original.{ext}").write_bytes(content)
+                result_json = json.dumps(result, indent=2, ensure_ascii=False)
+                (hash_dir / "result.json").write_text(result_json, encoding="utf-8")
+                if result.get("markdown"):
+                    (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
 
             if build_page_index and result.get("markdown"):
                 try:
-                    from openkms_cli.page_index.strategy import effective_page_index_strategy, write_page_index
+                    from openkms_cli.page_index.strategy import (
+                        effective_page_index_strategy,
+                        strategy_for_markdown_ingest,
+                        write_page_index,
+                    )
 
                     provider = None
-                    if pipeline_name == "baidu-doc-parse":
-                        provider = "baidu"
-                    elif pipeline_name == "aliyun-docmind-parse":
-                        provider = "aliyun"
+                    if not is_markdown_input:
+                        if pipeline_name in ("baidu-doc-parse", "paddleocr-doc-parse"):
+                            provider = "baidu"
+                        elif pipeline_name == "aliyun-docmind-parse":
+                            provider = "aliyun"
 
-                    strategy = effective_page_index_strategy(
-                        provider=provider,
-                        override=page_index_strategy,
-                    )
+                    if is_markdown_input:
+                        strategy = strategy_for_markdown_ingest(page_index_strategy)
+                    else:
+                        strategy = effective_page_index_strategy(
+                            provider=provider,
+                            override=page_index_strategy,
+                        )
                     layouts = None
                     if isinstance(result.get("aliyun_layouts"), list):
                         layouts = [item for item in result["aliyun_layouts"] if isinstance(item, dict)]

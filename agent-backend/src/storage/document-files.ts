@@ -28,6 +28,8 @@ const ACCEPTED_EXTENSIONS = new Set([
   'xlsx',
   'epub',
   'xmind',
+  'md',
+  'markdown',
 ]);
 
 type UploadSession = {

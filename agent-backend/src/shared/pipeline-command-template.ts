@@ -72,7 +72,7 @@ export function defaultAsyncWorkerTemplate(pipelineName: string): string {
   if (pipelineName === 'aliyun-docmind-parse') {
     return 'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy aliyun-layouts';
   }
-  if (pipelineName === 'baidu-doc-parse') {
+  if (pipelineName === 'baidu-doc-parse' || pipelineName === 'paddleocr-doc-parse') {
     return 'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy baidu-layouts';
   }
   return 'openkms-cli pipeline run-async --job-id {job_id}';

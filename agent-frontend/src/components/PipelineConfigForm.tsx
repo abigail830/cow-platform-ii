@@ -16,7 +16,7 @@ const PIPELINE_TEMPLATE_COMMANDS = [
   {
     command: 'pipeline run-async',
     summary:
-      'One CLI process: cloud submit → poll (OPENKMS_ASYNC_POLL_INTERVAL_SECONDS) → finalize. Backend only spawns & receives PATCH.',
+      'One CLI worker: cloud submit → poll → finalize. Backend spawns & receives PATCH stage updates.',
   },
 ] as const;
 
@@ -30,7 +30,9 @@ const ASYNC_TEMPLATE_PLACEHOLDERS = [
 
 function defaultTemplateForPipelineName(pipelineName: string): string {
   if (pipelineName === 'aliyun-docmind-parse') return DEFAULT_ALIYUN_PIPELINE_COMMAND_TEMPLATE;
-  if (pipelineName === 'baidu-doc-parse') return DEFAULT_BAIDU_PIPELINE_COMMAND_TEMPLATE;
+  if (pipelineName === 'baidu-doc-parse' || pipelineName === 'paddleocr-doc-parse') {
+    return DEFAULT_BAIDU_PIPELINE_COMMAND_TEMPLATE;
+  }
   return DEFAULT_PIPELINE_COMMAND_TEMPLATE;
 }
 

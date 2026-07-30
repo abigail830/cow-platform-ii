@@ -226,6 +226,7 @@ export const appPipelineJobs = pgTable(
     stage: text('stage').notNull().default('submitted'),
     externalJobId: text('external_job_id'),
     extractionArgs: text('extraction_args'),
+    vlmArgs: text('vlm_args'),
     errorMessage: text('error_message'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

@@ -41,7 +41,7 @@ export function formatDocumentStatusLabel(status: string): string {
   }
 }
 
-export function formatPipelineStageLabel(stage: string): string {
+export function formatPipelineStageLabel(stage: string, pipelineName?: string | null): string {
   switch (stage) {
     case 'submitted':
       return 'Submitting to cloud';
@@ -134,7 +134,7 @@ function shortenErrorMessage(message: string, maxLen = 120): string {
 function buildTooltip(document: DocumentRecord, job: DocumentPipelineJob | null): string {
   const parts: string[] = [formatDocumentStatusLabel(document.status)];
   if (job) {
-    parts.push(formatPipelineStageLabel(job.stage));
+    parts.push(formatPipelineStageLabel(job.stage, job.pipeline_name));
     if (job.error_message) parts.push(job.error_message);
   } else if (document.status === 'running') {
     parts.push('Pipeline in progress');
