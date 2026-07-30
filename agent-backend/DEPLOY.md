@@ -16,15 +16,21 @@ Deploy **only** `agent-backend` as a separate Vercel project. Pipeline jobs run 
 | **Node.js** | 22.x |
 | **Framework Preset** | Other / leave unset — `vercel.json` sets `"framework": null` |
 
-Create a **separate** Vercel project for the backend (e.g. `cow-platform-ii-backend`). Do not share one project with the frontend.
+Create a **separate** Vercel project for the backend (e.g. `cow-platform-ii` → `https://cow-platform-ii.vercel.app`).
 
-Health check URL is the **backend** deployment, e.g. `https://cow-platform-ii-backend.vercel.app/health`.
+Health check: `https://cow-platform-ii.vercel.app/health` (frontend is a different project, e.g. `https://cow-platform.vercel.app`).
 
-If you use a separate frontend project, do not expect `/health` on the frontend URL unless `BACKEND_ORIGIN` is set (see `agent-frontend/DEPLOY.md`).
+## Region
+
+Default **Singapore (`sin1`)** via `vercel.json` → `"regions": ["sin1"]` and `.vc-config.json` from the build script.
+
+To change at build time, set Vercel env `VERCEL_REGIONS` (comma-separated), e.g. `hkg1` (Hong Kong) or `icn1` (Seoul).
+
+You can also override in the Vercel dashboard: **Project → Settings → Functions → Function Regions** (Pro plan may be required for multi-region).
 
 ## Build
 
-`npm run build:vercel` emits Vercel **Build Output API** under `.vercel/output/` (bundled CJS handler at `functions/index.func/index.js`, ~10 MB). This bypasses the Hono framework preset, which otherwise compiles `src/app.ts` without rewriting `.ts` imports and crashes at runtime (`ERR_MODULE_NOT_FOUND`).
+`npm run build:vercel` emits Vercel **Build Output API** under `.vercel/output/` (bundled **CJS** handler at `functions/index.func/index.cjs`, ~10 MB). Do not use ESM here — `pg` triggers `Dynamic require of "events" is not supported` on Vercel.
 
 Run `npx tsc --noEmit` locally before deploy to catch type errors.
 

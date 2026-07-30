@@ -1,6 +1,6 @@
 # Vercel static frontend + API proxy
 
-Deploy as a **separate** Vercel project from `agent-backend` (e.g. this project = `cow-platform-ii`, backend = `cow-platform-ii-backend`).
+Deploy as a **separate** Vercel project from `agent-backend` (e.g. frontend = `cow-platform` → `https://cow-platform.vercel.app`, backend = `cow-platform-ii` → `https://cow-platform-ii.vercel.app`).
 
 ## Vercel project settings
 
@@ -12,7 +12,7 @@ Deploy as a **separate** Vercel project from `agent-backend` (e.g. this project 
 
 | Variable | Required | Notes |
 |----------|----------|--------|
-| `BACKEND_ORIGIN` | Yes | **Backend** project URL, e.g. `https://cow-platform-ii-backend.vercel.app` — **not** the frontend URL |
+| `BACKEND_ORIGIN` | Yes | Backend URL: `https://cow-platform-ii.vercel.app` — **not** the frontend URL (`https://cow-platform.vercel.app`) |
 | `VITE_FLUE_LIVE_MODE` | No | Default `sse` |
 
 ## Routing

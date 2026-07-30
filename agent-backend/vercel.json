@@ -3,5 +3,6 @@
   "framework": null,
   "installCommand": "npm ci",
   "buildCommand": "npm run build:vercel",
-  "outputDirectory": ".vercel/output"
+  "outputDirectory": ".vercel/output",
+  "regions": ["sin1"]
 }
