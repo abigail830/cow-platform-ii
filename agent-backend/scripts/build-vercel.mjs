@@ -8,7 +8,7 @@ const outDir = path.join(root, 'api');
 mkdirSync(outDir, { recursive: true });
 
 await esbuild.build({
-  entryPoints: [path.join(root, 'api/entry.ts')],
+  entryPoints: [path.join(root, 'scripts/vercel-entry.ts')],
   outfile: path.join(outDir, 'index.mjs'),
   bundle: true,
   platform: 'node',

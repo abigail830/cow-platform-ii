@@ -7,3 +7,4 @@ dist
 .flue
 src/**/*.test.ts
 scripts/tmp-*.ts
+api/*.ts
