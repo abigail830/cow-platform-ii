@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
+import archiver from 'archiver';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   assertStorageClient,
@@ -9,6 +11,7 @@ import {
   StorageNotConfiguredError,
 } from './s3-client.ts';
 import { validateKey } from './prefix-utils.ts';
+import { readStorageBuffer } from './document-content.ts';
 
 export const DOCUMENTS_PREFIX = 'documents/';
 export const CHUNK_UPLOAD_THRESHOLD_BYTES = 10 * 1024 * 1024;
@@ -81,6 +84,50 @@ export function buildDocumentS3Key(fileHash: string, ext: string): string {
   const key = `${DOCUMENTS_PREFIX}${fileHash}/original.${ext}`;
   validateKey(key);
   return key;
+}
+
+export function documentStoragePrefix(fileHash: string): string {
+  const prefix = `${DOCUMENTS_PREFIX}${fileHash}/`;
+  validateKey(prefix);
+  return prefix;
+}
+
+export function archiveFilenameFromDocumentName(filename: string): string {
+  const trimmed = filename.trim() || 'document';
+  const withoutExt = trimmed.includes('.') ? trimmed.replace(/\.[^.]+$/, '') : trimmed;
+  const safe = withoutExt.replace(/[^\w.\-() ]/g, '_').trim() || 'document';
+  return `${safe.slice(0, 200)}.zip`;
+}
+
+export function attachmentContentDisposition(filename: string): string {
+  const safeFilename = filename.replace(/[^\w.\-() ]/g, '_');
+  return `attachment; filename="${safeFilename}"`;
+}
+
+export async function listDocumentStorageKeys(fileHash: string): Promise<string[]> {
+  return listKeysUnderPrefix(documentStoragePrefix(fileHash));
+}
+
+export async function createDocumentBundleArchive(fileHash: string): Promise<Readable> {
+  const prefix = documentStoragePrefix(fileHash);
+  const keys = await listDocumentStorageKeys(fileHash);
+  const objectKeys = keys.filter((key) => !key.endsWith('/') && key.length > prefix.length);
+
+  if (objectKeys.length === 0) {
+    throw new Error('No stored artifacts found for this document');
+  }
+
+  const archive = archiver('zip', { zlib: { level: 5 } });
+
+  for (const key of objectKeys) {
+    const relativePath = key.slice(prefix.length);
+    const buffer = await readStorageBuffer(key);
+    if (!buffer) continue;
+    archive.append(buffer, { name: relativePath });
+  }
+
+  archive.finalize();
+  return archive;
 }
 
 export async function getDocumentDownloadUrl(

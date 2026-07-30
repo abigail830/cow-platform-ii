@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { flattenChannels } from '../api/documentChannels.ts';
 import {
   deleteDocument,
-  downloadDocument,
   formatDocumentBytes,
   listDocuments,
   moveDocument,
@@ -11,10 +10,11 @@ import {
   uploadDocument,
   type DocumentRecord,
 } from '../api/documents.ts';
+import { DocumentDownloadActions } from '../components/DocumentDownloadMenu.tsx';
 import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
 import { DocumentPipelineStatus } from '../components/DocumentPipelineStatus.tsx';
 import { DocumentUploadModal } from '../components/DocumentUploadModal.tsx';
-import { IconDelete, IconDownload, IconMove, IconRun } from '../components/AdminActionIcons.tsx';
+import { IconDelete, IconMove, IconRun } from '../components/AdminActionIcons.tsx';
 import { Search } from 'lucide-react';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
@@ -90,14 +90,6 @@ export function DocumentsListPage() {
       await loadDocuments();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete document');
-    }
-  }
-
-  async function handleDownloadDocument(document: DocumentRecord) {
-    try {
-      await downloadDocument(document.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to download document');
     }
   }
 
@@ -219,14 +211,11 @@ export function DocumentsListPage() {
                   <td>{new Date(document.created_at).toLocaleString()}</td>
                   <td>
                     <div className="row-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Download"
-                        onClick={() => void handleDownloadDocument(document)}
-                      >
-                        <IconDownload />
-                      </button>
+                      <DocumentDownloadActions
+                        documentId={document.id}
+                        documentName={document.name}
+                        onError={setError}
+                      />
                       {canWrite && (
                         <>
                           <button

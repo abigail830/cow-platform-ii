@@ -29,6 +29,7 @@
     "@flue/postgres": "1.0.0-beta.9",
     "@flue/runtime": "1.0.0-beta.9",
     "@flue/sdk": "1.0.0-beta.9",
+    "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
     "e2b": "^2.36.0",

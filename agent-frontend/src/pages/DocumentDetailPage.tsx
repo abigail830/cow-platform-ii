@@ -99,7 +99,14 @@ export function DocumentDetailPage() {
         <p className="document-detail-loading">Loading document…</p>
       ) : content ? (
         <div className="document-detail-layout">
-          <DocumentMetadataBar metadata={content.metadata} />
+          <DocumentMetadataBar
+            documentId={documentId!}
+            metadata={content.metadata}
+            onMetadataChange={(metadata) => {
+              setContent((prev) => (prev ? { ...prev, metadata } : prev));
+              setDocument((prev) => (prev ? { ...prev, metadata } : prev));
+            }}
+          />
 
           <div
             ref={containerRef}

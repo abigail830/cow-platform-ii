@@ -92,6 +92,33 @@ export async function downloadDocument(id: string): Promise<void> {
   const data = await authFetch(`/api/documents/${id}/download`);
   const url = data.url as string;
   const filename = (data.filename as string) || 'download';
+  triggerBrowserDownload(url, filename);
+}
+
+export async function downloadDocumentBundle(id: string, suggestedFilename: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch(`/api/documents/${id}/download/bundle`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const filename = suggestedFilename.endsWith('.zip')
+    ? suggestedFilename
+    : `${suggestedFilename.replace(/\.[^.]+$/, '')}.zip`;
+  triggerBrowserDownload(url, filename);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function triggerBrowserDownload(url: string, filename: string) {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
@@ -114,6 +141,18 @@ export async function moveDocument(id: string, channelId: string): Promise<Docum
 export async function runDocumentPipeline(id: string): Promise<{ status: string }> {
   const data = await authFetch(`/api/documents/${id}/run-pipeline`, { method: 'POST' });
   return data as { status: string };
+}
+
+export async function updateDocumentMetadata(
+  id: string,
+  metadata: Record<string, unknown>,
+): Promise<{ metadata: Record<string, unknown> }> {
+  const data = await authFetch(`/api/documents/${id}/metadata`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ metadata }),
+  });
+  return { metadata: data.metadata as Record<string, unknown> };
 }
 
 async function uploadSingleFile(channelId: string, file: File): Promise<DocumentRecord> {

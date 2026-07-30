@@ -330,6 +330,22 @@ export async function moveDocument(
   return toDocumentPublic(row!);
 }
 
+export async function updateDocumentMetadata(
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<{ metadata: Record<string, unknown> }> {
+  const existing = await getDocumentById(id);
+  if (!existing) throw new Error('Document not found');
+
+  const merged = { ...(existing.metadata ?? {}), ...patch };
+  await db
+    .update(appDocuments)
+    .set({ metadata: merged, updatedAt: new Date() })
+    .where(eq(appDocuments.id, id));
+
+  return { metadata: merged };
+}
+
 export async function getDocumentStats(): Promise<{ channels: number; documents: number }> {
   const [channelRow] = await db.select({ count: sql<number>`count(*)::int` }).from(appDocumentChannels);
   const [docRow] = await db.select({ count: sql<number>`count(*)::int` }).from(appDocuments);

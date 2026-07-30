@@ -1,4 +1,4 @@
-import { Download, Eye, FolderInput, Pencil, Play, Trash2, type LucideProps } from 'lucide-react';
+import { Download, Eye, FolderArchive, FolderInput, Pencil, Play, Trash2, type LucideProps } from 'lucide-react';
 import { iconProps } from './icons/icon-props.ts';
 
 type IconProps = LucideProps;
@@ -17,6 +17,10 @@ export function IconView(props: IconProps) {
 
 export function IconDownload(props: IconProps) {
   return <Download {...iconProps(props)} />;
+}
+
+export function IconArchive(props: IconProps) {
+  return <FolderArchive {...iconProps(props)} />;
 }
 
 export function IconMove(props: IconProps) {

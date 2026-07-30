@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   assembleUploadSession,
+  archiveFilenameFromDocumentName,
   buildDocumentS3Key,
   createChunkUploadSession,
+  documentStoragePrefix,
   extensionFromFilename,
   fileTypeFromExtension,
   sha256Hex,
@@ -26,6 +28,15 @@ describe('document-files', () => {
   it('builds content-addressed S3 keys', () => {
     const hash = 'abc123';
     assert.equal(buildDocumentS3Key(hash, 'pdf'), 'documents/abc123/original.pdf');
+    assert.equal(documentStoragePrefix(hash), 'documents/abc123/');
+  });
+
+  it('builds archive filenames from document names', () => {
+    assert.equal(
+      archiveFilenameFromDocumentName('InCorp Indonesia Proposal.docx'),
+      'InCorp Indonesia Proposal.zip',
+    );
+    assert.match(archiveFilenameFromDocumentName('bad/name!.pdf'), /\.zip$/);
   });
 
   it('hashes file bytes deterministically', () => {

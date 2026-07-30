@@ -1,12 +1,16 @@
 import { Hono } from 'hono';
+import { Readable } from 'node:stream';
 import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
 import { isStorageEnabled } from '../storage/s3-config.ts';
 import {
   assembleUploadSession,
+  archiveFilenameFromDocumentName,
+  attachmentContentDisposition,
   buildDocumentS3Key,
   createChunkUploadSession,
+  createDocumentBundleArchive,
   deleteDocumentStorage,
   extensionFromFilename,
   fileTypeFromExtension,
@@ -27,6 +31,7 @@ import {
   getDocumentStats,
   listDocuments,
   moveDocument,
+  updateDocumentMetadata,
 } from '../services/documents.ts';
 import { autoStartPipelineAfterUpload } from '../services/auto-pipeline.ts';
 import { startDocumentPipeline } from '../services/pipeline-runner.ts';
@@ -112,6 +117,33 @@ documents.get(
 );
 
 documents.get(
+  '/:id/download/bundle',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const row = await getDocumentById(c.req.param('id'));
+    if (!row) return c.json({ error: 'Document not found' }, 404);
+
+    try {
+      const archive = await createDocumentBundleArchive(row.fileHash);
+      const filename = archiveFilenameFromDocumentName(row.name);
+      return new Response(Readable.toWeb(archive) as BodyInit, {
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': attachmentContentDisposition(filename),
+        },
+      });
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      const message = error instanceof Error ? error.message : 'Bundle download failed';
+      const status = message.includes('not found') || message.includes('No stored') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+documents.get(
   '/:id/download',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
@@ -126,6 +158,26 @@ documents.get(
     } catch (error) {
       if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
       return c.json({ error: error instanceof Error ? error.message : 'Download failed' }, 400);
+    }
+  },
+);
+
+documents.put(
+  '/:id/metadata',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
+  async (c) => {
+    const body = await c.req.json<{ metadata?: Record<string, unknown> }>().catch(() => ({}));
+    if (!body.metadata || typeof body.metadata !== 'object' || Array.isArray(body.metadata)) {
+      return c.json({ error: 'metadata object is required' }, 400);
+    }
+
+    try {
+      const result = await updateDocumentMetadata(c.req.param('id'), body.metadata);
+      return c.json({ ok: true, metadata: result.metadata });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update metadata';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
     }
   },
 );

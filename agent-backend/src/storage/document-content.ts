@@ -14,6 +14,12 @@ function isS3NotFound(error: unknown): boolean {
 }
 
 export async function readStorageText(key: string): Promise<string | null> {
+  const buffer = await readStorageBuffer(key);
+  if (!buffer) return null;
+  return buffer.toString('utf-8');
+}
+
+export async function readStorageBuffer(key: string): Promise<Buffer | null> {
   const { client, config } = assertStorageClient();
   try {
     const response = await client.send(
@@ -22,7 +28,8 @@ export async function readStorageText(key: string): Promise<string | null> {
         Key: key,
       }),
     );
-    return (await response.Body?.transformToString('utf-8')) ?? null;
+    const bytes = await response.Body?.transformToByteArray();
+    return bytes ? Buffer.from(bytes) : null;
   } catch (error) {
     if (isS3NotFound(error)) return null;
     throw error;

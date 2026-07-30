@@ -2,7 +2,11 @@ import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
 import { appDocuments, db } from '../../db/index.ts';
-import { getChannelById, getDocumentById } from '../../services/documents.ts';
+import {
+  getChannelById,
+  getDocumentById,
+  updateDocumentMetadata,
+} from '../../services/documents.ts';
 import { uploadDocumentObject, StorageNotConfiguredError } from '../../storage/document-files.ts';
 import { isStorageEnabled } from '../../storage/s3-config.ts';
 
@@ -84,21 +88,19 @@ documents.put('/:id/markdown', async (c) => {
 });
 
 documents.put('/:id/metadata', async (c) => {
-  const doc = await getDocumentById(c.req.param('id'));
-  if (!doc) return c.json({ error: 'Document not found' }, 404);
-
   const body = await c.req.json<{ metadata?: Record<string, unknown> }>().catch(() => ({}));
   if (!body.metadata || typeof body.metadata !== 'object' || Array.isArray(body.metadata)) {
     return c.json({ error: 'metadata object is required' }, 400);
   }
 
-  const merged = { ...(doc.metadata ?? {}), ...body.metadata };
-  await db
-    .update(appDocuments)
-    .set({ metadata: merged, updatedAt: new Date() })
-    .where(eq(appDocuments.id, doc.id));
-
-  return c.json({ ok: true, metadata: merged });
+  try {
+    const result = await updateDocumentMetadata(c.req.param('id'), body.metadata);
+    return c.json({ ok: true, metadata: result.metadata });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update metadata';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status);
+  }
 });
 
 documents.post('/:id/versions', async (c) => {
