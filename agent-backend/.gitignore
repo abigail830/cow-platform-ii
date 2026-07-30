@@ -5,3 +5,5 @@ data/
 dist/
 .flue/
 api/index.mjs
+api/index.cjs
+public/

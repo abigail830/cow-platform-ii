@@ -4,7 +4,7 @@ Deploy **only** `agent-backend` as a separate Vercel project. Pipeline jobs run 
 
 ## Prerequisites
 
-- Node.js **24.x** on Vercel (Project Settings → General → Node.js Version)
+- Node.js **22.x** on Vercel (Project Settings → General → Node.js Version)
 - Neon Postgres linked via Vercel Storage (or `DATABASE_URL` env)
 - `openkms-cli` repo GHA secrets: `OPENKMS_API_URL` = this backend’s public URL
 
