@@ -50,7 +50,9 @@ curl https://<backend>/health
 
 ## SSE / agent streaming
 
-`VITE_FLUE_LIVE_MODE=sse` on the frontend requires long-lived HTTP streams. Vercel **Hobby** functions time out at **10s**; use **Pro** and `maxDuration: 300` (configured in `vercel.json`).
+`maxDuration: 300` is exported from the esbuild bundle (`scripts/vercel-entry.ts`). Do **not** list `api/index.mjs` in `vercel.json` `functions` — Vercel validates that pattern before `buildCommand` creates the file.
+
+Vercel **Hobby** still caps execution at **10s**; **Pro** is required for longer agent SSE streams.
 
 ## Known serverless limits
 
