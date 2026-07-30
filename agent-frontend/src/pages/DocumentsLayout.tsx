@@ -15,6 +15,7 @@ import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../la
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { DocumentsOutletProvider } from './DocumentsOutletContext.tsx';
+import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 
 const PAGE = getNavPage('/knowledge/documents')!;
 
@@ -31,6 +32,11 @@ export function DocumentsLayout() {
   const [loadingChannels, setLoadingChannels] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [channelModal, setChannelModal] = useState<ChannelModalState | null>(null);
+
+  const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('documents-channel-split', 18, {
+    minPct: 12,
+    maxPct: 42,
+  });
 
   const loadChannels = useCallback(async () => {
     setLoadingChannels(true);
@@ -115,7 +121,11 @@ export function DocumentsLayout() {
           </AdminPageDescription>
         </header>
 
-        <div className="documents-layout">
+        <div
+          ref={containerRef}
+          className="documents-layout"
+          style={{ ['--documents-left-pct' as string]: `${leftPct}%` }}
+        >
           <ChannelTreePanel
             channels={channels}
             selectedId={selectedChannelId}
@@ -125,6 +135,14 @@ export function DocumentsLayout() {
             onCreateChild={(parentId) => setChannelModal({ mode: 'create', parentId })}
             onSettings={(channel) => setChannelModal({ mode: 'settings', channel })}
             onDelete={(channel) => void handleDeleteChannel(channel)}
+          />
+
+          <div
+            className="documents-split-handle"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize channel panel"
+            onMouseDown={onHandleMouseDown}
           />
 
           <section className="documents-main-panel">
