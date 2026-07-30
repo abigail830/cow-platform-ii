@@ -1,5 +1,5 @@
 import esbuild from 'esbuild';
-import { copyFileSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,13 +8,9 @@ const outRoot = path.join(root, '.vercel', 'output');
 const funcDir = path.join(outRoot, 'functions', 'index.func');
 const staticDir = path.join(outRoot, 'static');
 
-// Also keep a copy under api/ for local inspection (gitignored).
-const apiDir = path.join(root, 'api');
-
 rmSync(outRoot, { recursive: true, force: true });
 mkdirSync(funcDir, { recursive: true });
 mkdirSync(staticDir, { recursive: true });
-mkdirSync(apiDir, { recursive: true });
 writeFileSync(path.join(staticDir, '.gitkeep'), '');
 
 // Native / optional deps that must not be bundled.
@@ -75,9 +71,9 @@ writeFileSync(
   )}\n`,
 );
 
-// Mirror for local debugging (not used by Build Output API deploy).
-copyFileSync(outfile, path.join(apiDir, 'index.js'));
-
 console.log(
   `Vercel Build Output: .vercel/output/functions/index.func/index.js (${(size / 1024 / 1024).toFixed(1)} MB)`,
+);
+console.log(
+  'IMPORTANT: Vercel project Root Directory must be "agent-backend" (not the monorepo root).',
 );

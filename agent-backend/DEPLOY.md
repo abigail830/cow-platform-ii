@@ -12,11 +12,13 @@ Deploy **only** `agent-backend` as a separate Vercel project. Pipeline jobs run 
 
 | Setting | Value |
 |---------|--------|
-| **Root Directory** | `agent-backend` (required when using the monorepo) |
+| **Root Directory** | `agent-backend` (**required** — if left as repo root, runtime uses `agent-backend/src/app.js` and crashes with `ERR_MODULE_NOT_FOUND` for `.ts` imports) |
 | **Node.js** | 22.x |
 | **Framework Preset** | Other / leave unset — `vercel.json` sets `"framework": null` |
 
-Health check URL is the **backend** deployment, e.g. `https://<backend-project>.vercel.app/health`.
+Create a **separate** Vercel project for the backend (e.g. `cow-platform-ii-backend`). Do not share one project with the frontend.
+
+Health check URL is the **backend** deployment, e.g. `https://cow-platform-ii-backend.vercel.app/health`.
 
 If you use a separate frontend project, do not expect `/health` on the frontend URL unless `BACKEND_ORIGIN` is set (see `agent-frontend/DEPLOY.md`).
 
