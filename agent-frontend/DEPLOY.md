@@ -16,6 +16,8 @@ Deploy as a **separate** Vercel project from `agent-backend`.
 
 Local dev uses Vite proxy (`vite.config.ts`); `BACKEND_ORIGIN` is only used on Vercel.
 
+`/health` on the **frontend** URL returns Vercel 404 unless `BACKEND_ORIGIN` is set — use the **backend** project URL for health checks.
+
 ## SSE note
 
 Agent chat uses SSE end-to-end. Backend needs Vercel **Pro** for `maxDuration` > 10s on serverless functions.

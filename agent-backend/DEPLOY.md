@@ -8,14 +8,20 @@ Deploy **only** `agent-backend` as a separate Vercel project. Pipeline jobs run 
 - Neon Postgres linked via Vercel Storage (or `DATABASE_URL` env)
 - `openkms-cli` repo GHA secrets: `OPENKMS_API_URL` = this backend’s public URL
 
+## Vercel project settings
+
+| Setting | Value |
+|---------|--------|
+| **Root Directory** | `agent-backend` (required when using the monorepo) |
+| **Node.js** | 22.x |
+
+Health check URL is the **backend** deployment, e.g. `https://<backend-project>.vercel.app/health`.
+
+If you use a separate frontend project, do not expect `/health` on the frontend URL unless `BACKEND_ORIGIN` is set (see `agent-frontend/DEPLOY.md`).
+
 ## Build
 
-```bash
-npm ci
-npm run build:vercel   # esbuild → api/index.mjs
-```
-
-Vercel runs `build:vercel` via `vercel.json` `buildCommand`.
+Vercel compiles `api/index.ts` as the single Serverless Function. No esbuild prebuild step.
 
 ## Required environment variables
 
@@ -50,9 +56,7 @@ curl https://<backend>/health
 
 ## SSE / agent streaming
 
-`maxDuration: 300` is exported from the esbuild bundle (`scripts/vercel-entry.ts`). Do **not** list `api/index.mjs` in `vercel.json` `functions` — Vercel validates that pattern before `buildCommand` creates the file.
-
-Vercel **Hobby** still caps execution at **10s**; **Pro** is required for longer agent SSE streams.
+`maxDuration: 300` is exported from `api/index.ts`. Vercel **Hobby** still caps execution at **10s**; **Pro** is required for longer agent SSE streams.
 
 ## Known serverless limits
 
