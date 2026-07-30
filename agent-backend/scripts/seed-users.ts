@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.ts';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { appAgentPermissions, appUsers, db } from '../src/db/index.ts';

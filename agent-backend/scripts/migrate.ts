@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.ts';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { syncRbac } from '../src/db/sync-rbac.ts';

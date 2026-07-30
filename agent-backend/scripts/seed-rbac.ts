@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.ts';
 import { syncRbac } from '../src/db/sync-rbac.ts';
 import { closePool } from '../src/db/pool.ts';
 

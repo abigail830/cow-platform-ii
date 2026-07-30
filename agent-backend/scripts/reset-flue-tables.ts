@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.ts';
 import { getPool, closePool } from '../src/db/pool.ts';
 
 /**

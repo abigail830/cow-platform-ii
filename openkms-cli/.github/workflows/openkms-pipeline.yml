@@ -1,0 +1,95 @@
+# Run pipeline jobs on GitHub-hosted runners (standalone openkms-cli repo).
+#
+# Manual: Actions → OpenKMS Pipeline → Run workflow → job_id from backend DB.
+# Trigger API (for backend later):
+#   POST /repos/abigail830/openkms-cli/actions/workflows/openkms-pipeline.yml/dispatches
+
+name: OpenKMS Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Pipeline job UUID (app_pipeline_jobs.id)
+        required: true
+        type: string
+      page_index_strategy:
+        description: Page index strategy
+        required: false
+        default: aliyun-layouts
+        type: string
+
+concurrency:
+  group: openkms-pipeline-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+jobs:
+  run-async:
+    name: run-async (${{ inputs.job_id }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # Reuse .venv when uv.lock unchanged — avoids reinstalling wheels every run.
+      - name: Restore virtualenv cache
+        id: venv-cache
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('uv.lock') }}
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra pipeline --extra aliyun --extra metadata
+
+      - name: Validate backend URL
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+        run: |
+          if [ -z "$OPENKMS_API_URL" ]; then
+            echo "::error::GitHub secret OPENKMS_API_URL is not set. Use a public URL (not http://127.0.0.1)."
+            exit 1
+          fi
+          case "$OPENKMS_API_URL" in
+            http://127.0.0.1:*|http://localhost:*|https://127.0.0.1:*|https://localhost:*)
+              echo "::error::OPENKMS_API_URL points to localhost — GitHub runners cannot reach your machine."
+              exit 1
+              ;;
+          esac
+          echo "Checking ${OPENKMS_API_URL}/health ..."
+          curl -fsS --max-time 15 "${OPENKMS_API_URL%/}/health" || {
+            echo "::error::Backend health check failed. Ensure the API is deployed and reachable from the internet."
+            exit 1
+          }
+
+      - name: Run pipeline (submit → poll → finalize)
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+          OPENKMS_AUTH_MODE: local
+          OPENKMS_CLI_BASIC_USER: ${{ secrets.OPENKMS_CLI_BASIC_USER }}
+          OPENKMS_CLI_BASIC_PASSWORD: ${{ secrets.OPENKMS_CLI_BASIC_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_BUCKET_NAME: ${{ secrets.AWS_BUCKET_NAME }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
+          OPENKMS_DOCMIND_ENDPOINT: ${{ secrets.OPENKMS_DOCMIND_ENDPOINT }}
+          OPENKMS_ASYNC_POLL_INTERVAL_SECONDS: "8"
+          OPENKMS_ASYNC_MAX_WAIT_SECONDS: "600"
+        run: |
+          uv run openkms-cli pipeline run-async \
+            --job-id "${{ inputs.job_id }}" \
+            --page-index-strategy "${{ inputs.page_index_strategy }}"

@@ -35,7 +35,7 @@ use_node_22() {
   local major
   major="$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)"
   if [[ "$major" -lt 22 ]]; then
-    echo "Error: Node.js >= 22 required. Install nvm and run: cd agent-backend && nvm use" >&2
+    echo "Error: Node.js >= 22.18 required (24 recommended). Install nvm and run: cd agent-backend && nvm use" >&2
     return 1
   fi
 }

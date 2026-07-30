@@ -2,6 +2,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { appDocuments, appPipelineJobs, db, PIPELINE_JOB_STAGES, type PipelineJobStage } from '../db/index.ts';
 import { markDocumentForJobStage, updatePipelineJob } from './pipeline-jobs.ts';
 import { spawnAsyncPipelineWorker } from './pipeline-runner.ts';
+import { shouldRunPipelineStartupRecovery, shouldRunPipelineWatchdog } from './pipeline-worker-mode.ts';
 
 const ACTIVE_JOB_STAGES = PIPELINE_JOB_STAGES.filter(
   (stage): stage is PipelineJobStage => stage !== 'done' && stage !== 'failed',
@@ -22,6 +23,10 @@ let watchdogTimer: ReturnType<typeof setInterval> | undefined;
  * running documents as failed so the UI does not show stale "Running" forever.
  */
 export async function recoverOrphanedPipelineWorkOnStartup(): Promise<void> {
+  if (!shouldRunPipelineStartupRecovery()) {
+    console.info('[pipeline] skip startup recovery (serverless or PIPELINE_STARTUP_RECOVERY=false)');
+    return;
+  }
   const orphanedJobs = await db
     .select()
     .from(appPipelineJobs)
@@ -56,7 +61,10 @@ export async function recoverOrphanedPipelineWorkOnStartup(): Promise<void> {
 }
 
 export function startPipelinePollScheduler(): void {
-  if (process.env.PIPELINE_POLL_SCHEDULER === 'false') return;
+  if (!shouldRunPipelineWatchdog()) {
+    console.info('[pipeline] skip job watchdog (serverless or PIPELINE_POLL_SCHEDULER=false)');
+    return;
+  }
   if (watchdogTimer) return;
 
   watchdogTimer = setInterval(() => {

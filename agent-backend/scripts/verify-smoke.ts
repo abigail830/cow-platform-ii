@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.ts';
 import { createFlueClient } from '@flue/sdk';
 import { getPool, closePool } from '../src/db/pool.ts';
 import { toAgentInstanceId } from '../src/shared/agent-instance-id.ts';

@@ -8,11 +8,17 @@ import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../share
 import {
   defaultAsyncWorkerTemplate,
   normalizeAsyncWorkerCliArgs,
+  pageIndexStrategyFromCliArgs,
   parseAsyncWorkerTemplate,
   pipelineTemplateToCliArgs,
   renderCommandTemplate,
 } from '../shared/pipeline-command-template.ts';
 import { getChannelById } from './documents.ts';
+import {
+  resolveGithubActionsConfig,
+  triggerGithubActionsPipeline,
+} from './pipeline-github-actions.ts';
+import { resolvePipelineWorkerMode } from './pipeline-worker-mode.ts';
 import {
   ASYNC_PIPELINE_NAMES,
   createPipelineJob,
@@ -45,8 +51,8 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-/** Prevent duplicate concurrent CLI invocations for the same async job. */
-const activePipelineCliJobs = new Set<string>();
+/** Prevent duplicate concurrent dispatches for the same async job. */
+const activePipelineJobs = new Set<string>();
 
 function extractJobIdFromCliArgs(args: string[]): string | undefined {
   const idx = args.indexOf('--job-id');
@@ -54,30 +60,62 @@ function extractJobIdFromCliArgs(args: string[]): string | undefined {
   return undefined;
 }
 
-/** Worker CLI reads credentials from openkms-cli/.env (cwd on spawn). Only override API URL. */
-function cliSpawnEnv(apiUrl: string): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    OPENKMS_API_URL: apiUrl,
-  };
+function resolveApiUrl(apiUrl?: string): string {
+  return (
+    apiUrl?.trim() ||
+    process.env.OPENKMS_API_URL?.trim() ||
+    `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`
+  );
 }
 
-export function spawnPipelineCli(args: string[], apiUrl?: string): void {
+async function buildAsyncWorkerCliArgs(
+  jobId: string,
+  pipelineName: string,
+): Promise<string[]> {
+  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
+  const template = parseAsyncWorkerTemplate(pipeline?.commandTemplate ?? '', pipelineName);
+  const args = normalizeAsyncWorkerCliArgs(
+    pipelineTemplateToCliArgs(template, { job_id: jobId }),
+  );
+  if (args.length === 0) {
+    return ['pipeline', 'run-async', '--job-id', jobId];
+  }
+  return args;
+}
+
+async function dispatchGithubActionsWorker(
+  jobId: string,
+  pipelineName: string,
+): Promise<void> {
+  const config = resolveGithubActionsConfig();
+  if (!config) {
+    throw new Error(
+      'PIPELINE_WORKER=github_actions requires GITHUB_PIPELINE_TOKEN (or GITHUB_TOKEN) ' +
+        'and GITHUB_PIPELINE_REPOSITORY (e.g. abigail830/openkms-cli)',
+    );
+  }
+  const args = await buildAsyncWorkerCliArgs(jobId, pipelineName);
+  const pageIndexStrategy = pageIndexStrategyFromCliArgs(args);
+  await triggerGithubActionsPipeline({ jobId, pageIndexStrategy }, config);
+  console.info(
+    `[pipeline] dispatched GitHub Actions workflow=${config.workflowFile} ` +
+      `repo=${config.repository} job=${jobId}`,
+  );
+}
+
+function spawnPipelineCliLocal(args: string[], apiUrl?: string): void {
   const jobId = extractJobIdFromCliArgs(args);
-  if (jobId && activePipelineCliJobs.has(jobId)) {
-    console.info(`[pipeline] skip spawn (CLI already running): job ${jobId}`);
+  if (jobId && activePipelineJobs.has(jobId)) {
+    console.info(`[pipeline] skip spawn (worker already active): job ${jobId}`);
     return;
   }
 
   const cliBin = shellQuote(resolveCliBin());
-  const resolvedApiUrl =
-    apiUrl?.trim() ||
-    process.env.OPENKMS_API_URL?.trim() ||
-    `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
+  const resolvedApiUrl = resolveApiUrl(apiUrl);
   const command = `${cliBin} ${args.map(shellQuote).join(' ')}`;
   console.info(`[pipeline] spawn ${command}`);
 
-  if (jobId) activePipelineCliJobs.add(jobId);
+  if (jobId) activePipelineJobs.add(jobId);
 
   const child = spawn(command, {
     shell: true,
@@ -94,11 +132,11 @@ export function spawnPipelineCli(args: string[], apiUrl?: string): void {
     stdout += String(chunk);
   });
   child.on('error', (error) => {
-    if (jobId) activePipelineCliJobs.delete(jobId);
+    if (jobId) activePipelineJobs.delete(jobId);
     console.error('[pipeline] spawn error:', error);
   });
   child.on('close', (code) => {
-    if (jobId) activePipelineCliJobs.delete(jobId);
+    if (jobId) activePipelineJobs.delete(jobId);
     if (code !== 0) {
       const detail = (stderr || stdout).trim();
       console.error(`[pipeline] CLI exited with code ${code}: ${detail.slice(0, 2000)}`);
@@ -106,21 +144,44 @@ export function spawnPipelineCli(args: string[], apiUrl?: string): void {
   });
 }
 
+/** Worker CLI reads credentials from openkms-cli/.env (cwd on spawn). Only override API URL. */
+function cliSpawnEnv(apiUrl: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    OPENKMS_API_URL: apiUrl,
+  };
+}
+
+/** Local subprocess dispatch (development / long-running Node host). */
+export function spawnPipelineCli(args: string[], apiUrl?: string): void {
+  spawnPipelineCliLocal(args, apiUrl);
+}
+
+/**
+ * Run async pipeline worker: local spawn or GitHub Actions (see PIPELINE_WORKER / VERCEL).
+ */
 export async function spawnAsyncPipelineWorker(
   jobId: string,
   pipelineName: string,
   apiUrl?: string,
 ): Promise<void> {
-  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
-  const template = parseAsyncWorkerTemplate(pipeline?.commandTemplate ?? '', pipelineName);
-  const args = normalizeAsyncWorkerCliArgs(
-    pipelineTemplateToCliArgs(template, { job_id: jobId }),
-  );
-  if (args.length === 0) {
-    spawnPipelineCli(['pipeline', 'run-async', '--job-id', jobId], apiUrl);
+  if (activePipelineJobs.has(jobId)) {
+    console.info(`[pipeline] skip dispatch (worker already active): job ${jobId}`);
     return;
   }
-  spawnPipelineCli(args, apiUrl);
+
+  if (resolvePipelineWorkerMode() === 'github_actions') {
+    activePipelineJobs.add(jobId);
+    try {
+      await dispatchGithubActionsWorker(jobId, pipelineName);
+    } finally {
+      activePipelineJobs.delete(jobId);
+    }
+    return;
+  }
+
+  const args = await buildAsyncWorkerCliArgs(jobId, pipelineName);
+  spawnPipelineCliLocal(args, apiUrl);
 }
 
 /** @deprecated Use spawnAsyncPipelineWorker */
@@ -143,6 +204,13 @@ export async function updateDocumentStatus(
 }
 
 async function executeLegacyPipelineRun(documentId: string): Promise<void> {
+  if (resolvePipelineWorkerMode() === 'github_actions') {
+    throw new Error(
+      'Legacy synchronous pipeline run is not supported with PIPELINE_WORKER=github_actions. ' +
+        'Use an async pipeline (e.g. aliyun-docmind-parse).',
+    );
+  }
+
   const [doc] = await db.select().from(appDocuments).where(eq(appDocuments.id, documentId)).limit(1);
   if (!doc) throw new Error('Document not found');
 
@@ -157,9 +225,7 @@ async function executeLegacyPipelineRun(documentId: string): Promise<void> {
 
   const inputUri = `s3://${s3.bucket}/${doc.s3Key}`;
   const s3Prefix = s3PrefixFromKey(doc.s3Key);
-  const apiUrl =
-    process.env.OPENKMS_API_URL?.trim() ||
-    `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
+  const apiUrl = resolveApiUrl();
 
   let extractionArgs = '';
   if (channel.metadataExtractionModelId) {
@@ -241,9 +307,7 @@ async function startAsyncPipelineJob(documentId: string): Promise<{ jobId: strin
   const provider = pipelineProviderForName(pipeline.pipelineName);
   if (!provider) throw new Error(`Unsupported async pipeline: ${pipeline.pipelineName}`);
 
-  const apiUrl =
-    process.env.OPENKMS_API_URL?.trim() ||
-    `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
+  const apiUrl = resolveApiUrl();
 
   let extractionArgs = '';
   if (channel.metadataExtractionModelId) {

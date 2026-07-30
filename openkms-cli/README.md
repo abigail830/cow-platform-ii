@@ -100,3 +100,22 @@ subprocess.run(
 ## Extending the CLI
 
 Add a Typer subapp under `openkms_cli/` and register it in **`app.py`**.
+
+## GitHub Actions (remote worker)
+
+This repository includes **`.github/workflows/openkms-pipeline.yml`** for running `pipeline run-async` on GitHub-hosted runners (alternative to the backend spawning a local subprocess).
+
+**Manual test:** GitHub → Actions → OpenKMS Pipeline → Run workflow → enter `job_id` from `app_pipeline_jobs`.
+
+**Repository secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Purpose |
+|--------|---------|
+| `OPENKMS_API_URL` | Public backend URL (not localhost) |
+| `OPENKMS_CLI_BASIC_USER` / `OPENKMS_CLI_BASIC_PASSWORD` | Internal API auth |
+| `AWS_*` | S3 / OSS for document artifacts |
+| `OPENKMS_DOCMIND_ENDPOINT` | Aliyun Document Mind |
+
+**Caching:** `uv` package cache + `.venv` cache keyed on `uv.lock`. First run installs deps (~1–3 min); later runs typically finish install in under a minute when the lockfile is unchanged.
+
+**Backend trigger (later):** `POST https://api.github.com/repos/abigail830/openkms-cli/actions/workflows/openkms-pipeline.yml/dispatches` with `inputs.job_id`.

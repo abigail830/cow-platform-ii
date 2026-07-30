@@ -67,6 +67,13 @@ export function normalizeAsyncWorkerCliArgs(args: string[]): string[] {
   return args;
 }
 
+/** Read --page-index-strategy from parsed CLI args (for GHA workflow inputs). */
+export function pageIndexStrategyFromCliArgs(args: string[]): string | undefined {
+  const idx = args.indexOf('--page-index-strategy');
+  if (idx >= 0 && args[idx + 1]?.trim()) return args[idx + 1].trim();
+  return undefined;
+}
+
 /** Full async job in one CLI process (submit + poll + finalize worker). */
 export function defaultAsyncWorkerTemplate(pipelineName: string): string {
   if (pipelineName === 'aliyun-docmind-parse') {
