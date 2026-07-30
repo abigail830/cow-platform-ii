@@ -4,13 +4,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from openkms_cli.baidu_bos import (
+from openkms_cli.providers.baidu.bos import (
     build_bos_object_key,
     generate_bos_presigned_url,
     stage_file_on_bos,
     validate_baidu_upload_size,
 )
-from openkms_cli.baidu_parser import BaiduParseError, BAIDU_MAX_FILE_URL_BYTES
+from openkms_cli.providers.baidu.parser import BaiduParseError, BAIDU_MAX_FILE_URL_BYTES
 
 
 def test_build_bos_object_key_short():
@@ -33,8 +33,8 @@ def test_validate_baidu_upload_size_image_over_limit():
         validate_baidu_upload_size(b"x" * (11 * 1024 * 1024), "photo.jpg")
 
 
-@patch("openkms_cli.baidu_bos._make_bos_client")
-@patch("openkms_cli.baidu_bos._bos_settings")
+@patch("openkms_cli.providers.baidu.bos._make_bos_client")
+@patch("openkms_cli.providers.baidu.bos._bos_settings")
 def test_stage_file_on_bos_upload_and_presign(mock_settings, mock_client_factory):
     mock_settings.return_value = ("my-bucket", "bj.bcebos.com", "tmp", 3600, "ak", "sk")
     client = MagicMock()
@@ -52,8 +52,8 @@ def test_stage_file_on_bos_upload_and_presign(mock_settings, mock_client_factory
     assert len(url.encode("utf-8")) <= BAIDU_MAX_FILE_URL_BYTES
 
 
-@patch("openkms_cli.baidu_bos._make_bos_client")
-@patch("openkms_cli.baidu_bos._bos_settings")
+@patch("openkms_cli.providers.baidu.bos._make_bos_client")
+@patch("openkms_cli.providers.baidu.bos._bos_settings")
 def test_generate_bos_presigned_url_rejects_too_long(mock_settings, mock_client_factory):
     mock_settings.return_value = ("b", "bj.bcebos.com", "p", 3600, "ak", "sk")
     client = MagicMock()
@@ -73,15 +73,15 @@ def test_bos_settings_requires_iam_credentials():
         baidu_bos_access_key="",
         baidu_bos_secret_key="",
     )
-    with patch("openkms_cli.settings.get_cli_settings", return_value=mock_s):
-        from openkms_cli.baidu_bos import _bos_settings
+    with patch("openkms_cli.core.settings.get_cli_settings", return_value=mock_s):
+        from openkms_cli.providers.baidu.bos import _bos_settings
 
         with pytest.raises(BaiduParseError, match="BOS_ACCESS_KEY"):
             _bos_settings()
 
 
 def test_bos_error_message_signature_mismatch():
-    from openkms_cli.baidu_bos import _bos_error_message
+    from openkms_cli.providers.baidu.bos import _bos_error_message
 
     msg = _bos_error_message(
         Exception("The request signature we calculated does not match the signature you provided"),
@@ -94,7 +94,7 @@ def test_bos_error_message_signature_mismatch():
 
 
 def test_normalize_bos_presigned_url_decodes_bytes_and_upgrades_https():
-    from openkms_cli.baidu_bos import _normalize_bos_presigned_url
+    from openkms_cli.providers.baidu.bos import _normalize_bos_presigned_url
 
     raw = b"http://openkms.bj.bcebos.com/openkms-temp/a.pdf?authorization=bce-auth-v1%2Fx"
     url = _normalize_bos_presigned_url(raw)

@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Callable
 
-from .baidu_parser import BAIDU_MAX_FILE_URL_BYTES, BaiduParseError
+from openkms_cli.providers.baidu.parser import BAIDU_MAX_FILE_URL_BYTES, BaiduParseError
 
 logger = logging.getLogger("openkms_cli.baidu")
 
@@ -22,7 +22,7 @@ _BOS_UPLOAD_BACKOFF_SEC = (2, 5, 10)
 
 
 def _bos_settings() -> tuple[str, str, str, int, str, str]:
-    from .settings import get_cli_settings
+    from openkms_cli.core.settings import get_cli_settings
 
     s = get_cli_settings()
     bucket = (getattr(s, "baidu_bos_bucket", "") or "").strip()

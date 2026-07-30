@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .page_index_aliyun_layout import _build_tree_preserving_node_ids, _format_structure
+from .aliyun_layout import _build_tree_preserving_node_ids, _format_structure
 
 STRATEGY_NAME = "baidu-layouts"
 ANCHOR_PREFIX = "blk-baidu-"

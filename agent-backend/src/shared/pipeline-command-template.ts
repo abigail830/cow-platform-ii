@@ -2,22 +2,19 @@ export function renderCommandTemplate(template: string, values: Record<string, s
   return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, key: string) => values[key] ?? '');
 }
 
-/** Async pipelines may list submit + finalize + extract-metadata commands on separate lines. */
-export function parseAsyncPipelineCommandTemplate(commandTemplate: string): {
-  submitTemplate: string;
-  finalizeTemplate: string | null;
-  extractMetadataTemplate: string | null;
-} {
+/** First worker line: run-async (or legacy finalize) with optional flags. */
+export function parseAsyncWorkerTemplate(commandTemplate: string, pipelineName: string): string {
   const lines = commandTemplate
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !line.startsWith('#'));
 
-  const submitTemplate = lines.find((line) => /\bpipeline\s+submit\b/.test(line)) ?? lines[0] ?? '';
-  const finalizeTemplate = lines.find((line) => /\bpipeline\s+finalize\b/.test(line)) ?? null;
-  const extractMetadataTemplate = lines.find((line) => /\bpipeline\s+extract-metadata\b/.test(line)) ?? null;
-
-  return { submitTemplate, finalizeTemplate, extractMetadataTemplate };
+  const workerLine =
+    lines.find((line) => /\bpipeline\s+run-async\b/.test(line)) ??
+    lines.find((line) => /\bpipeline\s+finalize\b/.test(line)) ??
+    lines[0] ??
+    '';
+  return workerLine.trim() || defaultAsyncWorkerTemplate(pipelineName);
 }
 
 export function pipelineTemplateToCliArgs(
@@ -62,17 +59,21 @@ export function pipelineTemplateToCliArgs(
   return tokens;
 }
 
-export function defaultFinalizeTemplate(pipelineName: string): string {
-  if (pipelineName === 'aliyun-docmind-parse') {
-    return 'openkms-cli pipeline finalize --job-id {job_id} --page-index-strategy aliyun-layouts';
+/** Normalize legacy finalize template line to run-async. */
+export function normalizeAsyncWorkerCliArgs(args: string[]): string[] {
+  if (args.length >= 2 && args[0] === 'pipeline' && args[1] === 'finalize') {
+    return ['pipeline', 'run-async', ...args.slice(2)];
   }
-  if (pipelineName === 'baidu-doc-parse') {
-    return 'openkms-cli pipeline finalize --job-id {job_id} --page-index-strategy baidu-layouts';
-  }
-  return 'openkms-cli pipeline finalize --job-id {job_id}';
+  return args;
 }
 
-export const DEFAULT_ASYNC_SUBMIT_TEMPLATE = 'openkms-cli pipeline submit --job-id {job_id}';
-
-export const DEFAULT_ASYNC_EXTRACT_METADATA_TEMPLATE =
-  'openkms-cli pipeline extract-metadata --job-id {job_id}';
+/** Full async job in one CLI process (submit + poll + finalize worker). */
+export function defaultAsyncWorkerTemplate(pipelineName: string): string {
+  if (pipelineName === 'aliyun-docmind-parse') {
+    return 'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy aliyun-layouts';
+  }
+  if (pipelineName === 'baidu-doc-parse') {
+    return 'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy baidu-layouts';
+  }
+  return 'openkms-cli pipeline run-async --job-id {job_id}';
+}

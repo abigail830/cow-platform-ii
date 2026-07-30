@@ -1,6 +1,6 @@
 """Tests for Baidu layout page-index strategy."""
 
-from openkms_cli.page_index_baidu_layout import (
+from openkms_cli.page_index.baidu_layout import (
     build_page_index_from_baidu_layouts,
     is_indexable_baidu_layout,
     layout_anchor_id,

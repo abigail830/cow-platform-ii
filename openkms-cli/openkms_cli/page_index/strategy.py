@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .page_index_aliyun_layout import STRATEGY_NAME as ALIYUN_STRATEGY
-from .page_index_aliyun_layout import write_page_index_from_aliyun_layouts
-from .page_index_baidu_layout import STRATEGY_NAME as BAIDU_STRATEGY
-from .page_index_baidu_layout import write_page_index_from_baidu_layouts
-from .page_index_markdown import STRATEGY_NAME as MARKDOWN_STRATEGY
-from .page_index_markdown import write_page_index_from_markdown
+from .aliyun_layout import STRATEGY_NAME as ALIYUN_STRATEGY
+from .aliyun_layout import write_page_index_from_aliyun_layouts
+from .baidu_layout import STRATEGY_NAME as BAIDU_STRATEGY
+from .baidu_layout import write_page_index_from_baidu_layouts
+from .markdown import STRATEGY_NAME as MARKDOWN_STRATEGY
+from .markdown import write_page_index_from_markdown
 
 SUPPORTED_STRATEGIES = (MARKDOWN_STRATEGY, ALIYUN_STRATEGY, BAIDU_STRATEGY)
 

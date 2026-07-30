@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from openkms_cli.parser import (
+from openkms_cli.parse.parser import (
     _annotate_layout_boxes,
     _bbox_iou,
     _find_best_matching_block,

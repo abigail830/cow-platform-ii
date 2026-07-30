@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from .parse_result import validate_parse_result
+from openkms_cli.parse.result import validate_parse_result
 
 logger = logging.getLogger("openkms_cli.aliyun_docmind")
 
@@ -46,9 +46,9 @@ def presign_s3_get_url(
     region: str,
     expires_in: int,
 ) -> str:
-    from .pipeline_cli import _get_s3_client
+    from openkms_cli.pipeline.storage import get_s3_client
 
-    client = _get_s3_client(endpoint_url, access_key, secret_key, region)
+    client = get_s3_client(endpoint_url, access_key, secret_key, region)
     return client.generate_presigned_url(
         "get_object",
         Params={"Bucket": bucket, "Key": key},

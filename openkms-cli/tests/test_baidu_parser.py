@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from openkms_cli.baidu_parser import (
+from openkms_cli.providers.baidu.parser import (
     BaiduParseError,
     _baidu_http_json,
     _build_result_from_baidu_json,
@@ -36,7 +36,7 @@ def test_get_access_token_success():
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {"access_token": "tok123", "expires_in": 2592000}
-    with patch("openkms_cli.baidu_parser.requests.post", return_value=mock_resp):
+    with patch("openkms_cli.providers.baidu.parser.requests.post", return_value=mock_resp):
         assert get_access_token("key", "secret") == "tok123"
 
 
@@ -56,7 +56,7 @@ def test_create_parse_task_file_url_success():
         "result": {"task_id": "task-url-1"},
     }
     file_url = "https://bucket.bj.bcebos.com/tmp/doc.pdf?authorization=bce-auth-v1/test"
-    with patch("openkms_cli.baidu_parser.requests.post", return_value=mock_resp) as mock_post:
+    with patch("openkms_cli.providers.baidu.parser.requests.post", return_value=mock_resp) as mock_post:
         task_id = create_parse_task("tok", "doc.pdf", file_url=file_url)
     assert task_id == "task-url-1"
     payload = mock_post.call_args.kwargs.get("data") or mock_post.call_args[1].get("data")
@@ -91,7 +91,7 @@ def test_baidu_http_json_non_json_body():
 
 
 def test_baidu_post_retries_on_ssl_error():
-    from openkms_cli.baidu_parser import _baidu_post
+    from openkms_cli.providers.baidu.parser import _baidu_post
 
     mock_http = MagicMock()
     mock_http.post.side_effect = [
@@ -99,7 +99,7 @@ def test_baidu_post_retries_on_ssl_error():
         requests.exceptions.SSLError("eof"),
         MagicMock(status_code=200, text='{"ok":1}', headers={}),
     ]
-    with patch("openkms_cli.baidu_parser.time.sleep"):
+    with patch("openkms_cli.providers.baidu.parser.time.sleep"):
         resp = _baidu_post(mock_http, "https://example/task", operation="task_submit", timeout=10)
     assert resp.status_code == 200
     assert mock_http.post.call_count == 3
@@ -108,7 +108,7 @@ def test_baidu_post_retries_on_ssl_error():
 def test_query_parse_task_error():
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"error_code": 282007, "error_msg": "task not exist"}
-    with patch("openkms_cli.baidu_parser.requests.post", return_value=mock_resp):
+    with patch("openkms_cli.providers.baidu.parser.requests.post", return_value=mock_resp):
         with pytest.raises(BaiduParseError, match="task not exist"):
             query_parse_task("tok", "bad-id")
 
@@ -119,8 +119,8 @@ def test_poll_parse_task_success():
         {"status": "processing"},
         {"status": "success", "markdown_url": "https://x/md", "parse_result_url": "https://x/json"},
     ]
-    with patch("openkms_cli.baidu_parser.query_parse_task", side_effect=results):
-        with patch("openkms_cli.baidu_parser.time.sleep"):
+    with patch("openkms_cli.providers.baidu.parser.query_parse_task", side_effect=results):
+        with patch("openkms_cli.providers.baidu.parser.time.sleep"):
             out = poll_parse_task("tok", "task-1", poll_interval=1, max_wait=30)
     assert out["status"] == "success"
 
@@ -173,7 +173,7 @@ def test_build_result_from_baidu_json(tmp_path):
             return b"\x89PNG\r\n"
         raise AssertionError(f"unexpected url {url}")
 
-    with patch("openkms_cli.baidu_parser._download_bytes", side_effect=fake_download):
+    with patch("openkms_cli.providers.baidu.parser._download_bytes", side_effect=fake_download):
         result = _build_result_from_baidu_json(
             baidu_json,
             "# Title\n\nBody",
@@ -255,15 +255,15 @@ def test_submit_file_url_retries_on_baidu_download_timeout():
         return url
 
     with patch(
-        "openkms_cli.baidu_parser.create_parse_task",
+        "openkms_cli.providers.baidu.parser.create_parse_task",
         side_effect=[
             BaiduParseError("Baidu task submit failed: url download timeout (282112)"),
             "task-retry-ok",
         ],
     ) as mock_submit:
-        with patch("openkms_cli.baidu_parser.time.sleep") as mock_sleep:
+        with patch("openkms_cli.providers.baidu.parser.time.sleep") as mock_sleep:
             with patch(
-                "openkms_cli.baidu_parser._baidu_file_url_submit_settings",
+                "openkms_cli.providers.baidu.parser._baidu_file_url_submit_settings",
                 return_value=(3, 20, 600),
             ):
                 task_id = _submit_parse_task_file_url_with_retries(
@@ -283,12 +283,12 @@ def test_submit_file_url_exhausted_retries_raises():
     session = MagicMock()
 
     with patch(
-        "openkms_cli.baidu_parser.create_parse_task",
+        "openkms_cli.providers.baidu.parser.create_parse_task",
         side_effect=err,
     ):
-        with patch("openkms_cli.baidu_parser.time.sleep"):
+        with patch("openkms_cli.providers.baidu.parser.time.sleep"):
             with patch(
-                "openkms_cli.baidu_parser._baidu_file_url_submit_settings",
+                "openkms_cli.providers.baidu.parser._baidu_file_url_submit_settings",
                 return_value=(2, 0, 600),
             ):
                 with pytest.raises(BaiduParseError, match="after 2 attempts"):

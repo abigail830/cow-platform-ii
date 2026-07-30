@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from .auth import auth_expired_response, try_api_request_auth
+from openkms_cli.core.auth import auth_expired_response, try_api_request_auth
 
 
 class PipelineJobApiError(RuntimeError):
@@ -49,7 +49,7 @@ def _request(
             data = resp.json()
             return data if isinstance(data, dict) else {}
         if attempt == 0 and auth_expired_response(resp):
-            from .auth import try_api_request_auth as refresh
+            from openkms_cli.core.auth import try_api_request_auth as refresh
 
             cred = refresh()
             if cred is not None:

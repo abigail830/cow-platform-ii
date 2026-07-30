@@ -223,7 +223,7 @@ def run_parser(
     """
     from paddleocr import PaddleOCRVL
 
-    from .parse_result import empty_parse_result, validate_parse_result
+    from .result import empty_parse_result, validate_parse_result
 
     hash_path = content_hash_source or input_path
     file_hash = hashlib.sha256(hash_path.read_bytes()).hexdigest()

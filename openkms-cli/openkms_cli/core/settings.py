@@ -127,6 +127,20 @@ class CliSettings(BaseSettings):
         validation_alias="OPENKMS_OSS_PRESIGN_TTL_SECONDS",
     )
 
+    # --- Async platform pipeline (submit → poll → finalize in one CLI process) ---
+    async_poll_interval_seconds: int = Field(
+        default=8,
+        ge=1,
+        le=300,
+        validation_alias="OPENKMS_ASYNC_POLL_INTERVAL_SECONDS",
+    )
+    async_max_wait_seconds: int = Field(
+        default=600,
+        ge=60,
+        le=7200,
+        validation_alias="OPENKMS_ASYNC_MAX_WAIT_SECONDS",
+    )
+
     # --- AWS / S3 (standard names) ---
     aws_access_key_id: str = Field(default="", validation_alias="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = Field(default="", validation_alias="AWS_SECRET_ACCESS_KEY")

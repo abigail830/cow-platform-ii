@@ -233,7 +233,7 @@ def _chunk_upload_timeout(batch_size: int) -> int:
 
 def _finalize_embedding_model_config(model_config: dict[str, Any]) -> dict[str, Any]:
     """Merge optional OPENKMS_EMBEDDING_MODEL_* env overrides on top of internal-api values."""
-    from openkms_cli.settings import get_cli_settings
+    from openkms_cli.core.settings import get_cli_settings
 
     cfg = get_cli_settings()
     out = dict(model_config)

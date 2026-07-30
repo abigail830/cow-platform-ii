@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from openkms_cli.office_convert import _mutool_epub_convert_cmd
+from openkms_cli.parse.office_convert import _mutool_epub_convert_cmd
 
 
 def test_mutool_epub_convert_cmd_includes_compression_options() -> None:

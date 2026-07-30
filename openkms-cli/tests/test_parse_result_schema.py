@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from openkms_cli.parse_result import (
+from openkms_cli.parse.result import (
     ParseResultValidationError,
     empty_parse_result,
     load_schema,

@@ -7,7 +7,7 @@ import {
   updatePipelineJob,
   type PipelineJobStage,
 } from '../../services/pipeline-jobs.ts';
-import { spawnAsyncPipelineFinalize, spawnAsyncPipelineExtractMetadata } from '../../services/pipeline-runner.ts';
+import { spawnAsyncPipelineWorker } from '../../services/pipeline-runner.ts';
 
 const pipelineJobs = new Hono();
 
@@ -40,7 +40,7 @@ pipelineJobs.post('/:id/aliyun-callback', async (c) => {
     await updatePipelineJob(job.id, { externalJobId: externalId });
   }
 
-  await spawnAsyncPipelineFinalize(job.id, job.pipelineName);
+  await spawnAsyncPipelineWorker(job.id, job.pipelineName);
   return c.json({ ok: true, status: 'finalize_spawned' }, 202);
 });
 
@@ -77,16 +77,6 @@ pipelineJobs.patch('/:id', async (c) => {
     await markDocumentForJobStage(job.documentId, body.stage);
   }
 
-  if (body.stage === 'parsed') {
-    const current = updated ?? job;
-    if (current.extractionArgs?.trim()) {
-      await spawnAsyncPipelineExtractMetadata(current.id, current.pipelineName);
-    } else {
-      await updatePipelineJob(current.id, { stage: 'done' });
-      await markDocumentForJobStage(current.documentId, 'done');
-    }
-  }
-
   return c.json({ ok: true, job: updated });
 });
 
@@ -106,7 +96,7 @@ pipelineJobs.post('/:id/events', async (c) => {
     await updatePipelineJob(job.id, { externalJobId: body.external_job_id.trim() });
   }
 
-  await spawnAsyncPipelineFinalize(job.id, job.pipelineName);
+  await spawnAsyncPipelineWorker(job.id, job.pipelineName);
   return c.json({ ok: true, status: 'finalize_spawned' }, 202);
 });
 

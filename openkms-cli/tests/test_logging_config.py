@@ -2,7 +2,7 @@
 
 import logging
 
-from openkms_cli.logging_config import configure_cli_logging
+from openkms_cli.core.logging_config import configure_cli_logging
 
 
 def test_configure_cli_logging_stderr_handler(capsys):

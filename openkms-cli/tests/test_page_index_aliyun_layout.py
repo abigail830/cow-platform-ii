@@ -1,6 +1,6 @@
 """Tests for Aliyun layout-based page index builder."""
 
-from openkms_cli.page_index_aliyun_layout import (
+from openkms_cli.page_index.aliyun_layout import (
     build_page_index_from_aliyun_layouts,
     build_markdown_with_layout_anchors,
     is_indexable_layout,

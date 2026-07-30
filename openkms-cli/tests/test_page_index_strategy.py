@@ -1,6 +1,6 @@
 """Tests for page-index strategy selection (CLI param, no env)."""
 
-from openkms_cli.page_index_strategy import (
+from openkms_cli.page_index.strategy import (
     default_page_index_strategy,
     effective_page_index_strategy,
 )

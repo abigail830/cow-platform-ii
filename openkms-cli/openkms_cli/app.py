@@ -3,10 +3,10 @@
 import typer
 from rich.console import Console
 
-from .parse_cli import parse_app
-from .page_index_cli import page_index_app
-from .pipeline_cli import pipeline_app
-from .wiki_cli import wiki_app
+from .commands.page_index import page_index_app
+from .commands.parse import parse_app
+from .commands.pipeline import pipeline_app
+from .commands.wiki import wiki_app
 
 console = Console()
 

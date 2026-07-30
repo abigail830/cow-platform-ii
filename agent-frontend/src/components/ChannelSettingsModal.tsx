@@ -183,7 +183,7 @@ export function ChannelSettingsModal({
                       When set, documents in this channel can run the configured parse pipeline.
                       {selectedPipelineLabel ? ` Selected: ${selectedPipelineLabel}.` : ' No pipeline selected.'}
                       {pipelineId && options?.pipelines.find((p) => p.id === pipelineId)?.pipelineName === 'baidu-doc-parse'
-                        ? ' Baidu uses async submit → finalize (baidu-layouts PageIndex) → extract-metadata. No VLM on pipeline config.'
+                        ? ' Baidu uses async run-async (submit → poll → finalize in CLI). No VLM on pipeline config.'
                         : ''}
                     </span>
                   </label>

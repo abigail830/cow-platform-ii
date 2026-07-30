@@ -9,7 +9,7 @@ import requests
 import typer
 from rich.console import Console
 
-from .settings import get_cli_settings
+from openkms_cli.core.settings import get_cli_settings
 
 console = Console()
 
@@ -30,7 +30,7 @@ def _encode_path_segments(path: str) -> str:
 
 
 def _request_auth():
-    from .auth import api_request_auth
+    from openkms_cli.core.auth import api_request_auth
 
     return api_request_auth()
 

@@ -11,23 +11,22 @@ import {
 } from '../api/pipelines.ts';
 
 /** Async template commands (cloud pipelines). */
+/** Async cloud pipeline: one worker command line (finalize bundles parse + page index + metadata). */
 const PIPELINE_TEMPLATE_COMMANDS = [
   {
-    command: 'pipeline submit',
-    summary: 'Line 1 — submit cloud parse job when processing starts.',
-  },
-  {
-    command: 'pipeline finalize',
+    command: 'pipeline run-async',
     summary:
-      'Line 2 — fetch results, PageIndex, upload. --page-index-strategy: baidu-layouts | aliyun-layouts | markdown-headings.',
-  },
-  {
-    command: 'pipeline extract-metadata',
-    summary: 'Line 3 — LLM metadata when channel has extraction model (job extraction_args).',
+      'One CLI process: cloud submit → poll (OPENKMS_ASYNC_POLL_INTERVAL_SECONDS) → finalize. Backend only spawns & receives PATCH.',
   },
 ] as const;
 
-const ASYNC_TEMPLATE_PLACEHOLDERS = [{ token: '{job_id}', summary: 'Pipeline job UUID on each async line.' }] as const;
+const ASYNC_TEMPLATE_PLACEHOLDERS = [
+  { token: '{job_id}', summary: 'Pipeline job UUID.' },
+  {
+    token: '--page-index-strategy …',
+    summary: 'CLI flag on the run-async line (not a {placeholder}).',
+  },
+] as const;
 
 function defaultTemplateForPipelineName(pipelineName: string): string {
   if (pipelineName === 'aliyun-docmind-parse') return DEFAULT_ALIYUN_PIPELINE_COMMAND_TEMPLATE;
@@ -176,8 +175,8 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
                     ))}
                   </ul>
                   <p className="field-tooltip-foot">
-                    Three lines: submit → finalize → extract-metadata. Backend polls between submit and finalize.
-                    Lines starting with # are ignored.
+                    One line: pipeline run-async (submit + poll + finalize inside CLI). Poll interval:
+                    OPENKMS_ASYNC_POLL_INTERVAL_SECONDS in openkms-cli/.env. Lines starting with # are ignored.
                   </p>
                 </div>
               </div>
@@ -188,7 +187,7 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
                 required
               />
               <span className="admin-form-hint">
-                Cloud pipelines: submit → finalize → extract-metadata (one command per line).
+                Cloud pipelines: one run-async command; legacy finalize lines are normalized to run-async.
               </span>
             </label>
             <label className="form-checkbox">

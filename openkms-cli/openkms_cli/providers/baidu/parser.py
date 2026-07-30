@@ -77,7 +77,7 @@ def _baidu_http_json(resp: requests.Response, operation: str) -> dict[str, Any]:
 
 
 def _baidu_urls() -> tuple[str, str, str]:
-    from .settings import get_cli_settings
+    from openkms_cli.core.settings import get_cli_settings
 
     s = get_cli_settings()
     return s.baidu_token_url, s.baidu_task_url, s.baidu_query_url
@@ -143,7 +143,7 @@ def get_access_token(api_key: str, secret_key: str, *, session: requests.Session
 
 def _worker_output(line: str) -> None:
     """Emit a line via CLI logger (stderr → job worker output)."""
-    from .logging_config import configure_cli_logging
+    from openkms_cli.core.logging_config import configure_cli_logging
 
     configure_cli_logging()
     logger.info(line)
@@ -167,7 +167,7 @@ def _is_baidu_url_download_timeout(err: BaseException) -> bool:
 
 
 def _baidu_file_url_submit_settings() -> tuple[int, int, int]:
-    from .settings import get_cli_settings
+    from openkms_cli.core.settings import get_cli_settings
 
     s = get_cli_settings()
     return (
@@ -709,7 +709,7 @@ def _build_result_from_baidu_json(
 
     markdown = _rewrite_markdown_image_urls(markdown, url_to_rel)
 
-    from .parse_result import validate_parse_result
+    from openkms_cli.parse.result import validate_parse_result
 
     return validate_parse_result(
         {
@@ -730,7 +730,7 @@ def _build_result_from_baidu_json(
 
 def prepare_for_baidu_parse(stored_input: Path, convert_parent: Path) -> tuple[Path, Path]:
     """Return (path to upload, path for content hash). Only EPUB needs conversion."""
-    from .office_convert import convert_epub_to_pdf
+    from openkms_cli.parse.office_convert import convert_epub_to_pdf
 
     suf = stored_input.suffix.lower()
     if suf == ".epub":
@@ -759,7 +759,7 @@ def finalize_baidu_task(
     api_key = ""
     secret_key = ""
     try:
-        from .settings import get_cli_settings
+        from openkms_cli.core.settings import get_cli_settings
 
         cfg_settings = get_cli_settings()
         api_key = cfg_settings.baidu_cloud_api_key
@@ -843,7 +843,7 @@ def run_baidu_parser(
 
     Returns (result_dict, extra_files, markdown_out_files) matching paddle parser shape.
     """
-    from .baidu_bos import cleanup_bos_object, make_presign_refresher, stage_file_on_bos
+    from openkms_cli.providers.baidu.bos import cleanup_bos_object, make_presign_refresher, stage_file_on_bos
 
     hash_path = content_hash_source or input_path
     file_hash = hashlib.sha256(hash_path.read_bytes()).hexdigest()

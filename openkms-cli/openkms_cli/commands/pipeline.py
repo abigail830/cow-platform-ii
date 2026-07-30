@@ -1,11 +1,6 @@
-"""Pipeline CLI: run document parsing pipeline.
-
-Usage: openkms-cli pipeline run --pipeline-name paddleocr-doc-parse --input s3://bucket/key/original.pdf --s3-prefix {file_hash}
-"""
+"""Pipeline CLI: run document parsing pipeline."""
 
 import json
-import os
-import re
 import traceback
 from pathlib import Path
 from typing import Optional
@@ -16,13 +11,25 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from .backend_defaults import resolve_vlm_config
-from .settings import get_cli_settings
+from openkms_cli.core.auth import try_api_request_auth
+from openkms_cli.core.backend_defaults import resolve_vlm_config
+from openkms_cli.core.settings import get_cli_settings
+from openkms_cli.pipeline.api_client import (
+    load_cached_parse_from_storage,
+    post_pipeline_version,
+    put_document_markdown,
+    resolve_api_request_auth,
+    run_pipeline_metadata_extraction,
+)
+from openkms_cli.pipeline.storage import (
+    content_type_for_path,
+    get_s3_client,
+    is_s3_uri,
+    parse_s3_uri,
+)
 
-# stderr: subprocess workers only log stderr on failure; auth/errors must not land on stdout alone.
 console = Console(stderr=True)
 
-# Built-in pipelines the CLI can run. Key: --pipeline-name value, value: (display name, description)
 SUPPORTED_PIPELINES: dict[str, tuple[str, str]] = {
     "paddleocr-doc-parse": (
         "PaddleOCR Document Parse",
@@ -45,367 +52,6 @@ SUPPORTED_PIPELINES: dict[str, tuple[str, str]] = {
 pipeline_app = typer.Typer(
     help="Run document parsing pipeline (download from S3 → parse → upload to S3)",
 )
-
-
-def _is_s3_uri(s: str) -> bool:
-    """Return True if input looks like an S3 URI."""
-    return s.strip().lower().startswith("s3://")
-
-
-def _parse_s3_uri(uri: str) -> tuple[str, str]:
-    """Parse s3://bucket/key into (bucket, key)."""
-    m = re.match(r"^s3://([^/]+)/(.+)$", uri.strip())
-    if not m:
-        raise typer.BadParameter(f"Invalid S3 URI: {uri}. Use s3://bucket/key")
-    return m.group(1), m.group(2).rstrip("/")
-
-
-def _s3_addressing_style(endpoint_url: Optional[str]) -> str:
-    """MinIO/local use path style; Aliyun OSS and AWS default to virtual hosted style."""
-    force = os.environ.get("AWS_S3_FORCE_PATH_STYLE", "").strip().lower()
-    if force in ("1", "true", "yes"):
-        return "path"
-    if endpoint_url:
-        host = endpoint_url.lower()
-        if "localhost" in host or "127.0.0.1" in host:
-            return "path"
-    return "virtual"
-
-
-def _get_s3_client(endpoint_url: Optional[str], access_key: str, secret_key: str, region: str):
-    """Create boto3 S3 client."""
-    try:
-        import boto3
-        from botocore.config import Config
-    except ImportError:
-        console.print("[red]boto3 not installed. pip install openkms-cli[pipeline][/red]")
-        raise typer.Exit(1)
-
-    addressing_style = _s3_addressing_style(endpoint_url)
-    kwargs = {
-        "aws_access_key_id": access_key,
-        "aws_secret_access_key": secret_key,
-        "region_name": region,
-        "config": Config(
-            signature_version="s3v4",
-            s3={"addressing_style": addressing_style},
-            # Aliyun OSS and other S3-compatible stores reject AWS chunked payload signing.
-            request_checksum_calculation="when_required",
-            response_checksum_validation="when_required",
-        ),
-    }
-    if endpoint_url:
-        kwargs["endpoint_url"] = endpoint_url
-    return boto3.client("s3", **kwargs)
-
-
-def _content_type_for_path(path: str) -> str:
-    p = Path(path)
-    suffixes = {
-        ".md": "text/markdown",
-        ".json": "application/json",
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-    }
-    return suffixes.get(p.suffix.lower(), "application/octet-stream")
-
-
-def _resolve_api_request_auth(*, required: bool = False) -> tuple[dict[str, str], Optional[tuple[str, str]], bool]:
-    from .auth import try_api_request_auth
-
-    cred = try_api_request_auth()
-    if cred is None:
-        if required:
-            console.print("[red]API authentication required[/red]")
-            raise typer.Exit(1)
-        return {}, None, False
-    auth_headers, basic_auth = cred
-    return auth_headers, basic_auth, True
-
-
-def _persist_extracted_metadata_sidecar(
-    extracted: dict,
-    *,
-    hash_dir: Path,
-    prefix: str,
-    skip_upload: bool,
-    bucket: str,
-    endpoint_url: Optional[str],
-    access_key: str,
-    secret_key: str,
-    region: str,
-) -> None:
-    """Write extracted_metadata.json locally and to storage for worker DB merge."""
-    meta_path = hash_dir / "extracted_metadata.json"
-    meta_path.write_text(
-        json.dumps(extracted, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    if skip_upload:
-        console.print("[dim]Wrote extracted_metadata.json (local only)[/dim]")
-        return
-    client = _get_s3_client(endpoint_url, access_key, secret_key, region)
-    client.put_object(
-        Bucket=bucket,
-        Key=f"{prefix}/extracted_metadata.json",
-        Body=meta_path.read_bytes(),
-        ContentType="application/json",
-    )
-    console.print("[dim]extracted_metadata.json uploaded to storage[/dim]")
-
-
-def _put_document_markdown(
-    api_url: str, document_id: str, markdown: str, auth_headers: dict, basic: tuple[str, str] | None
-) -> tuple[bool, dict[str, str], Optional[tuple[str, str]]]:
-    """Sync parsed markdown to backend (required before POST /versions snapshots DB state)."""
-    from .auth import auth_expired_response, try_api_request_auth
-
-    base = api_url.rstrip("/")
-    url = f"{base}/internal-api/documents/{document_id}/markdown"
-    payload = {"markdown": markdown}
-    for attempt in range(2):
-        headers = {**auth_headers, "Content-Type": "application/json"}
-        r = requests.put(url, json=payload, headers=headers, auth=basic, timeout=300)
-        if r.ok:
-            console.print("[dim]Markdown synced to API[/dim]")
-            return True, auth_headers, basic
-        if attempt == 0 and auth_expired_response(r):
-            cred = try_api_request_auth()
-            if cred is not None:
-                auth_headers, basic = cred
-                continue
-        console.print(f"[yellow]PUT markdown failed: {r.status_code} {r.text[:200]}[/yellow]")
-        console.print(f"[dim]PUT {url}[/dim]")
-        return False, auth_headers, basic
-    return False, auth_headers, basic
-
-
-def _post_pipeline_version(
-    api_url: str, document_id: str, auth_headers: dict, basic: tuple[str, str] | None
-) -> bool:
-    """Create explicit document version tagged Pipeline (current DB markdown + metadata)."""
-    base = api_url.rstrip("/")
-    headers = {**auth_headers, "Content-Type": "application/json"}
-    r = requests.post(
-        f"{base}/internal-api/documents/{document_id}/versions",
-        json={"tag": "Pipeline", "note": None},
-        headers=headers,
-        auth=basic,
-        timeout=60,
-    )
-    if r.ok:
-        console.print("[green]Pipeline version saved[/green]")
-        return True
-    console.print(f"[yellow]Save version failed: {r.status_code} {r.text[:200]}[/yellow]")
-    return False
-
-
-def _cached_parse_usable(result: dict) -> bool:
-    """True when storage result.json is enough to skip VLM/Baidu re-parse."""
-    if not isinstance(result, dict) or not result:
-        return False
-    if result.get("document_kind") in ("spreadsheet", "mindmap"):
-        return False
-    if result.get("parsing_res_list") or result.get("layout_det_res"):
-        return True
-    if (result.get("markdown") or "").strip():
-        return True
-    return False
-
-
-def _load_cached_parse_from_storage(
-    client,
-    bucket: str,
-    prefix: str,
-    out_base: Path,
-) -> tuple[dict, Path] | None:
-    """Download existing parse output from storage for metadata-only reruns."""
-    prefix = prefix.rstrip("/")
-    rkey = f"{prefix}/result.json"
-    try:
-        raw = client.get_object(Bucket=bucket, Key=rkey)["Body"].read()
-        result = json.loads(raw)
-    except Exception:
-        return None
-    if not _cached_parse_usable(result):
-        return None
-    markdown = (result.get("markdown") or "").strip()
-    if not markdown:
-        mkey = f"{prefix}/markdown.md"
-        try:
-            markdown = client.get_object(Bucket=bucket, Key=mkey)["Body"].read().decode("utf-8")
-            result = {**result, "markdown": markdown}
-        except Exception:
-            markdown = ""
-    file_hash = result.get("file_hash") or prefix.split("/")[-1]
-    hash_dir = out_base / file_hash
-    hash_dir.mkdir(parents=True, exist_ok=True)
-    (hash_dir / "result.json").write_bytes(raw)
-    if markdown:
-        (hash_dir / "markdown.md").write_text(markdown, encoding="utf-8")
-    return result, hash_dir
-
-
-def _document_metadata_needs_extraction_via_api(
-    api_url: str,
-    document_id: str,
-    auth_headers: dict,
-    basic_auth: tuple[str, str] | None,
-) -> bool | None:
-    """Ask backend whether schema metadata fields are all empty (None if request fails)."""
-    from .auth import auth_expired_response, try_api_request_auth
-
-    base = api_url.rstrip("/")
-    url = f"{base}/internal-api/documents/{document_id}/metadata-needs-extraction"
-    for attempt in range(2):
-        resp = requests.get(url, headers={**auth_headers}, auth=basic_auth, timeout=30)
-        if resp.ok:
-            body = resp.json()
-            if isinstance(body.get("needs_extraction"), bool):
-                return body["needs_extraction"]
-            return None
-        if attempt == 0 and auth_expired_response(resp):
-            cred = try_api_request_auth()
-            if cred is not None:
-                auth_headers, basic_auth = cred
-                continue
-        break
-    return None
-
-
-def _run_pipeline_metadata_extraction(
-    *,
-    result: dict,
-    hash_dir: Path,
-    prefix: str,
-    extract_metadata: bool,
-    document_id: str | None,
-    extraction_schema: str | None,
-    extraction_model_name: str | None,
-    extraction_model_base_url: str | None,
-    extraction_api_key: str | None,
-    api_url: str,
-    skip_upload: bool,
-    bucket: str,
-    endpoint_url: Optional[str],
-    access_key: str,
-    secret_key: str,
-    region: str,
-    progress,
-    task,
-    auth_headers: dict,
-    basic_auth: tuple[str, str] | None,
-) -> tuple[dict, tuple[str, str] | None]:
-    """Extract metadata when API reports empty schema fields; persist sidecar; PUT to internal API."""
-    if not extract_metadata or not document_id or not result.get("markdown"):
-        return auth_headers, basic_auth
-
-    auth_headers, basic_auth, has_api_auth = _resolve_api_request_auth(required=True)
-    if not has_api_auth:
-        return auth_headers, basic_auth
-
-    needs_extraction = _document_metadata_needs_extraction_via_api(
-        api_url, document_id, auth_headers, basic_auth
-    )
-    if needs_extraction is False:
-        console.print("[dim]Skipped metadata extraction: document metadata already has values[/dim]")
-        return auth_headers, basic_auth
-    if needs_extraction is None:
-        console.print(
-            "[yellow]Could not check document metadata via API; proceeding with extraction.[/yellow]"
-        )
-
-    progress.update(task, description="Extracting metadata...")
-    try:
-        schema_data = json.loads(extraction_schema or "[]")
-    except json.JSONDecodeError as e:
-        console.print(f"[red]Invalid --extraction-schema JSON: {e}[/red]")
-        raise typer.Exit(1)
-
-    try:
-        from .extract import extract_metadata_sync
-    except ImportError:
-        console.print(
-            "[yellow]Metadata extraction skipped: pip install openkms-cli[metadata][/yellow]"
-        )
-        return auth_headers, basic_auth
-
-    if extraction_model_base_url:
-        cfg = get_cli_settings()
-        model_config = {
-            "base_url": extraction_model_base_url,
-            "api_key": extraction_api_key or cfg.extraction_model_api_key or None,
-            "model_name": extraction_model_name or "gpt-4",
-        }
-    elif extraction_model_name:
-        from .backend_defaults import fetch_cli_model_params
-
-        cfg = get_cli_settings()
-        data = fetch_cli_model_params(
-            cfg,
-            model_name=extraction_model_name,
-            api_type="chat-completions",
-        )
-        if not data:
-            console.print(
-                "[red]Failed to fetch extraction model via cli-params "
-                f"(model_name={extraction_model_name})[/red]"
-            )
-            raise typer.Exit(1)
-        model_config = {
-            "base_url": data.get("base_url"),
-            "api_key": data.get("api_key"),
-            "model_name": data.get("model_name"),
-        }
-    else:
-        console.print(
-            "[red]--extract-metadata requires --extraction-model-base-url or "
-            "--extraction-model-name[/red]"
-        )
-        raise typer.Exit(1)
-
-    extracted: dict | None = None
-    try:
-        extracted = extract_metadata_sync(result["markdown"], model_config, schema_data)
-    except ValueError as e:
-        console.print(f"[yellow]Metadata extraction failed: {e}[/yellow]")
-        console.print(
-            "[dim]Document parse finished; fix the extraction model (e.g. 502 from chat/completions) "
-            "or use Extract on the document page when it is healthy.[/dim]"
-        )
-
-    if extracted is not None:
-        _persist_extracted_metadata_sidecar(
-            extracted,
-            hash_dir=hash_dir,
-            prefix=prefix,
-            skip_upload=skip_upload,
-            bucket=bucket,
-            endpoint_url=endpoint_url,
-            access_key=access_key,
-            secret_key=secret_key,
-            region=region,
-        )
-        base = api_url.rstrip("/")
-        put_url = f"{base}/internal-api/documents/{document_id}/metadata"
-        headers = {**auth_headers, "Content-Type": "application/json"}
-        resp = requests.put(
-            put_url, json={"metadata": extracted}, headers=headers, auth=basic_auth, timeout=30
-        )
-        if not resp.ok:
-            console.print(
-                f"[yellow]PUT metadata failed: {resp.status_code} {resp.text[:200]}[/yellow]"
-            )
-            console.print(f"[dim]PUT {put_url}[/dim]")
-            console.print(
-                "[dim]Metadata is on storage; the worker merges it when the job completes.[/dim]"
-            )
-        else:
-            console.print("[green]Metadata updated via API[/green]")
-
-    return auth_headers, basic_auth
-
 
 @pipeline_app.command("list")
 def pipeline_list() -> None:
@@ -608,9 +254,9 @@ def pipeline_run(
             raise typer.Exit(1)
         try:
             if wiki_space_id:
-                from .kb_indexer import run_wiki_space_indexer as _run_kb_index
+                from openkms_cli.kb.indexer import run_wiki_space_indexer as _run_kb_index
             else:
-                from .kb_indexer import run_indexer as _run_kb_index
+                from openkms_cli.kb.indexer import run_indexer as _run_kb_index
         except ImportError as e:
             console.print(f"[red]Missing dependencies: {e}. Install with: pip install openkms-cli[kb][/red]")
             raise typer.Exit(1)
@@ -618,7 +264,7 @@ def pipeline_run(
         auth_headers: dict = {}
         basic_auth: Optional[tuple[str, str]] = None
         try:
-            from .auth import try_api_request_auth
+            from openkms_cli.core.auth import try_api_request_auth
 
             cred = try_api_request_auth()
             if cred:
@@ -712,7 +358,7 @@ def pipeline_run(
             )
             raise typer.Exit(1)
     if document_id:
-        auth_headers, basic_auth, has_api_auth = _resolve_api_request_auth(required=extract_metadata)
+        auth_headers, basic_auth, has_api_auth = resolve_api_request_auth(required=extract_metadata)
         if has_api_auth:
             console.print("[dim]Using API authentication[/dim]")
         elif not extract_metadata:
@@ -721,7 +367,7 @@ def pipeline_run(
     access_key = cfg.aws_access_key_id
     secret_key = cfg.aws_secret_access_key
 
-    is_local = not _is_s3_uri(input_uri)
+    is_local = not is_s3_uri(input_uri)
     work = output_dir.resolve() / "_pipeline_work"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -738,26 +384,26 @@ def pipeline_run(
             console.print("[red]AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required for S3[/red]")
             raise typer.Exit(1)
         try:
-            input_bucket, input_key = _parse_s3_uri(input_uri)
+            input_bucket, input_key = parse_s3_uri(input_uri)
         except typer.BadParameter as e:
             console.print(f"[red]{e}[/red]")
             raise typer.Exit(1)
         ext_part = Path(input_key).suffix.lower().lstrip(".") or "bin"
         stored_path = work / f"input.{ext_part}"
-        content = _get_s3_client(endpoint_url, access_key, secret_key, region).get_object(
+        content = get_s3_client(endpoint_url, access_key, secret_key, region).get_object(
             Bucket=input_bucket, Key=input_key
         )["Body"].read()
         stored_path.write_bytes(content)
         console.print(f"[dim]Input: s3://{input_bucket}/{input_key}[/dim]")
 
     try:
-        from .baidu_parser import BaiduParseError
-        from .office_convert import OfficeConvertError
+        from openkms_cli.providers.baidu.parser import BaiduParseError
+        from openkms_cli.parse.office_convert import OfficeConvertError
 
         if use_baidu:
-            from .baidu_parser import prepare_for_baidu_parse
+            from openkms_cli.providers.baidu.parser import prepare_for_baidu_parse
         else:
-            from .office_convert import prepare_for_vlm_parse
+            from openkms_cli.parse.office_convert import prepare_for_vlm_parse
     except ImportError:
         console.print("[red]Required parser module missing[/red]")
         raise typer.Exit(1)
@@ -774,7 +420,7 @@ def pipeline_run(
     baidu_auth_headers: dict[str, str] = {}
     baidu_basic_auth: Optional[tuple[str, str]] = None
     if use_baidu and document_id:
-        baidu_auth_headers, baidu_basic_auth, _ = _resolve_api_request_auth(required=False)
+        baidu_auth_headers, baidu_basic_auth, _ = resolve_api_request_auth(required=False)
 
     if not skip_upload and (not access_key or not secret_key):
         console.print("[red]AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required for upload[/red]")
@@ -797,8 +443,8 @@ def pipeline_run(
     prefix: str | None = storage_prefix
 
     if not skip_upload and storage_prefix and access_key and secret_key:
-        s3_client = _get_s3_client(endpoint_url, access_key, secret_key, region)
-        cached = _load_cached_parse_from_storage(s3_client, bucket, storage_prefix, out_base)
+        s3_client = get_s3_client(endpoint_url, access_key, secret_key, region)
+        cached = load_cached_parse_from_storage(s3_client, bucket, storage_prefix, out_base)
         if cached is not None:
             result, hash_dir = cached
             parsed_from_cache = True
@@ -816,7 +462,7 @@ def pipeline_run(
         else:
             try:
                 if use_baidu:
-                    from .baidu_parser import run_baidu_parser
+                    from openkms_cli.providers.baidu.parser import run_baidu_parser
 
                     def _baidu_status(status: str) -> None:
                         progress.update(task, description=f"Baidu parse: {status}...")
@@ -839,7 +485,7 @@ def pipeline_run(
                         on_status=_baidu_status,
                     )
                 else:
-                    from .parser import run_parser
+                    from openkms_cli.parse.parser import run_parser
 
                     result, _, _ = run_parser(
                         input_path=parse_path,
@@ -874,7 +520,7 @@ def pipeline_run(
 
             if build_page_index and result.get("markdown"):
                 try:
-                    from .page_index_strategy import effective_page_index_strategy, write_page_index
+                    from openkms_cli.page_index.strategy import effective_page_index_strategy, write_page_index
 
                     provider = None
                     if pipeline_name == "baidu-doc-parse":
@@ -909,14 +555,14 @@ def pipeline_run(
                 console.print(f"[green]Pipeline done. {count} files in {hash_dir}[/green]")
             else:
                 progress.update(task, description="Uploading to S3...")
-                upload_client = s3_client or _get_s3_client(endpoint_url, access_key, secret_key, region)
+                upload_client = s3_client or get_s3_client(endpoint_url, access_key, secret_key, region)
                 key_base = prefix
                 count = 0
                 for f in hash_dir.rglob("*"):
                     if f.is_file():
                         rel = f.relative_to(hash_dir).as_posix()
                         key = f"{key_base}/{rel}"
-                        ct = _content_type_for_path(rel)
+                        ct = content_type_for_path(rel)
                         upload_client.put_object(
                             Bucket=bucket,
                             Key=key,
@@ -933,14 +579,14 @@ def pipeline_run(
         has_api_auth = False
         markdown_synced = False
         if not skip_upload and document_id and result.get("markdown"):
-            auth_headers, basic_auth, has_api_auth = _resolve_api_request_auth(required=extract_metadata)
+            auth_headers, basic_auth, has_api_auth = resolve_api_request_auth(required=extract_metadata)
             if has_api_auth:
                 progress.update(task, description="Syncing markdown to API...")
-                markdown_synced, auth_headers, basic_auth = _put_document_markdown(
+                markdown_synced, auth_headers, basic_auth = put_document_markdown(
                     api_url, document_id, result["markdown"], auth_headers, basic_auth
                 )
 
-        auth_headers, basic_auth = _run_pipeline_metadata_extraction(
+        auth_headers, basic_auth = run_pipeline_metadata_extraction(
             result=result,
             hash_dir=hash_dir,
             prefix=prefix,
@@ -971,7 +617,7 @@ def pipeline_run(
             and markdown_synced
         ):
             progress.update(task, description="Saving pipeline version...")
-            _post_pipeline_version(api_url, document_id, auth_headers, basic_auth)
+            post_pipeline_version(api_url, document_id, auth_headers, basic_auth)
 
 
 @pipeline_app.command("submit")
@@ -980,7 +626,7 @@ def pipeline_submit(
     api_url: Optional[str] = typer.Option(None, "--api-url", help="Backend API URL"),
 ) -> None:
     """Submit an async pipeline job to the cloud provider (baidu / aliyun)."""
-    from .pipeline_async import submit_job
+    from openkms_cli.pipeline.async_jobs import submit_job
 
     submit_job(job_id, api_url)
 
@@ -991,9 +637,43 @@ def pipeline_poll(
     api_url: Optional[str] = typer.Option(None, "--api-url", help="Backend API URL"),
 ) -> None:
     """Poll provider status; POST provider_ready when parsing completes."""
-    from .pipeline_async import poll_job
+    from openkms_cli.pipeline.async_jobs import poll_job
 
     poll_job(job_id, api_url)
+
+
+@pipeline_app.command("run-async")
+def pipeline_run_async(
+    job_id: str = typer.Option(..., "--job-id", help="Pipeline job UUID"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", help="Backend API URL"),
+    page_index_strategy: Optional[str] = typer.Option(
+        None,
+        "--page-index-strategy",
+        help="page_index builder: markdown-headings | aliyun-layouts | baidu-layouts",
+    ),
+    poll_interval: Optional[int] = typer.Option(
+        None,
+        "--poll-interval",
+        min=1,
+        help="Seconds between cloud status checks (default: OPENKMS_ASYNC_POLL_INTERVAL_SECONDS)",
+    ),
+    max_wait: Optional[int] = typer.Option(
+        None,
+        "--max-wait",
+        min=60,
+        help="Max seconds to wait for cloud parse (default: OPENKMS_ASYNC_MAX_WAIT_SECONDS)",
+    ),
+) -> None:
+    """Submit to cloud, poll until ready, finalize (+ page index + metadata). One CLI process."""
+    from openkms_cli.pipeline.async_jobs import run_async_job
+
+    run_async_job(
+        job_id,
+        api_url,
+        page_index_strategy=page_index_strategy,
+        poll_interval=poll_interval,
+        max_wait=max_wait,
+    )
 
 
 @pipeline_app.command("finalize")
@@ -1003,11 +683,11 @@ def pipeline_finalize(
     page_index_strategy: Optional[str] = typer.Option(
         None,
         "--page-index-strategy",
-        help="page_index builder: markdown-headings | aliyun-layouts (default: aliyun-layouts for aliyun, else markdown-headings)",
+        help="page_index builder: markdown-headings | aliyun-layouts | baidu-layouts",
     ),
 ) -> None:
-    """Fetch parse results, upload to storage, sync markdown, advance job stage."""
-    from .pipeline_async import finalize_job
+    """Fetch cloud results, build page index, upload, optional metadata — one worker run."""
+    from openkms_cli.pipeline.async_jobs import finalize_job
 
     finalize_job(job_id, api_url, page_index_strategy=page_index_strategy)
 
@@ -1018,6 +698,6 @@ def pipeline_extract_metadata(
     api_url: Optional[str] = typer.Option(None, "--api-url", help="Backend API URL"),
 ) -> None:
     """Run metadata extraction for a parsed async job."""
-    from .pipeline_async import extract_metadata_job
+    from openkms_cli.pipeline.async_jobs import extract_metadata_job
 
     extract_metadata_job(job_id, api_url)

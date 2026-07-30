@@ -8,8 +8,8 @@ import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn
 
-from .backend_defaults import resolve_vlm_config
-from .settings import get_cli_settings
+from openkms_cli.core.backend_defaults import resolve_vlm_config
+from openkms_cli.core.settings import get_cli_settings
 
 console = Console()
 
@@ -149,7 +149,7 @@ def parse_run(
         out_base = output_dir or input_path.parent / "parsed"
     else:
         if use_baidu:
-            from .baidu_parser import _BAIDU_NATIVE_EXT
+            from openkms_cli.providers.baidu.parser import _BAIDU_NATIVE_EXT
 
             exts = set(_BAIDU_NATIVE_EXT) | {".epub"}
         else:
@@ -164,14 +164,14 @@ def parse_run(
 
     if use_baidu:
         try:
-            from .baidu_parser import BaiduParseError, prepare_for_baidu_parse, run_baidu_parser
+            from openkms_cli.providers.baidu.parser import BaiduParseError, prepare_for_baidu_parse, run_baidu_parser
         except ImportError as e:
             console.print("[red]Baidu parser not available. pip install openkms-cli (requests)[/red]")
             console.print(f"[dim]{e}[/dim]")
             raise typer.Exit(1)
     else:
         try:
-            from .parser import run_parser
+            from openkms_cli.parse.parser import run_parser
         except ImportError as e:
             console.print(
                 "[red]Parser not available. Install optional dependencies:[/red]\n"
@@ -196,7 +196,7 @@ def parse_run(
                         console.print(f"[red]{fp}: {e}[/red]")
                         raise typer.Exit(1)
                 else:
-                    from .office_convert import OfficeConvertError, prepare_for_vlm_parse
+                    from openkms_cli.parse.office_convert import OfficeConvertError, prepare_for_vlm_parse
 
                     try:
                         parse_path, hash_src = prepare_for_vlm_parse(fp.resolve(), work_sub)

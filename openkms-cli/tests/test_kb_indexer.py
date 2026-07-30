@@ -1,6 +1,6 @@
 """Tests for KB chunking helpers."""
 
-from openkms_cli.kb_indexer import chunk_document
+from openkms_cli.kb.indexer import chunk_document
 
 
 def test_markdown_header_splits_oversized_sections():
@@ -38,7 +38,7 @@ def test_fixed_size_not_double_split():
 
 
 def test_wiki_page_single_chunk_when_small():
-    from openkms_cli.kb_indexer import chunk_wiki_page
+    from openkms_cli.kb.indexer import chunk_wiki_page
 
     md = "## Overview\n\nShort page body."
     chunks = chunk_wiki_page(md)
@@ -48,7 +48,7 @@ def test_wiki_page_single_chunk_when_small():
 
 
 def test_wiki_page_splits_at_header_when_large():
-    from openkms_cli.kb_indexer import chunk_wiki_page
+    from openkms_cli.kb.indexer import chunk_wiki_page
 
     body = "x" * 8500
     md = f"## Part one\n\n{body}\n\n## Part two\n\nHello."
@@ -59,7 +59,7 @@ def test_wiki_page_splits_at_header_when_large():
 
 
 def test_wiki_page_splits_at_last_header_before_limit():
-    from openkms_cli.kb_indexer import chunk_wiki_page
+    from openkms_cli.kb.indexer import chunk_wiki_page
 
     intro = "y" * 100
     body = "z" * 9000
@@ -71,7 +71,7 @@ def test_wiki_page_splits_at_last_header_before_limit():
 
 def test_wiki_page_many_small_headers_stay_packed():
     """Oversized pages must not emit one chunk per ### section."""
-    from openkms_cli.kb_indexer import chunk_wiki_page
+    from openkms_cli.kb.indexer import chunk_wiki_page
 
     parts = [f"### Section {i}\n\n<!-- entries added by wiki-ingest -->\n\n{'x' * 120}" for i in range(80)]
     md = "\n\n".join(parts)
@@ -83,7 +83,7 @@ def test_wiki_page_many_small_headers_stay_packed():
 
 
 def test_wiki_page_splits_at_h4_header():
-    from openkms_cli.kb_indexer import chunk_wiki_page
+    from openkms_cli.kb.indexer import chunk_wiki_page
 
     prefix = "intro\n\n" + "x" * 7990
     md = f"{prefix}\n\n#### 终身寿险 (万能型)\n\n- [[wiki/pages/foo-bar]]"
@@ -95,7 +95,7 @@ def test_wiki_page_splits_at_h4_header():
 
 
 def test_wiki_page_avoids_mid_line_cut_without_headers():
-    from openkms_cli.kb_indexer import chunk_wiki_page
+    from openkms_cli.kb.indexer import chunk_wiki_page
 
     line = "- [[wiki/pages/some-page-name]] — title (ingested 2026-06-07)\n"
     md = line * 400

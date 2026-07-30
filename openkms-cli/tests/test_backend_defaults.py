@@ -6,13 +6,13 @@ from unittest.mock import patch
 
 import pytest
 
-from openkms_cli.backend_defaults import (
+from openkms_cli.core.backend_defaults import (
     VlmRuntimeConfig,
     _merge_document_parse_defaults_payload,
     resolve_vlm_config,
     resolve_vlm_for_cli,
 )
-from openkms_cli.settings import CliSettings
+from openkms_cli.core.settings import CliSettings
 
 
 @pytest.mark.parametrize(
@@ -103,7 +103,7 @@ def test_resolve_skips_fetch_when_nothing_needed(monkeypatch: pytest.MonkeyPatch
         vlm_model="CfgModel",
         vlm_api_key="cfgkey",
     )
-    with patch("openkms_cli.backend_defaults._fetch_document_parse_defaults") as fetch:
+    with patch("openkms_cli.core.backend_defaults._fetch_document_parse_defaults") as fetch:
         u, m, k = resolve_vlm_for_cli(cfg)
         fetch.assert_not_called()
     # Values come from settings (env flags only suppress fetch; pydantic would normally fill cfg from env).
@@ -125,7 +125,7 @@ def test_resolve_merges_when_config_name_set(monkeypatch: pytest.MonkeyPatch) ->
         vlm_config_name="prod-vlm",
     )
     fake = {"base_url": "https://merged/", "model_name": "MM", "api_key": "kk"}
-    with patch("openkms_cli.backend_defaults._fetch_document_parse_defaults", return_value=fake):
+    with patch("openkms_cli.core.backend_defaults._fetch_document_parse_defaults", return_value=fake):
         resolved = resolve_vlm_config(cfg)
     assert resolved.base_url == "https://merged/"
     assert resolved.model_name == "MM"
@@ -139,7 +139,7 @@ def test_resolve_standalone_cli_skips_backend_fetch() -> None:
         vlm_model="ignored",
         vlm_config_name="should-not-fetch",
     )
-    with patch("openkms_cli.backend_defaults._fetch_document_parse_defaults") as fetch:
+    with patch("openkms_cli.core.backend_defaults._fetch_document_parse_defaults") as fetch:
         resolved = resolve_vlm_config(
             cfg,
             cli_vlm_url="http://direct/",
@@ -173,7 +173,7 @@ def test_fetch_passes_model_name_when_env_model_set(monkeypatch: pytest.MonkeyPa
         captured["model_name_query"] = model_name_query
         return {"base_url": "", "model_name": "ResolvedName", "api_key": "k"}
 
-    with patch("openkms_cli.backend_defaults._fetch_document_parse_defaults", side_effect=fake_fetch):
+    with patch("openkms_cli.core.backend_defaults._fetch_document_parse_defaults", side_effect=fake_fetch):
         resolved = resolve_vlm_config(cfg)
     assert captured["model_name_query"] == "my-model"
     assert resolved.base_url == "http://u/"

@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock
 
-from openkms_cli.auth import auth_expired_response
+from openkms_cli.core.auth import auth_expired_response
 
 
 def test_auth_expired_response_detects_invalid_token_code():

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from openkms_cli.parser import _restructure_pages_after_predict
+from openkms_cli.parse.parser import _restructure_pages_after_predict
 
 
 def test_restructure_single_page_pdf_uses_plain_restructure() -> None:

@@ -6,10 +6,9 @@ import { appDocuments, db } from '../db/index.ts';
 import { fetchModelCliParams, formatExtractionCliArgs, formatVlmCliArgs } from '../shared/model-cli-client.ts';
 import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../shared/pipeline-config-store.ts';
 import {
-  DEFAULT_ASYNC_SUBMIT_TEMPLATE,
-  DEFAULT_ASYNC_EXTRACT_METADATA_TEMPLATE,
-  defaultFinalizeTemplate,
-  parseAsyncPipelineCommandTemplate,
+  defaultAsyncWorkerTemplate,
+  normalizeAsyncWorkerCliArgs,
+  parseAsyncWorkerTemplate,
   pipelineTemplateToCliArgs,
   renderCommandTemplate,
 } from '../shared/pipeline-command-template.ts';
@@ -46,24 +45,30 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+/** Prevent duplicate concurrent CLI invocations for the same async job. */
+const activePipelineCliJobs = new Set<string>();
+
+function extractJobIdFromCliArgs(args: string[]): string | undefined {
+  const idx = args.indexOf('--job-id');
+  if (idx >= 0 && args[idx + 1]) return args[idx + 1];
+  return undefined;
+}
+
+/** Worker CLI reads credentials from openkms-cli/.env (cwd on spawn). Only override API URL. */
 function cliSpawnEnv(apiUrl: string): NodeJS.ProcessEnv {
-  const s3 = getS3Config();
   return {
     ...process.env,
-    ...(s3
-      ? {
-          AWS_ACCESS_KEY_ID: s3.accessKeyId,
-          AWS_SECRET_ACCESS_KEY: s3.secretAccessKey,
-          AWS_BUCKET_NAME: s3.bucket,
-          AWS_REGION: s3.region,
-          ...(s3.endpoint ? { AWS_ENDPOINT_URL: s3.endpoint } : {}),
-        }
-      : {}),
     OPENKMS_API_URL: apiUrl,
   };
 }
 
 export function spawnPipelineCli(args: string[], apiUrl?: string): void {
+  const jobId = extractJobIdFromCliArgs(args);
+  if (jobId && activePipelineCliJobs.has(jobId)) {
+    console.info(`[pipeline] skip spawn (CLI already running): job ${jobId}`);
+    return;
+  }
+
   const cliBin = shellQuote(resolveCliBin());
   const resolvedApiUrl =
     apiUrl?.trim() ||
@@ -72,6 +77,8 @@ export function spawnPipelineCli(args: string[], apiUrl?: string): void {
   const command = `${cliBin} ${args.map(shellQuote).join(' ')}`;
   console.info(`[pipeline] spawn ${command}`);
 
+  if (jobId) activePipelineCliJobs.add(jobId);
+
   const child = spawn(command, {
     shell: true,
     cwd: path.join(repoRootFromBackend(), '..', 'openkms-cli'),
@@ -79,49 +86,50 @@ export function spawnPipelineCli(args: string[], apiUrl?: string): void {
   });
 
   let stderr = '';
+  let stdout = '';
   child.stderr?.on('data', (chunk: Buffer | string) => {
     stderr += String(chunk);
   });
+  child.stdout?.on('data', (chunk: Buffer | string) => {
+    stdout += String(chunk);
+  });
   child.on('error', (error) => {
+    if (jobId) activePipelineCliJobs.delete(jobId);
     console.error('[pipeline] spawn error:', error);
   });
   child.on('close', (code) => {
+    if (jobId) activePipelineCliJobs.delete(jobId);
     if (code !== 0) {
-      console.error(`[pipeline] CLI exited with code ${code}: ${stderr.trim().slice(0, 500)}`);
+      const detail = (stderr || stdout).trim();
+      console.error(`[pipeline] CLI exited with code ${code}: ${detail.slice(0, 2000)}`);
     }
   });
 }
 
+export async function spawnAsyncPipelineWorker(
+  jobId: string,
+  pipelineName: string,
+  apiUrl?: string,
+): Promise<void> {
+  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
+  const template = parseAsyncWorkerTemplate(pipeline?.commandTemplate ?? '', pipelineName);
+  const args = normalizeAsyncWorkerCliArgs(
+    pipelineTemplateToCliArgs(template, { job_id: jobId }),
+  );
+  if (args.length === 0) {
+    spawnPipelineCli(['pipeline', 'run-async', '--job-id', jobId], apiUrl);
+    return;
+  }
+  spawnPipelineCli(args, apiUrl);
+}
+
+/** @deprecated Use spawnAsyncPipelineWorker */
 export async function spawnAsyncPipelineFinalize(
   jobId: string,
   pipelineName: string,
   apiUrl?: string,
 ): Promise<void> {
-  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
-  const { finalizeTemplate } = parseAsyncPipelineCommandTemplate(pipeline?.commandTemplate ?? '');
-  const template = finalizeTemplate ?? defaultFinalizeTemplate(pipelineName);
-  const args = pipelineTemplateToCliArgs(template, { job_id: jobId });
-  if (args.length === 0) {
-    spawnPipelineCli(['pipeline', 'finalize', '--job-id', jobId], apiUrl);
-    return;
-  }
-  spawnPipelineCli(args, apiUrl);
-}
-
-export async function spawnAsyncPipelineExtractMetadata(
-  jobId: string,
-  pipelineName: string,
-  apiUrl?: string,
-): Promise<void> {
-  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
-  const { extractMetadataTemplate } = parseAsyncPipelineCommandTemplate(pipeline?.commandTemplate ?? '');
-  const template = extractMetadataTemplate ?? DEFAULT_ASYNC_EXTRACT_METADATA_TEMPLATE;
-  const args = pipelineTemplateToCliArgs(template, { job_id: jobId });
-  if (args.length === 0) {
-    spawnPipelineCli(['pipeline', 'extract-metadata', '--job-id', jobId], apiUrl);
-    return;
-  }
-  spawnPipelineCli(args, apiUrl);
+  return spawnAsyncPipelineWorker(jobId, pipelineName, apiUrl);
 }
 
 export async function updateDocumentStatus(
@@ -248,14 +256,7 @@ async function startAsyncPipelineJob(documentId: string): Promise<{ jobId: strin
     extractionArgs: extractionArgs || null,
   });
 
-  const { submitTemplate } = parseAsyncPipelineCommandTemplate(pipeline.commandTemplate);
-  const submitArgs = pipelineTemplateToCliArgs(submitTemplate || DEFAULT_ASYNC_SUBMIT_TEMPLATE, {
-    job_id: job.id,
-  });
-  spawnPipelineCli(
-    submitArgs.length > 0 ? submitArgs : ['pipeline', 'submit', '--job-id', job.id],
-    apiUrl,
-  );
+  await spawnAsyncPipelineWorker(job.id, pipeline.pipelineName, apiUrl);
   return { jobId: job.id };
 }
 

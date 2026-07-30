@@ -9,7 +9,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from .page_index_strategy import SUPPORTED_STRATEGIES, normalize_strategy, write_page_index
+from openkms_cli.page_index.strategy import SUPPORTED_STRATEGIES, normalize_strategy, write_page_index
 
 console = Console(stderr=True)
 
@@ -81,7 +81,7 @@ def build_page_index(
         if markdown is None:
             console.print("[red]--markdown is required for markdown-headings[/red]")
             raise typer.Exit(1)
-        from .page_index_markdown import write_page_index_from_markdown
+        from openkms_cli.page_index.markdown import write_page_index_from_markdown
 
         tree = write_page_index_from_markdown(markdown, output)
         console.print(f"[green]Wrote {output} ({len(tree.get('structure') or [])} root nodes)[/green]")
@@ -95,7 +95,7 @@ def build_page_index(
             raise typer.Exit(1)
         layouts = [item for item in raw if isinstance(item, dict)]
     elif result_json is not None:
-        from .page_index_strategy import load_layouts_from_result_json
+        from openkms_cli.page_index.strategy import load_layouts_from_result_json
 
         data = json.loads(result_json.read_text(encoding="utf-8"))
         if isinstance(data, dict) and isinstance(data.get("aliyun_layouts"), list):
@@ -110,7 +110,7 @@ def build_page_index(
         console.print("[red]aliyun-layouts requires --layouts-json or --result-json[/red]")
         raise typer.Exit(1)
 
-    from .page_index_aliyun_layout import write_page_index_from_aliyun_layouts
+    from openkms_cli.page_index.aliyun_layout import write_page_index_from_aliyun_layouts
 
     md_path = markdown if rewrite_markdown else None
     if rewrite_markdown and markdown is None:

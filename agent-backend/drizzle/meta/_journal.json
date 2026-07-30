@@ -92,6 +92,27 @@
       "when": 1785169000000,
       "tag": "0012_async_pipeline_three_step_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785170000000,
+      "tag": "0013_pipeline_page_index_step",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785171000000,
+      "tag": "0014_async_single_worker_template",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1785172000000,
+      "tag": "0015_pipeline_run_async",
+      "breakpoints": true
     }
   ]
 }

@@ -12,7 +12,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "document_parse_result.schema.json"
+_SCHEMA_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "schemas" / "document_parse_result.schema.json"
+)
 
 
 class ParseResultValidationError(ValueError):
