@@ -55,6 +55,7 @@ export type DocumentContentResponse = {
   metadata: Record<string, unknown>;
   markdown: string | null;
   page_index: Record<string, unknown> | null;
+  parsing_result: Record<string, unknown> | null;
   has_markdown: boolean;
   has_page_index: boolean;
 };

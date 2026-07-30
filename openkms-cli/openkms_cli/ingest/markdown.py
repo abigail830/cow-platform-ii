@@ -1,39 +1,15 @@
-"""Shared markdown document ingest (no VLM / cloud parse)."""
+"""Markdown native ingest — no cloud OCR."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
 
 from openkms_cli.parse.result import validate_parse_result
 
-MARKDOWN_EXTENSIONS = frozenset({".md", ".markdown"})
 
-
-def is_markdown_suffix(suffix: str) -> bool:
-    return (suffix if suffix.startswith(".") else f".{suffix}").lower() in MARKDOWN_EXTENSIONS
-
-
-def input_suffix_from_ctx(ctx: dict[str, Any]) -> str:
-    doc = ctx.get("document") or {}
-    name = str(doc.get("name") or "").strip()
-    if name:
-        suf = Path(name).suffix.lower()
-        if suf:
-            return suf
-    input_uri = str(ctx.get("input_uri") or "")
-    if input_uri:
-        return Path(input_uri).suffix.lower()
-    return ""
-
-
-def is_markdown_job_context(ctx: dict[str, Any]) -> bool:
-    return is_markdown_suffix(input_suffix_from_ctx(ctx))
-
-
-def build_markdown_parse_result(file_hash: str, markdown: str) -> dict[str, Any]:
+def build_markdown_parse_result(file_hash: str, markdown: str) -> dict:
     """Canonical result.json for uploaded Markdown (no OCR layout)."""
     return validate_parse_result(
         {
@@ -54,7 +30,7 @@ def materialize_markdown_ingest(
     original_content: bytes,
     out_base: Path,
     file_hash: str | None = None,
-) -> tuple[dict[str, Any], Path]:
+) -> tuple[dict, Path]:
     """Write hash_dir artifacts: original.*, result.json, markdown.md."""
     resolved_hash = file_hash or hashlib.sha256(original_content).hexdigest()
     try:

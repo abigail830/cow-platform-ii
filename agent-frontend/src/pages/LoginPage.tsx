@@ -27,7 +27,9 @@ export function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <img className="login-logo" src="/cow.png" alt="" width={56} height={56} />
-        <h1>Agent Platform II</h1>
+        <h1>
+          Agent Platform <span className="login-title-accent">II</span>
+        </h1>
         <p className="login-subtitle">Sign in with email and password</p>
         <form onSubmit={onSubmit}>
           <label className="login-field">

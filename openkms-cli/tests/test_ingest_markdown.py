@@ -1,28 +1,13 @@
-"""Tests for shared markdown ingest (no VLM / cloud parse)."""
+"""Tests for markdown native ingest."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from openkms_cli.parse.markdown_ingest import (
-    build_markdown_parse_result,
-    is_markdown_job_context,
-    is_markdown_suffix,
-    materialize_markdown_ingest,
-)
-
-
-def test_is_markdown_suffix() -> None:
-    assert is_markdown_suffix(".md")
-    assert is_markdown_suffix("markdown")
-    assert not is_markdown_suffix(".pdf")
-
-
-def test_is_markdown_job_context() -> None:
-    assert is_markdown_job_context({"document": {"name": "notes.md"}})
-    assert is_markdown_job_context({"input_uri": "s3://b/k/doc.markdown"})
-    assert not is_markdown_job_context({"document": {"name": "doc.pdf"}})
+from openkms_cli.ingest.kinds import IngestKind
+from openkms_cli.ingest.markdown import build_markdown_parse_result, materialize_markdown_ingest
+from openkms_cli.ingest.runner import run_native_ingest
 
 
 def test_build_markdown_parse_result() -> None:
@@ -60,5 +45,30 @@ def test_materialize_rejects_non_utf8(tmp_path: Path) -> None:
         materialize_markdown_ingest(
             stored_input=src,
             original_content=b"\xff\xfe",
+            out_base=tmp_path / "out",
+        )
+
+
+def test_run_native_ingest_markdown(tmp_path: Path) -> None:
+    src = tmp_path / "doc.md"
+    content = b"# Native"
+    src.write_bytes(content)
+    result, hash_dir = run_native_ingest(
+        kind=IngestKind.MARKDOWN,
+        stored_input=src,
+        original_content=content,
+        out_base=tmp_path / "out",
+    )
+    assert result["parser"] == "markdown-ingest"
+    assert (hash_dir / "markdown.md").exists()
+
+
+def test_run_native_ingest_rejects_cloud_kind(tmp_path: Path) -> None:
+    src = tmp_path / "doc.pdf"
+    with pytest.raises(ValueError, match="No native ingest handler"):
+        run_native_ingest(
+            kind=IngestKind.CLOUD_OCR,
+            stored_input=src,
+            original_content=b"%PDF",
             out_base=tmp_path / "out",
         )

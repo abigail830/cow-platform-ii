@@ -13,12 +13,20 @@ from rich.table import Table
 
 from openkms_cli.core.auth import try_api_request_auth
 from openkms_cli.core.settings import get_cli_settings
+from openkms_cli.ingest import is_native_ingest, resolve_ingest_kind, run_native_ingest
 from openkms_cli.pipeline.api_client import (
     load_cached_parse_from_storage,
     post_pipeline_version,
     put_document_markdown,
     resolve_api_request_auth,
     run_pipeline_metadata_extraction,
+)
+from openkms_cli.pipeline.post_ingest import (
+    build_page_index,
+    ensure_original_upload_artifact,
+    layouts_from_result,
+    original_basename_from_path,
+    write_hash_dir_artifacts,
 )
 from openkms_cli.pipeline.storage import (
     content_type_for_path,
@@ -383,9 +391,7 @@ def pipeline_run(
         stored_path.write_bytes(content)
         console.print(f"[dim]Input: s3://{input_bucket}/{input_key}[/dim]")
 
-    from openkms_cli.parse.markdown_ingest import is_markdown_suffix, materialize_markdown_ingest
-
-    is_markdown_input = is_markdown_suffix(stored_path.suffix)
+    ingest_kind = resolve_ingest_kind(suffix=stored_path.suffix)
 
     try:
         from openkms_cli.providers.baidu.parser import BaiduParseError
@@ -403,7 +409,7 @@ def pipeline_run(
     parse_path = stored_path
     hash_src = stored_path
     ch_source = None
-    if not is_markdown_input:
+    if not is_native_ingest(ingest_kind):
         try:
             if use_baidu:
                 parse_path, hash_src = prepare_for_baidu_parse(stored_path, work / "baidu_stage")
@@ -456,9 +462,10 @@ def pipeline_run(
             console.print(f"[dim]Skipped parse: reusing s3://{bucket}/{prefix}/[/dim]")
         else:
             try:
-                if is_markdown_input:
-                    progress.update(task, description="Ingesting markdown...")
-                    result, hash_dir = materialize_markdown_ingest(
+                if is_native_ingest(ingest_kind):
+                    progress.update(task, description=f"Ingesting {ingest_kind.value}...")
+                    result, hash_dir = run_native_ingest(
+                        kind=ingest_kind,
                         stored_input=stored_path,
                         original_content=content,
                         out_base=out_base,
@@ -497,55 +504,42 @@ def pipeline_run(
                 console.print(f"[red]Baidu parse failed: network error ({e})[/red]")
                 raise typer.Exit(1)
 
-            if not is_markdown_input:
+            if not is_native_ingest(ingest_kind):
                 file_hash = result["file_hash"]
                 hash_dir = out_base / file_hash
                 prefix = storage_prefix or file_hash
 
-                ext = Path(hash_src).suffix.lower().lstrip(".") or "pdf"
-                (hash_dir / f"original.{ext}").write_bytes(content)
-                result_json = json.dumps(result, indent=2, ensure_ascii=False)
-                (hash_dir / "result.json").write_text(result_json, encoding="utf-8")
-                if result.get("markdown"):
-                    (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
+                write_hash_dir_artifacts(
+                    hash_dir=hash_dir,
+                    result=result,
+                    original_content=Path(hash_src).read_bytes(),
+                    original_basename=original_basename_from_path(hash_src),
+                )
+            else:
+                ensure_original_upload_artifact(
+                    hash_dir,
+                    basename=original_basename_from_path(stored_path),
+                    content=content,
+                )
 
             if build_page_index and result.get("markdown"):
                 try:
-                    from openkms_cli.page_index.strategy import (
-                        effective_page_index_strategy,
-                        strategy_for_markdown_ingest,
-                        write_page_index,
-                    )
-
                     provider = None
-                    if not is_markdown_input:
+                    if not is_native_ingest(ingest_kind):
                         if pipeline_name in ("baidu-doc-parse", "paddleocr-doc-parse"):
                             provider = "baidu"
                         elif pipeline_name == "aliyun-docmind-parse":
                             provider = "aliyun"
 
-                    if is_markdown_input:
-                        strategy = strategy_for_markdown_ingest(page_index_strategy)
-                    else:
-                        strategy = effective_page_index_strategy(
-                            provider=provider,
-                            override=page_index_strategy,
-                        )
-                    layouts = None
-                    if isinstance(result.get("aliyun_layouts"), list):
-                        layouts = [item for item in result["aliyun_layouts"] if isinstance(item, dict)]
-
                     progress.update(task, description="Building PageIndex...")
-                    tree = write_page_index(
-                        strategy=strategy,
-                        hash_dir=hash_dir,
-                        layouts=layouts,
+                    build_page_index(
+                        hash_dir,
+                        ingest_kind=ingest_kind,
+                        provider=provider,
+                        layouts=layouts_from_result(result),
+                        page_index_strategy=page_index_strategy,
                         doc_name=Path(hash_src).stem,
                     )
-                    if tree is None:
-                        console.print("[dim]Skipped page index: no markdown.md[/dim]")
-                    else:
-                        console.print(f"[dim]PageIndex built (strategy={strategy})[/dim]")
                 except Exception as e:
                     console.print(f"[yellow]PageIndex build failed: {e}. Skipping.[/yellow]")
 

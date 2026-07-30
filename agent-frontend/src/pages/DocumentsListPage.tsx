@@ -10,6 +10,7 @@ import {
   uploadDocument,
   type DocumentRecord,
 } from '../api/documents.ts';
+import { DocumentDeleteConfirmModal } from '../components/DocumentDeleteConfirmModal.tsx';
 import { DocumentDownloadActions } from '../components/DocumentDownloadMenu.tsx';
 import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
 import { DocumentPipelineStatus } from '../components/DocumentPipelineStatus.tsx';
@@ -34,7 +35,9 @@ export function DocumentsListPage() {
   const [error, setError] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [moveDocumentTarget, setMoveDocumentTarget] = useState<DocumentRecord | null>(null);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<DocumentRecord | null>(null);
   const [runningDocumentIds, setRunningDocumentIds] = useState<Set<string>>(new Set());
+  const [deletingDocumentIds, setDeletingDocumentIds] = useState<Set<string>>(new Set());
 
   const flatChannels = useMemo(() => flattenChannels(channels), [channels]);
   const selectedChannel = flatChannels.find((channel) => channel.id === selectedChannelId) ?? null;
@@ -84,12 +87,20 @@ export function DocumentsListPage() {
   }
 
   async function handleDeleteDocument(document: DocumentRecord) {
-    if (!window.confirm(`Delete "${document.name}"?`)) return;
+    setDeleteConfirmTarget(null);
+    setDeletingDocumentIds((current) => new Set(current).add(document.id));
+    setError('');
     try {
       await deleteDocument(document.id);
       await loadDocuments();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete document');
+    } finally {
+      setDeletingDocumentIds((current) => {
+        const next = new Set(current);
+        next.delete(document.id);
+        return next;
+      });
     }
   }
 
@@ -199,6 +210,7 @@ export function DocumentsListPage() {
               documents.map((document) => {
                 const isPipelineBusy =
                   runningDocumentIds.has(document.id) || document.status === 'running';
+                const isDeleting = deletingDocumentIds.has(document.id);
 
                 return (
                 <tr key={document.id}>
@@ -252,11 +264,17 @@ export function DocumentsListPage() {
                           </button>
                           <button
                             type="button"
-                            className="icon-btn danger"
-                            title="Delete"
-                            onClick={() => void handleDeleteDocument(document)}
+                            className={`icon-btn danger icon-btn--delete${isDeleting ? ' is-busy' : ''}`}
+                            title={isDeleting ? 'Deleting…' : 'Delete'}
+                            disabled={isDeleting}
+                            aria-busy={isDeleting}
+                            onClick={() => setDeleteConfirmTarget(document)}
                           >
-                            <IconDelete />
+                            {isDeleting ? (
+                              <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                            ) : (
+                              <IconDelete />
+                            )}
                           </button>
                         </>
                       )}
@@ -290,6 +308,13 @@ export function DocumentsListPage() {
           channels={channels}
           onCancel={() => setMoveDocumentTarget(null)}
           onSubmit={handleMoveDocument}
+        />
+      )}
+      {deleteConfirmTarget && (
+        <DocumentDeleteConfirmModal
+          documentName={deleteConfirmTarget.name}
+          onCancel={() => setDeleteConfirmTarget(null)}
+          onConfirm={() => void handleDeleteDocument(deleteConfirmTarget)}
         />
       )}
     </>

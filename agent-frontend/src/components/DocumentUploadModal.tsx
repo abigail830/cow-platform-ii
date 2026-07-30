@@ -1,8 +1,12 @@
 import { useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { ICON_SIZE_LG, iconProps } from './icons/icon-props.ts';
 
 const ACCEPTED_TYPES = '.pdf,.png,.jpg,.jpeg,.webp,.docx,.pptx,.xlsx,.epub,.xmind,.md,.markdown';
+
+function fileKey(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
 
 type DocumentUploadModalProps = {
   channelName: string;
@@ -18,8 +22,25 @@ export function DocumentUploadModal({ channelName, onCancel, onUpload }: Documen
   const [dragOver, setDragOver] = useState(false);
 
   function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    setFiles((current) => [...current, ...Array.from(fileList)]);
+    if (!fileList?.length) return;
+    const incoming = Array.from(fileList);
+    setFiles((current) => {
+      const seen = new Set(current.map(fileKey));
+      const merged = [...current];
+      for (const file of incoming) {
+        const key = fileKey(file);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(file);
+      }
+      return merged;
+    });
+    if (inputRef.current) inputRef.current.value = '';
+  }
+
+  function removeFile(targetKey: string) {
+    setFiles((current) => current.filter((file) => fileKey(file) !== targetKey));
+    setError('');
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -59,7 +80,9 @@ export function DocumentUploadModal({ channelName, onCancel, onUpload }: Documen
             }}
             onClick={() => inputRef.current?.click()}
           >
-            <p className="document-upload-dropzone-title">Drag and drop files here, or click to browse.</p>
+            <p className="document-upload-dropzone-title">
+              Drag and drop files here, or click to browse (multiple files supported).
+            </p>
             <p className="document-upload-dropzone-hint">
               PDF, images, DOCX, PPTX, XLSX, EPUB, XMind. Large files upload in chunks.
             </p>
@@ -77,13 +100,30 @@ export function DocumentUploadModal({ channelName, onCancel, onUpload }: Documen
           </div>
 
           {files.length > 0 && (
-            <ul className="document-upload-file-list">
-              {files.map((file) => (
-                <li key={`${file.name}-${file.size}-${file.lastModified}`}>
-                  <span>{file.name}</span>
-                  <span>{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
-                </li>
-              ))}
+            <ul className="document-upload-file-list" aria-label="Files to upload">
+              {files.map((file) => {
+                const key = fileKey(file);
+                return (
+                  <li key={key}>
+                    <span className="document-upload-file-name" title={file.name}>
+                      {file.name}
+                    </span>
+                    <span className="document-upload-file-size">
+                      {(file.size / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-btn document-upload-file-remove"
+                      title="Remove from list"
+                      aria-label={`Remove ${file.name}`}
+                      disabled={busy}
+                      onClick={() => removeFile(key)}
+                    >
+                      <X {...iconProps()} aria-hidden />
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
 

@@ -8,6 +8,7 @@ import {
   type DocumentRecord,
 } from '../api/documents.ts';
 import { DocumentMetadataBar } from '../components/DocumentMetadataBar.tsx';
+import { MindmapMetadataPanel, parseMindmapParsingResult } from '../components/MindmapMetadataPanel.tsx';
 import { formatDocumentStatusLabel } from '../components/DocumentPipelineStatus.tsx';
 import { PageIndexTreePanel, slugifyHeading, type PageIndexNode, type PageIndexTree } from '../components/PageIndexTree.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
@@ -25,6 +26,7 @@ export function DocumentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [activeSheetIndex, setActiveSheetIndex] = useState<number | null>(null);
 
   const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('document-detail-split', 32);
 
@@ -75,6 +77,19 @@ export function DocumentDetailPage() {
   }
 
   const pageIndex = (content?.page_index as PageIndexTree | null) ?? null;
+  const mindmap = parseMindmapParsingResult(content?.parsing_result);
+  const isMindmap = Boolean(mindmap) || document?.file_type?.toUpperCase() === 'XMIND';
+  const isMindmapOutline = pageIndex?.strategy === 'xmind-outline';
+  const sheetCount = mindmap?.sheets?.length ?? 0;
+  const showSheetFilter = isMindmapOutline && sheetCount > 1;
+
+  function handleSelectSheet(sheetIndex: number) {
+    setActiveSheetIndex(sheetIndex);
+    const sheetNode = pageIndex?.structure?.find((node) => node.sheet_index === sheetIndex);
+    if (sheetNode) {
+      handleSelectNode(sheetNode);
+    }
+  }
 
   return (
     <div className="document-detail-page">
@@ -108,17 +123,33 @@ export function DocumentDetailPage() {
             }}
           />
 
+          {mindmap && (
+            <MindmapMetadataPanel
+              parsingResult={mindmap}
+              onSelectSheet={showSheetFilter ? handleSelectSheet : undefined}
+              activeSheetIndex={showSheetFilter ? activeSheetIndex : null}
+            />
+          )}
+
           <div
             ref={containerRef}
             className="document-detail-split"
             style={{ ['--document-detail-left-pct' as string]: `${leftPct}%` }}
           >
             <aside className="document-detail-pageindex" aria-label="Page index">
-              <h3 className="document-detail-panel-heading">Page index</h3>
+              <h3 className="document-detail-panel-heading">
+                {isMindmapOutline ? 'Mind map outline' : 'Page index'}
+              </h3>
               <PageIndexTreePanel
                 tree={pageIndex}
                 activeNodeId={activeNodeId}
                 onSelectNode={handleSelectNode}
+                sheetFilterIndex={showSheetFilter ? activeSheetIndex : null}
+                emptyHint={
+                  isMindmap
+                    ? 'Run the pipeline to build a topic tree from the XMind file.'
+                    : undefined
+                }
               />
             </aside>
 

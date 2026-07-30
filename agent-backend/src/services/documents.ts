@@ -363,6 +363,7 @@ export type DocumentContentResponse = {
   metadata: Record<string, unknown>;
   markdown: string | null;
   page_index: Record<string, unknown> | null;
+  parsing_result: Record<string, unknown> | null;
   has_markdown: boolean;
   has_page_index: boolean;
 };
@@ -374,9 +375,10 @@ export async function getDocumentContent(id: string): Promise<DocumentContentRes
   const { readStorageText, storagePrefixFromS3Key } = await import('../storage/document-content.ts');
   const prefix = storagePrefixFromS3Key(doc.s3Key);
 
-  const [markdown, pageIndexRaw] = await Promise.all([
+  const [markdown, pageIndexRaw, resultRaw] = await Promise.all([
     readStorageText(`${prefix}/markdown.md`),
     readStorageText(`${prefix}/page_index.json`),
+    readStorageText(`${prefix}/result.json`),
   ]);
 
   let page_index: Record<string, unknown> | null = null;
@@ -391,6 +393,18 @@ export async function getDocumentContent(id: string): Promise<DocumentContentRes
     }
   }
 
+  let parsing_result: Record<string, unknown> | null = null;
+  if (resultRaw) {
+    try {
+      const parsed = JSON.parse(resultRaw) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        parsing_result = parsed as Record<string, unknown>;
+      }
+    } catch {
+      parsing_result = null;
+    }
+  }
+
   return {
     id: doc.id,
     name: doc.name,
@@ -399,6 +413,7 @@ export async function getDocumentContent(id: string): Promise<DocumentContentRes
     metadata: doc.metadata ?? {},
     markdown,
     page_index,
+    parsing_result,
     has_markdown: Boolean(markdown?.trim()),
     has_page_index: page_index !== null,
   };

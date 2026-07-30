@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-import shlex
 import tempfile
 import time
 from pathlib import Path
@@ -14,120 +12,24 @@ from typing import Any
 from rich.console import Console
 
 from openkms_cli.core.settings import get_cli_settings
-from openkms_cli.parse.markdown_ingest import is_markdown_job_context
-from openkms_cli.pipeline.api_client import (
-    post_pipeline_version,
-    put_document_markdown,
-    resolve_api_request_auth,
-    run_pipeline_metadata_extraction,
-)
+from openkms_cli.ingest.kinds import IngestKind
+from openkms_cli.ingest.registry import is_native_ingest, resolve_ingest_kind
 from openkms_cli.pipeline.jobs import (
     PipelineJobApiError,
     get_job_context,
     patch_job,
     post_provider_ready,
 )
-from openkms_cli.pipeline.storage import content_type_for_path, get_s3_client
+from openkms_cli.pipeline.post_ingest import (
+    complete_job_after_parse,
+    download_input_to_temp,
+    fail_job,
+    finalize_job_artifacts,
+    parse_s3_uri,
+    run_metadata_extraction_from_ctx,
+)
 
 console = Console(stderr=True)
-
-
-def _parse_s3_uri(uri: str) -> tuple[str, str]:
-    m = re.match(r"^s3://([^/]+)/(.+)$", uri.strip())
-    if not m:
-        raise ValueError(f"Invalid S3 URI: {uri}")
-    return m.group(1), m.group(2).rstrip("/")
-
-
-def _fail_job(api_url: str, job_id: str, message: str) -> None:
-    console.print(f"[red]{message}[/red]")
-    try:
-        patch_job(api_url, job_id, stage="failed", error_message=message[:2000])
-    except PipelineJobApiError as e:
-        console.print(f"[yellow]Could not mark job failed: {e}[/yellow]")
-
-
-def _download_input_to_temp(ctx: dict[str, Any], work_dir: Path) -> tuple[Path, bytes, str]:
-    cfg = get_cli_settings()
-    bucket, key = _parse_s3_uri(ctx["input_uri"])
-    client = get_s3_client(
-        cfg.aws_endpoint_url or None,
-        cfg.aws_access_key_id,
-        cfg.aws_secret_access_key,
-        cfg.aws_region,
-    )
-    content = client.get_object(Bucket=bucket, Key=key)["Body"].read()
-    ext = Path(key).suffix.lower().lstrip(".") or "bin"
-    stored = work_dir / f"input.{ext}"
-    stored.write_bytes(content)
-    return stored, content, ext
-
-
-def _upload_hash_dir(
-    hash_dir: Path,
-    *,
-    bucket: str,
-    prefix: str,
-    endpoint_url: str | None,
-    access_key: str,
-    secret_key: str,
-    region: str,
-) -> int:
-    client = get_s3_client(endpoint_url, access_key, secret_key, region)
-    count = 0
-    for f in hash_dir.rglob("*"):
-        if not f.is_file():
-            continue
-        rel = f.relative_to(hash_dir).as_posix()
-        client.put_object(
-            Bucket=bucket,
-            Key=f"{prefix}/{rel}",
-            Body=f.read_bytes(),
-            ContentType=content_type_for_path(rel),
-        )
-        count += 1
-    return count
-
-
-def _build_page_index(
-    hash_dir: Path,
-    *,
-    provider: str | None = None,
-    layouts: list[dict[str, Any]] | None = None,
-    page_index_strategy: str | None = None,
-    doc_name: str | None = None,
-) -> None:
-    try:
-        from openkms_cli.page_index.strategy import effective_page_index_strategy, write_page_index
-
-        strategy = effective_page_index_strategy(
-            provider=provider,
-            override=page_index_strategy,
-        )
-        tree = write_page_index(
-            strategy=strategy,
-            hash_dir=hash_dir,
-            layouts=layouts,
-            doc_name=doc_name or hash_dir.name,
-        )
-        if tree is None:
-            console.print("[dim]Skipped page index: no markdown.md[/dim]")
-        else:
-            console.print(f"[dim]PageIndex built (strategy={strategy})[/dim]")
-    except Exception as e:
-        console.print(f"[yellow]PageIndex build failed: {e}[/yellow]")
-
-
-def _sync_markdown_and_version(api_url: str, document_id: str, markdown: str) -> bool:
-    auth_headers, basic, has_auth = resolve_api_request_auth(required=True)
-    if not has_auth:
-        return False
-    ok, auth_headers, basic = put_document_markdown(
-        api_url, document_id, markdown, auth_headers, basic
-    )
-    if ok:
-        post_pipeline_version(api_url, document_id, auth_headers, basic)
-    return ok
 
 
 def submit_job(job_id: str, api_url: str | None = None) -> None:
@@ -158,11 +60,11 @@ def submit_job(job_id: str, api_url: str | None = None) -> None:
         elif provider == "aliyun":
             _submit_aliyun(ctx, api, job_id)
         else:
-            _fail_job(api, job_id, f"Unsupported provider for submit: {provider}")
+            fail_job(api, job_id, f"Unsupported provider for submit: {provider}")
             raise SystemExit(1)
         console.print(f"[green]Submitted job {job_id} ({provider}) document={document_id}[/green]")
     except Exception as e:
-        _fail_job(api, job_id, str(e))
+        fail_job(api, job_id, str(e))
         raise SystemExit(1) from e
 
 
@@ -183,7 +85,7 @@ def _submit_baidu(ctx: dict[str, Any], api_url: str, job_id: str, work: Path) ->
             "Set them in openkms-cli/.env."
         )
 
-    stored, _content, ext = _download_input_to_temp(ctx, work)
+    stored, _content, ext = download_input_to_temp(ctx, work)
     parse_path, hash_src = prepare_for_baidu_parse(stored, work / "baidu_stage")
     file_bytes = parse_path.read_bytes()
     file_hash = hashlib.sha256(hash_src.read_bytes()).hexdigest()
@@ -220,7 +122,7 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
         raise AliyunDocmindError("OPENKMS_DOCMIND_ENDPOINT is required")
 
     doc = ctx["document"]
-    bucket, key = _parse_s3_uri(ctx["input_uri"])
+    bucket, key = parse_s3_uri(ctx["input_uri"])
     file_name = Path(doc.get("name") or key).name or Path(key).name
     presign_ttl = cfg.oss_presign_ttl_seconds
 
@@ -278,7 +180,7 @@ def poll_job(job_id: str, api_url: str | None = None) -> None:
         return
 
     if failed:
-        _fail_job(api, job_id, detail or "Provider reported failure")
+        fail_job(api, job_id, detail or "Provider reported failure")
         raise SystemExit(1)
     if ready:
         console.print(
@@ -317,7 +219,7 @@ def _poll_until_provider_ready(
             ready, failed, detail = False, False, None
 
         if failed:
-            _fail_job(api, job_id, detail or "Provider reported failure")
+            fail_job(api, job_id, detail or "Provider reported failure")
             raise SystemExit(1)
         if ready:
             console.print(f"[green]Cloud parse ready for job {job_id} (attempt {attempt})[/green]")
@@ -330,7 +232,7 @@ def _poll_until_provider_ready(
         )
         time.sleep(poll_interval)
 
-    _fail_job(api, job_id, f"Timed out waiting for cloud parse after {max_wait}s")
+    fail_job(api, job_id, f"Timed out waiting for cloud parse after {max_wait}s")
     raise SystemExit(1)
 
 
@@ -343,6 +245,8 @@ def run_async_job(
 ) -> None:
     """
     Platform async orchestration in one CLI process.
+
+    Native ingest (markdown): local materialize → page index → upload → metadata.
 
     Cloud (baidu/aliyun): submit → poll → finalize (+ metadata).
 
@@ -364,11 +268,11 @@ def run_async_job(
         console.print(f"[dim]Job {job_id} already terminal ({stage})[/dim]")
         return
 
-    provider = ctx.get("provider")
-    if is_markdown_job_context(ctx):
-        from openkms_cli.pipeline.markdown_ingest_job import run_markdown_ingest_async_job
+    ingest_kind = resolve_ingest_kind(ctx=ctx)
+    if is_native_ingest(ingest_kind):
+        from openkms_cli.pipeline.native_job import run_native_ingest_async_job
 
-        run_markdown_ingest_async_job(
+        run_native_ingest_async_job(
             job_id,
             api,
             ctx,
@@ -379,7 +283,7 @@ def run_async_job(
     if stage == "parsed":
         extraction_args = (ctx.get("extraction_args") or "").strip()
         if extraction_args:
-            _run_metadata_extraction_from_ctx(ctx, api, job_id)
+            run_metadata_extraction_from_ctx(ctx, api, job_id)
         else:
             patch_job(api, job_id, stage="done")
             console.print(f"[green]Job {job_id} done[/green]")
@@ -426,7 +330,6 @@ def _poll_baidu(task_id: str) -> tuple[bool, bool, str | None]:
 
 def _poll_aliyun(task_id: str) -> tuple[bool, bool, str | None]:
     from openkms_cli.providers.aliyun.docmind import (
-        AliyunDocmindError,
         is_status_failed,
         is_status_success,
         query_doc_parser_status,
@@ -466,18 +369,15 @@ def finalize_job(
 
     external_id = (ctx.get("external_job_id") or "").strip()
     if not external_id:
-        _fail_job(api, job_id, "Missing external_job_id for finalize")
+        fail_job(api, job_id, "Missing external_job_id for finalize")
         raise SystemExit(1)
 
     provider = ctx.get("provider")
-    doc = ctx["document"]
-    prefix = ctx["s3_prefix"]
-    document_id = doc["id"]
 
     work = Path(tempfile.mkdtemp(prefix="openkms-finalize-"))
     out_base = work / "parsed"
     out_base.mkdir(parents=True, exist_ok=True)
-    provider_layouts: list[dict[str, Any]] | None = None
+    _stored, original_content, _ext = download_input_to_temp(ctx, work)
 
     try:
         from openkms_cli.page_index.strategy import effective_page_index_strategy
@@ -489,9 +389,6 @@ def finalize_job(
 
         if provider == "baidu":
             result, hash_dir = _finalize_baidu(ctx, external_id, out_base, work)
-            raw_layouts = result.get("baidu_layouts")
-            if isinstance(raw_layouts, list):
-                provider_layouts = [item for item in raw_layouts if isinstance(item, dict)]
         elif provider == "aliyun":
             result, hash_dir = _finalize_aliyun(
                 ctx,
@@ -499,116 +396,24 @@ def finalize_job(
                 out_base,
                 page_index_strategy=resolved_strategy,
             )
-            raw_layouts = result.get("aliyun_layouts")
-            if isinstance(raw_layouts, list):
-                provider_layouts = [item for item in raw_layouts if isinstance(item, dict)]
         else:
-            _fail_job(api, job_id, f"Unsupported provider: {provider}")
+            fail_job(api, job_id, f"Unsupported provider: {provider}")
             raise SystemExit(1)
 
-        _build_page_index(
-            hash_dir,
-            provider=provider,
-            layouts=provider_layouts,
-            page_index_strategy=resolved_strategy,
-            doc_name=doc.get("name"),
-        )
-        count = _upload_hash_dir(
-            hash_dir,
-            bucket=cfg.aws_bucket_name,
-            prefix=prefix,
-            endpoint_url=cfg.aws_endpoint_url or None,
-            access_key=cfg.aws_access_key_id,
-            secret_key=cfg.aws_secret_access_key,
-            region=cfg.aws_region,
-        )
-        console.print(f"[green]Uploaded {count} files to s3://{cfg.aws_bucket_name}/{prefix}/[/green]")
-
-        markdown = (result.get("markdown") or "").strip()
-        if markdown:
-            _sync_markdown_and_version(api, document_id, markdown)
-
-        patch_job(api, job_id, stage="parsed")
-
-        extraction_args = (ctx.get("extraction_args") or "").strip()
-        if extraction_args:
-            _run_metadata_extraction_from_ctx(ctx, api, job_id)
-        else:
-            patch_job(api, job_id, stage="done")
-            console.print(f"[green]Job {job_id} done[/green]")
-    except Exception as e:
-        _fail_job(api, job_id, str(e))
-        raise SystemExit(1) from e
-
-
-def _run_metadata_extraction_from_ctx(ctx: dict[str, Any], api: str, job_id: str) -> None:
-    extraction_args = (ctx.get("extraction_args") or "").strip()
-    if not extraction_args:
-        patch_job(api, job_id, stage="done")
-        return
-
-    cfg = get_cli_settings()
-    args = shlex.split(extraction_args)
-    document_id = ctx["document"]["id"]
-    prefix = ctx["s3_prefix"]
-
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-
-    hash_dir = Path(tempfile.mkdtemp(prefix="openkms-meta-"))
-    bucket, _ = _parse_s3_uri(ctx["input_uri"])
-
-    client = get_s3_client(
-        cfg.aws_endpoint_url or None,
-        cfg.aws_access_key_id,
-        cfg.aws_secret_access_key,
-        cfg.aws_region,
-    )
-    raw = client.get_object(Bucket=bucket, Key=f"{prefix}/result.json")["Body"].read()
-    result = json.loads(raw)
-    (hash_dir / "result.json").write_bytes(raw)
-    if result.get("markdown"):
-        (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
-
-    def _flag_value(flag: str) -> str | None:
-        if flag not in args:
-            return None
-        idx = args.index(flag)
-        if idx + 1 >= len(args):
-            return None
-        return args[idx + 1]
-
-    auth_headers, basic_auth, has_auth = resolve_api_request_auth(required=True)
-    if not has_auth:
-        raise RuntimeError("API authentication required for metadata extraction")
-
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        task = progress.add_task("Extracting metadata...", total=None)
-        auth_headers, basic_auth = run_pipeline_metadata_extraction(
+        finalize_job_artifacts(
+            api=api,
+            job_id=job_id,
+            ctx=ctx,
             result=result,
             hash_dir=hash_dir,
-            prefix=prefix,
-            extract_metadata="--extract-metadata" in args,
-            document_id=document_id,
-            extraction_schema=_flag_value("--extraction-schema"),
-            extraction_model_name=_flag_value("--extraction-model-name"),
-            extraction_model_base_url=_flag_value("--extraction-model-base-url"),
-            extraction_api_key=_flag_value("--extraction-api-key"),
-            api_url=api,
-            skip_upload=False,
-            bucket=cfg.aws_bucket_name,
-            endpoint_url=cfg.aws_endpoint_url or None,
-            access_key=cfg.aws_access_key_id,
-            secret_key=cfg.aws_secret_access_key,
-            region=cfg.aws_region,
-            progress=progress,
-            task=task,
-            auth_headers=auth_headers,
-            basic_auth=basic_auth,
+            ingest_kind=IngestKind.CLOUD_OCR,
+            page_index_strategy=page_index_strategy,
+            provider=provider,
+            original_content=original_content,
         )
-
-    patch_job(api, job_id, stage="extracted_metadata")
-    patch_job(api, job_id, stage="done")
-    console.print(f"[green]Job {job_id} metadata done[/green]")
+    except Exception as e:
+        fail_job(api, job_id, str(e))
+        raise SystemExit(1) from e
 
 
 def _finalize_baidu(
@@ -617,9 +422,9 @@ def _finalize_baidu(
     out_base: Path,
     work: Path,
 ) -> tuple[dict[str, Any], Path]:
-    from openkms_cli.providers.baidu.parser import BaiduParseError, finalize_baidu_task
+    from openkms_cli.providers.baidu.parser import finalize_baidu_task
 
-    stored, _content, ext = _download_input_to_temp(ctx, work)
+    stored, _content, ext = download_input_to_temp(ctx, work)
     return finalize_baidu_task(
         task_id=task_id,
         input_path=stored,
@@ -701,7 +506,7 @@ def extract_metadata_job(job_id: str, api_url: str | None = None) -> None:
         raise SystemExit(1) from e
 
     try:
-        _run_metadata_extraction_from_ctx(ctx, api, job_id)
+        run_metadata_extraction_from_ctx(ctx, api, job_id)
     except Exception as e:
-        _fail_job(api, job_id, str(e))
+        fail_job(api, job_id, str(e))
         raise SystemExit(1) from e

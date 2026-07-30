@@ -1,14 +1,20 @@
 """Document parsing CLI commands (Baidu Cloud PaddleOCR-VL API)."""
 
-import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn
 
 from openkms_cli.core.settings import get_cli_settings
+from openkms_cli.ingest import (
+    is_native_ingest,
+    resolve_ingest_kind,
+    run_native_ingest,
+    supported_batch_extensions,
+)
+from openkms_cli.pipeline.post_ingest import original_basename_from_path, write_hash_dir_artifacts
 
 console = Console()
 
@@ -17,19 +23,6 @@ parse_app = typer.Typer(
 )
 
 _PARSE_METHODS = frozenset({"baidu-doc-parse", "paddleocr-doc-parse"})
-
-
-def _json_default(obj: Any) -> Any:
-    try:
-        import numpy as np
-
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, (np.integer, np.floating)):
-            return float(obj) if isinstance(obj, np.floating) else int(obj)
-    except ImportError:
-        pass
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 def _resolve_parse_method(method: str) -> str:
@@ -95,10 +88,7 @@ def parse_run(
         )
         raise typer.Exit(1)
 
-    from openkms_cli.parse.markdown_ingest import MARKDOWN_EXTENSIONS
-    from openkms_cli.providers.baidu.parser import _BAIDU_ADOBE_EXT, _BAIDU_NATIVE_EXT
-
-    batch_exts = set(_BAIDU_NATIVE_EXT) | {".epub"} | set(_BAIDU_ADOBE_EXT) | set(MARKDOWN_EXTENSIONS)
+    batch_exts = supported_batch_extensions()
 
     if input_path.is_file():
         files = [input_path]
@@ -127,12 +117,12 @@ def parse_run(
         for fp in files:
             progress.update(task, description=f"Parsing {fp.name}")
             try:
-                from openkms_cli.parse.markdown_ingest import is_markdown_suffix, materialize_markdown_ingest
-
                 work_sub = out_base / "_baidu_tmp"
-                if is_markdown_suffix(fp.suffix):
+                ingest_kind = resolve_ingest_kind(suffix=fp.suffix)
+                if is_native_ingest(ingest_kind):
                     content = fp.read_bytes()
-                    materialize_markdown_ingest(
+                    run_native_ingest(
+                        kind=ingest_kind,
                         stored_input=fp.resolve(),
                         original_content=content,
                         out_base=out_base,
@@ -161,16 +151,13 @@ def parse_run(
                     )
                     file_hash = result["file_hash"]
                     hash_dir = out_base / file_hash
-
                     ext = Path(hash_src).suffix.lower().lstrip(".") or "bin"
-                    (hash_dir / f"original.{ext}").write_bytes(Path(hash_src).read_bytes())
-
-                    result_json = json.dumps(
-                        result, indent=2, ensure_ascii=False, default=_json_default
+                    write_hash_dir_artifacts(
+                        hash_dir=hash_dir,
+                        result=result,
+                        original_content=Path(hash_src).read_bytes(),
+                        original_basename=original_basename_from_path(hash_src),
                     )
-                    (hash_dir / "result.json").write_text(result_json, encoding="utf-8")
-                    if result.get("markdown"):
-                        (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
             except BaiduParseError as e:
                 console.print(f"[red]Failed {fp}: {e}[/red]")
                 raise typer.Exit(1)
