@@ -14,6 +14,7 @@ Deploy **only** `agent-backend` as a separate Vercel project. Pipeline jobs run 
 |---------|--------|
 | **Root Directory** | `agent-backend` (required when using the monorepo) |
 | **Node.js** | 22.x |
+| **Framework Preset** | Other / leave unset — `vercel.json` sets `"framework": null` |
 
 Health check URL is the **backend** deployment, e.g. `https://<backend-project>.vercel.app/health`.
 
@@ -21,7 +22,9 @@ If you use a separate frontend project, do not expect `/health` on the frontend 
 
 ## Build
 
-`npm run build:vercel` bundles the app into `api/index.js` (~10 MB). Use modern `vercel.json` **without** legacy `builds`/`routes` — those skip `buildCommand` and produce empty output in ~4s. Run `npx tsc --noEmit` locally before deploy to catch type errors Vercel will also report.
+`npm run build:vercel` emits Vercel **Build Output API** under `.vercel/output/` (bundled CJS handler at `functions/index.func/index.js`, ~10 MB). This bypasses the Hono framework preset, which otherwise compiles `src/app.ts` without rewriting `.ts` imports and crashes at runtime (`ERR_MODULE_NOT_FOUND`).
+
+Run `npx tsc --noEmit` locally before deploy to catch type errors.
 
 ## Required environment variables
 
@@ -54,9 +57,11 @@ curl https://<backend>/health
 # {"ok":true,"service":"agent-backend"}
 ```
 
+After a good deploy, the Vercel function size should be ~10 MB (full esbuild bundle), not ~5 MB (Hono preset compiling `src/` only).
+
 ## SSE / agent streaming
 
-`maxDuration: 300` is exported from the esbuild bundle (`scripts/vercel-entry.ts`). Vercel **Hobby** still caps execution at **10s**; **Pro** is required for longer agent SSE streams.
+`maxDuration: 300` is set in `.vc-config.json`. Vercel **Hobby** still caps execution at **10s**; **Pro** is required for longer agent SSE streams.
 
 ## Known serverless limits
 
