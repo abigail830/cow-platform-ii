@@ -21,7 +21,7 @@ If you use a separate frontend project, do not expect `/health` on the frontend 
 
 ## Build
 
-`npm run build:vercel` bundles the app with esbuild into `api/index.js`. Vercel `builds`/`routes` in `vercel.json` register that file after the build step (no TypeScript compile of `src/**/*.ts`).
+`npm run build:vercel` bundles the app into `api/index.js` (~10 MB). Use modern `vercel.json` **without** legacy `builds`/`routes` — those skip `buildCommand` and produce empty output in ~4s.
 
 ## Required environment variables
 

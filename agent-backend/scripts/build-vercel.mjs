@@ -1,5 +1,5 @@
 import esbuild from 'esbuild';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,4 +33,10 @@ await esbuild.build({
   },
 });
 
-console.log('Vercel serverless bundle: api/index.js');
+const outFile = path.join(outDir, 'index.js');
+const { size } = statSync(outFile);
+if (size < 100_000) {
+  throw new Error(`api/index.js bundle suspiciously small (${size} bytes)`);
+}
+
+console.log(`Vercel serverless bundle: api/index.js (${(size / 1024 / 1024).toFixed(1)} MB)`);
