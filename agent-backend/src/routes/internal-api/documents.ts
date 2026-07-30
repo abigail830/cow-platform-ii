@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
 import { appDocuments, db } from '../../db/index.ts';
+import { routeParam } from '../../http/route-param.ts';
 import {
   getChannelById,
   getDocumentById,
@@ -35,7 +36,10 @@ function metadataNeedsExtraction(
 }
 
 documents.get('/:id', async (c) => {
-  const doc = await getDocumentById(c.req.param('id'));
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+  const doc = await getDocumentById(id);
   if (!doc) return c.json({ error: 'Document not found' }, 404);
   return c.json({
     id: doc.id,
@@ -49,7 +53,10 @@ documents.get('/:id', async (c) => {
 });
 
 documents.get('/:id/metadata-needs-extraction', async (c) => {
-  const doc = await getDocumentById(c.req.param('id'));
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+  const doc = await getDocumentById(id);
   if (!doc) return c.json({ error: 'Document not found' }, 404);
   const channel = await getChannelById(doc.channelId);
   if (!channel) return c.json({ error: 'Channel not found' }, 404);
@@ -64,10 +71,15 @@ documents.get('/:id/metadata-needs-extraction', async (c) => {
 documents.put('/:id/markdown', async (c) => {
   if (!isStorageEnabled()) return c.json({ error: 'Object storage is not configured' }, 503);
 
-  const doc = await getDocumentById(c.req.param('id'));
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+  const doc = await getDocumentById(id);
   if (!doc) return c.json({ error: 'Document not found' }, 404);
 
-  const body = await c.req.json<{ markdown?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ markdown?: string }>().catch(
+    (): { markdown?: string } => ({}),
+  );
   if (typeof body.markdown !== 'string') {
     return c.json({ error: 'markdown is required' }, 400);
   }
@@ -88,13 +100,18 @@ documents.put('/:id/markdown', async (c) => {
 });
 
 documents.put('/:id/metadata', async (c) => {
-  const body = await c.req.json<{ metadata?: Record<string, unknown> }>().catch(() => ({}));
+  const body = await c.req.json<{ metadata?: Record<string, unknown> }>().catch(
+    (): { metadata?: Record<string, unknown> } => ({}),
+  );
   if (!body.metadata || typeof body.metadata !== 'object' || Array.isArray(body.metadata)) {
     return c.json({ error: 'metadata object is required' }, 400);
   }
 
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Document id is required' }, 400);
+
   try {
-    const result = await updateDocumentMetadata(c.req.param('id'), body.metadata);
+    const result = await updateDocumentMetadata(id, body.metadata);
     return c.json({ ok: true, metadata: result.metadata });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update metadata';
@@ -104,7 +121,10 @@ documents.put('/:id/metadata', async (c) => {
 });
 
 documents.post('/:id/versions', async (c) => {
-  const doc = await getDocumentById(c.req.param('id'));
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+  const doc = await getDocumentById(id);
   if (!doc) return c.json({ error: 'Document not found' }, 404);
 
   // Version snapshots are not persisted yet; acknowledge pipeline completion.

@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
+import { routeParam } from '../http/route-param.ts';
 import { isStorageEnabled } from '../storage/s3-config.ts';
 import {
   assembleUploadSession,
@@ -122,7 +123,10 @@ documents.get(
   async (c) => {
     if (!isStorageEnabled()) return storageUnavailable(c);
 
-    const row = await getDocumentById(c.req.param('id'));
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const row = await getDocumentById(id);
     if (!row) return c.json({ error: 'Document not found' }, 404);
 
     try {
@@ -149,7 +153,10 @@ documents.get(
   async (c) => {
     if (!isStorageEnabled()) return storageUnavailable(c);
 
-    const row = await getDocumentById(c.req.param('id'));
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const row = await getDocumentById(id);
     if (!row) return c.json({ error: 'Document not found' }, 404);
 
     try {
@@ -166,13 +173,18 @@ documents.put(
   '/:id/metadata',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
   async (c) => {
-    const body = await c.req.json<{ metadata?: Record<string, unknown> }>().catch(() => ({}));
+    const body = await c.req.json<{ metadata?: Record<string, unknown> }>().catch(
+      (): { metadata?: Record<string, unknown> } => ({}),
+    );
     if (!body.metadata || typeof body.metadata !== 'object' || Array.isArray(body.metadata)) {
       return c.json({ error: 'metadata object is required' }, 400);
     }
 
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
     try {
-      const result = await updateDocumentMetadata(c.req.param('id'), body.metadata);
+      const result = await updateDocumentMetadata(id, body.metadata);
       return c.json({ ok: true, metadata: result.metadata });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update metadata';
@@ -186,12 +198,17 @@ documents.put(
   '/:id',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
   async (c) => {
-    const body = await c.req.json<{ channel_id?: string }>().catch(() => ({}));
+    const body = await c.req.json<{ channel_id?: string }>().catch(
+      (): { channel_id?: string } => ({}),
+    );
     const channelId = body.channel_id;
     if (!channelId) return c.json({ error: 'channel_id is required' }, 400);
 
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
     try {
-      const document = await moveDocument(c.req.param('id'), channelId);
+      const document = await moveDocument(id, channelId);
       return c.json(document);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to move document';
@@ -208,7 +225,10 @@ documents.get(
     if (!isStorageEnabled()) return storageUnavailable(c);
 
     try {
-      const content = await getDocumentContent(c.req.param('id'));
+      const id = routeParam(c, 'id');
+      if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+      const content = await getDocumentContent(id);
       return c.json(content);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load document content';
@@ -222,7 +242,10 @@ documents.get(
   '/:id',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
-    const row = await getDocumentById(c.req.param('id'));
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const row = await getDocumentById(id);
     if (!row) return c.json({ error: 'Document not found' }, 404);
     const document = await getDocumentPublicById(row.id);
     if (!document) return c.json({ error: 'Document not found' }, 404);
@@ -324,7 +347,10 @@ documents.post(
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
   async (c) => {
     try {
-      const result = await startDocumentPipeline(c.req.param('id'));
+      const id = routeParam(c, 'id');
+      if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+      const result = await startDocumentPipeline(id);
       return c.json(result, 202);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start pipeline';
@@ -339,7 +365,10 @@ documents.delete(
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
   async (c) => {
     try {
-      const row = await deleteDocument(c.req.param('id'));
+      const id = routeParam(c, 'id');
+      if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+      const row = await deleteDocument(id);
       if (isStorageEnabled()) {
         try {
           await deleteDocumentStorage(row.fileHash);
