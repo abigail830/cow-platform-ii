@@ -25,7 +25,7 @@ const systemPrompt = '';
 
 type AgentModule = {
   default?: {
-    __flueCreatedAgent?: boolean;
+    __flueAgentDefinition?: boolean;
     initialize?: (...args: never[]) => unknown;
   };
   route?: AgentRouteHandler;
@@ -60,7 +60,7 @@ function normalizeBuiltModules(
   const workflowRouteMiddleware: Record<string, AgentRouteHandler> = {};
 
   for (const [name, mod] of Object.entries(agentModules)) {
-    if (!mod.default?.__flueCreatedAgent || typeof mod.default.initialize !== 'function') {
+    if (!mod.default?.__flueAgentDefinition || typeof mod.default.initialize !== 'function') {
       throw new Error(`[flue] Agent "${name}" must default-export defineAgent(...).`);
     }
     if (mod.route !== undefined && typeof mod.route !== 'function') {
