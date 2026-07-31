@@ -27,7 +27,7 @@ import {
   createDocumentRecord,
   deleteDocument,
   getDocumentById,
-  getDocumentContent,
+  getDocumentContentManifest,
   getDocumentPublicById,
   getDocumentStats,
   listDocuments,
@@ -228,7 +228,7 @@ documents.get(
       const id = routeParam(c, 'id');
       if (!id) return c.json({ error: 'Document id is required' }, 400);
 
-      const content = await getDocumentContent(id);
+      const content = await getDocumentContentManifest(id);
       return c.json(content);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load document content';

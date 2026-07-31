@@ -355,6 +355,21 @@ export async function getDocumentStats(): Promise<{ channels: number; documents:
   };
 }
 
+export type DocumentContentSources = {
+  markdown_url: string;
+  page_index_url: string;
+  parsing_result_url?: string;
+};
+
+export type DocumentContentManifest = {
+  id: string;
+  name: string;
+  file_type: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  sources: DocumentContentSources;
+};
+
 export type DocumentContentResponse = {
   id: string;
   name: string;
@@ -368,43 +383,21 @@ export type DocumentContentResponse = {
   has_page_index: boolean;
 };
 
-export async function getDocumentContent(id: string): Promise<DocumentContentResponse> {
+/** Presigned URLs only — browser fetches OSS directly (avoids Vercel→OSS connectivity). */
+export async function getDocumentContentManifest(id: string): Promise<DocumentContentManifest> {
   const doc = await getDocumentById(id);
   if (!doc) throw new Error('Document not found');
 
-  const { readStorageText, storagePrefixFromS3Key } = await import('../storage/document-content.ts');
+  const { storagePrefixFromS3Key } = await import('../storage/document-content.ts');
+  const { getStorageReadUrl } = await import('../storage/document-files.ts');
   const prefix = storagePrefixFromS3Key(doc.s3Key);
   const needsParsingResult = doc.fileType.toUpperCase() === 'XMIND';
 
-  const [markdown, pageIndexRaw, resultRaw] = await Promise.all([
-    readStorageText(`${prefix}/markdown.md`),
-    readStorageText(`${prefix}/page_index.json`),
-    needsParsingResult ? readStorageText(`${prefix}/result.json`) : Promise.resolve(null),
+  const [markdownUrl, pageIndexUrl, parsingResultUrl] = await Promise.all([
+    getStorageReadUrl(`${prefix}/markdown.md`),
+    getStorageReadUrl(`${prefix}/page_index.json`),
+    needsParsingResult ? getStorageReadUrl(`${prefix}/result.json`) : Promise.resolve(undefined),
   ]);
-
-  let page_index: Record<string, unknown> | null = null;
-  if (pageIndexRaw) {
-    try {
-      const parsed = JSON.parse(pageIndexRaw) as unknown;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        page_index = parsed as Record<string, unknown>;
-      }
-    } catch {
-      page_index = null;
-    }
-  }
-
-  let parsing_result: Record<string, unknown> | null = null;
-  if (resultRaw) {
-    try {
-      const parsed = JSON.parse(resultRaw) as unknown;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        parsing_result = parsed as Record<string, unknown>;
-      }
-    } catch {
-      parsing_result = null;
-    }
-  }
 
   return {
     id: doc.id,
@@ -412,10 +405,10 @@ export async function getDocumentContent(id: string): Promise<DocumentContentRes
     file_type: doc.fileType,
     status: doc.status,
     metadata: doc.metadata ?? {},
-    markdown,
-    page_index,
-    parsing_result,
-    has_markdown: Boolean(markdown?.trim()),
-    has_page_index: page_index !== null,
+    sources: {
+      markdown_url: markdownUrl,
+      page_index_url: pageIndexUrl,
+      ...(parsingResultUrl ? { parsing_result_url: parsingResultUrl } : {}),
+    },
   };
 }

@@ -132,6 +132,16 @@ export async function createDocumentBundleArchive(fileHash: string): Promise<Rea
   return archive;
 }
 
+/** Presigned GET for parsed artifacts (markdown, page_index, etc.) — signing is local, no OSS round-trip. */
+export async function getStorageReadUrl(key: string, expiresIn = 900): Promise<string> {
+  const { client, config } = assertStorageClient();
+  const command = new GetObjectCommand({
+    Bucket: config.bucket,
+    Key: key,
+  });
+  return getSignedUrl(client, command, { expiresIn });
+}
+
 export async function getDocumentDownloadUrl(
   s3Key: string,
   filename: string,

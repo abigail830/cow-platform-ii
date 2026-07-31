@@ -48,6 +48,19 @@ async function authFetch(path: string, init?: RequestInit) {
   return data;
 }
 
+type DocumentContentManifest = {
+  id: string;
+  name: string;
+  file_type: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  sources: {
+    markdown_url: string;
+    page_index_url: string;
+    parsing_result_url?: string;
+  };
+};
+
 export type DocumentContentResponse = {
   id: string;
   name: string;
@@ -60,6 +73,28 @@ export type DocumentContentResponse = {
   has_markdown: boolean;
   has_page_index: boolean;
 };
+
+function parseJsonRecord(raw: string | null): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function fetchStorageText(url: string, signal?: AbortSignal): Promise<string | null> {
+  const res = await fetch(url, { signal });
+  if (res.status === 404 || res.status === 403) return null;
+  if (!res.ok) {
+    throw new Error(`Object storage read failed (${res.status})`);
+  }
+  return res.text();
+}
 
 export async function getDocument(id: string): Promise<DocumentRecord> {
   const data = await authFetch(`/api/documents/${id}`);
@@ -75,8 +110,34 @@ export async function fetchDocumentContent(
     timeoutMs && timeoutMs > 0 && typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal
       ? AbortSignal.timeout(timeoutMs)
       : undefined;
-  const data = await authFetch(`/api/documents/${id}/content`, signal ? { signal } : undefined);
-  return data as DocumentContentResponse;
+  const manifest = (await authFetch(
+    `/api/documents/${id}/content`,
+    signal ? { signal } : undefined,
+  )) as DocumentContentManifest;
+
+  const [markdown, pageIndexRaw, resultRaw] = await Promise.all([
+    fetchStorageText(manifest.sources.markdown_url, signal),
+    fetchStorageText(manifest.sources.page_index_url, signal),
+    manifest.sources.parsing_result_url
+      ? fetchStorageText(manifest.sources.parsing_result_url, signal)
+      : Promise.resolve(null),
+  ]);
+
+  const page_index = parseJsonRecord(pageIndexRaw);
+  const parsing_result = parseJsonRecord(resultRaw);
+
+  return {
+    id: manifest.id,
+    name: manifest.name,
+    file_type: manifest.file_type,
+    status: manifest.status,
+    metadata: manifest.metadata,
+    markdown,
+    page_index,
+    parsing_result,
+    has_markdown: Boolean(markdown?.trim()),
+    has_page_index: page_index !== null,
+  };
 }
 
 export async function listDocuments(params: {

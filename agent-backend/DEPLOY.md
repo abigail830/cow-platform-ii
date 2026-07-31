@@ -48,6 +48,8 @@ Run `npx tsc --noEmit` locally before deploy to catch type errors.
 | `MODEL_PROFILE` + provider keys | Agent models |
 | `AWS_*` | OSS document storage |
 
+**OSS CORS (required for document detail):** Parsed content (`markdown.md`, `page_index.json`) is fetched by the **browser** via presigned URLs. In Aliyun OSS → bucket → **Cross-Origin Resource Sharing**, allow your frontend origin, e.g. `https://cow-platform.vercel.app`, with methods `GET` and headers `*`. Without CORS, the detail page shows storage read errors while the list still works.
+
 Do **not** set `PIPELINE_WORKER=spawn` on Vercel.
 
 ## Database migrate
