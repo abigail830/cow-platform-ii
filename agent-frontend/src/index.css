@@ -552,6 +552,7 @@ textarea {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: 1rem 1.25rem;
   font-size: 13px;
   font-weight: 400;

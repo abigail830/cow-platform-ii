@@ -1,7 +1,22 @@
-import { memo, useState, type ReactNode } from 'react';
+import { memo, startTransition, useEffect, useState, type ReactNode } from 'react';
 import type { FlueConversationPart } from '@flue/react';
 import { Markdown } from './Markdown.tsx';
 import { isPartStreaming, partBodyText, partFoldLabel } from './part-labels.ts';
+
+function CompletedTextPart({ text }: { text: string }) {
+  const [useMarkdown, setUseMarkdown] = useState(false);
+
+  useEffect(() => {
+    setUseMarkdown(false);
+    startTransition(() => setUseMarkdown(true));
+  }, [text]);
+
+  if (!useMarkdown) {
+    return <pre className="streaming-plain-text">{text}</pre>;
+  }
+
+  return <Markdown>{text}</Markdown>;
+}
 
 type DynamicToolPart = Extract<FlueConversationPart, { type: 'dynamic-tool' }>;
 
@@ -78,7 +93,7 @@ function MessagePartView({ part }: { part: FlueConversationPart }) {
       }
       return (
         <div className="text-part">
-          {part.text.length > 0 ? <Markdown>{part.text}</Markdown> : null}
+          {part.text.length > 0 ? <CompletedTextPart text={part.text} /> : null}
         </div>
       );
 

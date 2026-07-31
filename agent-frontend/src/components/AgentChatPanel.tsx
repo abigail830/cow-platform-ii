@@ -1,5 +1,5 @@
 import { useFlueAgent } from '@flue/react';
-import { useDeferredValue, useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import { isAgentBusy } from '../chat/agentStatus.ts';
 import { sendMessageWithAdmissionRetry } from '../chat/agent-send-retry.ts';
 import { resolveFlueLiveMode } from '../chat/flue-live-mode.ts';
@@ -7,6 +7,7 @@ import { isAwaitingAssistantResponse } from '../chat/assistant-turn.ts';
 import { filterRenderableParts, groupMessages, mergeAssistantParts, partRenderKey, userMessageText } from '../chat/groupMessages.ts';
 import { shouldShowTypingIndicator } from '../chat/typing-indicator.ts';
 import { useChatAutoScroll } from '../chat/use-chat-auto-scroll.ts';
+import { useThrottledMessages } from '../chat/use-throttled-messages.ts';
 import { MessagePart } from '../chat/MessagePart.tsx';
 import { toAgentInstanceId } from '../shared/agent-instance-id.ts';
 import { AssistantInProgress } from './AssistantInProgress.tsx';
@@ -52,7 +53,7 @@ export function AgentChatPanel({
   });
 
   const busy = isAgentBusy(agent.status);
-  const renderMessages = useDeferredValue(agent.messages);
+  const renderMessages = useThrottledMessages(agent.messages, busy);
   const turns = useMemo(() => groupMessages(renderMessages), [renderMessages]);
   const showTypingIndicator = shouldShowTypingIndicator(agent.status, agent.messages);
   const awaitingAssistant = isAwaitingAssistantResponse(agent.status, agent.messages);
