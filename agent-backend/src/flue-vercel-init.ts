@@ -1,16 +1,19 @@
 // @ts-nocheck — mirrors Flue-generated server bootstrap; internal types are not exported.
 /**
  * Initialize Flue agent runtime on Vercel (no `flue build` server entry).
- * Mirrors the generated block in dist/server.mjs without calling serve().
+ * Mirrors loadFlueNodeApplication() persistence + configureFlueRuntime() from @flue/cli.
  */
 import {
   Bash,
   InMemoryFs,
+  admitDetachedWorkflow,
+  assertWorkflowDefinition,
   bashFactoryToSessionEnv,
   configureFlueRuntime,
   createFlueContext,
   createNodeAgentCoordinator,
   createNodeDispatchQueue,
+  createRuntimeActivityGate,
   resolveModel,
 } from '@flue/runtime/internal';
 import type { AgentRouteHandler } from '@flue/runtime';
@@ -18,46 +21,35 @@ import * as genericOkf from './agents/generic-okf.ts';
 import * as smartProposal from './agents/smart-proposal.ts';
 import db from './db.ts';
 
-const RUNTIME_VERSION = '1.0.0-beta.9';
-const packagedSkills: Record<string, unknown> = {};
-const skills: Record<string, unknown> = {};
-const systemPrompt = '';
-
 type AgentModule = {
   default?: {
     __flueAgentDefinition?: boolean;
     initialize?: (...args: never[]) => unknown;
   };
   route?: AgentRouteHandler;
-};
-
-type FluePersistence = typeof db & {
-  migrate?: () => Promise<void>;
-  connect: () => {
-    sessions: { save: (...args: never[]) => unknown };
-    submissions: { getSubmission: (...args: never[]) => unknown };
-  };
-  connectRunStore: () => unknown;
-  connectRunRegistry: () => unknown;
-  connectEventStreamStore: () => {
-    appendEvent: (...args: never[]) => unknown;
-    readEvents: (...args: never[]) => unknown;
-  };
+  attachments?: AgentRouteHandler;
+  description?: string;
 };
 
 function normalizeBuiltModules(
   agentModules: Record<string, AgentModule>,
-  workflowModules: Record<string, { run?: unknown; route?: unknown }>,
+  workflowModules: Record<string, { default?: unknown; route?: unknown; runs?: unknown }>,
+  channelModules: Record<string, unknown> = {},
 ) {
-  const manifest: {
-    agents: Array<{ name: string; transports: Record<string, boolean>; created: boolean }>;
-    workflows: Array<{ name: string; transports: Record<string, boolean> }>;
-  } = { agents: [], workflows: [] };
-  const createdAgents: Record<string, NonNullable<AgentModule['default']>> = {};
-  const dispatchAgentNames = new Map<NonNullable<AgentModule['default']>, string>();
-  const workflowHandlers: Record<string, unknown> = {};
-  const agentRouteMiddleware: Record<string, AgentRouteHandler> = {};
-  const workflowRouteMiddleware: Record<string, AgentRouteHandler> = {};
+  const agents: Array<{
+    name: string;
+    definition: NonNullable<AgentModule['default']>;
+    route?: AgentRouteHandler;
+    attachments?: AgentRouteHandler;
+    description?: string;
+  }> = [];
+  const workflows: Array<{
+    name: string;
+    definition: unknown;
+    route?: AgentRouteHandler;
+    runs?: AgentRouteHandler;
+  }> = [];
+  const channelHandlers: Record<string, Record<string, AgentRouteHandler>> = {};
 
   for (const [name, mod] of Object.entries(agentModules)) {
     if (!mod.default?.__flueAgentDefinition || typeof mod.default.initialize !== 'function') {
@@ -66,37 +58,93 @@ function normalizeBuiltModules(
     if (mod.route !== undefined && typeof mod.route !== 'function') {
       throw new Error(`[flue] Agent "${name}" route export must be middleware.`);
     }
-    const transports: Record<string, boolean> = {};
-    if (typeof mod.route === 'function') transports.http = true;
-    manifest.agents.push({ name, transports, created: true });
-    createdAgents[name] = mod.default;
-    const previous = dispatchAgentNames.get(mod.default);
-    if (previous !== undefined) {
-      throw new Error(`[flue] Agents "${previous}" and "${name}" share the same agent definition.`);
+    if (mod.attachments !== undefined && typeof mod.attachments !== 'function') {
+      throw new Error(`[flue] Agent "${name}" attachments export must be middleware.`);
     }
-    dispatchAgentNames.set(mod.default, name);
-    if (typeof mod.route === 'function') agentRouteMiddleware[name] = mod.route;
+    if (
+      mod.description !== undefined &&
+      (typeof mod.description !== 'string' || mod.description.trim().length === 0)
+    ) {
+      throw new Error(`[flue] Agent "${name}" description export must be a non-empty string.`);
+    }
+    const previous = agents.find((agent) => agent.definition === mod.default);
+    if (previous) {
+      throw new Error(
+        `[flue] Agents "${previous.name}" and "${name}" default-export the same agent definition.`,
+      );
+    }
+    const agent = { name, definition: mod.default };
+    if (mod.description !== undefined) agent.description = mod.description;
+    if (typeof mod.route === 'function') agent.route = mod.route;
+    if (typeof mod.attachments === 'function') agent.attachments = mod.attachments;
+    agents.push(agent);
   }
 
   for (const [name, mod] of Object.entries(workflowModules)) {
-    if (typeof mod.run !== 'function') {
-      throw new Error(`[flue] Workflow "${name}" must export run.`);
+    assertWorkflowDefinition(mod.default, name);
+    if (mod.route !== undefined && typeof mod.route !== 'function') {
+      throw new Error(`[flue] Workflow "${name}" route export must be middleware.`);
     }
-    const transports: Record<string, boolean> = {};
-    if (typeof mod.route === 'function') transports.http = true;
-    manifest.workflows.push({ name, transports });
-    if (transports.http) workflowHandlers[name] = mod.run;
-    if (typeof mod.route === 'function') workflowRouteMiddleware[name] = mod.route as AgentRouteHandler;
+    if (mod.runs !== undefined && typeof mod.runs !== 'function') {
+      throw new Error(`[flue] Workflow "${name}" runs export must be middleware.`);
+    }
+    const previous = workflows.find((workflow) => workflow.definition === mod.default);
+    if (previous) {
+      throw new Error(
+        `[flue] Workflows "${previous.name}" and "${name}" default-export the same workflow definition.`,
+      );
+    }
+    const workflow = { name, definition: mod.default };
+    if (typeof mod.route === 'function') workflow.route = mod.route;
+    if (typeof mod.runs === 'function') workflow.runs = mod.runs;
+    workflows.push(workflow);
   }
 
-  return {
-    manifest,
-    createdAgents,
-    dispatchAgentNames,
-    workflowHandlers,
-    agentRouteMiddleware,
-    workflowRouteMiddleware,
-  };
+  for (const [name, mod] of Object.entries(channelModules)) {
+    const channel = (mod as { channel?: { routes?: Array<{ method?: string; path?: string; handler?: unknown }> } })
+      .channel;
+    if (!channel || typeof channel !== 'object' || Array.isArray(channel)) {
+      throw new Error(`[flue] Channel "${name}" must export a created channel as the named "channel" binding.`);
+    }
+    if (!Array.isArray(channel.routes) || channel.routes.length === 0) {
+      throw new Error(`[flue] Channel "${name}" must declare at least one route.`);
+    }
+    const routes: Record<string, AgentRouteHandler> = {};
+    for (const route of channel.routes) {
+      if (!route || typeof route !== 'object' || Array.isArray(route)) {
+        throw new Error(`[flue] Channel "${name}" contains an invalid route declaration.`);
+      }
+      if (typeof route.method !== 'string' || !/^[A-Z]+$/.test(route.method)) {
+        throw new Error(`[flue] Channel "${name}" route method must contain only uppercase ASCII letters.`);
+      }
+      if (
+        typeof route.path !== 'string' ||
+        route.path.length < 2 ||
+        !route.path.startsWith('/') ||
+        route.path.startsWith('//') ||
+        route.path.includes('?') ||
+        route.path.includes('#')
+      ) {
+        throw new Error(
+          `[flue] Channel "${name}" route path must be a non-empty absolute suffix without a query or fragment.`,
+        );
+      }
+      if (route.path.split('/').some((segment) => segment === '.' || segment === '..')) {
+        throw new Error(`[flue] Channel "${name}" route path must remain beneath its channel namespace.`);
+      }
+      if (typeof route.handler !== 'function') {
+        throw new Error(`[flue] Channel "${name}" route handler must be callable.`);
+      }
+      const key = `${route.method} ${route.path}`;
+      if (routes[key] !== undefined) {
+        throw new Error(`[flue] Channel "${name}" declares duplicate route "${key}".`);
+      }
+      routes[key] = route.handler as AgentRouteHandler;
+    }
+    channelHandlers[name] = routes;
+  }
+
+  return { agents, workflows, channelHandlers };
 }
 
 async function createDefaultEnv() {
@@ -115,109 +163,179 @@ let initialized = false;
 export async function initFlueRuntime(): Promise<void> {
   if (initialized) return;
 
-  const {
-    manifest,
-    createdAgents,
-    dispatchAgentNames,
-    workflowHandlers,
-    agentRouteMiddleware,
-    workflowRouteMiddleware,
-  } = normalizeBuiltModules(
+  const { agents, workflows, channelHandlers } = normalizeBuiltModules(
     {
       'generic-okf': genericOkf,
       'smart-proposal': smartProposal,
     },
     {},
+    {},
   );
 
-  const persistence = db as FluePersistence;
+  const persistence = db as {
+    migrate?: () => Promise<void>;
+    connect: () =>
+      | Promise<{
+          executionStore: { submissions: { getSubmission: (...args: never[]) => unknown } };
+          runStore: { createRun: (...args: never[]) => unknown; listRuns: (...args: never[]) => unknown };
+          eventStreamStore: {
+            appendEvent: (...args: never[]) => unknown;
+            readEvents: (...args: never[]) => unknown;
+          };
+          conversationStreamStore: {
+            append: (...args: never[]) => unknown;
+            acquireProducer: (...args: never[]) => unknown;
+          };
+          attachmentStore: { put: (...args: never[]) => unknown; get: (...args: never[]) => unknown };
+        }>
+      | {
+          executionStore: { submissions: { getSubmission: (...args: never[]) => unknown } };
+          runStore: { createRun: (...args: never[]) => unknown; listRuns: (...args: never[]) => unknown };
+          eventStreamStore: {
+            appendEvent: (...args: never[]) => unknown;
+            readEvents: (...args: never[]) => unknown;
+          };
+          conversationStreamStore: {
+            append: (...args: never[]) => unknown;
+            acquireProducer: (...args: never[]) => unknown;
+          };
+          attachmentStore: { put: (...args: never[]) => unknown; get: (...args: never[]) => unknown };
+        };
+  };
+
   if (!persistence || typeof persistence.connect !== 'function') {
-    throw new Error('[flue] db.ts must default-export a PersistenceAdapter with connect().');
+    throw new Error('[flue] db.ts must default-export a PersistenceAdapter with a connect() method.');
   }
 
-  if (persistence.migrate) await persistence.migrate();
-  const executionStore = persistence.connect();
-  if (
-    !executionStore?.sessions?.save ||
-    !executionStore?.submissions?.getSubmission
-  ) {
-    throw new Error('[flue] connect() must return AgentExecutionStore with sessions and submissions.');
+  let executionStore;
+  let runStore;
+  let eventStreamStore;
+  let conversationStreamStore;
+  let attachmentStore;
+
+  try {
+    if (persistence.migrate) await persistence.migrate();
+    const stores = await persistence.connect();
+    if (!stores || typeof stores !== 'object') {
+      throw new Error('connect() must return { executionStore, runStore, eventStreamStore }.');
+    }
+    ({ executionStore, runStore, eventStreamStore, conversationStreamStore, attachmentStore } = stores);
+    if (!executionStore || typeof executionStore.submissions?.getSubmission !== 'function') {
+      throw new Error('connect() must return an executionStore with submissions.');
+    }
+    if (!runStore || typeof runStore.createRun !== 'function' || typeof runStore.listRuns !== 'function') {
+      throw new Error('connect() must return a runStore.');
+    }
+    if (
+      !eventStreamStore ||
+      typeof eventStreamStore.appendEvent !== 'function' ||
+      typeof eventStreamStore.readEvents !== 'function'
+    ) {
+      throw new Error('connect() must return an eventStreamStore.');
+    }
+    if (
+      !conversationStreamStore ||
+      typeof conversationStreamStore.append !== 'function' ||
+      typeof conversationStreamStore.acquireProducer !== 'function'
+    ) {
+      throw new Error('connect() must return a conversationStreamStore.');
+    }
+    if (
+      !attachmentStore ||
+      typeof attachmentStore.put !== 'function' ||
+      typeof attachmentStore.get !== 'function'
+    ) {
+      throw new Error('connect() must return an attachmentStore.');
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`[flue] Failed to initialize persistence from db.ts: ${message}`, { cause: error });
   }
 
-  const runStore = persistence.connectRunStore();
-  const runRegistry = persistence.connectRunRegistry();
-  if (typeof persistence.connectEventStreamStore !== 'function') {
-    throw new Error('[flue] connectEventStreamStore() must be defined on the PersistenceAdapter.');
-  }
-  const eventStreamStore = persistence.connectEventStreamStore();
-  if (!eventStreamStore?.appendEvent || !eventStreamStore?.readEvents) {
-    throw new Error('[flue] connectEventStreamStore() must return EventStreamStore.');
-  }
+  const activityGate = createRuntimeActivityGate();
 
-  function createContextForRequest(
-    id: string,
-    runId: string,
-    payload: unknown,
-    req: Request,
-    initialEventIndex?: number,
-    dispatchId?: string,
-  ) {
+  function createAgentContextForRequest({ id, agentName, request, initialEventIndex, dispatchId }) {
     return createFlueContext({
       id,
-      runId,
+      agentName,
       dispatchId,
-      payload,
       initialEventIndex,
       env: process.env,
-      req,
-      agentConfig: {
-        systemPrompt,
-        skills,
-        packagedSkills,
-        model: undefined,
-        resolveModel,
-      },
+      req: request,
+      agentConfig: { resolveModel },
       createDefaultEnv,
-      defaultStore: executionStore.sessions,
+      submissionStore: executionStore.submissions,
+    });
+  }
+
+  function createWorkflowContextForRequest({ runId, request, initialEventIndex }) {
+    return createFlueContext({
+      id: runId,
+      runId,
+      initialEventIndex,
+      env: process.env,
+      req: request,
+      agentConfig: { resolveModel },
+      createDefaultEnv,
       submissionStore: executionStore.submissions,
     });
   }
 
   const agentCoordinator = createNodeAgentCoordinator({
     submissions: executionStore.submissions,
-    agents: createdAgents,
-    createContext: createContextForRequest,
-    eventStreamStore,
+    agents,
+    createContext: createAgentContextForRequest,
+    conversationStreamStore,
+    attachmentStore,
+    activityGate,
   });
 
   const dispatchQueue = createNodeDispatchQueue(agentCoordinator);
-  const createAdmission = Object.fromEntries(
-    Object.keys(createdAgents).map((name) => [
-      name,
-      (instanceId: string) => agentCoordinator.createAdmission(name, instanceId),
-    ]),
-  );
 
   configureFlueRuntime({
     target: 'node',
     devMode: process.env.FLUE_MODE === 'local',
-    runtimeVersion: RUNTIME_VERSION,
-    manifest,
-    createAdmission,
+    temporaryLocalExposure: false,
+    agents,
+    workflows,
+    createAgentAdmission: (agentName, instanceId) =>
+      agentCoordinator.createAdmission(agentName, instanceId),
+    abortAgentInstance: (agentName, instanceId) =>
+      agentCoordinator.abortInstance(agentName, instanceId),
     dispatchQueue,
-    resolveDispatchAgentName: (agent) => dispatchAgentNames.get(agent),
-    workflowHandlers,
-    agentRouteMiddleware,
-    workflowRouteMiddleware,
-    createContext: createContextForRequest,
+    activityGate,
+    admitWorkflow: ({ workflowName, input }) => {
+      const workflow = workflows.find((record) => record.name === workflowName)?.definition;
+      if (!workflow) {
+        throw new Error('[flue] Internal workflow admission target is not registered.');
+      }
+      return admitDetachedWorkflow({
+        workflowName,
+        workflow,
+        input,
+        request: new Request(
+          `https://flue.invalid/_internal/workflows/${encodeURIComponent(workflowName)}`,
+          { method: 'POST' },
+        ),
+        createContext: createWorkflowContextForRequest,
+        runStore,
+        eventStreamStore,
+        activityGate,
+      });
+    },
+    channelHandlers,
+    createWorkflowContext: createWorkflowContextForRequest,
     runStore,
-    runRegistry,
     eventStreamStore,
+    conversationStreamStore,
+    attachmentStore,
   });
 
-  void agentCoordinator.reconcileSubmissions().catch((error) => {
+  try {
+    await agentCoordinator.reconcileSubmissions();
+  } catch (error) {
     console.error('[flue] Startup submission reconciliation failed:', error);
-  });
+  }
 
   initialized = true;
 }
