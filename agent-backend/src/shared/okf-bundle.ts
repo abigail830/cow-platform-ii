@@ -1,13 +1,18 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import matter from 'gray-matter';
+import { backendRoot } from '../agent-catalog/paths.ts';
+import {
+  formatOkfBundleRef,
+  type OkfBundleRef,
+} from './okf-bundle-ref.ts';
 
 const RESERVED = new Set(['index.md', 'log.md']);
 const VENDORED_BUNDLE_DIR = 'okf-bundle';
 const MONOREPO_BUNDLE_DIR = '../smart-proposal-knowledge';
 
 function resolveBundleRoot(candidate: string): string {
-  return isAbsolute(candidate) ? candidate : resolve(process.cwd(), candidate);
+  return isAbsolute(candidate) ? candidate : resolve(backendRoot, candidate);
 }
 
 function assertBundleIndex(root: string): void {
@@ -15,22 +20,55 @@ function assertBundleIndex(root: string): void {
   if (!existsSync(indexPath)) {
     throw new Error(
       `OKF bundle index.md not found at ${indexPath}. ` +
-        'Set OKF_BUNDLE_PATH to the smart-proposal-knowledge directory (must contain index.md), not the git repo root.',
+        'Set OKF_BUNDLE_PATH to a directory that contains index.md.',
     );
   }
 }
 
-function bundleRoot(): string {
-  const configured = process.env.OKF_BUNDLE_PATH?.trim();
-  if (configured) {
-    const root = resolveBundleRoot(configured);
-    assertBundleIndex(root);
-    return root;
+function bundleRefLabel(bundle: OkfBundleRef): string {
+  return formatOkfBundleRef(bundle);
+}
+
+function resolveBundleRefPath(bundle: OkfBundleRef): string {
+  if (bundle.kind === 'env') {
+    const configured = process.env[bundle.envVar]?.trim();
+    if (!configured) {
+      throw new Error(
+        `Environment variable ${bundle.envVar} is not set (required by okf tool pack bundle ${bundleRefLabel(bundle)})`,
+      );
+    }
+    return resolveBundleRoot(configured);
   }
+  return resolveBundleRoot(bundle.path);
+}
+
+/** Locate an OKF bundle from a parsed `bundle` ref (`{ENV}` or literal path). */
+export function findOkfBundleRoot(bundle: OkfBundleRef): string | null {
+  try {
+    const root = resolveBundleRefPath(bundle);
+    if (existsSync(join(root, 'index.md'))) return root;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveOkfBundleRoot(bundle: OkfBundleRef): string {
+  const root = findOkfBundleRoot(bundle);
+  if (root) return root;
+
+  const resolved = resolveBundleRefPath(bundle);
+  assertBundleIndex(resolved);
+  return resolved;
+}
+
+function defaultBundleRoot(): string {
+  const root = findOkfBundleRoot({ kind: 'env', envVar: 'OKF_BUNDLE_PATH' });
+  if (root) return root;
 
   for (const candidate of [
-    resolve(process.cwd(), VENDORED_BUNDLE_DIR),
-    resolve(process.cwd(), MONOREPO_BUNDLE_DIR),
+    resolve(backendRoot, VENDORED_BUNDLE_DIR),
+    resolve(backendRoot, MONOREPO_BUNDLE_DIR),
   ]) {
     if (existsSync(join(candidate, 'index.md'))) return candidate;
   }
@@ -63,8 +101,15 @@ function toJsonValue(value: unknown): unknown {
   return String(value);
 }
 
-function resolveConcept(rel: string): string {
-  const root = bundleRoot();
+export type OkfBundleAccessor = {
+  root: string;
+  readConcept: (rel: string, maxChars?: number) => ReturnType<typeof readConceptWithRoot>;
+  listConcepts: (prefix?: string, limit?: number) => ReturnType<typeof listConceptsWithRoot>;
+  searchConcepts: (query: string, limit?: number) => ReturnType<typeof searchConceptsWithRoot>;
+  templateSections: (templateId: string) => ReturnType<typeof templateSectionsWithRoot>;
+};
+
+function resolveConceptPath(root: string, rel: string): string {
   const clean = rel.trim().replace(/^\//, '');
   const withExt = clean.endsWith('.md') ? clean : `${clean}.md`;
   const full = resolve(root, withExt);
@@ -72,15 +117,15 @@ function resolveConcept(rel: string): string {
   return full;
 }
 
-export function readConcept(rel: string, maxChars = 24_000) {
-  const path = resolveConcept(rel);
+function readConceptWithRoot(root: string, rel: string, maxChars = 24_000) {
+  const path = resolveConceptPath(root, rel);
   let text = readFileSync(path, 'utf-8');
   if (text.length > maxChars) text = `${text.slice(0, maxChars)}\n\n…(truncated)`;
   const { meta, body } = splitFrontmatter(text);
-  const id = relative(bundleRoot(), path).replace(/\.md$/, '');
+  const id = relative(root, path).replace(/\.md$/, '');
   return {
     id,
-    path: relative(bundleRoot(), path),
+    path: relative(root, path),
     type: meta.type,
     title: meta.title,
     frontmatter: toJsonValue(meta) as Record<string, unknown>,
@@ -88,8 +133,7 @@ export function readConcept(rel: string, maxChars = 24_000) {
   };
 }
 
-export function listConcepts(prefix = '', limit = 80) {
-  const root = bundleRoot();
+function listConceptsWithRoot(root: string, prefix = '', limit = 80) {
   const start = prefix ? join(root, prefix) : root;
   const out: Array<{ id: string; type?: unknown; title?: unknown; description?: string }> = [];
 
@@ -120,8 +164,7 @@ export function listConcepts(prefix = '', limit = 80) {
   return out;
 }
 
-export function searchConcepts(query: string, limit = 12) {
-  const root = bundleRoot();
+function searchConceptsWithRoot(root: string, query: string, limit = 12) {
   const q = query.toLowerCase();
   const hits: Array<{ score: number; item: { id: string; type?: unknown; title?: unknown } }> = [];
 
@@ -154,8 +197,8 @@ export function searchConcepts(query: string, limit = 12) {
   return hits.slice(0, limit).map((h) => toJsonValue(h.item) as { id: string; type?: unknown; title?: unknown });
 }
 
-export function templateSections(templateId: string) {
-  const data = readConcept(`templates/${templateId}`);
+function templateSectionsWithRoot(root: string, templateId: string) {
+  const data = readConceptWithRoot(root, `templates/${templateId}`);
   const sections = (data.frontmatter.sections as Array<Record<string, unknown>>) ?? [];
   return {
     template_id: data.frontmatter.template_id ?? templateId,
@@ -173,4 +216,34 @@ export function templateSections(templateId: string) {
         block: s.block,
       })),
   };
+}
+
+export function createBundleAccessor(bundlePath?: string): OkfBundleAccessor {
+  const root = bundlePath ? resolveBundleRoot(bundlePath) : defaultBundleRoot();
+  assertBundleIndex(root);
+  return {
+    root,
+    readConcept: (rel, maxChars) => readConceptWithRoot(root, rel, maxChars),
+    listConcepts: (prefix, limit) => listConceptsWithRoot(root, prefix, limit),
+    searchConcepts: (query, limit) => searchConceptsWithRoot(root, query, limit),
+    templateSections: (templateId) => templateSectionsWithRoot(root, templateId),
+  };
+}
+
+const defaultAccessor = () => createBundleAccessor();
+
+export function readConcept(rel: string, maxChars = 24_000) {
+  return defaultAccessor().readConcept(rel, maxChars);
+}
+
+export function listConcepts(prefix = '', limit = 80) {
+  return defaultAccessor().listConcepts(prefix, limit);
+}
+
+export function searchConcepts(query: string, limit = 12) {
+  return defaultAccessor().searchConcepts(query, limit);
+}
+
+export function templateSections(templateId: string) {
+  return defaultAccessor().templateSections(templateId);
 }

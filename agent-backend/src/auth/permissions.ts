@@ -1,8 +1,12 @@
-import { and, eq } from 'drizzle-orm';
 import type { AuthUser } from './jwt.ts';
 import { appAgentPermissions, appConversations, db } from '../db/index.ts';
+import { getAgentRegistry } from '../agent-catalog/registry.ts';
+import { bootAgentCatalog } from '../agent-catalog/boot.ts';
+import { and, eq } from 'drizzle-orm';
 
 export async function canAccessAgent(user: AuthUser, agentName: string): Promise<boolean> {
+  bootAgentCatalog();
+  if (!getAgentRegistry().has(agentName)) return false;
   if (user.role === 'admin' || user.role === 'operator') return true;
   const rows = await db
     .select()
@@ -22,12 +26,15 @@ export async function ownsConversation(userId: string, conversationId: string): 
 }
 
 export async function listAllowedAgents(user: AuthUser): Promise<string[]> {
+  bootAgentCatalog();
+  const catalogIds = getAgentRegistry().listIds();
   if (user.role === 'admin' || user.role === 'operator') {
-    return ['smart-proposal', 'generic-okf'];
+    return catalogIds;
   }
   const rows = await db
     .select({ agentName: appAgentPermissions.agentName })
     .from(appAgentPermissions)
     .where(eq(appAgentPermissions.userId, user.id));
-  return rows.map((r) => r.agentName);
+  const allowed = new Set(rows.map((r) => r.agentName));
+  return catalogIds.filter((id) => allowed.has(id));
 }

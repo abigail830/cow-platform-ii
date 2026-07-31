@@ -126,7 +126,7 @@ export function AppSideNav({
                   onClick={() => onSelectAgent(agent.name)}
                   title={collapsed ? agent.displayName : undefined}
                 >
-                  <AgentMenuIcon name={agent.name} className="sidenav-item-icon" />
+                  <AgentMenuIcon name={agent.name} icon={agent.icon} className="sidenav-item-icon" />
                   {!collapsed && <span className="sidenav-item-label">{agent.displayName}</span>}
                 </button>
               </li>

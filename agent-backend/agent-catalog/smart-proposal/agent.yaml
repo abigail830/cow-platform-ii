@@ -1,0 +1,27 @@
+id: smart-proposal
+displayName: Proposal Chef
+description: Smart proposal compose assistant using the OKF knowledge bundle.
+icon: ChefHat
+
+model:
+  configName: gpt-5.4-mini
+  profile: azure-openai
+
+prompt: ./prompt.md
+
+skills: []
+
+tools:
+  packs:
+    - name: okf
+      bundle: ${OKF_BUNDLE_PATH}
+
+mcp: []
+
+sandbox:
+  provider: none
+
+access:
+  defaultForRoles:
+    - admin
+    - operator

@@ -67,7 +67,7 @@ export const appModelConfigs = pgTable(
   'app_model_configs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    name: text('name').notNull(),
+    name: text('name').notNull().unique(),
     modelId: text('model_id').notNull(),
     provider: text('provider').notNull(),
     apiType: text('api_type').notNull(),

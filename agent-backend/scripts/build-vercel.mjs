@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:f
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { vendorOkfBundle } from './vendor-okf-bundle.mjs';
+import { cpSync } from 'node:fs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outRoot = path.join(root, '.vercel', 'output');
@@ -64,6 +65,11 @@ if (patched === bundle) {
 writeFileSync(outfile, patched);
 
 vendorOkfBundle(funcDir);
+
+const catalogSrc = path.join(root, 'agent-catalog');
+const catalogDest = path.join(funcDir, 'agent-catalog');
+cpSync(catalogSrc, catalogDest, { recursive: true });
+console.log('Vendored agent-catalog into serverless bundle.');
 
 const { size } = statSync(outfile);
 if (size < 100_000) {

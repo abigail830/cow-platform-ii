@@ -5,6 +5,8 @@ import { formatApiError } from './http.ts';
 export type AgentInfo = {
   name: string;
   displayName: string;
+  description?: string;
+  icon?: string;
 };
 
 export type Conversation = {

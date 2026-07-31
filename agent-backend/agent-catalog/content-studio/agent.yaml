@@ -1,0 +1,29 @@
+id: content-studio
+displayName: Content Studio
+description: Generate Word documents, PowerPoint decks, and HTML reveal.js presentations.
+icon: Presentation
+
+model:
+  configName: DeepSeek-V4-Flash
+  profile: azure-openai
+
+prompt: ./prompt.md
+
+skills:
+  - ./skills/html-slides
+  - ./skills/pptx
+  - ./skills/docx
+
+tools:
+  packs: []
+
+mcp: []
+
+sandbox:
+  provider: e2b
+  cwd: /home/user/content-studio
+
+access:
+  defaultForRoles:
+    - admin
+    - operator

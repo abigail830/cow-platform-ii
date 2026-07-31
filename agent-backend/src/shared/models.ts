@@ -18,8 +18,3 @@ export function resolveModel(profile?: string): string {
       return p.includes('/') ? p : `azure-openai-responses/${p}`;
   }
 }
-
-export const AGENT_DISPLAY_NAMES: Record<string, string> = {
-  'smart-proposal': 'Proposal Chef',
-  'generic-okf': 'OKF Explorer',
-};

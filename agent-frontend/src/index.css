@@ -1473,7 +1473,7 @@ textarea {
   background: #fafcfd;
 }
 
-.admin-table-empty {
+.admin-table td.admin-table-empty {
   text-align: center;
   color: #94a3b8;
   padding: 2rem 0.85rem !important;
@@ -2149,6 +2149,11 @@ textarea {
   line-height: 1.45;
   flex: 1;
   min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem 0.75rem;
   overflow-y: auto;
 }
 
@@ -2225,6 +2230,19 @@ textarea {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.documents-main-panel .admin-table {
+  height: 100%;
+}
+
+.documents-main-panel .admin-table tbody:has(.admin-table-empty) {
+  height: 100%;
+}
+
+.documents-main-panel .admin-table td.admin-table-empty {
+  height: 100%;
+  vertical-align: middle;
 }
 
 .documents-channel-context {

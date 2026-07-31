@@ -53,3 +53,15 @@ export async function getModelConfigById(id: string): Promise<RuntimeModelConfig
   const [row] = await db.select().from(appModelConfigs).where(eq(appModelConfigs.id, id)).limit(1);
   return row ? toRuntimeModel(row) : null;
 }
+
+/** Resolve a model config by display name (Admin UI first column). */
+export async function getModelConfigByName(name: string): Promise<RuntimeModelConfig | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const [row] = await db
+    .select()
+    .from(appModelConfigs)
+    .where(eq(appModelConfigs.name, trimmed))
+    .limit(1);
+  return row ? toRuntimeModel(row) : null;
+}

@@ -4,9 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "catalog:sync": "node scripts/sync-catalog-agents.mjs",
+    "catalog:validate": "tsx scripts/validate-agent-catalog.ts",
+    "catalog:vendor-content-skills": "node scripts/vendor-content-studio-skills.mjs",
+    "predev": "npm run catalog:sync",
+    "prebuild": "npm run catalog:sync",
     "dev": "tsx scripts/flue-with-env.ts dev --target node --env .env --port 8787",
     "build": "tsx scripts/flue-with-env.ts build --target node --env .env",
-    "build:vercel": "node scripts/build-vercel.mjs",
+    "build:vercel": "npm run catalog:sync && node scripts/build-vercel.mjs",
     "start": "tsx scripts/flue-with-env.ts run --target node --env .env",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
@@ -14,7 +19,7 @@
     "setup": "npm run db:migrate && npm run seed",
     "seed": "tsx scripts/seed-users.ts",
     "seed:rbac": "tsx scripts/seed-rbac.ts",
-    "verify": "tsx scripts/verify-smoke.ts",
+    "verify": "npm run catalog:validate && tsx scripts/verify-smoke.ts",
     "verify:documents": "tsx scripts/verify-documents.ts",
     "test": "tsx --test src/**/*.test.ts",
     "test:documents": "tsx --test src/storage/document-files.test.ts src/services/channel-tree.test.ts && tsx scripts/verify-documents.ts"
@@ -43,6 +48,7 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.22.0",
     "valibot": "^1.4.2",
+    "yaml": "^2.8.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

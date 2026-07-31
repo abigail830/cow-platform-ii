@@ -88,7 +88,7 @@ class E2BSandboxApi implements SandboxApi {
 
 export function e2b(sandbox: E2BSandbox): SandboxFactory {
   return {
-    async createSessionEnv(): Promise<SessionEnv> {
+    async createSessionEnv(_options: { id: string }): Promise<SessionEnv> {
       const sandboxCwd = '/home/user';
       const api = new E2BSandboxApi(sandbox);
       return createSandboxSessionEnv(api, sandboxCwd);

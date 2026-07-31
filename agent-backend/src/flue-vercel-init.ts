@@ -17,8 +17,7 @@ import {
   resolveModel,
 } from '@flue/runtime/internal';
 import type { AgentRouteHandler } from '@flue/runtime';
-import * as genericOkf from './agents/generic-okf.ts';
-import * as smartProposal from './agents/smart-proposal.ts';
+import { getCatalogFlueAgentModules } from './agent-catalog/boot.ts';
 import db from './db.ts';
 
 type AgentModule = {
@@ -163,14 +162,8 @@ let initialized = false;
 export async function initFlueRuntime(): Promise<void> {
   if (initialized) return;
 
-  const { agents, workflows, channelHandlers } = normalizeBuiltModules(
-    {
-      'generic-okf': genericOkf,
-      'smart-proposal': smartProposal,
-    },
-    {},
-    {},
-  );
+  const catalogModules = getCatalogFlueAgentModules();
+  const { agents, workflows, channelHandlers } = normalizeBuiltModules(catalogModules, {}, {});
 
   const persistence = db as {
     migrate?: () => Promise<void>;

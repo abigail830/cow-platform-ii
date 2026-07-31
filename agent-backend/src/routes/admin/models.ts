@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, ne, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { appModelConfigs, db, MODEL_API_TYPES, type ModelApiType } from '../../db/index.ts';
 import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
+import { invalidateModelConfigCache } from '../../shared/model-registry.ts';
 
 const models = new Hono();
 
@@ -37,6 +38,17 @@ function parseApiType(value: unknown): ModelApiType | null {
 function parseCapabilities(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+async function findModelConfigByName(name: string, excludeId?: string) {
+  const conditions = [eq(appModelConfigs.name, name)];
+  if (excludeId) conditions.push(ne(appModelConfigs.id, excludeId));
+  const [row] = await db
+    .select({ id: appModelConfigs.id })
+    .from(appModelConfigs)
+    .where(and(...conditions))
+    .limit(1);
+  return row ?? null;
 }
 
 models.get('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.MODELS, 'read'), async (c) => {
@@ -113,6 +125,10 @@ models.post('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BAS
   const apiKey = body.apiKey?.trim() || null;
   const extraConfig = body.extraConfig ?? {};
 
+  if (await findModelConfigByName(name)) {
+    return c.json({ error: `Model config name "${name}" already exists` }, 409);
+  }
+
   const [row] = await db
     .insert(appModelConfigs)
     .values({
@@ -135,6 +151,7 @@ models.post('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BAS
       .where(and(eq(appModelConfigs.apiType, apiType), sql`${appModelConfigs.id} <> ${row.id}`));
   }
 
+  invalidateModelConfigCache();
   return c.json({ model: toPublicModel(row) }, 201);
 });
 
@@ -163,6 +180,9 @@ models.patch('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM
   if (body.name !== undefined) {
     const name = body.name.trim();
     if (!name) return c.json({ error: 'name cannot be empty' }, 400);
+    if (await findModelConfigByName(name, id)) {
+      return c.json({ error: `Model config name "${name}" already exists` }, 409);
+    }
     updates.name = name;
   }
   if (body.modelId !== undefined) {
@@ -201,6 +221,7 @@ models.patch('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM
       .where(and(eq(appModelConfigs.apiType, row.apiType), sql`${appModelConfigs.id} <> ${row.id}`));
   }
 
+  invalidateModelConfigCache();
   return c.json({ model: toPublicModel(row) });
 });
 
@@ -221,6 +242,7 @@ models.post('/:id/set-default', requireResourcePermission(PLATFORM_BASIC_CATEGOR
     .where(eq(appModelConfigs.id, id))
     .returning();
 
+  invalidateModelConfigCache();
   return c.json({ model: toPublicModel(row!) });
 });
 
@@ -233,6 +255,7 @@ models.delete('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFOR
     .returning({ id: appModelConfigs.id });
 
   if (!row) return c.json({ error: 'Not found' }, 404);
+  invalidateModelConfigCache();
   return c.json({ ok: true });
 });
 
