@@ -49,7 +49,7 @@ function countFiles(dir) {
 
 /**
  * Copy OKF bundle into the Vercel function directory as `okf-bundle/`.
- * Vendored at build time — runtime reads via OKF_BUNDLE_PATH=okf-bundle (default).
+ * Vendored at build time — set runtime OKF_BUNDLE_PATH=okf-bundle on Vercel.
  */
 export function vendorOkfBundle(destDir) {
   const subdir = process.env.OKF_BUNDLE_GIT_SUBDIR ?? DEFAULT_SUBDIR;

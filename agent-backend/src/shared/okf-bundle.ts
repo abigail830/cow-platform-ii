@@ -2,89 +2,69 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import matter from 'gray-matter';
 import { backendRoot } from '../agent-catalog/paths.ts';
-import {
-  formatOkfBundleRef,
-  type OkfBundleRef,
-} from './okf-bundle-ref.ts';
+import type { OkfBundleRef } from './okf-bundle-ref.ts';
 
 const RESERVED = new Set(['index.md', 'log.md']);
-const VENDORED_BUNDLE_DIR = 'okf-bundle';
-const MONOREPO_BUNDLE_DIR = '../smart-proposal-knowledge';
 
 function resolveBundleRoot(candidate: string): string {
   return isAbsolute(candidate) ? candidate : resolve(backendRoot, candidate);
 }
 
-function assertBundleIndex(root: string): void {
-  const indexPath = join(root, 'index.md');
-  if (!existsSync(indexPath)) {
-    throw new Error(
-      `OKF bundle index.md not found at ${indexPath}. ` +
-        'Set OKF_BUNDLE_PATH to a directory that contains index.md.',
-    );
-  }
+function okfBundleEnvMissingError(envVar: string): Error {
+  return new Error(
+    `OKF bundle is not configured: environment variable ${envVar} is not set. ` +
+      `Set ${envVar} to the directory containing index.md ` +
+      '(local dev: absolute path to smart-proposal-knowledge; Vercel: okf-bundle).',
+  );
 }
 
-function bundleRefLabel(bundle: OkfBundleRef): string {
-  return formatOkfBundleRef(bundle);
+function okfBundlePathInvalidError(
+  envVar: string,
+  configured: string,
+  resolved: string,
+): Error {
+  return new Error(
+    `OKF bundle path is invalid: ${envVar}=${JSON.stringify(configured)} ` +
+      `resolves to ${resolved}, but index.md was not found. ` +
+      `Check that ${envVar} points to the OKF knowledge bundle directory.`,
+  );
 }
 
 function resolveBundleRefPath(bundle: OkfBundleRef): string {
   if (bundle.kind === 'env') {
     const configured = process.env[bundle.envVar]?.trim();
     if (!configured) {
-      throw new Error(
-        `Environment variable ${bundle.envVar} is not set (required by okf tool pack bundle ${bundleRefLabel(bundle)})`,
-      );
+      throw okfBundleEnvMissingError(bundle.envVar);
     }
     return resolveBundleRoot(configured);
   }
   return resolveBundleRoot(bundle.path);
 }
 
-/** Locate an OKF bundle from a parsed `bundle` ref (`{ENV}` or literal path). */
-export function findOkfBundleRoot(bundle: OkfBundleRef): string | null {
-  try {
-    const root = resolveBundleRefPath(bundle);
-    if (existsSync(join(root, 'index.md'))) return root;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function defaultBundleCandidates(): string[] {
-  return [
-    resolve(backendRoot, VENDORED_BUNDLE_DIR),
-    resolve(backendRoot, MONOREPO_BUNDLE_DIR),
-  ];
-}
-
+/** Resolve OKF bundle directory from agent tool pack config. Throws if env/path is missing or invalid. */
 export function resolveOkfBundleRoot(bundle: OkfBundleRef): string {
-  const root = findOkfBundleRoot(bundle);
-  if (root) return root;
-
-  for (const candidate of defaultBundleCandidates()) {
-    if (existsSync(join(candidate, 'index.md'))) return candidate;
-  }
-
   const resolved = resolveBundleRefPath(bundle);
-  assertBundleIndex(resolved);
+  const indexPath = join(resolved, 'index.md');
+  if (!existsSync(indexPath)) {
+    if (bundle.kind === 'env') {
+      const configured = process.env[bundle.envVar]?.trim() ?? '';
+      throw okfBundlePathInvalidError(bundle.envVar, configured, resolved);
+    }
+    throw new Error(
+      `OKF bundle index.md not found at ${indexPath}. ` +
+        'Check the okf tool pack bundle path in agent.yaml.',
+    );
+  }
   return resolved;
 }
 
-function defaultBundleRoot(): string {
-  const root = findOkfBundleRoot({ kind: 'env', envVar: 'OKF_BUNDLE_PATH' });
-  if (root) return root;
-
-  for (const candidate of defaultBundleCandidates()) {
-    if (existsSync(join(candidate, 'index.md'))) return candidate;
+/** Non-throwing lookup for catalog validation. */
+export function findOkfBundleRoot(bundle: OkfBundleRef): string | null {
+  try {
+    return resolveOkfBundleRoot(bundle);
+  } catch {
+    return null;
   }
-
-  throw new Error(
-    'OKF_BUNDLE_PATH is not set and no default bundle was found. ' +
-      'Example: OKF_BUNDLE_PATH=/path/to/okf-knowledge-bundle/smart-proposal-knowledge',
-  );
 }
 
 function splitFrontmatter(text: string): { meta: Record<string, unknown>; body: string } {
@@ -227,8 +207,9 @@ function templateSectionsWithRoot(root: string, templateId: string) {
 }
 
 export function createBundleAccessor(bundlePath?: string): OkfBundleAccessor {
-  const root = bundlePath ? resolveBundleRoot(bundlePath) : defaultBundleRoot();
-  assertBundleIndex(root);
+  const root = bundlePath
+    ? resolveBundleRoot(bundlePath)
+    : resolveOkfBundleRoot({ kind: 'env', envVar: 'OKF_BUNDLE_PATH' });
   return {
     root,
     readConcept: (rel, maxChars) => readConceptWithRoot(root, rel, maxChars),

@@ -7,7 +7,7 @@ import { listKnownToolPacks } from '../src/agent-catalog/tool-packs.ts';
 import { isOkfToolPack } from '../src/agent-catalog/tool-pack-schema.ts';
 import { closePool } from '../src/db/pool.ts';
 import { getModelConfigByName } from '../src/shared/model-config-store.ts';
-import { findOkfBundleRoot } from '../src/shared/okf-bundle.ts';
+import { resolveOkfBundleRoot } from '../src/shared/okf-bundle.ts';
 
 const CHAT_AGENT_API_TYPES = new Set(['chat-completions', 'custom-endpoint']);
 
@@ -46,15 +46,12 @@ function validateAgentSync(agentDir: string): ValidationIssue[] {
       continue;
     }
     if (isOkfToolPack(pack)) {
-      if (pack.bundle.kind === 'env' && !process.env[pack.bundle.envVar]?.trim()) {
+      try {
+        resolveOkfBundleRoot(pack.bundle);
+      } catch (error) {
         issues.push({
           agentId: spec.id,
-          message: `okf tool pack requires env ${pack.bundle.envVar} (bundle: \${${pack.bundle.envVar}})`,
-        });
-      } else if (!findOkfBundleRoot(pack.bundle)) {
-        issues.push({
-          agentId: spec.id,
-          message: `okf tool pack bundle does not point to a directory with index.md`,
+          message: error instanceof Error ? error.message : String(error),
         });
       }
     }
