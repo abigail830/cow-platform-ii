@@ -7,6 +7,7 @@ Deploy as a **separate** Vercel project from `agent-backend` (e.g. frontend = `c
 | Setting | Value |
 |---------|--------|
 | **Root Directory** | `agent-frontend` |
+| **Function region** | `hkg1` (Hong Kong) via `vercel.json` — mainly affects Edge middleware; API/upload traffic uses `VITE_API_ORIGIN` (backend region) |
 
 ## Environment variables (frontend Vercel project)
 

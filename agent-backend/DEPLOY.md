@@ -6,7 +6,7 @@ Deploy **only** `agent-backend` as a separate Vercel project. Pipeline jobs run 
 
 - Node.js **22.x** on Vercel (Project Settings → General → Node.js Version)
 - Neon Postgres linked via Vercel Storage (or `DATABASE_URL` env)
-- `openkms-cli` repo GHA secrets: `OPENKMS_API_URL` = this backend’s public URL
+- `openkms-cli` GHA secrets (on **this** monorepo): `OPENKMS_API_URL` = this backend’s public URL
 
 ## Vercel project settings
 
@@ -22,9 +22,9 @@ Health check: `https://cow-platform-ii.vercel.app/health` (frontend is a differe
 
 ## Region
 
-Default **Singapore (`sin1`)** via `vercel.json` → `"regions": ["sin1"]` and `.vc-config.json` from the build script.
+Default **Hong Kong (`hkg1`)** via `vercel.json` → `"regions": ["hkg1"]` and `.vc-config.json` from the build script (better reach to mainland Aliyun OSS than `sin1`).
 
-To change at build time, set Vercel env `VERCEL_REGIONS` (comma-separated), e.g. `hkg1` (Hong Kong) or `icn1` (Seoul).
+To override at build time, set Vercel env `VERCEL_REGIONS` (comma-separated), e.g. `sin1` (Singapore) or `icn1` (Seoul).
 
 You can also override in the Vercel dashboard: **Project → Settings → Functions → Function Regions** (Pro plan may be required for multi-region).
 
@@ -43,8 +43,8 @@ Run `npx tsc --noEmit` locally before deploy to catch type errors.
 | `CORS_ORIGIN` | Frontend origin, e.g. `https://your-frontend.vercel.app` |
 | `OPENKMS_API_URL` | **This** deployment URL (GHA callbacks) |
 | `OPENKMS_CLI_BASIC_USER` / `OPENKMS_CLI_BASIC_PASSWORD` | internal-api auth |
-| `GITHUB_PIPELINE_TOKEN` | PAT with `actions:write` on `openkms-cli` |
-| `GITHUB_PIPELINE_REPOSITORY` | `abigail830/openkms-cli` |
+| `GITHUB_PIPELINE_TOKEN` | PAT with `actions:write` on `cow-platform-ii` |
+| `GITHUB_PIPELINE_REPOSITORY` | `abigail830/cow-platform-ii` |
 | `MODEL_PROFILE` + provider keys | Agent models |
 | `AWS_*` | OSS document storage |
 

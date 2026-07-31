@@ -8,7 +8,7 @@ const outRoot = path.join(root, '.vercel', 'output');
 const funcDir = path.join(outRoot, 'functions', 'index.func');
 const staticDir = path.join(outRoot, 'static');
 
-const regions = (process.env.VERCEL_REGIONS ?? 'sin1')
+const regions = (process.env.VERCEL_REGIONS ?? 'hkg1')
   .split(',')
   .map((r) => r.trim())
   .filter(Boolean);

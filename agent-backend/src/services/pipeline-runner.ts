@@ -91,7 +91,7 @@ async function dispatchGithubActionsWorker(
   if (!config) {
     throw new Error(
       'PIPELINE_WORKER=github_actions requires GITHUB_PIPELINE_TOKEN (or GITHUB_TOKEN) ' +
-        'and GITHUB_PIPELINE_REPOSITORY (e.g. abigail830/openkms-cli)',
+        'and GITHUB_PIPELINE_REPOSITORY (e.g. abigail830/cow-platform-ii)',
     );
   }
   const args = await buildAsyncWorkerCliArgs(jobId, pipelineName);
