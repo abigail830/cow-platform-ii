@@ -1,12 +1,22 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import matter from 'gray-matter';
 
 const RESERVED = new Set(['index.md', 'log.md']);
+const VENDORED_BUNDLE_DIR = 'okf-bundle';
+const MONOREPO_BUNDLE_DIR = '../smart-proposal-knowledge';
 
 function bundleRoot(): string {
-  const path = process.env.OKF_BUNDLE_PATH ?? '../smart-proposal-knowledge';
-  return resolve(process.cwd(), path);
+  const configured = process.env.OKF_BUNDLE_PATH?.trim();
+  if (configured) return resolve(process.cwd(), configured);
+
+  const vendored = resolve(process.cwd(), VENDORED_BUNDLE_DIR);
+  if (existsSync(join(vendored, 'index.md'))) return vendored;
+
+  const monorepo = resolve(process.cwd(), MONOREPO_BUNDLE_DIR);
+  if (existsSync(join(monorepo, 'index.md'))) return monorepo;
+
+  return vendored;
 }
 
 function splitFrontmatter(text: string): { meta: Record<string, unknown>; body: string } {

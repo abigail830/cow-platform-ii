@@ -2,6 +2,7 @@ import esbuild from 'esbuild';
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { vendorOkfBundle } from './vendor-okf-bundle.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outRoot = path.join(root, '.vercel', 'output');
@@ -61,6 +62,8 @@ if (patched === bundle) {
   throw new Error('expected import_meta.url placeholders in CJS bundle — esbuild output changed?');
 }
 writeFileSync(outfile, patched);
+
+vendorOkfBundle(funcDir);
 
 const { size } = statSync(outfile);
 if (size < 100_000) {
