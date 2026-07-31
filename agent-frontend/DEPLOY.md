@@ -13,8 +13,10 @@ Deploy as a **separate** Vercel project from `agent-backend` (e.g. frontend = `c
 
 | Variable | Required | Notes |
 |----------|----------|--------|
-| `VITE_API_ORIGIN` | **Yes** | Backend origin, e.g. `https://cow-platform-ii.vercel.app` (no trailing slash). Baked into the build; browser calls backend directly. |
+| `VITE_API_ORIGIN` | **Yes** | Backend origin, e.g. `https://cow-platform-ii.vercel.app` (no trailing slash). Set in **Vercel env** or committed `.env.production` — **not** in local `.env` (breaks `npm run dev`). |
 | `VITE_FLUE_LIVE_MODE` | No | Default `sse` |
+
+**Local dev:** use `.env.development` only (`VITE_API_ORIGIN` unset). Copy `.env.example` → `.env` if needed; do not point `VITE_API_ORIGIN` at production while developing locally.
 
 `BACKEND_ORIGIN` + `middleware.ts` are **legacy** (Edge proxy). Vercel Edge drops Flue `202` admission JSON bodies; use `VITE_API_ORIGIN` instead.
 
