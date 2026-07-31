@@ -1,6 +1,7 @@
 import { flue } from '@flue/runtime/routing';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import './load-env.ts';
 import { registerModelProviders } from './providers.ts';
 import auth from './routes/auth.ts';
 import agents from './routes/agents.ts';

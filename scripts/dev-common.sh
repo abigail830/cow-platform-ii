@@ -123,13 +123,17 @@ wait_for_url() {
   local url=$1
   local label=$2
   local tries=${3:-30}
+  local body_pattern=${4:-}
   local i
   for ((i = 1; i <= tries; i++)); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
-      echo "$label ready: $url"
-      return 0
+    local body
+    body=$(curl -fsS "$url" 2>/dev/null) || { sleep 1; continue; }
+    if [[ -n "$body_pattern" ]] && ! echo "$body" | grep -q "$body_pattern"; then
+      sleep 1
+      continue
     fi
-    sleep 1
+    echo "$label ready: $url"
+    return 0
   done
   echo "Warning: $label did not become ready in ${tries}s (check logs)" >&2
   return 1

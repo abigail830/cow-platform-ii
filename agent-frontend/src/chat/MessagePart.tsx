@@ -1,16 +1,9 @@
-import type { ReactNode } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 import type { FlueConversationPart } from '@flue/react';
 import { Markdown } from './Markdown.tsx';
+import { isPartStreaming, partBodyText, partFoldLabel } from './part-labels.ts';
 
 type DynamicToolPart = Extract<FlueConversationPart, { type: 'dynamic-tool' }>;
-
-function foldLabel(raw: string): string {
-  return raw
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
 
 function FoldBlock({
   label,
@@ -21,61 +14,112 @@ function FoldBlock({
   streaming?: boolean;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <details className={`fold-block${streaming ? ' streaming' : ''}`}>
+    <details
+      className={`fold-block${streaming ? ' streaming' : ''}`}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary className="fold-block-summary">{label}</summary>
-      <div className="fold-block-body">{children}</div>
+      {open ? <div className="fold-block-body">{children}</div> : null}
     </details>
   );
 }
 
-export function MessagePart({ part }: { part: FlueConversationPart }) {
+function StreamingPre({ text, streaming }: { text: string; streaming: boolean }) {
+  return (
+    <pre className={streaming ? 'streaming-pre' : undefined}>
+      {text}
+      {streaming && text.length === 0 ? '\u00a0' : null}
+    </pre>
+  );
+}
+
+function partsEqual(a: FlueConversationPart, b: FlueConversationPart): boolean {
+  if (a === b) return true;
+  if (a.type !== b.type) return false;
+
+  if (a.type === 'text' && b.type === 'text') {
+    return a.text === b.text && a.state === b.state;
+  }
+
+  if (a.type === 'reasoning' && b.type === 'reasoning') {
+    return a.text === b.text && a.state === b.state;
+  }
+
+  if (a.type === 'dynamic-tool') {
+    const left = a as DynamicToolPart;
+    const right = b as DynamicToolPart;
+    return (
+      left.toolCallId === right.toolCallId &&
+      left.toolName === right.toolName &&
+      left.state === right.state &&
+      left.input === right.input &&
+      left.output === right.output &&
+      left.errorText === right.errorText
+    );
+  }
+
+  return false;
+}
+
+function MessagePartView({ part }: { part: FlueConversationPart }) {
+  const streaming = isPartStreaming(part);
+
   switch (part.type) {
     case 'text':
+      if (part.state === 'streaming') {
+        return (
+          <div className="text-part streaming">
+            {part.text.length > 0 ? <pre className="streaming-plain-text">{part.text}</pre> : null}
+          </div>
+        );
+      }
       return (
-        <div className={part.state === 'streaming' ? 'text-part streaming' : 'text-part'}>
-          <Markdown>{part.text}</Markdown>
+        <div className="text-part">
+          {part.text.length > 0 ? <Markdown>{part.text}</Markdown> : null}
         </div>
       );
 
     case 'reasoning':
-      if (!part.text.trim()) return null;
       return (
-        <FoldBlock label={part.state === 'streaming' ? 'Thinking…' : 'Reasoning'} streaming={part.state === 'streaming'}>
-          <pre>{part.text}</pre>
+        <FoldBlock label={partFoldLabel(part)} streaming={streaming}>
+          <StreamingPre text={part.text} streaming={streaming} />
         </FoldBlock>
       );
 
     case 'dynamic-tool': {
       const tool = part as DynamicToolPart;
-      const label =
-        tool.state === 'input-available'
-          ? `${tool.toolName}…`
-          : tool.state === 'output-error'
-            ? `${tool.toolName} failed`
-            : tool.toolName;
       return (
-        <FoldBlock label={`Tool · ${label}`}>
-          <pre>
-            {tool.state === 'output-available' || tool.state === 'output-error'
-              ? JSON.stringify(tool.output ?? tool.errorText ?? tool.input, null, 2)
-              : JSON.stringify(tool.input, null, 2)}
-          </pre>
+        <FoldBlock label={partFoldLabel(part)} streaming={streaming}>
+          <StreamingPre text={partBodyText(tool)} streaming={streaming} />
         </FoldBlock>
       );
     }
 
-    default: {
-      if (part.type.startsWith('data-')) {
-        const eventName = part.type.slice(5);
-        const payload = (part as { type: string; data?: unknown }).data;
-        return (
-          <FoldBlock label={foldLabel(eventName)}>
-            <pre>{JSON.stringify(payload, null, 2)}</pre>
-          </FoldBlock>
-        );
-      }
-      return null;
+    case 'file': {
+      const filePart = part as Extract<FlueConversationPart, { type: 'file' }>;
+      return (
+        <FoldBlock label={`File · ${filePart.filename ?? filePart.mediaType}`}>
+          {filePart.url ? (
+            <a href={filePart.url} target="_blank" rel="noreferrer">
+              {filePart.filename ?? 'Download attachment'}
+            </a>
+          ) : (
+            <StreamingPre text={JSON.stringify(filePart, null, 2)} streaming={false} />
+          )}
+        </FoldBlock>
+      );
     }
+
+    default:
+      return (
+        <FoldBlock label={partFoldLabel(part)} streaming={streaming}>
+          <StreamingPre text={partBodyText(part)} streaming={streaming} />
+        </FoldBlock>
+      );
   }
 }
+
+export const MessagePart = memo(MessagePartView, (left, right) => partsEqual(left.part, right.part));

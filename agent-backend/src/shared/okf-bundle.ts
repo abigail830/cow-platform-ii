@@ -1,27 +1,66 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import matter from 'gray-matter';
 
 const RESERVED = new Set(['index.md', 'log.md']);
 const VENDORED_BUNDLE_DIR = 'okf-bundle';
 const MONOREPO_BUNDLE_DIR = '../smart-proposal-knowledge';
 
+function resolveBundleRoot(candidate: string): string {
+  return isAbsolute(candidate) ? candidate : resolve(process.cwd(), candidate);
+}
+
+function assertBundleIndex(root: string): void {
+  const indexPath = join(root, 'index.md');
+  if (!existsSync(indexPath)) {
+    throw new Error(
+      `OKF bundle index.md not found at ${indexPath}. ` +
+        'Set OKF_BUNDLE_PATH to the smart-proposal-knowledge directory (must contain index.md), not the git repo root.',
+    );
+  }
+}
+
 function bundleRoot(): string {
   const configured = process.env.OKF_BUNDLE_PATH?.trim();
-  if (configured) return resolve(process.cwd(), configured);
+  if (configured) {
+    const root = resolveBundleRoot(configured);
+    assertBundleIndex(root);
+    return root;
+  }
 
-  const vendored = resolve(process.cwd(), VENDORED_BUNDLE_DIR);
-  if (existsSync(join(vendored, 'index.md'))) return vendored;
+  for (const candidate of [
+    resolve(process.cwd(), VENDORED_BUNDLE_DIR),
+    resolve(process.cwd(), MONOREPO_BUNDLE_DIR),
+  ]) {
+    if (existsSync(join(candidate, 'index.md'))) return candidate;
+  }
 
-  const monorepo = resolve(process.cwd(), MONOREPO_BUNDLE_DIR);
-  if (existsSync(join(monorepo, 'index.md'))) return monorepo;
-
-  return vendored;
+  throw new Error(
+    'OKF_BUNDLE_PATH is not set and no default bundle was found. ' +
+      'Example: OKF_BUNDLE_PATH=/path/to/okf-knowledge-bundle/smart-proposal-knowledge',
+  );
 }
 
 function splitFrontmatter(text: string): { meta: Record<string, unknown>; body: string } {
   const parsed = matter(text);
   return { meta: (parsed.data ?? {}) as Record<string, unknown>, body: parsed.content };
+}
+
+/** Flue tools must return plain JSON (no Date, class instances, undefined, etc.). */
+function toJsonValue(value: unknown): unknown {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'bigint') return value.toString();
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(toJsonValue);
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value)) {
+      if (child !== undefined) out[key] = toJsonValue(child);
+    }
+    return out;
+  }
+  return String(value);
 }
 
 function resolveConcept(rel: string): string {
@@ -44,7 +83,7 @@ export function readConcept(rel: string, maxChars = 24_000) {
     path: relative(bundleRoot(), path),
     type: meta.type,
     title: meta.title,
-    frontmatter: meta,
+    frontmatter: toJsonValue(meta) as Record<string, unknown>,
     body: body.trim(),
   };
 }
@@ -70,8 +109,8 @@ export function listConcepts(prefix = '', limit = 80) {
       const { meta } = splitFrontmatter(text);
       out.push({
         id: rel.replace(/\.md$/, ''),
-        type: meta.type,
-        title: meta.title,
+        type: toJsonValue(meta.type),
+        title: toJsonValue(meta.title),
         description: String(meta.description ?? '').slice(0, 160),
       });
     }
@@ -112,7 +151,7 @@ export function searchConcepts(query: string, limit = 12) {
 
   walk(root);
   hits.sort((a, b) => b.score - a.score);
-  return hits.slice(0, limit).map((h) => h.item);
+  return hits.slice(0, limit).map((h) => toJsonValue(h.item) as { id: string; type?: unknown; title?: unknown });
 }
 
 export function templateSections(templateId: string) {

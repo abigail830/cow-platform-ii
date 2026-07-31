@@ -1,12 +1,15 @@
 import { useFlueAgent } from '@flue/react';
-import { useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, type RefObject } from 'react';
 import { isAgentBusy } from '../chat/agentStatus.ts';
 import { sendMessageWithAdmissionRetry } from '../chat/agent-send-retry.ts';
 import { resolveFlueLiveMode } from '../chat/flue-live-mode.ts';
+import { isAwaitingAssistantResponse } from '../chat/assistant-turn.ts';
 import { filterRenderableParts, groupMessages, mergeAssistantParts, partRenderKey, userMessageText } from '../chat/groupMessages.ts';
 import { shouldShowTypingIndicator } from '../chat/typing-indicator.ts';
+import { useChatAutoScroll } from '../chat/use-chat-auto-scroll.ts';
 import { MessagePart } from '../chat/MessagePart.tsx';
 import { toAgentInstanceId } from '../shared/agent-instance-id.ts';
+import { AssistantInProgress } from './AssistantInProgress.tsx';
 import { ChatComposer } from './ChatComposer.tsx';
 import { TypingIndicator } from './TypingIndicator.tsx';
 
@@ -49,17 +52,22 @@ export function AgentChatPanel({
   });
 
   const busy = isAgentBusy(agent.status);
-  const turns = useMemo(() => groupMessages(agent.messages), [agent.messages]);
+  const renderMessages = useDeferredValue(agent.messages);
+  const turns = useMemo(() => groupMessages(renderMessages), [renderMessages]);
   const showTypingIndicator = shouldShowTypingIndicator(agent.status, agent.messages);
+  const awaitingAssistant = isAwaitingAssistantResponse(agent.status, agent.messages);
   const initialSentRef = useRef(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  useChatAutoScroll(
+    messagesContainerRef,
+    [renderMessages, showTypingIndicator, awaitingAssistant, agent.error],
+    busy,
+  );
 
   useEffect(() => {
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: busy ? 'auto' : 'smooth' });
-  }, [agent.messages, busy, showTypingIndicator, messagesEndRef]);
 
   useEffect(() => {
     initialSentRef.current = false;
@@ -97,7 +105,7 @@ export function AgentChatPanel({
 
   return (
     <>
-      <div className="chat-messages">
+      <div className="chat-messages" ref={messagesContainerRef}>
         <div className="chat-column">
           {!agent.historyReady && agent.messages.length === 0 && (
             <p className="empty">Loading conversation…</p>
@@ -107,7 +115,7 @@ export function AgentChatPanel({
               Start a conversation
             </p>
           )}
-          {turns.map((turn) => {
+          {turns.map((turn, turnIndex) => {
             if (turn.kind === 'user') {
               return (
                 <div key={turn.message.id} className="message user">
@@ -116,15 +124,23 @@ export function AgentChatPanel({
               );
             }
             const parts = filterRenderableParts(mergeAssistantParts(turn.messages));
+            const isLatestTurn = turnIndex === turns.length - 1;
+            const showInProgress = busy && isLatestTurn && parts.length === 0;
             return (
               <div key={turn.messages[0]?.id ?? 'assistant'} className="message assistant">
                 {parts.map((part, index) => (
                   <MessagePart key={partRenderKey(part, index)} part={part} />
                 ))}
+                {showInProgress && <AssistantInProgress status={agent.status} />}
               </div>
             );
           })}
-          {showTypingIndicator && <TypingIndicator />}
+          {awaitingAssistant && (
+            <div className="message assistant">
+              <AssistantInProgress status={agent.status} />
+            </div>
+          )}
+          {showTypingIndicator && !awaitingAssistant && <TypingIndicator />}
           {agent.error && <p className="error inline">{agent.error.message}</p>}
           <div ref={messagesEndRef} />
         </div>

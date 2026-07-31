@@ -57,7 +57,7 @@ start_backend() {
     exec npm run dev
   ) >>"$BACKEND_LOG" 2>&1 &
   echo $! >"$BACKEND_PID_FILE"
-  wait_for_url "http://127.0.0.1:$BACKEND_PORT/health" "Backend" 45 || true
+  wait_for_url "http://127.0.0.1:$BACKEND_PORT/health" "Backend" 60 '"ok":true' || true
   record_listener_pid "$BACKEND_PORT" "$BACKEND_PID_FILE"
 }
 
