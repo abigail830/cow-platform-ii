@@ -30,7 +30,7 @@ You can also override in the Vercel dashboard: **Project → Settings → Functi
 
 ## Build
 
-`npm run build:vercel` emits Vercel **Build Output API** under `.vercel/output/` (bundled **CJS** handler at `functions/index.func/index.cjs`, ~10 MB). Do not use ESM here — `pg` triggers `Dynamic require of "events" is not supported` on Vercel.
+`npm run build:vercel` emits Vercel **Build Output API** under `.vercel/output/` (bundled **CJS** handler at `functions/index.func/index.cjs`, ~15 MB). The bundle includes `src/flue-vercel-init.ts`, which calls `configureFlueRuntime()` so `/api/agents/*` works without `flue build`’s `serve()` entry. Do not use ESM here — `pg` triggers `Dynamic require of "events" is not supported` on Vercel.
 
 Run `npx tsc --noEmit` locally before deploy to catch type errors.
 

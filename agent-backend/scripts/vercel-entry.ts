@@ -1,18 +1,44 @@
 import { getRequestListener } from '@hono/node-server';
 import app from '../src/app.ts';
+import { initFlueRuntime } from '../src/flue-vercel-init.ts';
 
-export const config = {
+const vercelConfig = {
   maxDuration: 300,
 };
 
-// Build Output API uses Node.js (req, res); hono/vercel handle() expects Web Request only.
-const handler = getRequestListener(app.fetch);
+let handler: ReturnType<typeof getRequestListener> | undefined;
+let bootPromise: Promise<void> | undefined;
 
-export default handler;
+function bootstrap(): Promise<void> {
+  if (!bootPromise) {
+    bootPromise = initFlueRuntime().then(() => {
+      handler = getRequestListener(app.fetch.bind(app));
+      const g = globalThis as typeof globalThis & {
+        __okfVercelHandler?: typeof handler;
+        __okfVercelConfig?: typeof vercelConfig;
+      };
+      g.__okfVercelHandler = handler;
+      g.__okfVercelConfig = vercelConfig;
+    });
+  }
+  return bootPromise;
+}
+
+const serve = (req: Parameters<ReturnType<typeof getRequestListener>>[0], res: Parameters<ReturnType<typeof getRequestListener>>[1]) => {
+  bootstrap()
+    .then(() => handler!(req, res))
+    .catch((error) => {
+      console.error('[vercel] bootstrap failed:', error);
+      res.statusCode = 500;
+      res.end(error instanceof Error ? error.message : String(error));
+    });
+};
 
 const g = globalThis as typeof globalThis & {
-  __okfVercelHandler?: typeof handler;
-  __okfVercelConfig?: typeof config;
+  __okfVercelHandler?: typeof serve;
+  __okfVercelConfig?: typeof vercelConfig;
 };
-g.__okfVercelHandler = handler;
-g.__okfVercelConfig = config;
+g.__okfVercelHandler = serve;
+g.__okfVercelConfig = vercelConfig;
+
+export default serve;

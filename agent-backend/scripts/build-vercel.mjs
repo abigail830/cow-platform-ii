@@ -8,7 +8,6 @@ const outRoot = path.join(root, '.vercel', 'output');
 const funcDir = path.join(outRoot, 'functions', 'index.func');
 const staticDir = path.join(outRoot, 'static');
 
-// Default Singapore; override with VERCEL_REGIONS=sin1,hkg1 (comma-separated).
 const regions = (process.env.VERCEL_REGIONS ?? 'sin1')
   .split(',')
   .map((r) => r.trim())
@@ -19,12 +18,15 @@ mkdirSync(funcDir, { recursive: true });
 mkdirSync(staticDir, { recursive: true });
 writeFileSync(path.join(staticDir, '.gitkeep'), '');
 
-// Native / optional deps that must not be bundled.
 const external = [
   'pg-native',
   'cpu-features',
   'bufferutil',
   'utf-8-validate',
+  '@mongodb-js/zstd',
+  'mongodb',
+  'kerberos',
+  'snappy',
 ];
 
 const outfile = path.join(funcDir, 'index.cjs');
@@ -35,7 +37,6 @@ await esbuild.build({
   bundle: true,
   platform: 'node',
   target: 'node22',
-  // CJS: Vercel Node launcher + pg/drizzle rely on require(); ESM hits "Dynamic require" errors.
   format: 'cjs',
   external,
   logLevel: 'info',
