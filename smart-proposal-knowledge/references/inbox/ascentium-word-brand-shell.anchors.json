@@ -1,7 +1,0 @@
-{
-  "template": "ascentium-word-brand-shell.docx",
-  "body_insert_before_para_id": "202EA4F9",
-  "back_cover_title_para_id": "3CBF0169",
-  "deprecated_body_insert_para_ids": ["52E883DC", "4676E560"],
-  "notes": "All proposal body add/batch commands must use --before /body/p[@paraId=202EA4F9]. That paragraph has pageBreakBefore and starts the back-cover art; inserts stack above it on white pages."
-}
