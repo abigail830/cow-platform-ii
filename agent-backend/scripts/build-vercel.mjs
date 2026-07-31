@@ -1,5 +1,5 @@
 import esbuild from 'esbuild';
-import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,6 +51,16 @@ module.exports.config = globalThis.__okfVercelConfig;
 `,
   },
 });
+
+// CJS bundles cannot use import.meta.url; esbuild lowers it to `import_metaN = {}`.
+// just-bash (via @flue/runtime) calls createRequire(import.meta.url) at module init.
+const importMetaUrl = 'require("node:url").pathToFileURL(__filename).href';
+let bundle = readFileSync(outfile, 'utf8');
+const patched = bundle.replace(/import_meta\d+\.url/g, importMetaUrl);
+if (patched === bundle) {
+  throw new Error('expected import_meta.url placeholders in CJS bundle — esbuild output changed?');
+}
+writeFileSync(outfile, patched);
 
 const { size } = statSync(outfile);
 if (size < 100_000) {
