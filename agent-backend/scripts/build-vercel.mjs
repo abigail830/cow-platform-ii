@@ -24,6 +24,7 @@ const external = [
   'bufferutil',
   'utf-8-validate',
   '@mongodb-js/zstd',
+  'node-liblzma',
   'mongodb',
   'kerberos',
   'snappy',
