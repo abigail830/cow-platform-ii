@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import {
   fetchDocumentContent,
   getDocument,
@@ -125,7 +125,10 @@ export function DocumentDetailPage() {
       {error && <p className="error inline">{error}</p>}
 
       {loadingDoc ? (
-        <p className="document-detail-loading">Loading document…</p>
+        <p className="document-detail-loading" role="status" aria-live="polite">
+          <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
+          Loading document…
+        </p>
       ) : content ? (
         <div className="document-detail-layout">
           <DocumentMetadataBar
@@ -193,7 +196,10 @@ export function DocumentDetailPage() {
           </div>
         </div>
       ) : loadingContent ? (
-        <p className="document-detail-loading">Loading parsed content…</p>
+        <p className="document-detail-loading" role="status" aria-live="polite">
+          <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
+          Loading parsed content…
+        </p>
       ) : document ? (
         <div className="document-detail-panel-empty">
           <p>Could not load parsed content.</p>
