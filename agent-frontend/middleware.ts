@@ -31,9 +31,35 @@ export default async function middleware(request: Request): Promise<Response> {
   }
 
   const upstream = await fetch(target, init);
-  return new Response(upstream.body, {
+
+  if (shouldStreamProxyResponse(request, upstream, url)) {
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: upstream.headers,
+    });
+  }
+
+  // Edge middleware can drop small JSON bodies on 202 when piping upstream.body
+  // (e.g. Flue agent admission receipts). Buffer non-streaming responses.
+  const body = await upstream.arrayBuffer();
+  return new Response(body.byteLength > 0 ? body : null, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: upstream.headers,
   });
+}
+
+function shouldStreamProxyResponse(
+  request: Request,
+  upstream: Response,
+  url: URL,
+): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  if (url.searchParams.get('view') === 'updates') return true;
+  if (/\/runs\/[^/]+$/.test(url.pathname) && !url.searchParams.has('meta')) return true;
+  const contentType = upstream.headers.get('content-type') ?? '';
+  return (
+    contentType.includes('text/event-stream') || contentType.includes('application/x-ndjson')
+  );
 }
