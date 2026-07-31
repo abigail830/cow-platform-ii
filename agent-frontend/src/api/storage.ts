@@ -1,3 +1,4 @@
+import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
 
@@ -38,7 +39,7 @@ export type MoveResult = {
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
   });

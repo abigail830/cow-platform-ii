@@ -1,3 +1,4 @@
+import { apiUrl } from './base.ts';
 import { formatApiError } from './http.ts';
 
 export type UserRole = 'user' | 'operator' | 'admin';
@@ -63,7 +64,7 @@ async function parseJsonResponse<T>(res: Response): Promise<T> {
 }
 
 export async function login(email: string, password: string) {
-  const res = await fetch('/api/auth/login', {
+  const res = await fetch(apiUrl('/api/auth/login'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -78,7 +79,7 @@ export async function login(email: string, password: string) {
 export async function fetchMe(): Promise<AuthUser> {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
-  const res = await fetch('/api/auth/me', {
+  const res = await fetch(apiUrl('/api/auth/me'), {
     headers: { Authorization: `Bearer ${token}` },
   });
   const data = await parseJsonResponse<{ user?: AuthUser; error?: string }>(res);

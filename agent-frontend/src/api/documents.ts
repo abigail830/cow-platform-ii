@@ -1,3 +1,4 @@
+import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
 
@@ -37,7 +38,7 @@ export const UPLOAD_CHUNK_SIZE_BYTES = 5 * 1024 * 1024;
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
   });
@@ -100,7 +101,7 @@ export async function downloadDocumentBundle(id: string, suggestedFilename: stri
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
 
-  const res = await fetch(`/api/documents/${id}/download/bundle`, {
+  const res = await fetch(apiUrl(`/api/documents/${id}/download/bundle`), {
     headers: { Authorization: `Bearer ${token}` },
   });
 

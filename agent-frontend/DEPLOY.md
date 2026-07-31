@@ -1,4 +1,4 @@
-# Vercel static frontend + API proxy
+# Vercel static frontend
 
 Deploy as a **separate** Vercel project from `agent-backend` (e.g. frontend = `cow-platform` → `https://cow-platform.vercel.app`, backend = `cow-platform-ii` → `https://cow-platform-ii.vercel.app`).
 
@@ -8,21 +8,24 @@ Deploy as a **separate** Vercel project from `agent-backend` (e.g. frontend = `c
 |---------|--------|
 | **Root Directory** | `agent-frontend` |
 
-## Environment variables (Vercel)
+## Environment variables (frontend Vercel project)
 
 | Variable | Required | Notes |
 |----------|----------|--------|
-| `BACKEND_ORIGIN` | Yes | Backend URL: `https://cow-platform-ii.vercel.app` — **not** the frontend URL (`https://cow-platform.vercel.app`) |
+| `VITE_API_ORIGIN` | **Yes** | Backend origin, e.g. `https://cow-platform-ii.vercel.app` (no trailing slash). Baked into the build; browser calls backend directly. |
 | `VITE_FLUE_LIVE_MODE` | No | Default `sse` |
 
-## Routing
+`BACKEND_ORIGIN` + `middleware.ts` are **legacy** (Edge proxy). Vercel Edge drops Flue `202` admission JSON bodies; use `VITE_API_ORIGIN` instead.
 
-- `middleware.ts` (Edge): proxies `/api/*` and `/health` to `BACKEND_ORIGIN` (supports SSE)
-- `vercel.json`: SPA fallback to `index.html` for all other paths
+## Environment variables (backend Vercel project)
 
-Local dev uses Vite proxy (`vite.config.ts`); `BACKEND_ORIGIN` is only used on Vercel.
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `CORS_ORIGIN` | **Yes** | Frontend origin, e.g. `https://cow-platform.vercel.app` |
 
-`/health` on the **frontend** URL proxies to `BACKEND_ORIGIN`. If `BACKEND_ORIGIN` is missing or points to the frontend URL itself, `/health` will fail. Use the **backend** project URL for direct health checks.
+## Local dev
+
+Leave `VITE_API_ORIGIN` unset in `.env`. Vite proxy (`vite.config.ts`) forwards `/api` to `http://127.0.0.1:8787`.
 
 ## SSE note
 
