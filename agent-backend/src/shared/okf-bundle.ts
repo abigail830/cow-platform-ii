@@ -53,9 +53,20 @@ export function findOkfBundleRoot(bundle: OkfBundleRef): string | null {
   }
 }
 
+function defaultBundleCandidates(): string[] {
+  return [
+    resolve(backendRoot, VENDORED_BUNDLE_DIR),
+    resolve(backendRoot, MONOREPO_BUNDLE_DIR),
+  ];
+}
+
 export function resolveOkfBundleRoot(bundle: OkfBundleRef): string {
   const root = findOkfBundleRoot(bundle);
   if (root) return root;
+
+  for (const candidate of defaultBundleCandidates()) {
+    if (existsSync(join(candidate, 'index.md'))) return candidate;
+  }
 
   const resolved = resolveBundleRefPath(bundle);
   assertBundleIndex(resolved);
@@ -66,10 +77,7 @@ function defaultBundleRoot(): string {
   const root = findOkfBundleRoot({ kind: 'env', envVar: 'OKF_BUNDLE_PATH' });
   if (root) return root;
 
-  for (const candidate of [
-    resolve(backendRoot, VENDORED_BUNDLE_DIR),
-    resolve(backendRoot, MONOREPO_BUNDLE_DIR),
-  ]) {
+  for (const candidate of defaultBundleCandidates()) {
     if (existsSync(join(candidate, 'index.md'))) return candidate;
   }
 
