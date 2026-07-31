@@ -7,6 +7,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { getS3Config, type S3Config } from './s3-config.ts';
 
 let cachedClient: S3Client | null = null;
@@ -30,6 +31,10 @@ export function getS3Client(): { client: S3Client; config: S3Config } | null {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
       },
+      requestHandler: new NodeHttpHandler({
+        connectionTimeout: 10_000,
+        requestTimeout: 30_000,
+      }),
     });
     cachedConfigKey = key;
   }

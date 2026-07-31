@@ -23,7 +23,8 @@ export function DocumentDetailPage() {
 
   const [document, setDocument] = useState<DocumentRecord | null>(null);
   const [content, setContent] = useState<DocumentContentResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingDoc, setLoadingDoc] = useState(true);
+  const [loadingContent, setLoadingContent] = useState(true);
   const [error, setError] = useState('');
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [activeSheetIndex, setActiveSheetIndex] = useState<number | null>(null);
@@ -32,19 +33,32 @@ export function DocumentDetailPage() {
 
   const loadDetail = useCallback(async () => {
     if (!documentId) return;
-    setLoading(true);
+    setLoadingDoc(true);
+    setLoadingContent(true);
     setError('');
+    setContent(null);
+
     try {
-      const [doc, docContent] = await Promise.all([getDocument(documentId), fetchDocumentContent(documentId)]);
+      const doc = await getDocument(documentId);
       setDocument(doc);
-      setContent(docContent);
       setSelectedChannelId(doc.channel_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load document');
       setDocument(null);
+      setLoadingContent(false);
+      return;
+    } finally {
+      setLoadingDoc(false);
+    }
+
+    try {
+      const docContent = await fetchDocumentContent(documentId, { timeoutMs: 60_000 });
+      setContent(docContent);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load document content');
       setContent(null);
     } finally {
-      setLoading(false);
+      setLoadingContent(false);
     }
   }, [documentId, setSelectedChannelId]);
 
@@ -110,7 +124,7 @@ export function DocumentDetailPage() {
 
       {error && <p className="error inline">{error}</p>}
 
-      {loading ? (
+      {loadingDoc ? (
         <p className="document-detail-loading">Loading document…</p>
       ) : content ? (
         <div className="document-detail-layout">
@@ -177,6 +191,13 @@ export function DocumentDetailPage() {
               </div>
             </section>
           </div>
+        </div>
+      ) : loadingContent ? (
+        <p className="document-detail-loading">Loading parsed content…</p>
+      ) : document ? (
+        <div className="document-detail-panel-empty">
+          <p>Could not load parsed content.</p>
+          <p className="document-detail-panel-hint">Check object storage connectivity or re-run the pipeline.</p>
         </div>
       ) : null}
     </div>

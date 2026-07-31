@@ -374,11 +374,12 @@ export async function getDocumentContent(id: string): Promise<DocumentContentRes
 
   const { readStorageText, storagePrefixFromS3Key } = await import('../storage/document-content.ts');
   const prefix = storagePrefixFromS3Key(doc.s3Key);
+  const needsParsingResult = doc.fileType.toUpperCase() === 'XMIND';
 
   const [markdown, pageIndexRaw, resultRaw] = await Promise.all([
     readStorageText(`${prefix}/markdown.md`),
     readStorageText(`${prefix}/page_index.json`),
-    readStorageText(`${prefix}/result.json`),
+    needsParsingResult ? readStorageText(`${prefix}/result.json`) : Promise.resolve(null),
   ]);
 
   let page_index: Record<string, unknown> | null = null;

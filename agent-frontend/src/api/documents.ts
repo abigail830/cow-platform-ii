@@ -66,8 +66,16 @@ export async function getDocument(id: string): Promise<DocumentRecord> {
   return data as DocumentRecord;
 }
 
-export async function fetchDocumentContent(id: string): Promise<DocumentContentResponse> {
-  const data = await authFetch(`/api/documents/${id}/content`);
+export async function fetchDocumentContent(
+  id: string,
+  options?: { timeoutMs?: number },
+): Promise<DocumentContentResponse> {
+  const timeoutMs = options?.timeoutMs;
+  const signal =
+    timeoutMs && timeoutMs > 0 && typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal
+      ? AbortSignal.timeout(timeoutMs)
+      : undefined;
+  const data = await authFetch(`/api/documents/${id}/content`, signal ? { signal } : undefined);
   return data as DocumentContentResponse;
 }
 
