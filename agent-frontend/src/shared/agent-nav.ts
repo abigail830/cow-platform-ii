@@ -8,7 +8,7 @@ import {
   SESSION_EXPLORER_PATH,
   type NavPage,
 } from './admin-nav.ts';
-import { hasPermission } from './permissions.ts';
+import { hasAgentFeaturePermission, hasPermission } from './permissions.ts';
 
 export const AGENT_PLAYER_ROLE = 'agent-player';
 
@@ -26,8 +26,7 @@ export function isPlatformAdminUser(user: AuthUser): boolean {
 }
 
 export function canSeeSessionExplorer(user: AuthUser): boolean {
-  const roles = roleKeys(user);
-  return roles.includes('admin') || roles.includes(AGENT_PLAYER_ROLE) || user.role === 'admin' || user.role === 'operator';
+  return hasAgentFeaturePermission(user, 'session-explorer');
 }
 
 export function isRestrictedAgentPlayer(user: AuthUser): boolean {
@@ -37,20 +36,31 @@ export function isRestrictedAgentPlayer(user: AuthUser): boolean {
 
 export function visibleAgentPages(user: AuthUser): NavPage[] {
   return AGENT_PAGES.filter((page) => {
-    if (page.path === SESSION_EXPLORER_PATH) return canSeeSessionExplorer(user);
-    return true;
+    if (page.path === AGENT_PLAYGROUND_PATH) {
+      return hasAgentFeaturePermission(user, 'playground');
+    }
+    if (page.path === SESSION_EXPLORER_PATH) {
+      return hasAgentFeaturePermission(user, 'session-explorer');
+    }
+    return hasPermission(user, page.permissionKey, 'read');
   });
 }
 
 export function canAccessAppPath(user: AuthUser, path: string): boolean {
-  if (isRestrictedAgentPlayer(user)) {
-    return AGENT_PLAYER_ALLOWED_PATHS.some(
-      (allowed) => path === allowed || path.startsWith(`${allowed}/`),
-    );
+  if (path === AGENT_PLAYGROUND_PATH || path.startsWith(`${AGENT_PLAYGROUND_PATH}/`)) {
+    return hasAgentFeaturePermission(user, 'playground');
   }
 
-  if (path === SESSION_EXPLORER_PATH) {
-    return canSeeSessionExplorer(user);
+  if (path === SESSION_EXPLORER_PATH || path.startsWith(`${SESSION_EXPLORER_PATH}/`)) {
+    return hasAgentFeaturePermission(user, 'session-explorer');
+  }
+
+  if (path === '/chat' || path.startsWith('/chat/')) {
+    return hasAgentFeaturePermission(user, 'playground');
+  }
+
+  if (isRestrictedAgentPlayer(user)) {
+    return false;
   }
 
   const pages: readonly NavPage[] = [

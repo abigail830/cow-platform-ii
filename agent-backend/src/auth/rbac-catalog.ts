@@ -25,6 +25,15 @@ export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
 export type KnowledgeManagementResource =
   (typeof KNOWLEDGE_MANAGEMENT_RESOURCES)[keyof typeof KNOWLEDGE_MANAGEMENT_RESOURCES];
 
+export const AGENT_CATEGORY = 'agent' as const;
+
+export const AGENT_RESOURCES = {
+  PLAYGROUND: 'playground',
+  SESSION_EXPLORER: 'session-explorer',
+} as const;
+
+export type AgentResource = (typeof AGENT_RESOURCES)[keyof typeof AGENT_RESOURCES];
+
 export type AdminResource = (typeof ADMIN_RESOURCES)[keyof typeof ADMIN_RESOURCES];
 
 type ResourceDefinition = {
@@ -71,6 +80,23 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
       '/api/documents',
       '/api/documents/*',
     ],
+  },
+];
+
+const AGENT_RESOURCE_DEFS: ResourceDefinition[] = [
+  {
+    resource: AGENT_RESOURCES.PLAYGROUND,
+    label: 'Agent playground',
+    description: 'Chat with catalog agents and manage personal conversations.',
+    routePatterns: ['/agents/playground', '/chat'],
+    apiPatterns: ['/api/agents', '/api/agents/*', '/api/conversations', '/api/conversations/*'],
+  },
+  {
+    resource: AGENT_RESOURCES.SESSION_EXPLORER,
+    label: 'Session explorer',
+    description: 'Browse agent conversation history by date range and user.',
+    routePatterns: ['/agents/session-explorer'],
+    apiPatterns: ['/api/session-explorer', '/api/session-explorer/*'],
   },
 ];
 
@@ -132,9 +158,25 @@ function buildPermissions(
   );
 }
 
+/** Agent pages are all-or-nothing — one permission per feature, no read/write split. */
+function buildAgentPermissions(defs: ResourceDefinition[]): PermissionDefinition[] {
+  return defs.map((def) => ({
+    key: `${AGENT_CATEGORY}:${def.resource}`,
+    label: def.label,
+    description: def.description,
+    category: AGENT_CATEGORY,
+    resource: def.resource,
+    access: 'read' as const,
+    routePatterns: def.routePatterns,
+    apiPatterns: def.apiPatterns,
+    isSystem: true,
+  }));
+}
+
 export const PERMISSION_CATALOG: PermissionDefinition[] = [
   ...buildPermissions(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCE_DEFS),
   ...buildPermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS),
+  ...buildAgentPermissions(AGENT_RESOURCE_DEFS),
   ...buildPermissions('admin', ADMIN_RESOURCE_DEFS),
 ];
 
@@ -147,6 +189,10 @@ export const OBSOLETE_PERMISSION_KEYS = [
   'admin:users',
   'admin:roles',
   'admin:permissions',
+  'agent:playground:read',
+  'agent:playground:write',
+  'agent:session-explorer:read',
+  'agent:session-explorer:write',
 ] as const;
 
 export function permissionKey(category: string, resource: string, access: AccessLevel): string {
@@ -178,6 +224,9 @@ export function hasResourcePermission(
   resource: string,
   required: AccessLevel,
 ): boolean {
+  const flatKey = `${category}:${resource}`;
+  if (keys.has(flatKey)) return true;
+
   const writeKey = permissionKey(category, resource, 'write');
   const readKey = permissionKey(category, resource, 'read');
   if (keys.has(writeKey)) return true;
@@ -186,6 +235,8 @@ export function hasResourcePermission(
 }
 
 export function hasPermissionKey(keys: Set<string>, key: string, required: AccessLevel): boolean {
+  if (keys.has(key)) return true;
+
   if (key.endsWith(':read') || key.endsWith(':write')) {
     if (required === 'read') {
       if (keys.has(key)) return true;

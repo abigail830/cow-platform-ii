@@ -3,11 +3,13 @@ import { and, desc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { appConversations, db } from '../db/index.ts';
 import { getUser, requireAuth } from '../auth/jwt.ts';
+import { requireResourcePermission } from '../auth/require-permission.ts';
 import { canAccessAgent } from '../auth/permissions.ts';
 
 const conversations = new Hono();
 
 conversations.use('*', requireAuth);
+conversations.use('*', requireResourcePermission('agent', 'playground', 'read'));
 
 conversations.get('/', async (c) => {
   const user = getUser(c);

@@ -60,7 +60,7 @@ export const AGENT_PAGES: readonly NavPage[] = [
     navLabel: 'Agent playground',
     titleMain: 'Agent',
     titleAccent: 'Playground',
-    permissionKey: '',
+    permissionKey: 'agent:playground',
     icon: 'playground',
   },
   {
@@ -68,7 +68,7 @@ export const AGENT_PAGES: readonly NavPage[] = [
     navLabel: 'Session explorer',
     titleMain: 'Session',
     titleAccent: 'Explorer',
-    permissionKey: '',
+    permissionKey: 'agent:session-explorer',
     icon: 'session-explorer',
   },
 ];

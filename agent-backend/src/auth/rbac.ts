@@ -90,6 +90,9 @@ export async function userHasResourcePermission(
   }
 
   const [user] = await db.select({ role: appUsers.role }).from(appUsers).where(eq(appUsers.id, userId)).limit(1);
+  if (category === 'agent' && resource === 'playground') {
+    return true;
+  }
   return user?.role === 'admin' || user?.role === 'operator';
 }
 

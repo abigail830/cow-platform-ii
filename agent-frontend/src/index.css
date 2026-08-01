@@ -1196,29 +1196,59 @@ textarea {
 
 .role-picker {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.5rem;
 }
 
-.role-picker-option {
+.role-picker-card {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  color: #334155;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
   cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.role-picker-option input {
-  margin-top: 0.15rem;
-  flex-shrink: 0;
-  width: auto;
+.role-picker-card:hover:not(.disabled) {
+  border-color: #cbd5e1;
+  background: #f8fafc;
 }
 
-.role-picker-option span {
+.role-picker-card.selected {
+  border-color: var(--brand-orange);
+  background: #fff7ed;
+}
+
+.role-picker-card.disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.role-picker-card .brand-checkbox {
+  margin-top: 0.1rem;
+}
+
+.role-picker-card-body {
   flex: 1;
   min-width: 0;
-  color: #334155;
+}
+
+.role-picker-card-title {
+  display: block;
+  font-weight: 600;
   font-size: 0.8125rem;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.role-picker-card-desc {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.45;
 }
 
 .form-field textarea {

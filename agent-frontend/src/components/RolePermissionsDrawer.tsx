@@ -9,6 +9,8 @@ type ResourceGroup = {
   label: string;
   read?: PermissionRecord;
   write?: PermissionRecord;
+  /** Agent features — one permission grants full page access. */
+  access?: PermissionRecord;
 };
 
 function groupPermissions(permissions: PermissionRecord[]): ResourceGroup[] {
@@ -16,6 +18,16 @@ function groupPermissions(permissions: PermissionRecord[]): ResourceGroup[] {
 
   for (const perm of permissions) {
     const parts = perm.key.split(':');
+
+    if (parts.length === 2 && parts[0] === 'agent') {
+      const resource = parts[1];
+      if (!resource) continue;
+      const group = groups.get(resource) ?? { resource, label: perm.label };
+      group.access = perm;
+      groups.set(resource, group);
+      continue;
+    }
+
     if (parts.length !== 3) continue;
     const [, resource, access] = parts;
     if (!resource || (access !== 'read' && access !== 'write')) continue;
@@ -98,29 +110,47 @@ export function RolePermissionsDrawer({
                   <tr key={group.resource}>
                     <td>{group.label}</td>
                     <td>
-                      {group.read && (
-                        <label className="role-perm-check">
+                      {group.access ? (
+                        <label className="role-perm-check" title="Full access">
                           <input
                             type="checkbox"
                             className="brand-checkbox"
-                            checked={grantedIds.has(group.read.id) || isSystemAdmin}
+                            checked={grantedIds.has(group.access.id) || isSystemAdmin}
                             disabled={!canWrite || isSystemAdmin}
-                            onChange={() => togglePermission(group.read!.id)}
+                            onChange={() => togglePermission(group.access!.id)}
                           />
                         </label>
+                      ) : (
+                        group.read && (
+                          <label className="role-perm-check">
+                            <input
+                              type="checkbox"
+                              className="brand-checkbox"
+                              checked={grantedIds.has(group.read.id) || isSystemAdmin}
+                              disabled={!canWrite || isSystemAdmin}
+                              onChange={() => togglePermission(group.read!.id)}
+                            />
+                          </label>
+                        )
                       )}
                     </td>
                     <td>
-                      {group.write && (
-                        <label className="role-perm-check">
-                          <input
-                            type="checkbox"
-                            className="brand-checkbox"
-                            checked={grantedIds.has(group.write.id) || isSystemAdmin}
-                            disabled={!canWrite || isSystemAdmin}
-                            onChange={() => togglePermission(group.write!.id)}
-                          />
-                        </label>
+                      {group.access ? (
+                        <span className="role-perm-na" aria-hidden>
+                          —
+                        </span>
+                      ) : (
+                        group.write && (
+                          <label className="role-perm-check">
+                            <input
+                              type="checkbox"
+                              className="brand-checkbox"
+                              checked={grantedIds.has(group.write.id) || isSystemAdmin}
+                              disabled={!canWrite || isSystemAdmin}
+                              onChange={() => togglePermission(group.write!.id)}
+                            />
+                          </label>
+                        )
                       )}
                     </td>
                   </tr>

@@ -27,6 +27,74 @@ const AGENT_PLAYER_ROLE = {
   isSystem: true,
 };
 
+const KNOWLEDGE_MANAGER_ROLE = {
+  key: 'knowledge-manager',
+  label: 'Knowledge Manager',
+  description: 'Manage documents, pipelines, and object storage; read model configuration.',
+  isSystem: true,
+};
+
+/** Permission keys granted to each system role (admin gets the full catalog separately). */
+const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
+  'agent-player': ['agent:playground', 'agent:session-explorer'],
+  'knowledge-manager': [
+    'knowledge-management:documents:read',
+    'knowledge-management:documents:write',
+    'platform-basic:pipelines:read',
+    'platform-basic:pipelines:write',
+    'platform-basic:storage:read',
+    'platform-basic:storage:write',
+    'platform-basic:models:read',
+  ],
+};
+
+async function upsertSystemRole(def: {
+  key: string;
+  label: string;
+  description: string;
+  isSystem: boolean;
+}) {
+  let [role] = await db.select().from(appRoles).where(eq(appRoles.key, def.key)).limit(1);
+  if (role) {
+    [role] = await db
+      .update(appRoles)
+      .set({
+        label: def.label,
+        description: def.description,
+        isSystem: def.isSystem,
+      })
+      .where(eq(appRoles.id, role.id))
+      .returning();
+    return role;
+  }
+
+  [role] = await db.insert(appRoles).values(def).returning();
+  console.log(`  created role: ${def.key}`);
+  return role;
+}
+
+async function grantRolePermissionKeys(
+  roleId: string,
+  allowedKeys: Set<string>,
+  permissions: Awaited<ReturnType<typeof upsertPermission>>[],
+) {
+  for (const permission of permissions) {
+    if (!allowedKeys.has(permission.key)) continue;
+    const accessLevel = accessFromPermissionKey(permission.key);
+    await db
+      .insert(appRolePermissions)
+      .values({
+        roleId,
+        permissionId: permission.id,
+        accessLevel,
+      })
+      .onConflictDoUpdate({
+        target: [appRolePermissions.roleId, appRolePermissions.permissionId],
+        set: { accessLevel },
+      });
+  }
+}
+
 async function upsertPermission(def: (typeof PERMISSION_CATALOG)[number]) {
   const existing = await db
     .select()
@@ -95,35 +163,22 @@ export async function syncRbac(): Promise<{ permissionCount: number }> {
     permissions.push(await upsertPermission(def));
   }
 
-  let [adminRole] = await db.select().from(appRoles).where(eq(appRoles.key, ADMIN_ROLE.key)).limit(1);
-  if (!adminRole) {
-    [adminRole] = await db.insert(appRoles).values(ADMIN_ROLE).returning();
-    console.log(`  created role: ${ADMIN_ROLE.key}`);
-  }
+  let adminRole = await upsertSystemRole(ADMIN_ROLE);
+  const agentPlayerRole = await upsertSystemRole(AGENT_PLAYER_ROLE);
+  const knowledgeManagerRole = await upsertSystemRole(KNOWLEDGE_MANAGER_ROLE);
 
-  let [agentPlayerRole] = await db
-    .select()
-    .from(appRoles)
-    .where(eq(appRoles.key, AGENT_PLAYER_ROLE.key))
-    .limit(1);
-  if (!agentPlayerRole) {
-    [agentPlayerRole] = await db.insert(appRoles).values(AGENT_PLAYER_ROLE).returning();
-    console.log(`  created role: ${AGENT_PLAYER_ROLE.key}`);
-  }
+  const allPermissionKeys = new Set(permissions.map((permission) => permission.key));
+  await grantRolePermissionKeys(adminRole.id, allPermissionKeys, permissions);
 
-  for (const permission of permissions) {
-    const accessLevel = accessFromPermissionKey(permission.key);
-    await db
-      .insert(appRolePermissions)
-      .values({
-        roleId: adminRole.id,
-        permissionId: permission.id,
-        accessLevel,
-      })
-      .onConflictDoUpdate({
-        target: [appRolePermissions.roleId, appRolePermissions.permissionId],
-        set: { accessLevel },
-      });
+  for (const [roleKey, permissionKeys] of Object.entries(SYSTEM_ROLE_PERMISSION_KEYS)) {
+    const role =
+      roleKey === 'agent-player'
+        ? agentPlayerRole
+        : roleKey === 'knowledge-manager'
+          ? knowledgeManagerRole
+          : null;
+    if (!role) continue;
+    await grantRolePermissionKeys(role.id, new Set(permissionKeys), permissions);
   }
 
   const legacyAdmins = await db

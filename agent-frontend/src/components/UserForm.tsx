@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AdminRole } from '../api/users.ts';
+import { RolePicker } from './RolePicker.tsx';
 
 type UserFormProps = {
   roles: AdminRole[];
@@ -24,10 +25,6 @@ export function UserForm({ roles, onSubmit, onCancel }: UserFormProps) {
     const adminRole = roles.find((role) => role.key === 'admin');
     if (adminRole) setRoleIds([adminRole.id]);
   }, [roles]);
-
-  function toggleRole(roleId: string) {
-    setRoleIds((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]));
-  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -75,22 +72,7 @@ export function UserForm({ roles, onSubmit, onCancel }: UserFormProps) {
             </label>
             <div className="form-field form-field-wide">
               <span>Roles</span>
-              <div className="role-picker">
-                {roles.map((role) => (
-                  <label key={role.id} className="role-picker-option">
-                    <input
-                      type="checkbox"
-                      className="brand-checkbox"
-                      checked={roleIds.includes(role.id)}
-                      onChange={() => toggleRole(role.id)}
-                    />
-                    <span>
-                      {role.label}
-                      {role.description ? ` — ${role.description}` : ''}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <RolePicker roles={roles} selectedIds={roleIds} onChange={setRoleIds} disabled={busy} />
             </div>
           </div>
           {error && <p className="error">{error}</p>}

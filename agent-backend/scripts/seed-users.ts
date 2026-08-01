@@ -30,6 +30,14 @@ const SEED_USERS = [
     agents: [] as string[],
     rbacRoles: ['agent-player'],
   },
+  {
+    email: 'km@example.com',
+    password: 'km123',
+    displayName: 'Knowledge Manager',
+    role: 'user' as const,
+    agents: [] as string[],
+    rbacRoles: ['knowledge-manager'],
+  },
 ];
 
 async function assignRbacRoles(userId: string, roleKeys: string[]) {

@@ -25,6 +25,9 @@ function hasResourcePermission(
   resource: string,
   required: AccessLevel,
 ): boolean {
+  const flatKey = `${category}:${resource}`;
+  if (keys.has(flatKey)) return true;
+
   const writeKey = `${category}:${resource}:write`;
   const readKey = `${category}:${resource}:read`;
   if (keys.has(writeKey)) return true;
@@ -59,10 +62,23 @@ export function hasPermission(
 
   const parts = key.split(':');
   if (parts.length === 2) {
+    if (keys.has(key)) return true;
     return hasResourcePermission(keys, parts[0]!, parts[1]!, required);
   }
 
   return keys.has(key);
+}
+
+/** Agent playground / session explorer — single grant per feature; legacy users keep playground. */
+export function hasAgentFeaturePermission(
+  user: AuthUser | null | undefined,
+  resource: 'playground' | 'session-explorer',
+): boolean {
+  if (!user) return false;
+  const keys = permissionKeySet(user);
+  if (keys.has(`agent:${resource}`)) return true;
+  if (keys.size === 0 && resource === 'playground') return true;
+  return false;
 }
 
 export function canSeeAdminSection(user: AuthUser | null | undefined): boolean {
