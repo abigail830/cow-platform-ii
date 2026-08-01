@@ -1,12 +1,14 @@
 import { useRef, type KeyboardEvent } from 'react';
-import { IconPaperclip, IconSend } from './icons/ChatIcons.tsx';
+import { IconPaperclip, IconSend, IconStop, IconStopSpinner } from './icons/ChatIcons.tsx';
 
 type ChatComposerProps = {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  onCancel?: () => void;
   disabled?: boolean;
   busy?: boolean;
+  canceling?: boolean;
   placeholder?: string;
 };
 
@@ -14,8 +16,10 @@ export function ChatComposer({
   value,
   onChange,
   onSend,
+  onCancel,
   disabled = false,
   busy = false,
+  canceling = false,
   placeholder = 'question',
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,6 +29,7 @@ export function ChatComposer({
     if (event.key !== 'Enter' || event.shiftKey) return;
     if (event.nativeEvent.isComposing || isComposingRef.current || event.keyCode === 229) return;
     event.preventDefault();
+    if (busy) return;
     onSend();
   }
 
@@ -35,6 +40,10 @@ export function ChatComposer({
           className="input-bar"
           onSubmit={(event) => {
             event.preventDefault();
+            if (busy) {
+              onCancel?.();
+              return;
+            }
             onSend();
           }}
         >
@@ -71,15 +80,28 @@ export function ChatComposer({
             }}
             onKeyDown={onKeyDown}
           />
-          <button
-            type="submit"
-            className="send-btn"
-            disabled={disabled || busy || !value.trim()}
-            title="Send"
-            aria-label="Send"
-          >
-            <IconSend />
-          </button>
+          {busy ? (
+            <button
+              type="button"
+              className="send-btn stop-btn"
+              disabled={disabled || canceling || !onCancel}
+              title={canceling ? 'Stopping…' : 'Stop'}
+              aria-label={canceling ? 'Stopping' : 'Stop'}
+              onClick={() => onCancel?.()}
+            >
+              {canceling ? <IconStopSpinner /> : <IconStop />}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="send-btn"
+              disabled={disabled || !value.trim()}
+              title="Send"
+              aria-label="Send"
+            >
+              <IconSend />
+            </button>
+          )}
         </form>
       </div>
     </div>

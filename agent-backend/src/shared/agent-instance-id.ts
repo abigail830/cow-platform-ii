@@ -14,6 +14,11 @@ export function parseSessionIdFromAgentInstanceId(instanceId: string): string | 
   return instanceId.slice(separator + 2).trim() || null;
 }
 
+/** Durable conversation stream path used by Flue attachment reads (`agentStreamPath`). */
+export function agentConversationStreamPath(agentName: string, instanceId: string): string {
+  return `agents/${agentName}/${instanceId}`;
+}
+
 /** Resolve app conversation id from a Flue instance id (legacy bare UUID still works). */
 export function conversationIdFromInstanceId(instanceId: string): string {
   return parseSessionIdFromAgentInstanceId(instanceId) ?? instanceId;

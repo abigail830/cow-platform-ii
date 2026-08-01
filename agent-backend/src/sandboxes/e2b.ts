@@ -2,7 +2,7 @@ import { createSandboxSessionEnv, SandboxOperationUnsupportedError } from '@flue
 import type { FileStat, SandboxApi, SandboxFactory, SessionEnv } from '@flue/runtime';
 import type { Sandbox as E2BSandbox } from 'e2b';
 
-class E2BSandboxApi implements SandboxApi {
+export class E2BSandboxApi implements SandboxApi {
   constructor(private sandbox: E2BSandbox) {}
 
   async readFile(path: string): Promise<string> {

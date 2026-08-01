@@ -19,6 +19,8 @@ import {
 import type { AgentRouteHandler } from '@flue/runtime';
 import { getCatalogFlueAgentModules } from './agent-catalog/boot.ts';
 import db from './db.ts';
+import { setPlatformFlueStores } from './flue/platform-flue-stores.ts';
+import { runSubmissionGovernanceAtStartup } from './flue/submission-governance.ts';
 
 type AgentModule = {
   default?: {
@@ -158,8 +160,27 @@ async function createDefaultEnv() {
 }
 
 let initialized = false;
+let initPromise: Promise<void> | undefined;
+
+/** Start Flue init in the background (Vercel cold start). Safe to call multiple times. */
+export function startFlueRuntimeInit(): void {
+  if (!initPromise) {
+    initPromise = runFlueRuntimeInit();
+  }
+}
+
+/** Await Flue runtime readiness — only needed before agent/workflow Flue routes. */
+export async function ensureFlueReady(): Promise<void> {
+  startFlueRuntimeInit();
+  await initPromise!;
+}
 
 export async function initFlueRuntime(): Promise<void> {
+  startFlueRuntimeInit();
+  await initPromise!;
+}
+
+async function runFlueRuntimeInit(): Promise<void> {
   if (initialized) return;
 
   const catalogModules = getCatalogFlueAgentModules();
@@ -245,6 +266,8 @@ export async function initFlueRuntime(): Promise<void> {
     throw new Error(`[flue] Failed to initialize persistence from db.ts: ${message}`, { cause: error });
   }
 
+  setPlatformFlueStores({ attachmentStore, conversationStreamStore });
+
   const activityGate = createRuntimeActivityGate();
 
   function createAgentContextForRequest({ id, agentName, request, initialEventIndex, dispatchId }) {
@@ -324,11 +347,20 @@ export async function initFlueRuntime(): Promise<void> {
     attachmentStore,
   });
 
-  try {
-    await agentCoordinator.reconcileSubmissions();
-  } catch (error) {
-    console.error('[flue] Startup submission reconciliation failed:', error);
-  }
-
   initialized = true;
+
+  void runSubmissionGovernanceAtStartup({
+    submissions: executionStore.submissions,
+    abortInstance: (agentName, instanceId) => agentCoordinator.abortInstance(agentName, instanceId),
+  })
+    .then((result) => {
+      if (result.aborted > 0) {
+        console.info(
+          `[flue] Startup submission governance aborted ${result.aborted}/${result.examined} stale submissions`,
+        );
+      }
+    })
+    .catch((error) => {
+      console.error('[flue] Startup submission governance failed:', error);
+    });
 }

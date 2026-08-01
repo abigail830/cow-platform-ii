@@ -15,6 +15,7 @@ export function bootAgentCatalog(): void {
     return {
       definition: mod.definition,
       route: mod.route,
+      attachments: mod.attachments,
     };
   });
   void Promise.all([
@@ -31,6 +32,7 @@ export function getCatalogFlueAgentModules(): Record<
   {
     default: ReturnType<typeof buildCatalogAgentModule>['definition'];
     route: ReturnType<typeof buildCatalogAgentModule>['route'];
+    attachments: ReturnType<typeof buildCatalogAgentModule>['attachments'];
     description: string;
   }
 > {

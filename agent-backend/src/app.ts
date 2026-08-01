@@ -11,6 +11,9 @@ import consoleRoutes from './routes/console/index.ts';
 import documentChannels from './routes/document-channels.ts';
 import documents from './routes/documents.ts';
 import internalApi from './routes/internal-api/index.ts';
+import { ensureFlueReady } from './flue-vercel-init.ts';
+import { agentInstanceStreamRegistry } from './flue/agent-instance-stream-registry.ts';
+import { isAgentLiveSseRequest, parseAgentInstancePath } from './flue/agent-instance-path.ts';
 import { recoverOrphanedPipelineWorkOnStartup, startPipelinePollScheduler } from './services/pipeline-poller.ts';
 
 registerModelProviders();
@@ -42,6 +45,40 @@ app.route('/api/console', consoleRoutes);
 app.route('/api/document-channels', documentChannels);
 app.route('/api/documents', documents);
 app.route('/internal-api', internalApi);
-app.route('/api', flue());
+
+const flueRoutes = new Hono();
+flueRoutes.use('*', async (c, next) => {
+  const parsed = parseAgentInstancePath(new URL(c.req.url).pathname);
+  if (parsed) {
+    const method = c.req.method;
+    const isSse = isAgentLiveSseRequest(c.req.url, c.req.header('accept'));
+    if (method === 'POST') {
+      agentInstanceStreamRegistry.touchActivity(parsed.instanceId, { extendMs: 10 * 60 * 1000 });
+    } else if ((method === 'GET' || method === 'HEAD') && isSse) {
+      agentInstanceStreamRegistry.addSubscriber(parsed.instanceId);
+      c.req.raw.signal.addEventListener(
+        'abort',
+        () => agentInstanceStreamRegistry.removeSubscriber(parsed.instanceId),
+        { once: true },
+      );
+    } else if (method === 'GET' || method === 'HEAD') {
+      agentInstanceStreamRegistry.touchActivity(parsed.instanceId);
+    }
+  }
+  await next();
+});
+if (process.env.VERCEL) {
+  flueRoutes.use('*', async (c, next) => {
+    try {
+      await ensureFlueReady();
+      await next();
+    } catch (error) {
+      console.error('[flue] Runtime not ready:', error);
+      return c.json({ error: 'Agent runtime is starting. Please retry shortly.' }, 503);
+    }
+  });
+}
+flueRoutes.route('/', flue());
+app.route('/api', flueRoutes);
 
 export default app;

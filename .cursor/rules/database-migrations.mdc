@@ -1,0 +1,36 @@
+---
+description: Database schema changes must use Drizzle migrations only (agent-backend)
+alwaysApply: true
+---
+
+# Database — Migrations Only
+
+All PostgreSQL schema changes in this repo **must** go through Drizzle migrations in `agent-backend/`. Never apply DDL directly to the database.
+
+## Do
+
+1. Edit `agent-backend/src/db/schema.ts`.
+2. Run `npm run db:generate` in `agent-backend/` — creates `drizzle/NNNN_*.sql` and updates `drizzle/meta/_journal.json`.
+3. Commit the `.sql` file **and** journal metadata together.
+4. Apply with `npm run db:migrate` (validates SQL ↔ journal, then migrates + RBAC sync).
+
+`./scripts/start.sh` and `./scripts/restart.sh` run `db:migrate` before the backend starts.
+
+## Don't
+
+- Run `CREATE TABLE`, `ALTER TABLE`, `DROP`, or ad-hoc DDL in psql / GUI / scripts against app DB
+- Add a `drizzle/*.sql` file without a matching entry in `drizzle/meta/_journal.json` (Drizzle will **skip** it)
+- Use `drizzle-kit push` or manual schema sync instead of numbered migrations
+- Fix missing tables by hand — add or fix the migration, then `npm run db:migrate`
+
+## Verify
+
+```bash
+cd agent-backend
+npm run db:validate-migrations   # SQL files ↔ journal
+npm run db:migrate               # apply pending migrations
+```
+
+## RBAC note
+
+`db:migrate` also runs RBAC catalog sync from `src/auth/rbac-catalog.ts`. Permission/role **data** can be updated in code + migrate; permission **schema** still follows migrations only.

@@ -60,10 +60,23 @@ Frontend defaults to [http://localhost:5180](http://localhost:5180) — set `COR
 | Command | Purpose |
 |---------|---------|
 | `npm run setup` | **First-time / fresh DB** — migrate + seed users |
-| `npm run db:migrate` | Apply schema migrations + RBAC sync (idempotent) |
+| `npm run db:generate` | Generate a new migration from `src/db/schema.ts` (after schema edits) |
+| `npm run db:validate-migrations` | Check SQL files and `drizzle/meta/_journal.json` stay in sync |
+| `npm run db:migrate` | Validate + apply schema migrations + RBAC sync (idempotent) |
 | `npm run seed` | Upsert demo users + RBAC role assignment |
 | `npm run seed:rbac` | Re-sync permissions only (same logic as migrate step) |
 
 You do **not** need a separate `seed:rbac` after `db:migrate` or `setup` — RBAC sync is included automatically.
 
 Already ran `seed:rbac` manually? That is fine; re-running `db:migrate` is safe and idempotent.
+
+## Database schema changes (migrations only)
+
+All database schema changes **must** go through Drizzle migrations — never run `ALTER TABLE` / `CREATE TABLE` directly against the database.
+
+1. Edit `src/db/schema.ts`.
+2. Run `npm run db:generate` — creates `drizzle/NNNN_*.sql` and updates `drizzle/meta/_journal.json`.
+3. Commit the `.sql` file and journal metadata together.
+4. Apply with `npm run db:migrate` (also runs automatically via `./scripts/start.sh` / `restart.sh`).
+
+`db:migrate` validates that every numbered SQL file is registered in the journal before applying anything. A common failure mode is adding a `.sql` file without a journal entry — Drizzle will skip it and the table will not exist at runtime.

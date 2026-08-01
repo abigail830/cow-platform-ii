@@ -63,6 +63,19 @@ export const appConversations = pgTable(
   (t) => [index('idx_conversations_user').on(t.userId, t.updatedAt)],
 );
 
+/** Platform-owned E2B sandbox lease keyed by Flue agent instance id (`userId--conversationId`). */
+export const appE2bSessions = pgTable(
+  'app_e2b_sessions',
+  {
+    instanceId: text('instance_id').primaryKey(),
+    sandboxId: text('sandbox_id').notNull(),
+    agentName: text('agent_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_e2b_sessions_updated').on(t.updatedAt)],
+);
+
 export const appModelConfigs = pgTable(
   'app_model_configs',
   {

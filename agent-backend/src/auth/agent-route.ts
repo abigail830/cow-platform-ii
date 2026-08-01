@@ -1,9 +1,42 @@
 import type { AgentRouteHandler } from '@flue/runtime';
+import { verifyAttachmentAccessToken } from './attachment-access-token.ts';
 import { bearerToken, verifyToken } from '../auth/jwt.ts';
-import { canAccessAgent, ownsConversation } from '../auth/permissions.ts';
+import { ownsConversation } from '../auth/permissions.ts';
 import { conversationIdFromInstanceId } from '../shared/agent-instance-id.ts';
 
-export function agentAccessRoute(agentName: string): AgentRouteHandler {
+export function agentAttachmentsRoute(agentName: string): AgentRouteHandler {
+  return async (c, next) => {
+    const instanceId = c.req.param('id') ?? '';
+    const attachmentId = c.req.param('attachmentId') ?? '';
+
+    const bearer = bearerToken(c);
+    if (bearer) {
+      try {
+        const user = verifyToken(bearer);
+        const conversationId = conversationIdFromInstanceId(instanceId);
+        if (!(await ownsConversation(user.id, conversationId))) return c.notFound();
+        c.set('user', user);
+        await next();
+        return;
+      } catch {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+    }
+
+    const accessToken = c.req.query('token')?.trim();
+    if (
+      accessToken &&
+      verifyAttachmentAccessToken(accessToken, { agentName, instanceId, attachmentId })
+    ) {
+      await next();
+      return;
+    }
+
+    return c.json({ error: 'Unauthorized' }, 401);
+  };
+}
+
+export function agentAccessRoute(_agentName: string): AgentRouteHandler {
   return async (c, next) => {
     const token = bearerToken(c);
     if (!token) return c.json({ error: 'Unauthorized' }, 401);
@@ -13,7 +46,6 @@ export function agentAccessRoute(agentName: string): AgentRouteHandler {
     } catch {
       return c.json({ error: 'Unauthorized' }, 401);
     }
-    if (!(await canAccessAgent(user, agentName))) return c.notFound();
 
     const instanceId = c.req.param('id');
     if (instanceId) {

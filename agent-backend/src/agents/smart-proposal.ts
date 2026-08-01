@@ -4,5 +4,6 @@ import { buildCatalogAgentExports } from '../agent-catalog/build-agent-module.ts
 const agent = buildCatalogAgentExports("smart-proposal");
 
 export const route = agent.route;
+export const attachments = agent.attachments;
 export const description = agent.description;
 export default agent.definition;

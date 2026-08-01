@@ -660,6 +660,44 @@ textarea {
   cursor: not-allowed;
 }
 
+.input-bar .send-btn.stop-btn {
+  background: #ffffff;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  color: #ff6611;
+}
+
+.input-bar .send-btn.stop-btn:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: rgba(17, 24, 39, 0.16);
+  transform: scale(1.04);
+}
+
+.input-bar .send-btn.stop-btn svg {
+  color: #ff6611;
+}
+
+.chat-aborted-label,
+.chat-status-hint {
+  margin: 0.15rem 0;
+  padding: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: #9ca3af;
+  background: none;
+  border: none;
+}
+
+.chat-status-hint {
+  align-self: flex-end;
+  max-width: 85%;
+  text-align: right;
+}
+
+.chat-status-hint-inline {
+  align-self: flex-start;
+  text-align: left;
+}
+
 .history-panel {
   width: 280px;
   flex-shrink: 0;

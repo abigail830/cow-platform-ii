@@ -1,22 +1,7 @@
-import { memo, startTransition, useEffect, useState, type ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import type { FlueConversationPart } from '@flue/react';
 import { Markdown } from './Markdown.tsx';
 import { isPartStreaming, partBodyText, partFoldLabel } from './part-labels.ts';
-
-function CompletedTextPart({ text }: { text: string }) {
-  const [useMarkdown, setUseMarkdown] = useState(false);
-
-  useEffect(() => {
-    setUseMarkdown(false);
-    startTransition(() => setUseMarkdown(true));
-  }, [text]);
-
-  if (!useMarkdown) {
-    return <pre className="streaming-plain-text">{text}</pre>;
-  }
-
-  return <Markdown>{text}</Markdown>;
-}
 
 type DynamicToolPart = Extract<FlueConversationPart, { type: 'dynamic-tool' }>;
 
@@ -29,15 +14,11 @@ function FoldBlock({
   streaming?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-
+  // Default collapsed; body stays mounted so expand shows live streaming / tool I/O.
   return (
-    <details
-      className={`fold-block${streaming ? ' streaming' : ''}`}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
+    <details className={`fold-block${streaming ? ' streaming' : ''}`}>
       <summary className="fold-block-summary">{label}</summary>
-      {open ? <div className="fold-block-body">{children}</div> : null}
+      <div className="fold-block-body">{children}</div>
     </details>
   );
 }
@@ -84,16 +65,9 @@ function MessagePartView({ part }: { part: FlueConversationPart }) {
 
   switch (part.type) {
     case 'text':
-      if (part.state === 'streaming') {
-        return (
-          <div className="text-part streaming">
-            {part.text.length > 0 ? <pre className="streaming-plain-text">{part.text}</pre> : null}
-          </div>
-        );
-      }
       return (
-        <div className="text-part">
-          {part.text.length > 0 ? <CompletedTextPart text={part.text} /> : null}
+        <div className={`text-part${streaming ? ' streaming' : ''}`}>
+          {part.text.length > 0 ? <Markdown>{part.text}</Markdown> : null}
         </div>
       );
 

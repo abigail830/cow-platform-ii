@@ -1,18 +1,24 @@
-import { useFlueAgent } from '@flue/react';
-import { useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useFlueAgent, useFlueClient } from '@flue/react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { isAgentBusy } from '../chat/agentStatus.ts';
 import { sendMessageWithAdmissionRetry } from '../chat/agent-send-retry.ts';
 import { resolveFlueLiveMode } from '../chat/flue-live-mode.ts';
-import { isAwaitingAssistantResponse } from '../chat/assistant-turn.ts';
-import { filterRenderableParts, groupMessages, mergeAssistantParts, partRenderKey, userMessageText } from '../chat/groupMessages.ts';
-import { shouldShowTypingIndicator } from '../chat/typing-indicator.ts';
+import {
+  filterRenderableParts,
+  groupConsecutiveMessages,
+  isSubmissionStatusMessage,
+  lastUserMessage,
+  mergeAssistantParts,
+  partRenderKey,
+  userMessageText,
+} from '../chat/groupMessages.ts';
+import { isActiveStreaming, shouldShowThinkingIndicator } from '../chat/typing-indicator.ts';
 import { useChatAutoScroll } from '../chat/use-chat-auto-scroll.ts';
 import { useThrottledMessages } from '../chat/use-throttled-messages.ts';
 import { MessagePart } from '../chat/MessagePart.tsx';
 import { toAgentInstanceId } from '../shared/agent-instance-id.ts';
 import { AssistantInProgress } from './AssistantInProgress.tsx';
 import { ChatComposer } from './ChatComposer.tsx';
-import { TypingIndicator } from './TypingIndicator.tsx';
 
 const FLUE_LIVE_MODE = resolveFlueLiveMode();
 
@@ -46,29 +52,40 @@ export function AgentChatPanel({
     [userId, conversationId],
   );
 
+  const client = useFlueClient();
   const agent = useFlueAgent({
     name: agentName,
     id: agentInstanceId,
+    history: 'all',
     live: FLUE_LIVE_MODE,
   });
 
+  const [canceling, setCanceling] = useState(false);
+  const [abortedSubmissionIds, setAbortedSubmissionIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
   const busy = isAgentBusy(agent.status);
-  const renderMessages = useThrottledMessages(agent.messages, busy);
-  const turns = useMemo(() => groupMessages(renderMessages), [renderMessages]);
-  const showTypingIndicator = shouldShowTypingIndicator(agent.status, agent.messages);
-  const awaitingAssistant = isAwaitingAssistantResponse(agent.status, agent.messages);
+  const activeStreaming = isActiveStreaming(agent.messages);
+  const renderMessages = useThrottledMessages(agent.messages, activeStreaming);
+  const rows = useMemo(() => groupConsecutiveMessages(renderMessages), [renderMessages]);
+  const showThinking = shouldShowThinkingIndicator(agent.status, agent.messages);
   const initialSentRef = useRef(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useChatAutoScroll(
     messagesContainerRef,
-    [renderMessages, showTypingIndicator, awaitingAssistant, agent.error],
+    [renderMessages, showThinking, agent.error],
     busy,
   );
 
   useEffect(() => {
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    if (!busy) setCanceling(false);
+  }, [busy]);
 
   useEffect(() => {
     initialSentRef.current = false;
@@ -104,6 +121,27 @@ export function AgentChatPanel({
     }
   }
 
+  async function onCancel() {
+    if (!busy || canceling) return;
+    const submissionId = lastUserMessage(agent.messages)?.submissionId;
+    setCanceling(true);
+    try {
+      const result = await client.agents.abort(agentName, agentInstanceId);
+      if (result.aborted && submissionId) {
+        setAbortedSubmissionIds((previous) => new Set(previous).add(submissionId));
+      }
+    } catch (err) {
+      console.error('[chat] abort failed', err);
+    }
+  }
+
+  function assistantTurnSubmissionId(messages: typeof agent.messages): string | undefined {
+    for (const message of messages) {
+      if (message.submissionId) return message.submissionId;
+    }
+    return undefined;
+  }
+
   return (
     <>
       <div className="chat-messages" ref={messagesContainerRef}>
@@ -111,37 +149,48 @@ export function AgentChatPanel({
           {!agent.historyReady && agent.messages.length === 0 && (
             <p className="empty">Loading conversation…</p>
           )}
-          {agent.historyReady && turns.length === 0 && !initialMessage && (
+          {agent.historyReady && rows.length === 0 && !initialMessage && (
             <p className="empty">
               Start a conversation
             </p>
           )}
-          {turns.map((turn, turnIndex) => {
-            if (turn.kind === 'user') {
+          {rows.map((row) => {
+            if (row.kind === 'user') {
+              if (isSubmissionStatusMessage(row.message)) {
+                return (
+                  <p key={row.message.id} className="chat-status-hint">
+                    {userMessageText(row.message)}
+                  </p>
+                );
+              }
               return (
-                <div key={turn.message.id} className="message user">
-                  <p>{userMessageText(turn.message)}</p>
+                <div key={row.message.id} className="message user">
+                  <p>{userMessageText(row.message)}</p>
                 </div>
               );
             }
-            const parts = filterRenderableParts(mergeAssistantParts(turn.messages));
-            const isLatestTurn = turnIndex === turns.length - 1;
-            const showInProgress = busy && isLatestTurn && parts.length === 0;
+            const parts = filterRenderableParts(mergeAssistantParts(row.messages));
+            const submissionId = assistantTurnSubmissionId(row.messages);
+            const showAborted = submissionId ? abortedSubmissionIds.has(submissionId) : false;
             return (
-              <div key={turn.messages[0]?.id ?? 'assistant'} className="message assistant">
+              <div
+                key={row.messages.map((message) => message.id).join(':') || 'assistant'}
+                className="message assistant"
+              >
                 {parts.map((part, index) => (
                   <MessagePart key={partRenderKey(part, index)} part={part} />
                 ))}
-                {showInProgress && <AssistantInProgress status={agent.status} />}
+                {showAborted && (
+                  <p className="chat-status-hint chat-status-hint-inline">已停止</p>
+                )}
               </div>
             );
           })}
-          {awaitingAssistant && (
+          {showThinking && (
             <div className="message assistant">
               <AssistantInProgress status={agent.status} />
             </div>
           )}
-          {showTypingIndicator && !awaitingAssistant && <TypingIndicator />}
           {agent.error && <p className="error inline">{agent.error.message}</p>}
           <div ref={messagesEndRef} />
         </div>
@@ -151,8 +200,10 @@ export function AgentChatPanel({
         value={input}
         onChange={onInputChange}
         onSend={() => void onSend()}
+        onCancel={() => void onCancel()}
         disabled={!agent.historyReady}
         busy={busy}
+        canceling={canceling}
       />
     </>
   );

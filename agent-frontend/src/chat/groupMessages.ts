@@ -3,31 +3,54 @@ import { mergeToolPart } from './tool-payload.ts';
 
 type DynamicToolPart = Extract<FlueConversationPart, { type: 'dynamic-tool' }>;
 
-export type ChatTurn =
+export type ChatRow =
   | { kind: 'user'; message: FlueConversationMessage }
   | { kind: 'assistant'; messages: FlueConversationMessage[] };
 
-export function groupMessages(messages: FlueConversationMessage[]): ChatTurn[] {
-  const turns: ChatTurn[] = [];
-  let pendingAssistant: FlueConversationMessage[] = [];
+/**
+ * Preserve Flue's transcript order and only merge consecutive assistant rows
+ * into one visual bubble. Do not reorder by submissionId.
+ */
+export function groupConsecutiveMessages(messages: FlueConversationMessage[]): ChatRow[] {
+  const rows: ChatRow[] = [];
 
   for (const message of messages) {
     if (message.role === 'user') {
-      if (pendingAssistant.length > 0) {
-        turns.push({ kind: 'assistant', messages: pendingAssistant });
-        pendingAssistant = [];
-      }
-      turns.push({ kind: 'user', message });
+      rows.push({ kind: 'user', message });
       continue;
     }
-    pendingAssistant.push(message);
+
+    if (message.role === 'assistant') {
+      const last = rows.at(-1);
+      if (last?.kind === 'assistant') {
+        last.messages.push(message);
+      } else {
+        rows.push({ kind: 'assistant', messages: [message] });
+      }
+    }
   }
 
-  if (pendingAssistant.length > 0) {
-    turns.push({ kind: 'assistant', messages: pendingAssistant });
-  }
+  return rows;
+}
 
-  return turns;
+export function lastUserMessage(
+  messages: FlueConversationMessage[],
+): FlueConversationMessage | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'user') return message;
+  }
+  return undefined;
+}
+
+export function assistantMessagesForSubmission(
+  messages: FlueConversationMessage[],
+  submissionId: string | undefined,
+): FlueConversationMessage[] {
+  if (!submissionId) return [];
+  return messages.filter(
+    (message) => message.role === 'assistant' && message.submissionId === submissionId,
+  );
 }
 
 export function mergeAssistantParts(messages: FlueConversationMessage[]): FlueConversationPart[] {
@@ -59,6 +82,13 @@ export function userMessageText(message: FlueConversationMessage): string {
     .join('');
 }
 
+/** Flue projects submission signals (abort/interrupt) as user-role text messages. */
+export function isSubmissionStatusMessage(message: FlueConversationMessage): boolean {
+  if (message.role !== 'user') return false;
+  const text = userMessageText(message).trim();
+  return text.startsWith('Submission was ');
+}
+
 export function shouldRenderPart(part: FlueConversationPart): boolean {
   switch (part.type) {
     case 'text':
@@ -70,7 +100,6 @@ export function shouldRenderPart(part: FlueConversationPart): boolean {
     case 'file':
       return true;
     default:
-      // Show every streamed event (data-* and future part kinds) in a fold.
       return true;
   }
 }

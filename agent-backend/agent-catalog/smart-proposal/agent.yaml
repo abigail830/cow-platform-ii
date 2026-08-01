@@ -24,4 +24,3 @@ sandbox:
 access:
   defaultForRoles:
     - admin
-    - operator

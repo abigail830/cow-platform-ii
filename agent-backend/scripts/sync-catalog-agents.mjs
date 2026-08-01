@@ -26,6 +26,7 @@ function renderAgentModule(agentId) {
 const agent = buildCatalogAgentExports(${JSON.stringify(agentId)});
 
 export const route = agent.route;
+export const attachments = agent.attachments;
 export const description = agent.description;
 export default agent.definition;
 `;

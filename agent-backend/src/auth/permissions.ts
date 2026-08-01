@@ -1,19 +1,40 @@
 import type { AuthUser } from './jwt.ts';
-import { appAgentPermissions, appConversations, db } from '../db/index.ts';
+import { appConversations, db } from '../db/index.ts';
+import { isAgentVisibleToRoles } from '../agent-catalog/agent-access.ts';
 import { getAgentRegistry } from '../agent-catalog/registry.ts';
 import { bootAgentCatalog } from '../agent-catalog/boot.ts';
+import { loadUserAccessProfile } from './rbac.ts';
 import { and, eq } from 'drizzle-orm';
 
+/** RBAC role keys for catalog agent menu visibility; falls back to legacy `app_users.role`. */
+export async function getUserRoleKeys(user: AuthUser): Promise<string[]> {
+  const profile = await loadUserAccessProfile(user.id);
+  if (profile.roleKeys.length > 0) return profile.roleKeys;
+  return [user.role];
+}
+
+/**
+ * Catalog agents visible in the side-nav menu for this user's roles.
+ * This is the only agent-access gate for ongoing chat (Flue routes check conversation ownership only).
+ */
+export async function listAllowedAgents(user: AuthUser): Promise<string[]> {
+  bootAgentCatalog();
+  const roleKeys = await getUserRoleKeys(user);
+  const registry = getAgentRegistry();
+  return registry.listIds().filter((id) => {
+    const entry = registry.get(id);
+    if (!entry) return false;
+    return isAgentVisibleToRoles(entry.spec, roleKeys);
+  });
+}
+
+/** Gate creating a new conversation for an agent (same rule as menu visibility). */
 export async function canAccessAgent(user: AuthUser, agentName: string): Promise<boolean> {
   bootAgentCatalog();
-  if (!getAgentRegistry().has(agentName)) return false;
-  if (user.role === 'admin' || user.role === 'operator') return true;
-  const rows = await db
-    .select()
-    .from(appAgentPermissions)
-    .where(and(eq(appAgentPermissions.userId, user.id), eq(appAgentPermissions.agentName, agentName)))
-    .limit(1);
-  return rows.length > 0;
+  const entry = getAgentRegistry().get(agentName);
+  if (!entry) return false;
+  const roleKeys = await getUserRoleKeys(user);
+  return isAgentVisibleToRoles(entry.spec, roleKeys);
 }
 
 export async function ownsConversation(userId: string, conversationId: string): Promise<boolean> {
@@ -23,18 +44,4 @@ export async function ownsConversation(userId: string, conversationId: string): 
     .where(and(eq(appConversations.id, conversationId), eq(appConversations.userId, userId)))
     .limit(1);
   return rows.length > 0;
-}
-
-export async function listAllowedAgents(user: AuthUser): Promise<string[]> {
-  bootAgentCatalog();
-  const catalogIds = getAgentRegistry().listIds();
-  if (user.role === 'admin' || user.role === 'operator') {
-    return catalogIds;
-  }
-  const rows = await db
-    .select({ agentName: appAgentPermissions.agentName })
-    .from(appAgentPermissions)
-    .where(eq(appAgentPermissions.userId, user.id));
-  const allowed = new Set(rows.map((r) => r.agentName));
-  return catalogIds.filter((id) => allowed.has(id));
 }

@@ -1,5 +1,5 @@
 import { defineAgent } from '@flue/runtime';
-import { agentAccessRoute } from '../auth/agent-route.ts';
+import { agentAccessRoute, agentAttachmentsRoute } from '../auth/agent-route.ts';
 import { loadAllAgentSpecs } from './discover.ts';
 import { resolveCatalogAgentRuntime } from './resolve-agent-runtime.ts';
 import type { LoadedAgentSpec } from './schema.ts';
@@ -35,6 +35,7 @@ export function buildCatalogAgentModule(agentId: string) {
   return {
     definition,
     route: agentAccessRoute(spec.id),
+    attachments: agentAttachmentsRoute(spec.id),
     description: spec.description,
   };
 }

@@ -20,8 +20,10 @@ async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAg
   const packTools = resolveToolPacks(spec);
   const mcpTools = await connectAgentMcpTools(spec);
   const skills = loadAgentSkills(spec);
-  const sandbox = resolveSandboxFactory(spec.sandbox);
-  const cwd = resolveAgentCwd(spec.sandbox);
+  const sandbox = resolveSandboxFactory(spec.sandbox, spec.id);
+  // E2B workspace cwd is applied inside the sandbox SessionEnv — avoid Flue's second cwd wrapper
+  // (it produces a different env object and breaks session-scoped tool binding).
+  const cwd = spec.sandbox.provider === 'e2b' ? undefined : resolveAgentCwd(spec.sandbox);
 
   return {
     model: await resolveAgentModel(spec.model),

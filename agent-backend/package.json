@@ -14,6 +14,7 @@
     "build:vercel": "npm run catalog:sync && node scripts/build-vercel.mjs",
     "start": "tsx scripts/flue-with-env.ts run --target node --env .env",
     "db:generate": "drizzle-kit generate",
+    "db:validate-migrations": "tsx scripts/validate-migrations.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:reset-flue": "tsx scripts/reset-flue-tables.ts",
     "setup": "npm run db:migrate && npm run seed",
@@ -22,7 +23,8 @@
     "verify": "npm run catalog:validate && tsx scripts/verify-smoke.ts",
     "verify:documents": "tsx scripts/verify-documents.ts",
     "test": "tsx --test src/**/*.test.ts",
-    "test:documents": "tsx --test src/storage/document-files.test.ts src/services/channel-tree.test.ts && tsx scripts/verify-documents.ts"
+    "test:documents": "tsx --test src/storage/document-files.test.ts src/services/channel-tree.test.ts && tsx scripts/verify-documents.ts",
+    "e2b:build-content-studio-template": "tsx e2b-templates/content-studio/build.ts"
   },
   "keywords": [],
   "author": "",

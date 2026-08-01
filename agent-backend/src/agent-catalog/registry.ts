@@ -7,6 +7,7 @@ export type AgentCatalogEntry = {
   spec: LoadedAgentSpec;
   definition: AgentDefinition;
   route: AgentRouteHandler;
+  attachments: AgentRouteHandler;
 };
 
 export type AgentPublicMeta = {
@@ -55,15 +56,29 @@ export class AgentRegistry {
     });
   }
 
-  listFlueModules(): Record<string, { default: AgentDefinition; route: AgentRouteHandler; description: string }> {
+  listFlueModules(): Record<
+    string,
+    {
+      default: AgentDefinition;
+      route: AgentRouteHandler;
+      attachments: AgentRouteHandler;
+      description: string;
+    }
+  > {
     const modules: Record<
       string,
-      { default: AgentDefinition; route: AgentRouteHandler; description: string }
+      {
+        default: AgentDefinition;
+        route: AgentRouteHandler;
+        attachments: AgentRouteHandler;
+        description: string;
+      }
     > = {};
     for (const [id, entry] of this.entries) {
       modules[id] = {
         default: entry.definition,
         route: entry.route,
+        attachments: entry.attachments,
         description: entry.spec.description,
       };
     }

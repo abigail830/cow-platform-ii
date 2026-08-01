@@ -4,7 +4,7 @@ description: Generate Word documents, PowerPoint decks, and HTML reveal.js prese
 icon: Presentation
 
 model:
-  configName: DeepSeek-V4-Flash
+  configName: gpt-5.4
   profile: azure-openai
 
 prompt: ./prompt.md
@@ -21,9 +21,9 @@ mcp: []
 
 sandbox:
   provider: e2b
+  templateId: okf-content-studio:1.2
   cwd: /home/user/content-studio
 
 access:
   defaultForRoles:
     - admin
-    - operator

@@ -49,9 +49,9 @@ export const agentYamlSchema = z.object({
   sandbox: sandboxSchema.default({ provider: 'none' }),
   access: z
     .object({
-      defaultForRoles: z.array(z.string()).default(['admin', 'operator']),
+      defaultForRoles: z.array(z.string()).default(['admin']),
     })
-    .default({ defaultForRoles: ['admin', 'operator'] }),
+    .default({ defaultForRoles: ['admin'] }),
 });
 
 export type AgentYaml = z.infer<typeof agentYamlSchema>;

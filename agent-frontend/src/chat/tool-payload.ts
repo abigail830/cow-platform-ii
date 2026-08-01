@@ -28,14 +28,22 @@ export function mergeToolPart(current: DynamicToolPart, incoming: DynamicToolPar
 }
 
 export function formatToolBody(tool: DynamicToolPart): string {
-  if (tool.state === 'input-available' && isEmptyRecord(tool.input)) {
-    return 'Preparing arguments…';
-  }
   if (tool.state === 'output-error') {
     return String(tool.errorText ?? 'Tool failed');
   }
 
   const lines: string[] = [];
+  if (tool.state === 'input-available') {
+    lines.push('Request:');
+    if (isEmptyRecord(tool.input)) {
+      lines.push('Preparing arguments…');
+    } else {
+      lines.push(JSON.stringify(normalizeToolPayload(tool.input), null, 2));
+    }
+    lines.push('', '(running…)');
+    return lines.join('\n');
+  }
+
   if (!isEmptyRecord(tool.input)) {
     lines.push('Input:', JSON.stringify(normalizeToolPayload(tool.input), null, 2));
   }
