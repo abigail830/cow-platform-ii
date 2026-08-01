@@ -110,6 +110,25 @@ export async function createKnowledgeBase(input: {
   return data as KnowledgeBase;
 }
 
+export async function updateKnowledgeBase(
+  id: string,
+  input: { name: string; description?: string | null },
+): Promise<KnowledgeBase> {
+  const data = await authFetch(`/api/knowledge-bases/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: input.name,
+      description: input.description ?? null,
+    }),
+  });
+  return data as KnowledgeBase;
+}
+
+export async function deleteKnowledgeBase(id: string): Promise<void> {
+  await authFetch(`/api/knowledge-bases/${id}`, { method: 'DELETE' });
+}
+
 export async function getKnowledgeBase(id: string): Promise<KnowledgeBase> {
   const data = await authFetch(`/api/knowledge-bases/${id}`);
   return data as KnowledgeBase;
@@ -126,6 +145,24 @@ export async function listKbItems(
   const qs = params.toString();
   const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items${qs ? `?${qs}` : ''}`);
   return data as { items: KbItem[]; total: number };
+}
+
+export async function getKbItem(knowledgeBaseId: string, itemId: string): Promise<KbItem> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items/${itemId}`);
+  return data as KbItem;
+}
+
+export async function deleteKbItem(knowledgeBaseId: string, itemId: string): Promise<void> {
+  await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items/${itemId}`, { method: 'DELETE' });
+}
+
+export async function deleteKbItems(knowledgeBaseId: string, itemIds: string[]): Promise<number> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items/batch-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item_ids: itemIds }),
+  });
+  return (data.deleted_count as number) ?? itemIds.length;
 }
 
 export async function fetchImportSources(): Promise<ImportSources> {

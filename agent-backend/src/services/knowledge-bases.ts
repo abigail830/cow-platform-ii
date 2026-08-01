@@ -146,6 +146,44 @@ export async function createKnowledgeBase(input: {
   return toKnowledgeBasePublic(row!, 0);
 }
 
+export async function updateKnowledgeBase(
+  id: string,
+  input: { name?: string; description?: string | null },
+) {
+  const row = await getKnowledgeBaseById(id);
+  if (!row) throw new Error('Knowledge base not found');
+
+  const name = input.name !== undefined ? input.name.trim() : row.name;
+  if (!name || name.length > 256) throw new Error('Name must be 1–256 characters');
+
+  const description =
+    input.description !== undefined ? input.description?.trim() || null : row.description;
+
+  const [updated] = await db
+    .update(appKnowledgeBases)
+    .set({
+      name,
+      description,
+      updatedAt: new Date(),
+    })
+    .where(eq(appKnowledgeBases.id, id))
+    .returning();
+
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(appKbItems)
+    .where(eq(appKbItems.knowledgeBaseId, id));
+
+  return toKnowledgeBasePublic(updated!, countRow?.count ?? 0);
+}
+
+/** Deletes KB row; cascades to app_kb_items and app_kb_import_jobs (not app_documents). */
+export async function deleteKnowledgeBase(id: string): Promise<void> {
+  const row = await getKnowledgeBaseById(id);
+  if (!row) throw new Error('Knowledge base not found');
+  await db.delete(appKnowledgeBases).where(eq(appKnowledgeBases.id, id));
+}
+
 async function allChannelRows() {
   const rows = await db
     .select({
@@ -387,6 +425,33 @@ export async function upsertKbItemFromWorker(
     })
     .returning();
   return row!;
+}
+
+export async function deleteKbItem(knowledgeBaseId: string, itemId: string): Promise<void> {
+  const kb = await getKnowledgeBaseById(knowledgeBaseId);
+  if (!kb) throw new Error('Knowledge base not found');
+
+  const [deleted] = await db
+    .delete(appKbItems)
+    .where(and(eq(appKbItems.id, itemId), eq(appKbItems.knowledgeBaseId, knowledgeBaseId)))
+    .returning({ id: appKbItems.id });
+
+  if (!deleted) throw new Error('Item not found');
+}
+
+export async function deleteKbItems(knowledgeBaseId: string, itemIds: string[]): Promise<number> {
+  const kb = await getKnowledgeBaseById(knowledgeBaseId);
+  if (!kb) throw new Error('Knowledge base not found');
+
+  const uniqueIds = [...new Set(itemIds.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueIds.length === 0) throw new Error('No items selected');
+
+  const deleted = await db
+    .delete(appKbItems)
+    .where(and(eq(appKbItems.knowledgeBaseId, knowledgeBaseId), inArray(appKbItems.id, uniqueIds)))
+    .returning({ id: appKbItems.id });
+
+  return deleted.length;
 }
 
 export async function createKbImportJob(input: {

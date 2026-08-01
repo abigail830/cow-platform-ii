@@ -23,7 +23,7 @@ Does **not** use `app_pipeline_jobs`, `openkms-pipeline.yml`, or `pipeline run-a
 
 ## API
 
-- User: `GET/POST /api/knowledge-bases`, `POST /api/knowledge-bases/:id/import`
+- User: `GET/POST /api/knowledge-bases`, `PATCH/DELETE /api/knowledge-bases/:id`, `POST /api/knowledge-bases/:id/import`
 - Internal: `GET/PATCH /internal-api/kb-pageindex-import-jobs/:id`
 - Internal: `PUT /internal-api/knowledge-bases/:kbId/items/:documentId`
 

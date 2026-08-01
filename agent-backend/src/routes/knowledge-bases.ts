@@ -9,6 +9,9 @@ import { routeParam } from '../http/route-param.ts';
 import { spawnKbPageIndexImportWorker } from '../services/kb-pageindex-import-runner.ts';
 import {
   createKnowledgeBase,
+  deleteKnowledgeBase,
+  deleteKbItem,
+  deleteKbItems,
   getKbImportJobPublic,
   getKbItemById,
   getKnowledgeBasePublicById,
@@ -16,6 +19,7 @@ import {
   listKbItems,
   listKnowledgeBases,
   startKbPageIndexImport,
+  updateKnowledgeBase,
   type KnowledgeBaseType,
 } from '../services/knowledge-bases.ts';
 
@@ -101,6 +105,66 @@ knowledgeBases.get(
   },
 );
 
+knowledgeBases.patch(
+  '/:id',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'write',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const body = await c.req.json<{
+      name?: string;
+      description?: string | null;
+      type?: string;
+    }>().catch(() => ({}));
+
+    if (body.type !== undefined) {
+      return c.json({ error: 'Knowledge base type cannot be changed' }, 400);
+    }
+    if (body.name !== undefined && !body.name.trim()) {
+      return c.json({ error: 'name cannot be empty' }, 400);
+    }
+
+    try {
+      const kb = await updateKnowledgeBase(id, {
+        name: body.name,
+        description: body.description,
+      });
+      return c.json(kb);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update knowledge base';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+knowledgeBases.delete(
+  '/:id',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'write',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    try {
+      await deleteKnowledgeBase(id);
+      return c.json({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete knowledge base';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
 knowledgeBases.get(
   '/:id/items',
   requireResourcePermission(
@@ -142,6 +206,57 @@ knowledgeBases.get(
     const item = await getKbItemById(id, itemId);
     if (!item) return c.json({ error: 'Item not found' }, 404);
     return c.json(item);
+  },
+);
+
+knowledgeBases.delete(
+  '/:id/items/:itemId',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'write',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    const itemId = routeParam(c, 'itemId');
+    if (!id || !itemId) return c.json({ error: 'Knowledge base id and item id are required' }, 400);
+
+    try {
+      await deleteKbItem(id, itemId);
+      return c.json({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete item';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+knowledgeBases.post(
+  '/:id/items/batch-delete',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'write',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const body = await c.req.json<{ item_ids?: string[] }>().catch(() => ({}));
+    const itemIds = body.item_ids ?? [];
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return c.json({ error: 'item_ids is required' }, 400);
+    }
+
+    try {
+      const deletedCount = await deleteKbItems(id, itemIds);
+      return c.json({ ok: true, deleted_count: deletedCount });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete items';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
   },
 );
 
