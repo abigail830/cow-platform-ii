@@ -1159,6 +1159,27 @@ textarea {
   color: #e85c0f;
 }
 
+.artifact-download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  line-height: 1.35;
+}
+
+.artifact-download-link:hover {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
 .markdown-body strong {
   font-size: 13px;
   font-weight: 700;

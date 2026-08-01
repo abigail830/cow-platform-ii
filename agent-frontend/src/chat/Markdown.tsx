@@ -3,6 +3,7 @@ import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import { useChatLinkResolve } from './chat-link-resolve-context.ts';
 import { slugifyHeading } from '../components/PageIndexTree.tsx';
 
 type MarkdownProps = {
@@ -26,14 +27,22 @@ function extractText(node: ReactNode): string {
   return '';
 }
 
-function buildMarkdownComponents(headingIds: boolean): Components {
+function buildMarkdownComponents(
+  headingIds: boolean,
+  resolveLinkHref?: (href: string) => string,
+): Components {
+  const link = ({ href, children, ...props }: { href?: string; children?: ReactNode }) => {
+    const resolvedHref = href && resolveLinkHref ? resolveLinkHref(href) : href;
+    return (
+      <a href={resolvedHref} target="_blank" rel="noopener noreferrer" {...props}>
+        {children}
+      </a>
+    );
+  };
+
   if (!headingIds) {
     return {
-      a: ({ href, children, ...props }) => (
-        <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
-          {children}
-        </a>
-      ),
+      a: link,
       table: ({ children, ...props }) => (
         <div className="md-table-wrap">
           <table {...props}>{children}</table>
@@ -43,11 +52,7 @@ function buildMarkdownComponents(headingIds: boolean): Components {
   }
 
   return {
-    a: ({ href, children, ...props }) => (
-      <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
-        {children}
-      </a>
-    ),
+    a: link,
     table: ({ children, ...props }) => (
       <div className="md-table-wrap">
         <table {...props}>{children}</table>
@@ -106,12 +111,13 @@ function buildMarkdownComponents(headingIds: boolean): Components {
 
 export function Markdown({ children, content, headingIds = false }: MarkdownProps) {
   const source = content ?? children ?? '';
+  const resolveLinkHref = useChatLinkResolve();
   return (
     <div className="markdown-body">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={headingIds ? [rehypeRaw] : []}
-        components={buildMarkdownComponents(headingIds)}
+        components={buildMarkdownComponents(headingIds, resolveLinkHref)}
       >
         {source}
       </ReactMarkdown>
