@@ -56,7 +56,6 @@ export function AgentChatPanel({
   const agent = useFlueAgent({
     name: agentName,
     id: agentInstanceId,
-    history: 'all',
     live: FLUE_LIVE_MODE,
   });
 

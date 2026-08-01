@@ -8,7 +8,7 @@ function userMessage(id: string, text: string, submissionId?: string): FlueConve
     id,
     role: 'user',
     submissionId,
-    parts: [{ type: 'text', text }],
+    parts: [{ type: 'text', text, state: 'done' }],
   };
 }
 
