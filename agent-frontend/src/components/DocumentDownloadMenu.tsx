@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { downloadDocument, downloadDocumentBundle } from '../api/documents.ts';
 import { IconArchive, IconDownload } from './AdminActionIcons.tsx';
+import { iconProps } from './icons/icon-props.ts';
 
 type DocumentDownloadActionsProps = {
   documentId: string;
@@ -43,23 +45,33 @@ export function DocumentDownloadActions({
     <>
       <button
         type="button"
-        className="icon-btn"
-        title="Download original file"
+        className={`icon-btn${busy === 'original' ? ' is-busy' : ''}`}
+        title={busy === 'original' ? 'Downloading…' : 'Download original file'}
         aria-label="Download original file"
         disabled={busy !== null}
+        aria-busy={busy === 'original'}
         onClick={() => void handleDownloadOriginal()}
       >
-        <IconDownload />
+        {busy === 'original' ? (
+          <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+        ) : (
+          <IconDownload />
+        )}
       </button>
       <button
         type="button"
-        className="icon-btn"
-        title="Download all artifacts (ZIP)"
+        className={`icon-btn${busy === 'bundle' ? ' is-busy' : ''}`}
+        title={busy === 'bundle' ? 'Preparing ZIP…' : 'Download all artifacts (ZIP)'}
         aria-label="Download all artifacts (ZIP)"
         disabled={busy !== null}
+        aria-busy={busy === 'bundle'}
         onClick={() => void handleDownloadBundle()}
       >
-        <IconArchive />
+        {busy === 'bundle' ? (
+          <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+        ) : (
+          <IconArchive />
+        )}
       </button>
     </>
   );

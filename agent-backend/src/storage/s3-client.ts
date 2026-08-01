@@ -32,8 +32,9 @@ export function getS3Client(): { client: S3Client; config: S3Config } | null {
         secretAccessKey: config.secretAccessKey,
       },
       requestHandler: new NodeHttpHandler({
-        connectionTimeout: 10_000,
-        requestTimeout: 30_000,
+        // Bundle downloads list + fetch many objects; allow slower OSS links.
+        connectionTimeout: 30_000,
+        requestTimeout: 120_000,
       }),
     });
     cachedConfigKey = key;

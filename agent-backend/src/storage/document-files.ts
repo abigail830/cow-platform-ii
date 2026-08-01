@@ -11,7 +11,7 @@ import {
   StorageNotConfiguredError,
 } from './s3-client.ts';
 import { validateKey } from './prefix-utils.ts';
-import { readStorageBuffer } from './document-content.ts';
+import { readStorageStream } from './document-content.ts';
 
 export const DOCUMENTS_PREFIX = 'documents/';
 export const CHUNK_UPLOAD_THRESHOLD_BYTES = 10 * 1024 * 1024;
@@ -106,30 +106,108 @@ export function attachmentContentDisposition(filename: string): string {
   return `attachment; filename="${safeFilename}"`;
 }
 
-export async function listDocumentStorageKeys(fileHash: string): Promise<string[]> {
-  return listKeysUnderPrefix(documentStoragePrefix(fileHash));
+export function documentStoragePrefixes(fileHash: string): string[] {
+  return [documentStoragePrefix(fileHash), `${fileHash}/`];
 }
 
+function relativeStoragePath(key: string, fileHash: string): string | null {
+  for (const prefix of documentStoragePrefixes(fileHash)) {
+    if (key.startsWith(prefix) && key.length > prefix.length && !key.endsWith('/')) {
+      return key.slice(prefix.length);
+    }
+  }
+  return null;
+}
+
+export async function listDocumentStorageKeys(fileHash: string): Promise<string[]> {
+  const keys = new Set<string>();
+  for (const prefix of documentStoragePrefixes(fileHash)) {
+    for (const key of await listKeysUnderPrefix(prefix)) {
+      keys.add(key);
+    }
+  }
+  return [...keys];
+}
+
+function appendStreamToArchive(
+  archive: archiver.Archiver,
+  stream: Readable,
+  name: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      stream.off('error', fail);
+      stream.off('end', done);
+      stream.off('close', done);
+      archive.off('error', fail);
+    };
+
+    stream.once('error', fail);
+    archive.once('error', fail);
+    stream.once('end', done);
+    stream.once('close', done);
+    archive.append(stream, { name });
+  });
+}
+
+async function populateDocumentBundleArchive(
+  archive: archiver.Archiver,
+  fileHash: string,
+  objectKeys: string[],
+): Promise<void> {
+  for (const key of objectKeys) {
+    const relativePath = relativeStoragePath(key, fileHash);
+    if (!relativePath) continue;
+
+    const stream = await readStorageStream(key);
+    if (!stream) continue;
+    await appendStreamToArchive(archive, stream, relativePath);
+  }
+
+  await archive.finalize();
+}
+
+/** Lists keys first (fast validation), then streams each object into the ZIP without buffering the whole bundle. */
 export async function createDocumentBundleArchive(fileHash: string): Promise<Readable> {
-  const prefix = documentStoragePrefix(fileHash);
   const keys = await listDocumentStorageKeys(fileHash);
-  const objectKeys = keys.filter((key) => !key.endsWith('/') && key.length > prefix.length);
+  const objectKeys = keys.filter((key) => relativeStoragePath(key, fileHash) !== null);
 
   if (objectKeys.length === 0) {
     throw new Error('No stored artifacts found for this document');
   }
 
   const archive = archiver('zip', { zlib: { level: 5 } });
+  void populateDocumentBundleArchive(archive, fileHash, objectKeys).catch((error: unknown) => {
+    archive.emit('error', error instanceof Error ? error : new Error('Bundle download failed'));
+    archive.abort();
+  });
 
-  for (const key of objectKeys) {
-    const relativePath = key.slice(prefix.length);
-    const buffer = await readStorageBuffer(key);
-    if (!buffer) continue;
-    archive.append(buffer, { name: relativePath });
-  }
-
-  archive.finalize();
   return archive;
+}
+
+export function formatStorageError(error: unknown): string {
+  if (!(error instanceof Error)) return 'Storage operation failed';
+  const message = error.message;
+  if (message.includes('socket did not establish a connection')) {
+    return 'Could not connect to object storage. Check network connectivity and storage configuration.';
+  }
+  if (/timeout/i.test(message)) {
+    return 'Object storage request timed out. Please try again.';
+  }
+  return message;
 }
 
 /** Presigned GET for parsed artifacts (markdown, page_index, etc.) — signing is local, no OSS round-trip. */

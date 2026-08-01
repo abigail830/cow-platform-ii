@@ -15,6 +15,7 @@ import {
   deleteDocumentStorage,
   extensionFromFilename,
   fileTypeFromExtension,
+  formatStorageError,
   getDocumentDownloadUrl,
   MAX_DOCUMENT_BYTES,
   sha256Hex,
@@ -140,7 +141,7 @@ documents.get(
       });
     } catch (error) {
       if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
-      const message = error instanceof Error ? error.message : 'Bundle download failed';
+      const message = formatStorageError(error);
       const status = message.includes('not found') || message.includes('No stored') ? 404 : 400;
       return c.json({ error: message }, status);
     }
