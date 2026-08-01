@@ -14,6 +14,8 @@ RAG-type knowledge bases are created in the UI but import and embedding index ar
 
 ## Worker (isolated from document parse)
 
+PageIndex knowledge bases always use the built-in `kb-pageindex-import` pipeline (Pipelines → PageIndex KB Import).
+
 - CLI: `openkms-cli kb pageindex-import --job-id <uuid>`
 - Local: `KB_PAGEINDEX_IMPORT_WORKER=spawn` (default on non-Vercel)
 - Vercel: `KB_PAGEINDEX_IMPORT_WORKER=github_actions` + workflow `openkms-kb-pageindex-import.yml`

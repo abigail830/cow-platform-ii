@@ -281,6 +281,11 @@ export function KnowledgeBasesListPage() {
                       <span>RAG (coming soon)</span>
                     </label>
                   </div>
+                  {(type === 'page_index' || editingKb?.type === 'page_index') && (
+                    <p className="admin-form-hint kb-type-pipeline-hint">
+                      Uses built-in <strong>PageIndex KB Import</strong> (see Pipelines).
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="modal-actions">

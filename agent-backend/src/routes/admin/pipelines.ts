@@ -10,6 +10,7 @@ import {
   listPipelineConfigs,
   updatePipelineConfig,
 } from '../../shared/pipeline-config-store.ts';
+import { listSystemPipelineTemplates } from '../../shared/pipeline-catalog.ts';
 
 const pipelines = new Hono();
 
@@ -24,7 +25,8 @@ pipelines.get(
     const page = Math.max(Number(c.req.query('page') ?? 1), 1);
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 25), 1), 100);
     const result = await listPipelineConfigs({ search, enabledOnly, page, limit });
-    return c.json({ ...result, page, limit });
+    const systemPipelines = listSystemPipelineTemplates(search);
+    return c.json({ ...result, system_pipelines: systemPipelines, page, limit });
   },
 );
 

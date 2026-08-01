@@ -13,6 +13,17 @@ export type PipelineConfig = {
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
+  isSystem?: boolean;
+  category?: 'knowledge' | 'document';
+  boundTo?: string;
+  workflowFile?: string | null;
+};
+
+export type SystemPipelineTemplate = PipelineConfig & {
+  isSystem: true;
+  category: 'knowledge' | 'document';
+  boundTo: string;
+  workflowFile: string | null;
 };
 
 export type PipelineConfigInput = {
@@ -26,6 +37,7 @@ export type PipelineConfigInput = {
 
 export type PipelineListResponse = {
   pipelines: PipelineConfig[];
+  system_pipelines?: SystemPipelineTemplate[];
   total: number;
   page: number;
   limit: number;

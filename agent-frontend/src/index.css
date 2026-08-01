@@ -2738,6 +2738,39 @@ textarea {
   margin: 0;
 }
 
+.pipeline-system-row {
+  background: #fafcfd;
+}
+
+.pipeline-system-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  font-size: 0.6875rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.pipeline-bound-hint {
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.pipeline-system-meta {
+  font-size: 0.75rem;
+}
+
+.kb-type-pipeline-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
 .document-upload-dropzone {
   display: flex;
   flex-direction: column;

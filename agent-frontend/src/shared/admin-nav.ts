@@ -24,7 +24,7 @@ export const PLATFORM_BASIC_CATEGORY = 'Platform basic';
 export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
   {
     path: '/admin/models',
-    navLabel: 'Model configuration',
+    navLabel: 'Model Configuration',
     titleMain: 'Model',
     titleAccent: 'Configuration',
     permissionKey: 'platform-basic:models',
@@ -40,7 +40,7 @@ export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
   },
   {
     path: '/admin/storage',
-    navLabel: 'Object storage',
+    navLabel: 'Object Storage',
     titleMain: 'Object',
     titleAccent: 'Storage',
     permissionKey: 'platform-basic:storage',
@@ -58,7 +58,7 @@ export const SESSION_EXPLORER_PATH = '/agents/session-explorer';
 export const AGENT_PAGES: readonly NavPage[] = [
   {
     path: AGENT_PLAYGROUND_PATH,
-    navLabel: 'Agent playground',
+    navLabel: 'Agent Playground',
     titleMain: 'Agent',
     titleAccent: 'Playground',
     permissionKey: 'agent:playground',
@@ -66,7 +66,7 @@ export const AGENT_PAGES: readonly NavPage[] = [
   },
   {
     path: SESSION_EXPLORER_PATH,
-    navLabel: 'Session explorer',
+    navLabel: 'Session Explorer',
     titleMain: 'Session',
     titleAccent: 'Explorer',
     permissionKey: 'agent:session-explorer',
@@ -85,7 +85,7 @@ export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
   },
   {
     path: '/knowledge/knowledge-bases',
-    navLabel: 'Knowledge',
+    navLabel: 'KnowledgeBase',
     titleMain: 'Knowledge',
     titleAccent: 'Bases',
     permissionKey: 'knowledge-management:knowledge-bases',
