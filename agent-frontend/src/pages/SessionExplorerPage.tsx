@@ -229,7 +229,7 @@ export function SessionExplorerPage() {
             onChange={(event) => setFromDate(event.target.value)}
             aria-label="From date"
           />
-          <span className="session-explorer-date-sep">至</span>
+          <span className="session-explorer-date-sep">to</span>
           <input
             type="date"
             value={toDate}
@@ -242,7 +242,7 @@ export function SessionExplorerPage() {
           className="session-explorer-input"
           value={sessionIdQuery}
           onChange={(event) => setSessionIdQuery(event.target.value)}
-          placeholder="Session ID (独立检索)"
+          placeholder="Session ID (independent search)"
         />
 
         {showAdminFilters && (
@@ -250,16 +250,16 @@ export function SessionExplorerPage() {
             className="session-explorer-input"
             value={keywordQuery}
             onChange={(event) => setKeywordQuery(event.target.value)}
-            placeholder="关键词 (用户名/邮箱)"
+            placeholder="Keywords (username/email)"
           />
         )}
 
         <button type="button" className="session-explorer-reset-btn" onClick={resetFilters}>
-          重置
+          Reset
         </button>
         <button type="button" className="btn-primary session-explorer-search-btn" onClick={() => void loadSessions()}>
           <Search {...iconProps()} />
-          查询
+          Search
         </button>
       </div>
 
@@ -281,9 +281,9 @@ export function SessionExplorerPage() {
                 <tr>
                   <th className="session-explorer-select-col" aria-label="Select" />
                   <th>Session ID</th>
-                  {showAdminFilters && <th>用户</th>}
-                  <th>轮次</th>
-                  <th>时间</th>
+                  {showAdminFilters && <th>User</th>}
+                  <th>Turns</th>
+                  <th>Time</th>
                   <th className="session-explorer-detail-hint-col" aria-label="View detail" />
                 </tr>
               </thead>
