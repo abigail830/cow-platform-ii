@@ -1,0 +1,67 @@
+import type { AuthUser } from '../api/auth.ts';
+import {
+  ADMIN_PAGES,
+  AGENT_PAGES,
+  AGENT_PLAYGROUND_PATH,
+  KNOWLEDGE_MANAGEMENT_PAGES,
+  PLATFORM_BASIC_PAGES,
+  SESSION_EXPLORER_PATH,
+  type NavPage,
+} from './admin-nav.ts';
+import { hasPermission } from './permissions.ts';
+
+export const AGENT_PLAYER_ROLE = 'agent-player';
+
+export const AGENT_PLAYER_ALLOWED_PATHS = [AGENT_PLAYGROUND_PATH, SESSION_EXPLORER_PATH] as const;
+
+function roleKeys(user: AuthUser): string[] {
+  if (user.roles?.length) return user.roles;
+  return [user.role];
+}
+
+export function isPlatformAdminUser(user: AuthUser): boolean {
+  const roles = roleKeys(user);
+  if (roles.includes('admin')) return true;
+  return user.role === 'admin' || user.role === 'operator';
+}
+
+export function canSeeSessionExplorer(user: AuthUser): boolean {
+  const roles = roleKeys(user);
+  return roles.includes('admin') || roles.includes(AGENT_PLAYER_ROLE) || user.role === 'admin' || user.role === 'operator';
+}
+
+export function isRestrictedAgentPlayer(user: AuthUser): boolean {
+  if (isPlatformAdminUser(user)) return false;
+  return roleKeys(user).includes(AGENT_PLAYER_ROLE);
+}
+
+export function visibleAgentPages(user: AuthUser): NavPage[] {
+  return AGENT_PAGES.filter((page) => {
+    if (page.path === SESSION_EXPLORER_PATH) return canSeeSessionExplorer(user);
+    return true;
+  });
+}
+
+export function canAccessAppPath(user: AuthUser, path: string): boolean {
+  if (isRestrictedAgentPlayer(user)) {
+    return AGENT_PLAYER_ALLOWED_PATHS.some(
+      (allowed) => path === allowed || path.startsWith(`${allowed}/`),
+    );
+  }
+
+  if (path === SESSION_EXPLORER_PATH) {
+    return canSeeSessionExplorer(user);
+  }
+
+  const pages: readonly NavPage[] = [
+    ...AGENT_PAGES,
+    ...KNOWLEDGE_MANAGEMENT_PAGES,
+    ...PLATFORM_BASIC_PAGES,
+    ...ADMIN_PAGES,
+  ];
+
+  const page = pages.find((item) => path === item.path || path.startsWith(`${item.path}/`));
+  if (!page) return true;
+  if (!page.permissionKey) return true;
+  return hasPermission(user, page.permissionKey, 'read');
+}

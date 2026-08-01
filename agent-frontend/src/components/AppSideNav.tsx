@@ -4,13 +4,13 @@ import {
   ADMIN_PAGES,
   ADMINISTRATION_CATEGORY,
   AGENTS_CATEGORY,
-  AGENT_PAGES,
   KNOWLEDGE_MANAGEMENT_CATEGORY,
   KNOWLEDGE_MANAGEMENT_PAGES,
   PLATFORM_BASIC_CATEGORY,
   PLATFORM_BASIC_PAGES,
   type NavPage,
 } from '../shared/admin-nav.ts';
+import { visibleAgentPages } from '../shared/agent-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { User } from 'lucide-react';
 import { NavPageIcon } from './icons/NavIcons.tsx';
@@ -80,6 +80,7 @@ export function AppSideNav({
   const platformBasicItems = PLATFORM_BASIC_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
   const knowledgeItems = KNOWLEDGE_MANAGEMENT_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
   const adminItems = ADMIN_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
+  const agentItems = visibleAgentPages(user);
 
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -111,7 +112,7 @@ export function AppSideNav({
       <nav className="sidenav-nav">
         <NavSection
           category={AGENTS_CATEGORY}
-          items={AGENT_PAGES}
+          items={agentItems}
           activePath={activePath}
           collapsed={collapsed}
           onNavigate={onNavigate}

@@ -6,7 +6,8 @@ export type NavPageIcon =
   | 'users'
   | 'roles'
   | 'permissions'
-  | 'playground';
+  | 'playground'
+  | 'session-explorer';
 
 export type NavPage = {
   path: string;
@@ -51,6 +52,7 @@ export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'Knowledge Management';
 export const AGENTS_CATEGORY = 'Agents';
 
 export const AGENT_PLAYGROUND_PATH = '/agents/playground';
+export const SESSION_EXPLORER_PATH = '/agents/session-explorer';
 
 export const AGENT_PAGES: readonly NavPage[] = [
   {
@@ -60,6 +62,14 @@ export const AGENT_PAGES: readonly NavPage[] = [
     titleAccent: 'Playground',
     permissionKey: '',
     icon: 'playground',
+  },
+  {
+    path: SESSION_EXPLORER_PATH,
+    navLabel: 'Session explorer',
+    titleMain: 'Session',
+    titleAccent: 'Explorer',
+    permissionKey: '',
+    icon: 'session-explorer',
   },
 ];
 

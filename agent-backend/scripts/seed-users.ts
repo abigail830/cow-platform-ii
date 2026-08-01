@@ -1,7 +1,7 @@
 import './load-env.ts';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { appAgentPermissions, appUsers, db } from '../src/db/index.ts';
+import { appAgentPermissions, appRoles, appUserRoles, appUsers, db } from '../src/db/index.ts';
 import { syncRbac } from '../src/db/sync-rbac.ts';
 import { closePool } from '../src/db/pool.ts';
 
@@ -12,6 +12,7 @@ const SEED_USERS = [
     displayName: 'Admin',
     role: 'admin' as const,
     agents: ['smart-proposal', 'generic-okf'],
+    rbacRoles: [] as string[],
   },
   {
     email: 'user@example.com',
@@ -19,10 +20,35 @@ const SEED_USERS = [
     displayName: 'Demo User',
     role: 'user' as const,
     agents: ['smart-proposal'],
+    rbacRoles: [] as string[],
+  },
+  {
+    email: 'player@example.com',
+    password: 'player123',
+    displayName: 'Agent Player',
+    role: 'user' as const,
+    agents: [] as string[],
+    rbacRoles: ['agent-player'],
   },
 ];
 
+async function assignRbacRoles(userId: string, roleKeys: string[]) {
+  for (const roleKey of roleKeys) {
+    const [role] = await db.select().from(appRoles).where(eq(appRoles.key, roleKey)).limit(1);
+    if (!role) {
+      console.warn(`  RBAC role not found: ${roleKey}`);
+      continue;
+    }
+    await db
+      .insert(appUserRoles)
+      .values({ userId, roleId: role.id })
+      .onConflictDoNothing();
+  }
+}
+
 async function main() {
+  await syncRbac();
+
   for (const seed of SEED_USERS) {
     const existing = await db.select().from(appUsers).where(eq(appUsers.email, seed.email)).limit(1);
     let userId: string;
@@ -52,9 +78,11 @@ async function main() {
           .onConflictDoNothing();
       }
     }
-  }
 
-  await syncRbac();
+    if (seed.rbacRoles.length > 0) {
+      await assignRbacRoles(userId, seed.rbacRoles);
+    }
+  }
 }
 
 main()

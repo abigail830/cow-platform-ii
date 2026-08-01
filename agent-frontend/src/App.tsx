@@ -4,6 +4,7 @@ import { getToken } from './api/auth.ts';
 import { AppLayout } from './layouts/AppLayout.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
 import { AgentPlaygroundPage } from './pages/AgentPlaygroundPage.tsx';
+import { SessionExplorerPage } from './pages/SessionExplorerPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
@@ -34,6 +35,7 @@ export default function App() {
           }
         >
           <Route path="/agents/playground" element={<AgentPlaygroundPage />} />
+          <Route path="/agents/session-explorer" element={<SessionExplorerPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/admin/models" element={<ModelsConfigPage />} />
           <Route path="/admin/pipelines" element={<PipelinesConfigPage />} />

@@ -10,6 +10,7 @@ import admin from './routes/admin/index.ts';
 import consoleRoutes from './routes/console/index.ts';
 import documentChannels from './routes/document-channels.ts';
 import documents from './routes/documents.ts';
+import sessionExplorer from './routes/session-explorer.ts';
 import internalApi from './routes/internal-api/index.ts';
 import { ensureFlueReady } from './flue-vercel-init.ts';
 import { agentInstanceStreamRegistry } from './flue/agent-instance-stream-registry.ts';
@@ -44,6 +45,7 @@ app.route('/api/admin', admin);
 app.route('/api/console', consoleRoutes);
 app.route('/api/document-channels', documentChannels);
 app.route('/api/documents', documents);
+app.route('/api/session-explorer', sessionExplorer);
 app.route('/internal-api', internalApi);
 
 const flueRoutes = new Hono();

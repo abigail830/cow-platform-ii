@@ -5,6 +5,7 @@ import {
   FileText,
   GitBranch,
   KeyRound,
+  Search,
   ShieldCheck,
   Users,
   type LucideIcon,
@@ -22,6 +23,7 @@ const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   roles: ShieldCheck,
   permissions: KeyRound,
   playground: Bot,
+  'session-explorer': Search,
 };
 
 export function NavPageIcon({ name, ...props }: LucideProps & { name: NavPageIcon }) {

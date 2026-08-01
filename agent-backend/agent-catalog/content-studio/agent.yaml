@@ -27,3 +27,4 @@ sandbox:
 access:
   defaultForRoles:
     - admin
+    - agent-player

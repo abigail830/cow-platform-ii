@@ -20,6 +20,13 @@ const ADMIN_ROLE = {
   isSystem: true,
 };
 
+const AGENT_PLAYER_ROLE = {
+  key: 'agent-player',
+  label: 'Agent player',
+  description: 'Access to Agent playground and Session explorer only.',
+  isSystem: true,
+};
+
 async function upsertPermission(def: (typeof PERMISSION_CATALOG)[number]) {
   const existing = await db
     .select()
@@ -88,10 +95,20 @@ export async function syncRbac(): Promise<{ permissionCount: number }> {
     permissions.push(await upsertPermission(def));
   }
 
-  let [role] = await db.select().from(appRoles).where(eq(appRoles.key, ADMIN_ROLE.key)).limit(1);
-  if (!role) {
-    [role] = await db.insert(appRoles).values(ADMIN_ROLE).returning();
+  let [adminRole] = await db.select().from(appRoles).where(eq(appRoles.key, ADMIN_ROLE.key)).limit(1);
+  if (!adminRole) {
+    [adminRole] = await db.insert(appRoles).values(ADMIN_ROLE).returning();
     console.log(`  created role: ${ADMIN_ROLE.key}`);
+  }
+
+  let [agentPlayerRole] = await db
+    .select()
+    .from(appRoles)
+    .where(eq(appRoles.key, AGENT_PLAYER_ROLE.key))
+    .limit(1);
+  if (!agentPlayerRole) {
+    [agentPlayerRole] = await db.insert(appRoles).values(AGENT_PLAYER_ROLE).returning();
+    console.log(`  created role: ${AGENT_PLAYER_ROLE.key}`);
   }
 
   for (const permission of permissions) {
@@ -99,7 +116,7 @@ export async function syncRbac(): Promise<{ permissionCount: number }> {
     await db
       .insert(appRolePermissions)
       .values({
-        roleId: role.id,
+        roleId: adminRole.id,
         permissionId: permission.id,
         accessLevel,
       })
@@ -117,7 +134,7 @@ export async function syncRbac(): Promise<{ permissionCount: number }> {
   for (const user of legacyAdmins) {
     await db
       .insert(appUserRoles)
-      .values({ userId: user.id, roleId: role.id })
+      .values({ userId: user.id, roleId: adminRole.id })
       .onConflictDoNothing();
   }
 
