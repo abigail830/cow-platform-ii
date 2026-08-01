@@ -8,6 +8,7 @@ import {
   documentStoragePrefix,
   extensionFromFilename,
   fileTypeFromExtension,
+  normalizeBundleRelativePath,
   sha256Hex,
   storeUploadChunk,
   validateDocumentFilename,
@@ -44,6 +45,13 @@ describe('document-files', () => {
     const hash = sha256Hex(buffer);
     assert.equal(hash, sha256Hex(buffer));
     assert.match(hash, /^[a-f0-9]{64}$/);
+  });
+
+  it('normalizes bundle relative paths for legacy and documents prefixes', () => {
+    const hash = 'abc123';
+    assert.equal(normalizeBundleRelativePath(hash, 'documents/abc123/markdown.md'), 'markdown.md');
+    assert.equal(normalizeBundleRelativePath(hash, 'abc123/block_0.png'), 'block_0.png');
+    assert.equal(normalizeBundleRelativePath(hash, 'markdown_out/block_1.png'), 'markdown_out/block_1.png');
   });
 
   it('assembles chunked upload sessions in order', () => {

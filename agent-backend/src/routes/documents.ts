@@ -12,12 +12,14 @@ import {
   buildDocumentS3Key,
   createChunkUploadSession,
   createDocumentBundleArchive,
+  createDocumentBundleManifest,
   deleteDocumentStorage,
   extensionFromFilename,
   fileTypeFromExtension,
   formatStorageError,
   getDocumentDownloadUrl,
   MAX_DOCUMENT_BYTES,
+  presignDocumentBundlePaths,
   sha256Hex,
   StorageNotConfiguredError,
   storeUploadChunk,
@@ -114,6 +116,62 @@ documents.get(
       const message = error instanceof Error ? error.message : 'Failed to list documents';
       const status = message.includes('not found') ? 404 : 400;
       return c.json({ error: message }, status);
+    }
+  },
+);
+
+documents.get(
+  '/:id/download/bundle-manifest',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const row = await getDocumentById(id);
+    if (!row) return c.json({ error: 'Document not found' }, 404);
+
+    try {
+      const manifest = await createDocumentBundleManifest({
+        fileHash: row.fileHash,
+        s3Key: row.s3Key,
+        documentName: row.name,
+      });
+      return c.json(manifest);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: formatStorageError(error) }, 400);
+    }
+  },
+);
+
+documents.post(
+  '/:id/download/bundle-presign',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const body = await c.req.json<{ paths?: string[] }>().catch((): { paths?: string[] } => ({}));
+    if (!Array.isArray(body.paths) || body.paths.length === 0) {
+      return c.json({ error: 'paths array is required' }, 400);
+    }
+    if (body.paths.length > 500) {
+      return c.json({ error: 'Too many paths requested' }, 400);
+    }
+
+    const row = await getDocumentById(id);
+    if (!row) return c.json({ error: 'Document not found' }, 404);
+
+    try {
+      const files = await presignDocumentBundlePaths(row.fileHash, body.paths);
+      return c.json({ files });
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: formatStorageError(error) }, 400);
     }
   },
 );

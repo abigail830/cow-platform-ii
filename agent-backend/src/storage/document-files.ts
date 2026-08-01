@@ -201,13 +201,84 @@ export async function createDocumentBundleArchive(fileHash: string): Promise<Rea
 export function formatStorageError(error: unknown): string {
   if (!(error instanceof Error)) return 'Storage operation failed';
   const message = error.message;
-  if (message.includes('socket did not establish a connection')) {
+  if (message.includes('socket did not establish a connection') || message.includes('ETIMEDOUT')) {
     return 'Could not connect to object storage. Check network connectivity and storage configuration.';
   }
   if (/timeout/i.test(message)) {
     return 'Object storage request timed out. Please try again.';
   }
   return message;
+}
+
+export const STANDARD_BUNDLE_ARTIFACTS = [
+  'markdown.md',
+  'page_index.json',
+  'result.json',
+  'extracted_metadata.json',
+] as const;
+
+export function normalizeBundleRelativePath(fileHash: string, rawPath: string): string {
+  const normalized = rawPath.replace(/\\/g, '/').replace(/^\/+/, '');
+  for (const prefix of documentStoragePrefixes(fileHash)) {
+    if (normalized.startsWith(prefix)) {
+      return normalized.slice(prefix.length);
+    }
+  }
+  return normalized;
+}
+
+export function resolveDocumentStorageKey(fileHash: string, relativePath: string): string {
+  const rel = normalizeBundleRelativePath(fileHash, relativePath);
+  return `${documentStoragePrefix(fileHash)}${rel}`;
+}
+
+export type BundleManifestFile = { path: string; url: string };
+
+/** Presigned URLs only — signing is local; browser fetches OSS directly (avoids Vercel→OSS). */
+export async function createDocumentBundleManifest(input: {
+  fileHash: string;
+  s3Key: string;
+  documentName: string;
+}): Promise<{
+  file_hash: string;
+  archive_filename: string;
+  files: BundleManifestFile[];
+}> {
+  const relativePaths = new Set<string>();
+  const originalRel =
+    relativeStoragePath(input.s3Key, input.fileHash) ??
+    normalizeBundleRelativePath(input.fileHash, input.s3Key);
+  relativePaths.add(originalRel);
+  for (const rel of STANDARD_BUNDLE_ARTIFACTS) {
+    relativePaths.add(rel);
+  }
+
+  const files: BundleManifestFile[] = [];
+  for (const path of relativePaths) {
+    const url = await getStorageReadUrl(resolveDocumentStorageKey(input.fileHash, path));
+    files.push({ path, url });
+  }
+
+  return {
+    file_hash: input.fileHash,
+    archive_filename: archiveFilenameFromDocumentName(input.documentName),
+    files,
+  };
+}
+
+export async function presignDocumentBundlePaths(
+  fileHash: string,
+  paths: string[],
+): Promise<BundleManifestFile[]> {
+  const unique = [
+    ...new Set(paths.map((path) => normalizeBundleRelativePath(fileHash, path)).filter(Boolean)),
+  ];
+  const files: BundleManifestFile[] = [];
+  for (const path of unique) {
+    const url = await getStorageReadUrl(resolveDocumentStorageKey(fileHash, path));
+    files.push({ path, url });
+  }
+  return files;
 }
 
 /** Presigned GET for parsed artifacts (markdown, page_index, etc.) — signing is local, no OSS round-trip. */

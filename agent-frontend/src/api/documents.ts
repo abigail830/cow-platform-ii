@@ -1,6 +1,8 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
+import { extractPathsFromParseResult } from './document-bundle-paths.ts';
 import { formatApiError } from './http.ts';
+import JSZip from 'jszip';
 
 export type DocumentPipelineJob = {
   id: string;
@@ -167,26 +169,64 @@ export async function downloadDocument(id: string): Promise<void> {
 }
 
 export async function downloadDocumentBundle(id: string, suggestedFilename: string): Promise<void> {
-  const token = getToken();
-  if (!token) throw new Error('Not authenticated');
+  const manifest = (await authFetch(`/api/documents/${id}/download/bundle-manifest`)) as {
+    file_hash: string;
+    archive_filename: string;
+    files: Array<{ path: string; url: string }>;
+  };
 
-  const res = await fetch(apiUrl(`/api/documents/${id}/download/bundle`), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-    throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
+  const fileMap = new Map<string, string>();
+  for (const file of manifest.files) {
+    fileMap.set(file.path, file.url);
   }
 
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
+  const resultFile = manifest.files.find((file) => file.path === 'result.json');
+  if (resultFile) {
+    const resultRes = await fetch(resultFile.url);
+    if (resultRes.ok) {
+      const result = (await resultRes.json()) as Record<string, unknown>;
+      const extraPaths = extractPathsFromParseResult(result, manifest.file_hash).filter(
+        (path) => !fileMap.has(path),
+      );
+      if (extraPaths.length > 0) {
+        const presigned = (await authFetch(`/api/documents/${id}/download/bundle-presign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths: extraPaths }),
+        })) as { files: Array<{ path: string; url: string }> };
+        for (const file of presigned.files) {
+          fileMap.set(file.path, file.url);
+        }
+      }
+    }
+  }
+
+  if (fileMap.size === 0) {
+    throw new Error('No stored artifacts found for this document');
+  }
+
+  const zip = new JSZip();
+  let added = 0;
+  for (const [path, url] of fileMap) {
+    const res = await fetch(url);
+    if (!res.ok) continue;
+    zip.file(path, await res.blob());
+    added += 1;
+  }
+
+  if (added === 0) {
+    throw new Error(
+      'Could not download any artifacts. Check object storage CORS allows this site to read files.',
+    );
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
   const filename = suggestedFilename.endsWith('.zip')
     ? suggestedFilename
-    : `${suggestedFilename.replace(/\.[^.]+$/, '')}.zip`;
-  triggerBrowserDownload(url, filename);
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    : manifest.archive_filename || `${suggestedFilename.replace(/\.[^.]+$/, '')}.zip`;
+  const objectUrl = URL.createObjectURL(blob);
+  triggerBrowserDownload(objectUrl, filename);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
 function triggerBrowserDownload(url: string, filename: string) {
