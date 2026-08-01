@@ -168,7 +168,46 @@ export async function downloadDocument(id: string): Promise<void> {
   triggerBrowserDownload(url, filename);
 }
 
-export async function downloadDocumentBundle(id: string, suggestedFilename: string): Promise<void> {
+function isBrowserBundleFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message;
+  return (
+    message === 'Failed to fetch' ||
+    message.includes('Could not download any artifacts') ||
+    message.includes('object storage CORS')
+  );
+}
+
+async function downloadDocumentBundleViaServer(
+  id: string,
+  suggestedFilename: string,
+): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch(apiUrl(`/api/documents/${id}/download/bundle`), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const filename = suggestedFilename.endsWith('.zip')
+    ? suggestedFilename
+    : `${suggestedFilename.replace(/\.[^.]+$/, '')}.zip`;
+  triggerBrowserDownload(url, filename);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function downloadDocumentBundleViaBrowser(
+  id: string,
+  suggestedFilename: string,
+): Promise<void> {
   const manifest = (await authFetch(`/api/documents/${id}/download/bundle-manifest`)) as {
     file_hash: string;
     archive_filename: string;
@@ -182,22 +221,26 @@ export async function downloadDocumentBundle(id: string, suggestedFilename: stri
 
   const resultFile = manifest.files.find((file) => file.path === 'result.json');
   if (resultFile) {
-    const resultRes = await fetch(resultFile.url);
-    if (resultRes.ok) {
-      const result = (await resultRes.json()) as Record<string, unknown>;
-      const extraPaths = extractPathsFromParseResult(result, manifest.file_hash).filter(
-        (path) => !fileMap.has(path),
-      );
-      if (extraPaths.length > 0) {
-        const presigned = (await authFetch(`/api/documents/${id}/download/bundle-presign`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paths: extraPaths }),
-        })) as { files: Array<{ path: string; url: string }> };
-        for (const file of presigned.files) {
-          fileMap.set(file.path, file.url);
+    try {
+      const resultRes = await fetch(resultFile.url);
+      if (resultRes.ok) {
+        const result = (await resultRes.json()) as Record<string, unknown>;
+        const extraPaths = extractPathsFromParseResult(result, manifest.file_hash).filter(
+          (path) => !fileMap.has(path),
+        );
+        if (extraPaths.length > 0) {
+          const presigned = (await authFetch(`/api/documents/${id}/download/bundle-presign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths: extraPaths }),
+          })) as { files: Array<{ path: string; url: string }> };
+          for (const file of presigned.files) {
+            fileMap.set(file.path, file.url);
+          }
         }
       }
+    } catch {
+      // OSS CORS or network — continue with the standard manifest files only.
     }
   }
 
@@ -208,10 +251,14 @@ export async function downloadDocumentBundle(id: string, suggestedFilename: stri
   const zip = new JSZip();
   let added = 0;
   for (const [path, url] of fileMap) {
-    const res = await fetch(url);
-    if (!res.ok) continue;
-    zip.file(path, await res.blob());
-    added += 1;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      zip.file(path, await res.blob());
+      added += 1;
+    } catch {
+      // Skip files the browser cannot read (e.g. missing OSS CORS for localhost).
+    }
   }
 
   if (added === 0) {
@@ -227,6 +274,15 @@ export async function downloadDocumentBundle(id: string, suggestedFilename: stri
   const objectUrl = URL.createObjectURL(blob);
   triggerBrowserDownload(objectUrl, filename);
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+export async function downloadDocumentBundle(id: string, suggestedFilename: string): Promise<void> {
+  try {
+    await downloadDocumentBundleViaBrowser(id, suggestedFilename);
+  } catch (error) {
+    if (!isBrowserBundleFailure(error)) throw error;
+    await downloadDocumentBundleViaServer(id, suggestedFilename);
+  }
 }
 
 function triggerBrowserDownload(url: string, filename: string) {
