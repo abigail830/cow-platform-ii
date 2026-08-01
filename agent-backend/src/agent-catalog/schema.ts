@@ -37,11 +37,19 @@ export const a2aSkillSchema = z.object({
 
 export const a2aYamlSchema = z.object({
   enabled: z.boolean().default(true),
-  description: z.string().optional(),
-  version: z.string().optional(),
-  defaultInputModes: z.array(z.string()).optional(),
-  defaultOutputModes: z.array(z.string()).optional(),
-  skills: z.array(a2aSkillSchema).optional(),
+  /** Agent Card display name; defaults to displayName. */
+  name: z.string().min(1).optional(),
+  /** Long-form A2A description; defaults to agent description. */
+  description: z.string().min(1).optional(),
+  version: z.string().min(1).optional(),
+  documentationUrl: z.string().url().optional(),
+  provider: z
+    .object({
+      organization: z.string().min(1),
+      url: z.string().url(),
+    })
+    .optional(),
+  skills: z.array(a2aSkillSchema).min(1),
 });
 
 export const agentYamlSchema = z.object({

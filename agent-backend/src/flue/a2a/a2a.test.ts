@@ -1,29 +1,33 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { join } from 'node:path';
 import { loadAgentSpec } from '../../agent-catalog/discover.ts';
 import { agentCatalogRoot } from '../../agent-catalog/paths.ts';
-import { join } from 'node:path';
 import { a2aChannelName, isA2aEnabledForSpec } from './config.ts';
 import { buildAgentCardForSpec } from './build-agent-card.ts';
 import { extractTextFromA2aMessage } from './extract-text.ts';
-import { Message, Part, Role } from '@a2a-js/sdk';
+import { Message, Role } from '@a2a-js/sdk';
 
 describe('a2a config', () => {
   it('detects enabled agents from yaml', () => {
     const spec = loadAgentSpec(join(agentCatalogRoot(), 'content-studio'));
     assert.equal(isA2aEnabledForSpec(spec), true);
     assert.equal(a2aChannelName(spec.id), 'content-studio-a2a');
+    assert.ok(spec.a2a?.skills?.length);
   });
 });
 
 describe('buildAgentCardForSpec', () => {
-  it('builds a card with HTTP+JSON interface and skills', () => {
+  it('builds a card with HTTP+JSON interface, streaming, and configured skills', () => {
     const spec = loadAgentSpec(join(agentCatalogRoot(), 'smart-proposal'));
     const card = buildAgentCardForSpec(spec);
     assert.equal(card.name, spec.displayName);
+    assert.equal(card.capabilities?.streaming, true);
     assert.ok(card.supportedInterfaces.length >= 1);
     assert.equal(card.supportedInterfaces[0]?.protocolBinding, 'HTTP+JSON');
-    assert.ok(card.skills.length >= 1);
+    assert.equal(card.skills.length, spec.a2a!.skills.length);
+    assert.deepEqual(card.skills[0]?.tags, spec.a2a!.skills[0]!.tags);
+    assert.ok(card.defaultOutputModes.includes('application/json'));
   });
 });
 
@@ -35,8 +39,8 @@ describe('extractTextFromA2aMessage', () => {
       taskId: 't1',
       role: Role.ROLE_USER,
       parts: [
-        Part.fromJSON({ content: { text: 'hello' }, mediaType: 'text/plain' }),
-        Part.fromJSON({ content: { text: 'world' }, mediaType: 'text/plain' }),
+        { text: 'hello', mediaType: 'text/plain' },
+        { text: 'world', mediaType: 'text/plain' },
       ],
       metadata: undefined,
       extensions: [],

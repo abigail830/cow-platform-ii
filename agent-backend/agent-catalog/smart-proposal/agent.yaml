@@ -28,3 +28,13 @@ access:
 
 a2a:
   enabled: true
+  skills:
+    - id: smart-proposal
+      name: Proposal Chef
+      description: Smart proposal compose assistant using the OKF knowledge bundle.
+      tags:
+        - product:smart-proposal
+        - role:compose
+      examples:
+        - Draft a proposal outline for a new enterprise client.
+        - Summarize the key sections we should include in a services proposal.

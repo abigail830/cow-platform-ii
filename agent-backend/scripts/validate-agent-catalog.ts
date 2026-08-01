@@ -78,6 +78,26 @@ function validateAgentSync(agentDir: string): ValidationIssue[] {
     });
   }
 
+  if (spec.a2a && spec.a2a.enabled !== false) {
+    if (!spec.a2a.skills?.length) {
+      issues.push({
+        agentId: spec.id,
+        message: 'a2a.skills must contain at least one skill when A2A is enabled',
+      });
+    } else {
+      const skillIds = new Set<string>();
+      for (const skill of spec.a2a.skills) {
+        if (skillIds.has(skill.id)) {
+          issues.push({
+            agentId: spec.id,
+            message: `Duplicate a2a.skills id "${skill.id}"`,
+          });
+        }
+        skillIds.add(skill.id);
+      }
+    }
+  }
+
   return issues;
 }
 

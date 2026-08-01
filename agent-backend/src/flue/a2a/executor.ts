@@ -18,7 +18,7 @@ import {
   type Task,
 } from '@a2a-js/sdk';
 import { extractTextFromA2aMessage } from './extract-text.ts';
-import { invokeFlueAgentViaPrompt } from './invoke-agent.ts';
+import { invokeFlueAgent } from './invoke-agent.ts';
 
 const activeAborts = new Map<string, AbortController>();
 
@@ -62,10 +62,26 @@ export function createFlueA2aExecutor(agentName: string): AgentExecutor {
       );
 
       try {
-        const result = await invokeFlueAgentViaPrompt({
+        const result = await invokeFlueAgent({
           agentName,
           conversationId: contextId,
           message: userText,
+          signal: abortController.signal,
+          onAssistantText: (text) => {
+            if (!text.trim()) return;
+            eventBus.publish(
+              AgentEvent.statusUpdate({
+                taskId,
+                contextId,
+                status: {
+                  state: TaskState.TASK_STATE_WORKING,
+                  message: buildAgentTextMessage({ contextId, taskId, text }),
+                  timestamp: new Date().toISOString(),
+                },
+                metadata: undefined,
+              }),
+            );
+          },
         });
 
         if (abortController.signal.aborted) {
@@ -218,5 +234,4 @@ export function createIsolatedA2aRequestHandler(
   return new DefaultRequestHandler(agentCard, new InMemoryTaskStore(), createFlueA2aExecutor(agentName));
 }
 
-// Ensure bus can be constructed in tests without importing unused symbol warnings.
 void DefaultExecutionEventBus;

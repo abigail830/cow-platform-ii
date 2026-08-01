@@ -20,6 +20,7 @@ import { buildAgentCardForSpec } from './build-agent-card.ts';
 import { isA2aEnabledForSpec } from './config.ts';
 import { requireA2aAuth } from './auth.ts';
 import { getA2aRequestHandler } from './executor.ts';
+import { sseResponseFromStream } from './stream-sse.ts';
 
 class A2aServiceUser implements User {
   get isAuthenticated(): boolean {
@@ -61,6 +62,30 @@ function parseHistoryLength(value: string | undefined): number | undefined {
   if (!/^-?\d+$/.test(value)) return undefined;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function createSendMessageStreamHandler(requestHandler: DefaultRequestHandler): AgentRouteHandler {
+  return async (c) => {
+    const rejected = requireA2aAuth(c);
+    if (rejected) return rejected;
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return jsonA2a({ error: { code: 400, message: 'Invalid JSON body.' } }, 400);
+    }
+
+    const params = SendMessageRequest.fromJSON({
+      tenant: '',
+      message: body.message,
+      configuration: body.configuration,
+      metadata: body.metadata,
+    });
+
+    const stream = requestHandler.sendMessageStream(params, buildServerCallContext(c));
+    return sseResponseFromStream(stream);
+  };
 }
 
 function createSendMessageHandler(requestHandler: DefaultRequestHandler): AgentRouteHandler {
@@ -185,6 +210,7 @@ export function buildA2aChannelForSpec(spec: LoadedAgentSpec): A2aChannelExport 
   };
 
   const sendMessage = createSendMessageHandler(requestHandler);
+  const sendMessageStream = createSendMessageStreamHandler(requestHandler);
 
   return {
     channel: {
@@ -192,8 +218,8 @@ export function buildA2aChannelForSpec(spec: LoadedAgentSpec): A2aChannelExport 
         { method: 'GET', path: '/.well-known/agent-card.json', handler: agentCardHandler },
         { method: 'POST', path: '/message:send', handler: sendMessage },
         { method: 'POST', path: '/v1/message:send', handler: sendMessage },
-        { method: 'POST', path: '/message:stream', handler: unsupportedHandler('SendStreamingMessage') },
-        { method: 'POST', path: '/v1/message:stream', handler: unsupportedHandler('SendStreamingMessage') },
+        { method: 'POST', path: '/message:stream', handler: sendMessageStream },
+        { method: 'POST', path: '/v1/message:stream', handler: sendMessageStream },
         { method: 'GET', path: '/tasks/:taskId', handler: createGetTaskHandler(requestHandler) },
         { method: 'GET', path: '/v1/tasks/:taskId', handler: createGetTaskHandler(requestHandler) },
         { method: 'GET', path: '/tasks', handler: unsupportedHandler('ListTasks') },

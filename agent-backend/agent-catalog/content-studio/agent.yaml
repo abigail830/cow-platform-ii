@@ -31,3 +31,15 @@ access:
 
 a2a:
   enabled: true
+  skills:
+    - id: content-studio
+      name: Content Studio
+      description: Generate Word documents, PowerPoint decks, and HTML reveal.js presentations.
+      tags:
+        - product:content-studio
+        - format:docx
+        - format:pptx
+        - format:html
+      examples:
+        - Create a 10-slide investor pitch deck as PPTX.
+        - Generate a Word proposal document from these bullet points.

@@ -7,58 +7,28 @@ import {
 import type { LoadedAgentSpec } from '../../agent-catalog/schema.ts';
 import { a2aChannelName, readA2aApiKey, readPublicApiUrl } from './config.ts';
 
-function skillIdFromRef(skillRef: string): string {
-  const normalized = skillRef.replace(/^\.\//, '').split('/').filter(Boolean);
-  return normalized[normalized.length - 1] ?? skillRef;
-}
+const DEFAULT_INPUT_MODES = ['text/plain'] as const;
+const DEFAULT_OUTPUT_MODES = ['text/plain', 'application/json'] as const;
 
 function buildSkills(spec: LoadedAgentSpec): AgentSkill[] {
-  const description = spec.a2a?.description?.trim() || spec.description;
-
-  if (spec.a2a?.skills?.length) {
-    return spec.a2a.skills.map((skill) => ({
-      id: skill.id,
-      name: skill.name,
-      description: skill.description,
-      tags: skill.tags ?? [spec.id],
-      examples: skill.examples ?? [],
-      inputModes: skill.inputModes ?? ['text/plain'],
-      outputModes: skill.outputModes ?? ['text/plain'],
-    }));
-  }
-
-  if (spec.skills.length === 0) {
-    return [
-      {
-        id: spec.id,
-        name: spec.displayName,
-        description,
-        tags: [spec.id],
-        examples: [],
-        inputModes: ['text/plain'],
-        outputModes: ['text/plain'],
-      },
-    ];
-  }
-
-  return spec.skills.map((skillRef) => {
-    const id = skillIdFromRef(skillRef);
-    return {
-      id,
-      name: id,
-      description: `${spec.displayName} — ${id}`,
-      tags: [spec.id, id],
-      examples: [],
-      inputModes: ['text/plain'],
-      outputModes: ['text/plain'],
-    };
-  });
+  const a2aSkills = spec.a2a?.skills ?? [];
+  return a2aSkills.map((skill) => ({
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    tags: skill.tags ?? [],
+    examples: skill.examples ?? [],
+    inputModes: skill.inputModes ?? [...DEFAULT_INPUT_MODES],
+    outputModes: skill.outputModes ?? [...DEFAULT_OUTPUT_MODES],
+    securityRequirements: [],
+  }));
 }
 
 export function buildAgentCardForSpec(spec: LoadedAgentSpec): ReturnType<typeof AgentCard.fromJSON> {
   const channelName = a2aChannelName(spec.id);
   const baseUrl = `${readPublicApiUrl()}/api/channels/${channelName}`;
   const description = spec.a2a?.description?.trim() || spec.description;
+  const name = spec.a2a?.name?.trim() || spec.displayName;
   const apiKey = readA2aApiKey();
 
   const securitySchemes: Record<string, SecurityScheme> = {};
@@ -75,9 +45,11 @@ export function buildAgentCardForSpec(spec: LoadedAgentSpec): ReturnType<typeof 
   }
 
   return AgentCard.fromJSON({
-    name: spec.displayName,
+    name,
     description,
     version: spec.a2a?.version ?? '1.0.0',
+    documentationUrl: spec.a2a?.documentationUrl,
+    provider: spec.a2a?.provider,
     supportedInterfaces: [
       {
         url: baseUrl,
@@ -87,12 +59,12 @@ export function buildAgentCardForSpec(spec: LoadedAgentSpec): ReturnType<typeof 
       },
     ],
     capabilities: {
-      streaming: false,
+      streaming: true,
       pushNotifications: false,
       extensions: [],
     },
-    defaultInputModes: spec.a2a?.defaultInputModes ?? ['text/plain'],
-    defaultOutputModes: spec.a2a?.defaultOutputModes ?? ['text/plain'],
+    defaultInputModes: [...DEFAULT_INPUT_MODES],
+    defaultOutputModes: [...DEFAULT_OUTPUT_MODES],
     skills: buildSkills(spec),
     securitySchemes,
     securityRequirements,
