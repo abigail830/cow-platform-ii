@@ -17,6 +17,7 @@ import { useChatAutoScroll } from '../chat/use-chat-auto-scroll.ts';
 import { useThrottledMessages } from '../chat/use-throttled-messages.ts';
 import { MessagePart } from '../chat/MessagePart.tsx';
 import { toAgentInstanceId } from '../shared/agent-instance-id.ts';
+import { AssistantMessageBubble, UserMessageBubble } from './ChatMessageBubble.tsx';
 import { AssistantInProgress } from './AssistantInProgress.tsx';
 import { ChatComposer } from './ChatComposer.tsx';
 
@@ -162,19 +163,15 @@ export function AgentChatPanel({
                   </p>
                 );
               }
-              return (
-                <div key={row.message.id} className="message user">
-                  <p>{userMessageText(row.message)}</p>
-                </div>
-              );
+              return <UserMessageBubble key={row.message.id} message={row.message} />;
             }
             const parts = filterRenderableParts(mergeAssistantParts(row.messages));
             const submissionId = assistantTurnSubmissionId(row.messages);
             const showAborted = submissionId ? abortedSubmissionIds.has(submissionId) : false;
             return (
-              <div
+              <AssistantMessageBubble
                 key={row.messages.map((message) => message.id).join(':') || 'assistant'}
-                className="message assistant"
+                messages={row.messages}
               >
                 {parts.map((part, index) => (
                   <MessagePart key={partRenderKey(part, index)} part={part} />
@@ -182,7 +179,7 @@ export function AgentChatPanel({
                 {showAborted && (
                   <p className="chat-status-hint chat-status-hint-inline">已停止</p>
                 )}
-              </div>
+              </AssistantMessageBubble>
             );
           })}
           {showThinking && (

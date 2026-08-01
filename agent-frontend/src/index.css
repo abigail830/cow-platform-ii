@@ -794,6 +794,55 @@ textarea {
   color: #ffffff;
 }
 
+.message-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: 80%;
+}
+
+.message-stack.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.message-stack.assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.message-stack .message.user,
+.message-stack .message.assistant {
+  align-self: auto;
+  width: auto;
+  max-width: 100%;
+}
+
+.message-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 0;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.message-copy-btn:hover {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.message-copy-btn:focus-visible {
+  outline: 2px solid #fdba74;
+  outline-offset: 1px;
+}
+
 .message.assistant {
   align-self: flex-start;
   width: 100%;
@@ -2188,7 +2237,7 @@ textarea {
 .playground-agent-panel {
   display: flex;
   flex-direction: column;
-  flex: 0 0 var(--playground-left-pct, 22%);
+  flex: 0 0 var(--playground-left-pct, 16%);
   min-width: 0;
   background: #ffffff;
   padding: 0.75rem;

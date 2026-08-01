@@ -11,9 +11,9 @@ import {
   groupConsecutiveMessages,
   mergeAssistantParts,
   partRenderKey,
-  userMessageText,
 } from '../chat/groupMessages.ts';
 import { MessagePart } from '../chat/MessagePart.tsx';
+import { AssistantMessageBubble, UserMessageBubble } from '../components/ChatMessageBubble.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { getNavPage } from '../shared/admin-nav.ts';
@@ -368,23 +368,19 @@ export function SessionExplorerPage() {
                   <div className="chat-column">
                     {detailRows.map((row) => {
                       if (row.kind === 'user') {
-                        return (
-                          <div key={row.message.id} className="message user">
-                            <p>{userMessageText(row.message)}</p>
-                          </div>
-                        );
+                        return <UserMessageBubble key={row.message.id} message={row.message} />;
                       }
 
                       const parts = filterRenderableParts(mergeAssistantParts(row.messages));
                       return (
-                        <div
+                        <AssistantMessageBubble
                           key={row.messages.map((message) => message.id).join(':') || 'assistant'}
-                          className="message assistant"
+                          messages={row.messages}
                         >
                           {parts.map((part, index) => (
                             <MessagePart key={partRenderKey(part, index)} part={part} />
                           ))}
-                        </div>
+                        </AssistantMessageBubble>
                       );
                     })}
                   </div>

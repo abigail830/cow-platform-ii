@@ -82,6 +82,15 @@ export function userMessageText(message: FlueConversationMessage): string {
     .join('');
 }
 
+/** Plain text from assistant text parts (excludes tools, files, etc.). */
+export function assistantMessageText(messages: FlueConversationMessage[]): string {
+  return mergeAssistantParts(messages)
+    .filter((p): p is Extract<FlueConversationPart, { type: 'text' }> => p.type === 'text')
+    .map((p) => p.text)
+    .join('')
+    .trim();
+}
+
 /** Flue projects submission signals (abort/interrupt) as user-role text messages. */
 export function isSubmissionStatusMessage(message: FlueConversationMessage): boolean {
   if (message.role !== 'user') return false;

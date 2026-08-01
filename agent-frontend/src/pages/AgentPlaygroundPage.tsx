@@ -10,8 +10,8 @@ const PAGE = AGENT_PAGES[0]!;
 export function AgentPlaygroundPage() {
   const { user, agents } = useAppOutletContext();
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('agent-playground-split', 22, {
-    minPct: 14,
+  const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('agent-playground-split', 16.5, {
+    minPct: 11,
     maxPct: 40,
   });
 
