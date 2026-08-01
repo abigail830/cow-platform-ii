@@ -28,3 +28,6 @@ access:
   defaultForRoles:
     - admin
     - agent-player
+
+a2a:
+  enabled: true

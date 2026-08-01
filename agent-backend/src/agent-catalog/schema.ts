@@ -25,6 +25,25 @@ export const sandboxSchema = z.object({
   templateId: z.string().optional(),
 });
 
+export const a2aSkillSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  tags: z.array(z.string()).optional(),
+  examples: z.array(z.string()).optional(),
+  inputModes: z.array(z.string()).optional(),
+  outputModes: z.array(z.string()).optional(),
+});
+
+export const a2aYamlSchema = z.object({
+  enabled: z.boolean().default(true),
+  description: z.string().optional(),
+  version: z.string().optional(),
+  defaultInputModes: z.array(z.string()).optional(),
+  defaultOutputModes: z.array(z.string()).optional(),
+  skills: z.array(a2aSkillSchema).optional(),
+});
+
 export const agentYamlSchema = z.object({
   id: agentIdSchema,
   displayName: z.string().min(1),
@@ -52,9 +71,11 @@ export const agentYamlSchema = z.object({
       defaultForRoles: z.array(z.string()).default(['admin']),
     })
     .default({ defaultForRoles: ['admin'] }),
+  a2a: a2aYamlSchema.optional(),
 });
 
 export type AgentYaml = z.infer<typeof agentYamlSchema>;
+export type A2aYaml = z.infer<typeof a2aYamlSchema>;
 export type McpServerYaml = z.infer<typeof mcpServerSchema>;
 export type SandboxYaml = z.infer<typeof sandboxSchema>;
 

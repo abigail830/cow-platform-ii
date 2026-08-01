@@ -18,6 +18,7 @@ import {
 } from '@flue/runtime/internal';
 import type { AgentRouteHandler } from '@flue/runtime';
 import { getCatalogFlueAgentModules } from './agent-catalog/boot.ts';
+import { getCatalogA2aChannelModules } from './flue/a2a/create-channel.ts';
 import db from './db.ts';
 import { setPlatformFlueStores } from './flue/platform-flue-stores.ts';
 import { runSubmissionGovernanceAtStartup } from './flue/submission-governance.ts';
@@ -184,7 +185,12 @@ async function runFlueRuntimeInit(): Promise<void> {
   if (initialized) return;
 
   const catalogModules = getCatalogFlueAgentModules();
-  const { agents, workflows, channelHandlers } = normalizeBuiltModules(catalogModules, {}, {});
+  const channelModules = getCatalogA2aChannelModules();
+  const { agents, workflows, channelHandlers } = normalizeBuiltModules(
+    catalogModules,
+    {},
+    channelModules,
+  );
 
   const persistence = db as {
     migrate?: () => Promise<void>;
