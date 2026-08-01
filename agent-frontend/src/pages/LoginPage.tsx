@@ -15,7 +15,7 @@ export function LoginPage() {
     setError(null);
     try {
       await login(email, password);
-      navigate('/chat', { replace: true });
+      navigate('/agents/playground', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {

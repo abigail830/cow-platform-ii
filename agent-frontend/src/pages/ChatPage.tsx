@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import type { AuthUser } from '../api/auth.ts';
 import { AgentChatPanel } from '../components/AgentChatPanel.tsx';
-import { useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { ChatComposer } from '../components/ChatComposer.tsx';
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel.tsx';
 import { AgentMenuIcon } from '../components/icons/AgentIcons.tsx';
@@ -98,7 +98,7 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
       <main className="chat-main">
         <header className="chat-header">
           <div className="chat-header-title">
-            {selectedAgent && <AgentMenuIcon name={selectedAgent} className="chat-header-icon" />}
+            {selectedAgent && <AgentMenuIcon className="chat-header-icon" />}
             <h2>{selectedAgentInfo?.displayName ?? 'Chat'}</h2>
           </div>
           <div className="chat-header-actions">
@@ -174,15 +174,8 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
   );
 }
 
-export function ChatPage() {
-  const { user, agents, selectedAgent, setSelectedAgent } = useAppOutletContext();
+export { ChatPageContent };
 
-  return (
-    <ChatPageContent
-      user={user}
-      agents={agents}
-      selectedAgent={selectedAgent}
-      onSelectAgent={setSelectedAgent}
-    />
-  );
+export function ChatPage() {
+  return <Navigate to="/agents/playground" replace />;
 }

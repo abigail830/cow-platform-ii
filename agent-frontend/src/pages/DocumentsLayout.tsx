@@ -98,7 +98,7 @@ export function DocumentsLayout() {
     await loadChannels();
   }
 
-  if (forbidden) return <Navigate to="/chat" replace />;
+  if (forbidden) return <Navigate to="/agents/playground" replace />;
 
   const outletContext = {
     channels,

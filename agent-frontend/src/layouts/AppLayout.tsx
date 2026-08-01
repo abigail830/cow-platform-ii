@@ -7,8 +7,6 @@ import { AppSideNav } from '../components/AppSideNav.tsx';
 export type AppOutletContext = {
   user: AuthUser;
   agents: AgentInfo[];
-  selectedAgent: string | null;
-  setSelectedAgent: (name: string) => void;
 };
 
 const AppOutletContextInternal = createContext<AppOutletContext | null>(null);
@@ -24,7 +22,6 @@ export function AppLayout() {
   const location = useLocation();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
   const [navCollapsed, setNavCollapsed] = useState(false);
 
@@ -55,13 +52,6 @@ export function AppLayout() {
     navigate('/login', { replace: true });
   }
 
-  function handleSelectAgent(name: string) {
-    setSelectedAgent(name);
-    if (!location.pathname.startsWith('/chat')) {
-      navigate('/chat');
-    }
-  }
-
   if (booting || !user) {
     return <div className="boot">Loading…</div>;
   }
@@ -69,17 +59,12 @@ export function AppLayout() {
   const outletContext: AppOutletContext = {
     user,
     agents,
-    selectedAgent,
-    setSelectedAgent,
   };
 
   return (
     <AppOutletContextInternal.Provider value={outletContext}>
       <div className={`chat-layout${navCollapsed ? ' nav-collapsed' : ''}`}>
         <AppSideNav
-          agents={agents}
-          selectedAgent={selectedAgent}
-          onSelectAgent={handleSelectAgent}
           user={user}
           userLabel={user.displayName ?? user.email}
           activePath={location.pathname}

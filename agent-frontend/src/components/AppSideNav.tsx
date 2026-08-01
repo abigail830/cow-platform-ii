@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AuthUser } from '../api/auth.ts';
-import type { AgentInfo } from '../api/conversations.ts';
 import {
   ADMIN_PAGES,
   ADMINISTRATION_CATEGORY,
+  AGENTS_CATEGORY,
+  AGENT_PAGES,
   KNOWLEDGE_MANAGEMENT_CATEGORY,
   KNOWLEDGE_MANAGEMENT_PAGES,
   PLATFORM_BASIC_CATEGORY,
@@ -13,13 +14,10 @@ import {
 import { hasPermission } from '../shared/permissions.ts';
 import { User } from 'lucide-react';
 import { NavPageIcon } from './icons/NavIcons.tsx';
-import { AgentMenuIcon, IconSidenavCollapse, IconSidenavExpand } from './icons/AgentIcons.tsx';
+import { IconSidenavCollapse, IconSidenavExpand } from './icons/AgentIcons.tsx';
 import { iconProps } from './icons/icon-props.ts';
 
 type AppSideNavProps = {
-  agents: AgentInfo[];
-  selectedAgent: string | null;
-  onSelectAgent: (name: string) => void;
   user: AuthUser;
   userLabel: string;
   activePath: string;
@@ -69,9 +67,6 @@ function NavSection({
 }
 
 export function AppSideNav({
-  agents,
-  selectedAgent,
-  onSelectAgent,
   user,
   userLabel,
   activePath,
@@ -114,25 +109,13 @@ export function AppSideNav({
       </div>
 
       <nav className="sidenav-nav">
-        {!collapsed && <div className="sidenav-category">Agents</div>}
-        <ul className="sidenav-menu">
-          {agents.map((agent) => {
-            const active = activePath.startsWith('/chat') && selectedAgent === agent.name;
-            return (
-              <li key={agent.name}>
-                <button
-                  type="button"
-                  className={`sidenav-item${active ? ' active' : ''}`}
-                  onClick={() => onSelectAgent(agent.name)}
-                  title={collapsed ? agent.displayName : undefined}
-                >
-                  <AgentMenuIcon name={agent.name} icon={agent.icon} className="sidenav-item-icon" />
-                  {!collapsed && <span className="sidenav-item-label">{agent.displayName}</span>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <NavSection
+          category={AGENTS_CATEGORY}
+          items={AGENT_PAGES}
+          activePath={activePath}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        />
 
         <NavSection
           category={KNOWLEDGE_MANAGEMENT_CATEGORY}

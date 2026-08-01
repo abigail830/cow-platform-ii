@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { getToken } from './api/auth.ts';
 import { AppLayout } from './layouts/AppLayout.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
+import { AgentPlaygroundPage } from './pages/AgentPlaygroundPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
@@ -32,6 +33,7 @@ export default function App() {
             </RequireAuth>
           }
         >
+          <Route path="/agents/playground" element={<AgentPlaygroundPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/admin/models" element={<ModelsConfigPage />} />
           <Route path="/admin/pipelines" element={<PipelinesConfigPage />} />
@@ -44,7 +46,7 @@ export default function App() {
           <Route path="/admin/roles" element={<RolesPage />} />
           <Route path="/admin/permissions" element={<PermissionsPage />} />
         </Route>
-        <Route path="*" element={<Navigate to={getToken() ? '/chat' : '/login'} replace />} />
+        <Route path="*" element={<Navigate to={getToken() ? '/agents/playground' : '/login'} replace />} />
       </Routes>
     </FlueAuthProvider>
   );

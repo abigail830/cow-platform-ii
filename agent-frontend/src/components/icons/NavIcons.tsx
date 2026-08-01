@@ -1,5 +1,6 @@
 import {
   Boxes,
+  Bot,
   Database,
   FileText,
   GitBranch,
@@ -20,6 +21,7 @@ const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   users: Users,
   roles: ShieldCheck,
   permissions: KeyRound,
+  playground: Bot,
 };
 
 export function NavPageIcon({ name, ...props }: LucideProps & { name: NavPageIcon }) {

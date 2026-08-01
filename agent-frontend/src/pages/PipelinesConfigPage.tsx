@@ -76,7 +76,7 @@ export function PipelinesConfigPage() {
   const rangeEnd = Math.min(page * limit, total);
 
   if (forbidden) {
-    return <Navigate to="/chat" replace />;
+    return <Navigate to="/agents/playground" replace />;
   }
 
   return (

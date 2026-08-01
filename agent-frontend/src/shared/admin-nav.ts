@@ -1,4 +1,12 @@
-export type NavPageIcon = 'models' | 'pipelines' | 'storage' | 'documents' | 'users' | 'roles' | 'permissions';
+export type NavPageIcon =
+  | 'models'
+  | 'pipelines'
+  | 'storage'
+  | 'documents'
+  | 'users'
+  | 'roles'
+  | 'permissions'
+  | 'playground';
 
 export type NavPage = {
   path: string;
@@ -39,6 +47,21 @@ export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
 ];
 
 export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'Knowledge Management';
+
+export const AGENTS_CATEGORY = 'Agents';
+
+export const AGENT_PLAYGROUND_PATH = '/agents/playground';
+
+export const AGENT_PAGES: readonly NavPage[] = [
+  {
+    path: AGENT_PLAYGROUND_PATH,
+    navLabel: 'Agent playground',
+    titleMain: 'Agent',
+    titleAccent: 'Playground',
+    permissionKey: '',
+    icon: 'playground',
+  },
+];
 
 export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
   {
@@ -81,6 +104,7 @@ export const ADMIN_PAGES: readonly NavPage[] = [
 ];
 
 export const ALL_NAV_PAGES: readonly NavPage[] = [
+  ...AGENT_PAGES,
   ...KNOWLEDGE_MANAGEMENT_PAGES,
   ...PLATFORM_BASIC_PAGES,
   ...ADMIN_PAGES,

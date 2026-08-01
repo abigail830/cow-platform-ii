@@ -98,7 +98,7 @@ export function RolesPage() {
     }
   }
 
-  if (forbidden) return <Navigate to="/chat" replace />;
+  if (forbidden) return <Navigate to="/agents/playground" replace />;
 
   return (
     <>
