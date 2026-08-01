@@ -20,6 +20,7 @@ export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'knowledge-management' as const;
 
 export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
   DOCUMENTS: 'documents',
+  KNOWLEDGE_BASES: 'knowledge-bases',
 } as const;
 
 export type KnowledgeManagementResource =
@@ -80,6 +81,13 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
       '/api/documents',
       '/api/documents/*',
     ],
+  },
+  {
+    resource: KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    label: 'Knowledge bases',
+    description: 'PageIndex knowledge bases and document import.',
+    routePatterns: ['/knowledge/knowledge-bases'],
+    apiPatterns: ['/api/knowledge-bases', '/api/knowledge-bases/*'],
   },
 ];
 

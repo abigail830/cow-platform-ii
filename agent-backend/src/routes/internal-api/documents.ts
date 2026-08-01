@@ -8,6 +8,7 @@ import {
   getDocumentById,
   updateDocumentMetadata,
 } from '../../services/documents.ts';
+import { buildDocumentImportContext } from '../../services/knowledge-bases.ts';
 import { uploadDocumentObject, StorageNotConfiguredError } from '../../storage/document-files.ts';
 import { isStorageEnabled } from '../../storage/s3-config.ts';
 
@@ -34,6 +35,20 @@ function metadataNeedsExtraction(
     return false;
   });
 }
+
+documents.get('/:id/import-context', async (c) => {
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+  try {
+    const ctx = await buildDocumentImportContext(id);
+    return c.json(ctx);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load import context';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status);
+  }
+});
 
 documents.get('/:id', async (c) => {
   const id = routeParam(c, 'id');

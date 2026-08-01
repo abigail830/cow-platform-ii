@@ -52,3 +52,23 @@ export function collectDescendantIds(
   }
   return result;
 }
+
+/** Ancestor channel names from root to leaf, joined with `/`. */
+export function buildChannelPath(
+  channelId: string,
+  rows: Array<{ id: string; name: string; parent_id: string | null }>,
+): string {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const parts: string[] = [];
+  let current: string | null = channelId;
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const row = byId.get(current);
+    if (!row) break;
+    parts.push(row.name);
+    current = row.parent_id;
+  }
+  parts.reverse();
+  return parts.join('/');
+}

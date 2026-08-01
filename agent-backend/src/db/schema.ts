@@ -8,6 +8,7 @@ import {
   uuid,
   primaryKey,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 export const MODEL_API_TYPES = [
@@ -226,6 +227,83 @@ export type PipelineJobStage = (typeof PIPELINE_JOB_STAGES)[number];
 
 export const PIPELINE_PROVIDERS = ['baidu', 'aliyun'] as const;
 export type PipelineProvider = (typeof PIPELINE_PROVIDERS)[number];
+
+export const KNOWLEDGE_BASE_TYPES = ['page_index', 'rag'] as const;
+export type KnowledgeBaseType = (typeof KNOWLEDGE_BASE_TYPES)[number];
+
+export const KB_IMPORT_JOB_STATUSES = ['pending', 'running', 'completed', 'failed'] as const;
+export type KbImportJobStatus = (typeof KB_IMPORT_JOB_STATUSES)[number];
+
+export const KB_ITEM_IMPORT_STATUSES = ['pending', 'importing', 'completed', 'failed'] as const;
+export type KbItemImportStatus = (typeof KB_ITEM_IMPORT_STATUSES)[number];
+
+export const appKnowledgeBases = pgTable(
+  'app_knowledge_bases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    type: text('type').notNull(),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_knowledge_bases_type').on(t.type, t.updatedAt)],
+);
+
+export const appKbImportJobs = pgTable(
+  'app_kb_import_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    knowledgeBaseId: uuid('knowledge_base_id')
+      .notNull()
+      .references(() => appKnowledgeBases.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'),
+    documentIds: jsonb('document_ids').$type<string[]>().notNull().default([]),
+    totalCount: integer('total_count').notNull().default(0),
+    completedCount: integer('completed_count').notNull().default(0),
+    failedCount: integer('failed_count').notNull().default(0),
+    errorMessage: text('error_message'),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_kb_import_jobs_kb').on(t.knowledgeBaseId, t.createdAt),
+    index('idx_kb_import_jobs_status').on(t.status, t.updatedAt),
+  ],
+);
+
+export const appKbItems = pgTable(
+  'app_kb_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    knowledgeBaseId: uuid('knowledge_base_id')
+      .notNull()
+      .references(() => appKnowledgeBases.id, { onDelete: 'cascade' }),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => appDocuments.id, { onDelete: 'cascade' }),
+    documentName: text('document_name').notNull(),
+    channelPath: text('channel_path').notNull().default(''),
+    originalS3Key: text('original_s3_key').notNull(),
+    metadata: jsonb('metadata').$type<Record<string, unknown> | null>(),
+    pageIndex: jsonb('page_index').$type<Record<string, unknown> | null>(),
+    markdown: text('markdown'),
+    parsingResult: jsonb('parsing_result').$type<Record<string, unknown> | null>(),
+    importStatus: text('import_status').notNull().default('pending'),
+    importError: text('import_error'),
+    importWarnings: jsonb('import_warnings').$type<string[] | null>(),
+    importedAt: timestamp('imported_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('uq_kb_items_kb_document').on(t.knowledgeBaseId, t.documentId),
+    index('idx_kb_items_kb').on(t.knowledgeBaseId, t.importedAt),
+    index('idx_kb_items_document').on(t.documentId),
+  ],
+);
 
 export const appPipelineJobs = pgTable(
   'app_pipeline_jobs',

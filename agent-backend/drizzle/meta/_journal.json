@@ -148,6 +148,13 @@
       "when": 1785177000000,
       "tag": "0020_app_e2b_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785178000000,
+      "tag": "0021_knowledge_bases",
+      "breakpoints": true
     }
   ]
 }

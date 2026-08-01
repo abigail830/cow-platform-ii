@@ -40,6 +40,8 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
   'knowledge-manager': [
     'knowledge-management:documents:read',
     'knowledge-management:documents:write',
+    'knowledge-management:knowledge-bases:read',
+    'knowledge-management:knowledge-bases:write',
     'platform-basic:pipelines:read',
     'platform-basic:pipelines:write',
     'platform-basic:storage:read',

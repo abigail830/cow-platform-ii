@@ -6,6 +6,8 @@ import { ChatPage } from './pages/ChatPage.tsx';
 import { AgentPlaygroundPage } from './pages/AgentPlaygroundPage.tsx';
 import { SessionExplorerPage } from './pages/SessionExplorerPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
+import { KnowledgeBaseDetailPage } from './pages/KnowledgeBaseDetailPage.tsx';
+import { KnowledgeBasesListPage } from './pages/KnowledgeBasesListPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
 import { DocumentsLayout } from './pages/DocumentsLayout.tsx';
@@ -40,6 +42,8 @@ export default function App() {
           <Route path="/admin/models" element={<ModelsConfigPage />} />
           <Route path="/admin/pipelines" element={<PipelinesConfigPage />} />
           <Route path="/admin/storage" element={<ObjectStoragePage />} />
+          <Route path="/knowledge/knowledge-bases" element={<KnowledgeBasesListPage />} />
+          <Route path="/knowledge/knowledge-bases/:knowledgeBaseId" element={<KnowledgeBaseDetailPage />} />
           <Route path="/knowledge/documents" element={<DocumentsLayout />}>
             <Route index element={<DocumentsListPage />} />
             <Route path=":documentId" element={<DocumentDetailPage />} />

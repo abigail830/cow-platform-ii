@@ -3,6 +3,7 @@ export type NavPageIcon =
   | 'pipelines'
   | 'storage'
   | 'documents'
+  | 'knowledge'
   | 'users'
   | 'roles'
   | 'permissions'
@@ -81,6 +82,14 @@ export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
     titleAccent: '',
     permissionKey: 'knowledge-management:documents',
     icon: 'documents',
+  },
+  {
+    path: '/knowledge/knowledge-bases',
+    navLabel: 'Knowledge',
+    titleMain: 'Knowledge',
+    titleAccent: 'Bases',
+    permissionKey: 'knowledge-management:knowledge-bases',
+    icon: 'knowledge',
   },
 ];
 

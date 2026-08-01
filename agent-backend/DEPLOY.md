@@ -76,6 +76,20 @@ Push bundle changes to GitHub, then **redeploy backend** to pick them up.
 
 Do **not** set `PIPELINE_WORKER=spawn` on Vercel.
 
+## KB PageIndex import (isolated from document parse)
+
+Knowledge base import uses **separate** jobs (`app_kb_import_jobs`), CLI (`openkms-cli kb pageindex-import`), and GHA workflow **`openkms-kb-pageindex-import.yml`** (`OpenKMS KB PageIndex Import`). It does **not** use `openkms-pipeline.yml` or `app_pipeline_jobs`.
+
+| Variable | Notes |
+|----------|--------|
+| `KB_PAGEINDEX_IMPORT_WORKER` | `github_actions` on Vercel (default); `spawn` for local dev |
+| `GITHUB_KB_PAGEINDEX_IMPORT_WORKFLOW` | Default `openkms-kb-pageindex-import.yml` |
+| `GITHUB_PIPELINE_TOKEN` / `GITHUB_PIPELINE_REPOSITORY` | Same PAT/repo as document pipeline (workflow dispatch) |
+
+Enable the workflow in GitHub **Actions** for this repo. After deploy, smoke test locally: `npm run verify:knowledge-bases` (backend must be running).
+
+See `docs/knowledge-bases.md` for API and data model.
+
 ## Database migrate
 
 Run once after first deploy (or in CI):
