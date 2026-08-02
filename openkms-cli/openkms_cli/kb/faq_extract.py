@@ -13,7 +13,7 @@ from openkms_cli.core.auth import try_api_request_auth
 from openkms_cli.core.settings import get_cli_settings
 from openkms_cli.kb.chunking import propagate_metadata
 from openkms_cli.kb.pageindex_import import _read_s3_text
-from openkms_cli.kb.rag_index import _build_job_error_message, _load_kb_config, _patch_job
+from openkms_cli.kb.rag_index import _load_kb_config, _patch_job
 from openkms_cli.pipeline.storage import get_s3_client
 
 console = Console(stderr=True)
@@ -29,6 +29,73 @@ def _apply_template(template: str, vars: dict[str, str]) -> str:
     for key, value in vars.items():
         out = out.replace(f"{{{key}}}", value)
     return out
+
+
+def _message_text(message: dict[str, Any]) -> str:
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(str(part.get("text", "")))
+        return "".join(parts).strip()
+    return ""
+
+
+def _parse_faq_pairs_payload(parsed: Any) -> list[dict[str, Any]]:
+    if isinstance(parsed, dict):
+        for key in ("faqs", "items", "questions", "data", "pairs"):
+            nested = parsed.get(key)
+            if isinstance(nested, list):
+                parsed = nested
+                break
+    if not isinstance(parsed, list):
+        raise RuntimeError("Extraction response must be a JSON array")
+
+    items: list[dict[str, str]] = []
+    for row in parsed:
+        if not isinstance(row, dict):
+            continue
+        question = str(row.get("question", row.get("q", ""))).strip()
+        answer = str(row.get("answer", row.get("a", ""))).strip()
+        if question and answer:
+            items.append({"question": question, "answer": answer})
+    return items
+
+
+def _parse_faq_pairs_from_text(raw: str) -> list[dict[str, str]]:
+    cleaned = raw.strip()
+    cleaned = re.sub(r"^```json\s*", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"^```\s*", "", cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        return _parse_faq_pairs_payload(json.loads(cleaned))
+    except json.JSONDecodeError:
+        start = cleaned.find("[")
+        end = cleaned.rfind("]")
+        if start >= 0 and end > start:
+            return _parse_faq_pairs_payload(json.loads(cleaned[start : end + 1]))
+        raise
+
+
+def _build_extract_job_error_message(
+    failure_notes: list[str],
+    *,
+    failed: int,
+    completed: int,
+) -> str | None:
+    if not failure_notes:
+        return None
+    summary = "; ".join(failure_notes[:8])
+    if len(failure_notes) > 8:
+        summary += f" (+{len(failure_notes) - 8} more)"
+    if failed and completed:
+        return f"{failed} of {failed + completed} document(s) failed to extract: {summary}"
+    if failed:
+        return f"All documents failed to extract: {summary}"
+    return summary
 
 
 def _chat_extract(
@@ -50,46 +117,73 @@ def _chat_extract(
 
     params = params_resp.json()
     url = f"{params['base_url'].rstrip('/')}/chat/completions"
-    resp = requests.post(
-        url,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {params['api_key']}",
+    messages: list[dict[str, str]] = [
+        {
+            "role": "system",
+            "content": (
+                "Extract FAQ pairs from the document. "
+                "Respond with a JSON array of objects using keys question and answer. "
+                "If the document is not already FAQ-formatted, infer useful Q&A from its content."
+            ),
         },
-        json={
+        {"role": "user", "content": prompt},
+    ]
+
+    last_raw = ""
+    for attempt in range(2):
+        body: dict[str, Any] = {
             "model": params["model_name"],
-            "messages": [
+            "messages": messages,
+            "temperature": 0.35 if attempt else 0.2,
+        }
+        if params.get("max_completion_tokens"):
+            body["max_completion_tokens"] = int(params["max_completion_tokens"])
+        elif params.get("max_tokens"):
+            body["max_tokens"] = int(params["max_tokens"])
+
+        resp = requests.post(
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {params['api_key']}",
+            },
+            json=body,
+            timeout=180,
+        )
+        if not resp.ok:
+            raise RuntimeError(f"chat {resp.status_code} {resp.text[:300]}")
+
+        data = resp.json()
+        message = (data.get("choices") or [{}])[0].get("message") or {}
+        last_raw = _message_text(message)
+        if not last_raw:
+            raise RuntimeError("Extraction model returned empty content")
+
+        try:
+            items = _parse_faq_pairs_from_text(last_raw)
+        except (json.JSONDecodeError, RuntimeError) as exc:
+            raise RuntimeError(f"Failed to parse extraction JSON: {exc}; raw={last_raw[:400]}") from exc
+
+        if items:
+            return items
+
+        if attempt == 0:
+            console.print("[yellow]Empty FAQ extraction response; retrying with stronger prompt[/yellow]")
+            messages = [
+                *messages,
+                {"role": "assistant", "content": last_raw},
                 {
-                    "role": "system",
-                    "content": "Extract FAQ pairs. Respond with valid JSON array only.",
+                    "role": "user",
+                    "content": (
+                        "Your previous response had no valid FAQ pairs. "
+                        "From the same document, extract at least 3 substantive question-and-answer "
+                        "pairs a reader might ask (scope, pricing, timeline, deliverables, requirements). "
+                        "Return a non-empty JSON array with question and answer keys only."
+                    ),
                 },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-        },
-        timeout=180,
-    )
-    if not resp.ok:
-        raise RuntimeError(f"chat {resp.status_code} {resp.text[:300]}")
+            ]
 
-    data = resp.json()
-    raw = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
-    raw = re.sub(r"^```json\s*", "", raw, flags=re.I)
-    raw = re.sub(r"^```\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    parsed = json.loads(raw)
-    if not isinstance(parsed, list):
-        raise RuntimeError("Extraction response must be a JSON array")
-
-    items: list[dict[str, str]] = []
-    for row in parsed:
-        if not isinstance(row, dict):
-            continue
-        question = str(row.get("question", "")).strip()
-        answer = str(row.get("answer", "")).strip()
-        if question and answer:
-            items.append({"question": question, "answer": answer})
-    return items
+    raise RuntimeError(f"No FAQ pairs extracted after retry; raw={last_raw[:400]}")
 
 
 def run_faq_extract(job_id: str, api_url: Optional[str] = None) -> None:
@@ -213,7 +307,7 @@ def run_faq_extract(job_id: str, api_url: Optional[str] = None) -> None:
                 progress.advance(task)
 
         final_status = "failed" if failed and completed == 0 else "completed"
-        error_message = _build_job_error_message(
+        error_message = _build_extract_job_error_message(
             failure_notes,
             failed=failed,
             completed=completed,

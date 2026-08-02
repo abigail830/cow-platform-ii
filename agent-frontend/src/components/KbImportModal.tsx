@@ -134,12 +134,17 @@ export function KbImportModal({
   }
 
   async function handleConfirm() {
+    if (selectionCount === 0) {
+      setError('Select at least one document.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
       const channelIds = [...selectedChannelIds];
       const docIds = [...selectedDocumentIds];
       await onConfirm({ channelIds, documentIds: docIds });
+      setSubmitting(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
       setSubmitting(false);

@@ -39,6 +39,7 @@ import {
   listKnowledgeBases,
   startKbPageIndexImport,
   startKbRagIndexImport,
+  toKbImportJobPublic,
   updateKnowledgeBase,
   type KnowledgeBaseType,
 } from '../services/knowledge-bases.ts';
@@ -700,7 +701,10 @@ knowledgeBases.post(
         createdBy: user?.id,
       });
       await spawnKbImportWorker(job.id);
-      return c.json({ job: { id: job.id, status: job.status }, document_count: job.documentIds.length }, 202);
+      return c.json(
+        { job: toKbImportJobPublic(job), document_count: job.documentIds.length },
+        202,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start extract';
       const status = message.includes('not found') ? 404 : 400;
@@ -735,7 +739,7 @@ knowledgeBases.post(
         createdBy: user?.id,
       });
       await spawnKbImportWorker(job.id);
-      return c.json({ job: { id: job.id, status: job.status }, faq_count: job.faqIds.length }, 202);
+      return c.json({ job: toKbImportJobPublic(job), faq_count: job.faqIds.length }, 202);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start FAQ index';
       const status = message.includes('not found') ? 404 : 400;

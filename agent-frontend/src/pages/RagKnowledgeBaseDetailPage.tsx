@@ -331,7 +331,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                   )}
                   <button
                     type="button"
-                    className="btn-secondary"
+                    className="btn-dark"
                     onClick={() => setSettingsOpen(true)}
                   >
                     <Settings {...iconProps({ size: 16 })} aria-hidden />

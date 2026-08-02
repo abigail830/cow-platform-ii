@@ -1597,9 +1597,26 @@ textarea {
 }
 
 .btn-primary:disabled,
-.btn-secondary:disabled {
+.btn-secondary:disabled,
+.btn-dark:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.btn-dark {
+  border: none;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-dark:hover:not(:disabled) {
+  background: #1e293b;
 }
 
 .btn-secondary {
@@ -4136,7 +4153,8 @@ textarea {
 }
 
 .kb-items-toolbar .btn-secondary,
-.kb-items-toolbar .btn-primary {
+.kb-items-toolbar .btn-primary,
+.kb-items-toolbar .btn-dark {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -4198,6 +4216,11 @@ textarea {
 .kb-detail-table-wrap {
   border: none;
   border-radius: 0;
+}
+
+.kb-detail-table th,
+.kb-detail-table td {
+  padding: 0.42rem 0.7rem;
 }
 
 .kb-detail-table tbody tr.kb-item-row {
@@ -4487,6 +4510,45 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.app-transient-notice {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  z-index: 1200;
+  transform: translateX(-50%);
+  max-width: min(92vw, 36rem);
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  animation: app-transient-notice-in 180ms ease-out;
+}
+
+.app-transient-notice-success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+.app-transient-notice-info {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+@keyframes app-transient-notice-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .kb-faq-detail-section {

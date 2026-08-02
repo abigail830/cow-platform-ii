@@ -30,10 +30,12 @@ import { KbFaqSettingsModal } from '../components/KbFaqSettingsModal.tsx';
 import { KbImportModal } from '../components/KbImportModal.tsx';
 import { KbItemDeleteConfirmModal } from '../components/KbItemDeleteConfirmModal.tsx';
 import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
+import { TransientNotice } from '../components/TransientNotice.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import { isKbImportJobActive, useKbImportJobPolling } from '../hooks/useKbImportJobPolling.ts';
+import { useTransientNotice } from '../hooks/useTransientNotice.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
 type FaqKnowledgeBaseDetailPageProps = {
@@ -123,6 +125,8 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   const [deleting, setDeleting] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
   const [indexing, setIndexing] = useState(false);
+  const [extractBusy, setExtractBusy] = useState(false);
+  const { notice: transientNotice, showNotice, clearNotice } = useTransientNotice(4500);
   const [embeddingModels, setEmbeddingModels] = useState<ModelConfig[]>([]);
   const [chatModels, setChatModels] = useState<ModelConfig[]>([]);
   const selectedFaqIdRef = useRef<string | null>(null);
@@ -133,6 +137,8 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   });
 
   const jobActive = isKbImportJobActive(activeJob);
+  const extractJobActive =
+    extractBusy || (jobActive && activeJob?.job_kind === 'faq_extract');
 
   const listIndexInProgress = useMemo(
     () =>
@@ -217,6 +223,23 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
     onRefresh: () => load({ silent: true }),
   });
 
+  useEffect(() => {
+    if (!activeJob) return;
+    if (activeJob.status === 'failed' && activeJob.error_message) {
+      clearNotice();
+      const label =
+        activeJob.job_kind === 'faq_extract'
+          ? 'FAQ extract failed'
+          : activeJob.job_kind === 'faq_index'
+            ? 'FAQ index failed'
+            : 'Background job failed';
+      setError(`${label}: ${activeJob.error_message}`);
+    } else if (activeJob.status === 'completed' && activeJob.job_kind === 'faq_extract') {
+      setError('');
+      showNotice('FAQ extract completed. New draft FAQs were added to the list.');
+    }
+  }, [activeJob?.id, activeJob?.status, activeJob?.error_message, activeJob?.job_kind, clearNotice, showNotice]);
+
   function toggleFaqSelection(faqId: string, checked: boolean) {
     setSelectedFaqIds((prev) => {
       const next = new Set(prev);
@@ -249,12 +272,31 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   }
 
   async function handleExtract(input: { channelIds: string[]; documentIds: string[] }) {
-    if (!knowledgeBaseId) return;
+    if (!knowledgeBaseId) {
+      throw new Error('Knowledge base id is missing');
+    }
+    setExtractBusy(true);
     setError('');
-    const result = await startKbFaqExtract(knowledgeBaseId, input);
-    setActiveJob(result.job);
-    setExtractOpen(false);
-    await load({ silent: true });
+    clearNotice();
+    try {
+      const result = await startKbFaqExtract(knowledgeBaseId, input);
+      setActiveJob(result.job);
+      setExtractOpen(false);
+      await load({ silent: true });
+    } finally {
+      setExtractBusy(false);
+    }
+  }
+
+  function openExtractModal() {
+    setError('');
+    clearNotice();
+    const extractionModelId = kb?.faq_settings?.extraction_model_config_id;
+    if (!extractionModelId) {
+      setError('Configure an extraction model in Settings (AI tab) before extracting from documents.');
+      return;
+    }
+    setExtractOpen(true);
   }
 
   async function handleBatchPublish() {
@@ -350,6 +392,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
 
   return (
     <main className="admin-page kb-page kb-detail-page">
+      <TransientNotice message={transientNotice} />
       <Link to="/knowledge/knowledge-bases" className="kb-back-link">← Knowledge bases</Link>
 
       {loading && !kb ? (
@@ -424,19 +467,29 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                       </button>
                     </>
                   )}
-                  <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(true)}>
+                  <button type="button" className="btn-dark" onClick={() => setSettingsOpen(true)}>
                     <Settings {...iconProps({ size: 16 })} aria-hidden />
                     Settings
                   </button>
                   {kb.capabilities.extract && (
                     <button
                       type="button"
-                      className="btn-secondary"
-                      disabled={!kb.is_configured || jobActive}
-                      title={!kb.is_configured ? 'Configure settings first' : undefined}
-                      onClick={() => setExtractOpen(true)}
+                      className="btn-primary"
+                      disabled={!kb.is_configured || jobActive || extractBusy}
+                      title={
+                        !kb.faq_settings?.extraction_model_config_id
+                          ? 'Configure an extraction model in Settings (AI tab)'
+                          : !kb.is_configured
+                            ? 'Configure embedding settings first'
+                            : undefined
+                      }
+                      onClick={openExtractModal}
                     >
-                      <Plus {...iconProps({ size: 16 })} aria-hidden />
+                      {extractJobActive ? (
+                        <Loader2 {...iconProps({ size: 16, className: 'icon-btn-spin' })} aria-hidden />
+                      ) : (
+                        <Plus {...iconProps({ size: 16 })} aria-hidden />
+                      )}
                       Extract from documents
                     </button>
                   )}

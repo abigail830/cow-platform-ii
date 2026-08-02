@@ -7,7 +7,7 @@ import {
 import type { ModelConfig } from '../api/models.ts';
 
 const DEFAULT_EXTRACTION_PROMPT =
-  'Extract FAQ pairs from the document markdown below. Return a JSON array of objects with "question" and "answer" fields. Only include substantive Q&A from the content.\n\nDocument: {document_name}\n\n{markdown}';
+  'Extract FAQ question-and-answer pairs from the document markdown below. The source may be a proposal, report, or manual — infer useful Q&A a reader might ask (scope, pricing, timeline, deliverables, requirements). Return a JSON array of objects with "question" and "answer" fields. Include at least 3 pairs when the document has enough substance.\n\nDocument: {document_name}\n\n{markdown}';
 
 const DEFAULT_POLISH_PROMPT =
   'Polish the following FAQ answer for clarity and professionalism. Keep the same language as the input. Return only the polished answer text.\n\nQuestion: {question}\n\nAnswer: {answer}';
