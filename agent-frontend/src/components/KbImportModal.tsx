@@ -38,6 +38,7 @@ function ChannelTreeNode({
       <label className="kb-import-row">
         <input
           type="checkbox"
+          className="brand-checkbox"
           checked={channelChecked}
           onChange={(e) => onToggleChannel(node.id, e.target.checked)}
         />
@@ -51,6 +52,7 @@ function ChannelTreeNode({
               <label className="kb-import-row kb-import-doc-row">
                 <input
                   type="checkbox"
+                  className="brand-checkbox"
                   checked={selectedDocumentIds.has(doc.id) || channelChecked}
                   disabled={channelChecked}
                   onChange={(e) => onToggleDocument(doc.id, e.target.checked)}

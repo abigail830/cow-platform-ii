@@ -3,6 +3,8 @@ import base64
 import struct
 from typing import Any
 
+from openkms_cli.kb.embedding_provider import embedding_supports_dimensions
+
 
 def generate_embeddings(
     texts: list[str],
@@ -24,6 +26,7 @@ def generate_embeddings(
 
     batch_size = 32
     all_embeddings: list[str] = []
+    supports_dimensions = embedding_supports_dimensions(model_config)
     for i in range(0, len(texts), batch_size):
         batch = texts[i : i + batch_size]
         kwargs: dict[str, Any] = {
@@ -31,9 +34,17 @@ def generate_embeddings(
             "input": batch,
             "encoding_format": "base64",
         }
-        if dimensions is not None:
+        if dimensions is not None and supports_dimensions:
             kwargs["dimensions"] = dimensions
-        response = client.embeddings.create(**kwargs)
+        try:
+            response = client.embeddings.create(**kwargs)
+        except Exception:
+            # DashScope and some providers only accept float vectors.
+            if kwargs.get("encoding_format") == "base64":
+                kwargs.pop("encoding_format", None)
+                response = client.embeddings.create(**kwargs)
+            else:
+                raise
         for item in response.data:
             emb = item.embedding
             if isinstance(emb, str):

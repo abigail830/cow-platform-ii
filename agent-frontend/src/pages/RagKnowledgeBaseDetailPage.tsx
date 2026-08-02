@@ -3,10 +3,12 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { Loader2, Plus, Settings, Trash2 } from 'lucide-react';
 import {
   deleteDocumentChunks,
+  fetchImportSources,
   getKbImportJob,
   getKnowledgeBase,
   listIndexedDocuments,
   startKbImport,
+  type ImportSources,
   type KbImportJob,
   type KbIndexedDocument,
   type KnowledgeBase,
@@ -21,6 +23,35 @@ import { hasPermission } from '../shared/permissions.ts';
 type RagKnowledgeBaseDetailPageProps = {
   initialKb?: KnowledgeBase;
 };
+
+type RagDisplayRow = {
+  document_id: string;
+  document_name: string;
+  channel_path: string;
+  chunk_count: number | null;
+  indexed_at: string | null;
+  status: 'indexed' | 'indexing' | 'failed';
+};
+
+function resolveDocMeta(
+  documentId: string,
+  sources: ImportSources | null,
+): { name: string; channelPath: string } {
+  if (!sources) return { name: documentId, channelPath: '' };
+  for (const channel of sources.channels) {
+    const doc = (sources.documents_by_channel[channel.id] ?? []).find((d) => d.id === documentId);
+    if (doc) {
+      return { name: doc.name, channelPath: channel.name };
+    }
+  }
+  return { name: documentId, channelPath: '' };
+}
+
+function ragStatusClass(status: RagDisplayRow['status']): string {
+  if (status === 'indexed') return 'kb-status-completed';
+  if (status === 'failed') return 'kb-status-failed';
+  return 'kb-status-pending';
+}
 
 export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetailPageProps) {
   const { knowledgeBaseId } = useParams<{ knowledgeBaseId: string }>();
@@ -41,15 +72,16 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   const [activeJob, setActiveJob] = useState<KbImportJob | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [embeddingModels, setEmbeddingModels] = useState<ModelConfig[]>([]);
+  const [importSources, setImportSources] = useState<ImportSources | null>(null);
 
   const importJobActive =
     activeJob !== null && activeJob.status !== 'completed' && activeJob.status !== 'failed';
 
   const canImport = Boolean(canWrite && kb?.capabilities.import);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!knowledgeBaseId) return;
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     setError('');
     try {
       const [kbRow, docResult] = await Promise.all([
@@ -67,12 +99,15 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
         setError(message);
       }
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [knowledgeBaseId]);
 
   useEffect(() => {
     void load();
+    void fetchImportSources()
+      .then(setImportSources)
+      .catch(() => setImportSources(null));
   }, [load]);
 
   useEffect(() => {
@@ -84,14 +119,24 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
 
   useEffect(() => {
     if (!activeJob || !knowledgeBaseId) return;
-    if (activeJob.status === 'completed' || activeJob.status === 'failed') return;
+
+    if (activeJob.status === 'completed') {
+      void load({ silent: true });
+      return;
+    }
+
+    if (activeJob.status === 'failed') {
+      setError(activeJob.error_message || 'Indexing failed');
+      void load({ silent: true });
+      return;
+    }
 
     const intervalId = window.setInterval(() => {
       void (async () => {
         try {
           const job = await getKbImportJob(knowledgeBaseId, activeJob.id);
           setActiveJob(job);
-          await load();
+          await load({ silent: true });
         } catch {
           /* ignore poll errors */
         }
@@ -101,12 +146,45 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
     return () => window.clearInterval(intervalId);
   }, [activeJob, knowledgeBaseId, load]);
 
+  const displayRows = useMemo((): RagDisplayRow[] => {
+    const indexedById = new Map(docs.map((doc) => [doc.document_id, doc]));
+    const rows: RagDisplayRow[] = docs.map((doc) => ({
+      document_id: doc.document_id,
+      document_name: doc.document_name,
+      channel_path: doc.channel_path,
+      chunk_count: doc.chunk_count,
+      indexed_at: doc.indexed_at,
+      status: 'indexed',
+    }));
+
+    for (const documentId of activeJob?.document_ids ?? []) {
+      if (indexedById.has(documentId)) continue;
+      const meta = resolveDocMeta(documentId, importSources);
+      rows.push({
+        document_id: documentId,
+        document_name: meta.name,
+        channel_path: meta.channelPath,
+        chunk_count: null,
+        indexed_at: null,
+        status:
+          activeJob?.status === 'failed'
+            ? 'failed'
+            : activeJob?.status === 'running' || activeJob?.status === 'pending'
+              ? 'indexing'
+              : 'failed',
+      });
+    }
+
+    return rows;
+  }, [docs, activeJob, importSources]);
+
   async function handleImport(input: { channelIds: string[]; documentIds: string[] }) {
     if (!knowledgeBaseId) return;
+    setError('');
     const result = await startKbImport(knowledgeBaseId, input);
     setActiveJob(result.job);
     setImportOpen(false);
-    await load();
+    await load({ silent: true });
   }
 
   async function handleDeleteChunks(documentId: string) {
@@ -115,7 +193,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
     setError('');
     try {
       await deleteDocumentChunks(knowledgeBaseId, documentId);
-      await load();
+      await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove indexed chunks');
     } finally {
@@ -150,6 +228,14 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
 
           {error && <p className="admin-error" role="alert">{error}</p>}
 
+          {importJobActive && activeJob && (
+            <div className="kb-import-progress" role="status">
+              <Loader2 {...iconProps({ size: 16, className: 'icon-btn-spin' })} aria-hidden />
+              Indexing: {activeJob.completed_count}/{activeJob.total_count} documents
+              {activeJob.failed_count > 0 ? ` (${activeJob.failed_count} failed)` : ''}
+            </div>
+          )}
+
           <section className="kb-items-section">
             <div className="kb-items-header">
               <h2 className="kb-section-title">Indexed documents ({total})</h2>
@@ -178,49 +264,61 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
             </div>
 
             <div className="admin-table-wrap kb-detail-table-wrap">
-              <table className="admin-table">
+              <table className="admin-table kb-detail-table">
                 <thead>
                   <tr>
                     <th>Document</th>
                     <th>Channel</th>
+                    <th className="kb-item-status-col">Status</th>
                     <th>Chunks</th>
                     <th>Indexed at</th>
                     {canWrite && <th className="kb-item-actions-col">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {docs.length === 0 ? (
+                  {displayRows.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={canWrite ? 5 : 4}
-                        className="admin-table-empty"
-                      >
+                      <td colSpan={canWrite ? 6 : 5} className="admin-table-empty">
                         &nbsp;
                       </td>
                     </tr>
                   ) : (
-                    docs.map((doc) => (
-                      <tr key={doc.document_id}>
-                        <td>{doc.document_name}</td>
-                        <td className="kb-path-cell">{doc.channel_path}</td>
-                        <td>{doc.chunk_count}</td>
-                        <td>{new Date(doc.indexed_at).toLocaleString()}</td>
+                    displayRows.map((row) => (
+                      <tr key={row.document_id}>
+                        <td>{row.document_name}</td>
+                        <td className="kb-path-cell">{row.channel_path}</td>
+                        <td className="kb-item-status-col">
+                          {row.status === 'indexing' ? (
+                            <span className="kb-item-status-loading">
+                              <Loader2 {...iconProps({ size: 14, className: 'icon-btn-spin' })} aria-hidden />
+                              indexing
+                            </span>
+                          ) : (
+                            <span className={`kb-status-badge ${ragStatusClass(row.status)}`}>
+                              {row.status}
+                            </span>
+                          )}
+                        </td>
+                        <td>{row.chunk_count ?? '—'}</td>
+                        <td>{row.indexed_at ? new Date(row.indexed_at).toLocaleString() : '—'}</td>
                         {canWrite && (
                           <td className="kb-item-actions-col">
-                            <button
-                              type="button"
-                              className="icon-btn danger"
-                              title="Remove indexed chunks"
-                              aria-label={`Remove chunks for ${doc.document_name}`}
-                              disabled={deletingDocId === doc.document_id || importJobActive}
-                              onClick={() => void handleDeleteChunks(doc.document_id)}
-                            >
-                              {deletingDocId === doc.document_id ? (
-                                <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
-                              ) : (
-                                <Trash2 {...iconProps()} />
-                              )}
-                            </button>
+                            {row.status === 'indexed' ? (
+                              <button
+                                type="button"
+                                className="icon-btn danger"
+                                title="Remove indexed chunks"
+                                aria-label={`Remove chunks for ${row.document_name}`}
+                                disabled={deletingDocId === row.document_id || importJobActive}
+                                onClick={() => void handleDeleteChunks(row.document_id)}
+                              >
+                                {deletingDocId === row.document_id ? (
+                                  <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                                ) : (
+                                  <Trash2 {...iconProps()} />
+                                )}
+                              </button>
+                            ) : null}
                           </td>
                         )}
                       </tr>

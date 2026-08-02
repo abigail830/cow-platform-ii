@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
 import { getKnowledgeBaseById } from '../../services/knowledge-bases.ts';
 import { resolveModelCliParams } from '../../services/model-cli-params.ts';
+import { embeddingSupportsDimensions } from '../../shared/embedding-provider.ts';
+import { getModelConfigById } from '../../shared/model-config-store.ts';
 
 const models = new Hono();
 
@@ -58,11 +60,17 @@ models.get('/kb-embedding-credentials', async (c) => {
       modelId: kb.embeddingModelConfigId,
       expectedApiType: 'embeddings',
     });
+    const modelRow = await getModelConfigById(kb.embeddingModelConfigId);
     return c.json({
       base_url: params.base_url,
       model_name: params.model_name,
       api_key: params.api_key,
       dimensions: kb.embeddingDimensions,
+      supports_dimensions: embeddingSupportsDimensions({
+        modelId: params.model_name,
+        baseUrl: params.base_url,
+        extraConfig: modelRow?.extraConfig,
+      }),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to resolve embedding model';

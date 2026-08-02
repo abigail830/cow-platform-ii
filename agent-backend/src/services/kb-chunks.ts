@@ -135,12 +135,16 @@ export async function listIndexedDocuments(
     const doc = await getDocumentById(row.documentId);
     if (!doc) continue;
     const channelPath = buildChannelPath(doc.channelId, channelRows);
+    const indexedAt =
+      row.indexedAt instanceof Date
+        ? row.indexedAt.toISOString()
+        : new Date(row.indexedAt as string).toISOString();
     items.push({
       document_id: row.documentId,
       document_name: doc.name,
       channel_path: channelPath,
       chunk_count: row.chunkCount,
-      indexed_at: row.indexedAt.toISOString(),
+      indexed_at: indexedAt,
       status: 'indexed' as const,
     });
   }

@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE,
   DEFAULT_KB_PAGEINDEX_IMPORT_WORKFLOW_FILE,
+  DEFAULT_KB_RAG_INDEX_COMMAND_TEMPLATE,
+  RAG_KB_PIPELINE_NAME,
 } from '../shared/pipeline-catalog.ts';
 import {
   buildWorkerCliArgsFromTemplate,
@@ -48,11 +50,11 @@ function cliSpawnEnv(apiUrl: string): NodeJS.ProcessEnv {
 
 async function buildKbImportCliArgs(jobId: string): Promise<string[]> {
   const { pipeline } = await resolveKbImportPipelineForJob(jobId);
-  return buildWorkerCliArgsFromTemplate(
-    pipeline.commandTemplate,
-    DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE,
-    { job_id: jobId },
-  );
+  const fallback =
+    pipeline.pipelineName === RAG_KB_PIPELINE_NAME
+      ? DEFAULT_KB_RAG_INDEX_COMMAND_TEMPLATE
+      : DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE;
+  return buildWorkerCliArgsFromTemplate(pipeline.commandTemplate, fallback, { job_id: jobId });
 }
 
 function spawnKbImportCliLocal(jobId: string, cliArgs: string[], apiUrl?: string): void {
