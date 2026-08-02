@@ -18,6 +18,7 @@ type KbImportModalProps = {
 function ChannelTreeNode({
   node,
   depth,
+  ancestorChannelSelected,
   selectedChannelIds,
   selectedDocumentIds,
   documentsByChannel,
@@ -26,6 +27,7 @@ function ChannelTreeNode({
 }: {
   node: ImportSourceChannelNode;
   depth: number;
+  ancestorChannelSelected: boolean;
   selectedChannelIds: Set<string>;
   selectedDocumentIds: Set<string>;
   documentsByChannel: Record<string, ImportSourceDocument[]>;
@@ -33,15 +35,19 @@ function ChannelTreeNode({
   onToggleDocument: (id: string, checked: boolean) => void;
 }) {
   const docs = documentsByChannel[node.id] ?? [];
-  const channelChecked = selectedChannelIds.has(node.id);
+  const channelDirectlySelected = selectedChannelIds.has(node.id);
+  const channelEffectivelySelected = channelDirectlySelected || ancestorChannelSelected;
 
   return (
     <div className="kb-import-channel" style={{ paddingLeft: `${depth * 12}px` }}>
-      <label className="kb-import-row">
+      <label
+        className={`kb-import-row${channelEffectivelySelected && !channelDirectlySelected ? ' kb-import-row-inherited' : ''}`}
+      >
         <input
           type="checkbox"
           className="brand-checkbox"
-          checked={channelChecked}
+          checked={channelEffectivelySelected}
+          disabled={ancestorChannelSelected}
           onChange={(e) => onToggleChannel(node.id, e.target.checked)}
         />
         <span className="kb-import-channel-name">{node.name}</span>
@@ -51,12 +57,14 @@ function ChannelTreeNode({
         <ul className="kb-import-doc-list">
           {docs.map((doc) => (
             <li key={doc.id}>
-              <label className="kb-import-row kb-import-doc-row">
+              <label
+                className={`kb-import-row kb-import-doc-row${channelEffectivelySelected && !selectedDocumentIds.has(doc.id) ? ' kb-import-row-inherited' : ''}`}
+              >
                 <input
                   type="checkbox"
                   className="brand-checkbox"
-                  checked={selectedDocumentIds.has(doc.id) || channelChecked}
-                  disabled={channelChecked}
+                  checked={selectedDocumentIds.has(doc.id) || channelEffectivelySelected}
+                  disabled={channelEffectivelySelected}
                   onChange={(e) => onToggleDocument(doc.id, e.target.checked)}
                 />
                 <span>{doc.name}</span>
@@ -71,6 +79,7 @@ function ChannelTreeNode({
           key={child.id}
           node={child}
           depth={depth + 1}
+          ancestorChannelSelected={channelEffectivelySelected}
           selectedChannelIds={selectedChannelIds}
           selectedDocumentIds={selectedDocumentIds}
           documentsByChannel={documentsByChannel}
@@ -189,6 +198,7 @@ export function KbImportModal({
                 key={node.id}
                 node={node}
                 depth={0}
+                ancestorChannelSelected={false}
                 selectedChannelIds={selectedChannelIds}
                 selectedDocumentIds={selectedDocumentIds}
                 documentsByChannel={documentsByChannel}

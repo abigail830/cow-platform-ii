@@ -2465,7 +2465,7 @@ textarea {
 .channel-tree-row {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.1rem;
   border-radius: 8px;
 }
 
@@ -2500,9 +2500,17 @@ textarea {
 
 .channel-tree-actions {
   display: inline-flex;
-  gap: 0.1rem;
+  gap: 0;
+  margin-left: -0.1rem;
+  flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.15s ease;
+}
+
+.channel-tree-actions .icon-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
 }
 
 .channel-tree-row:hover .channel-tree-actions,
@@ -2705,11 +2713,6 @@ textarea {
   align-items: center;
   gap: 0.5rem;
   font-weight: 500;
-}
-
-.channel-auto-start-field input[type='checkbox'] {
-  width: 1rem;
-  height: 1rem;
 }
 
 .pipeline-command-cell {
@@ -4495,6 +4498,10 @@ textarea {
 
 .kb-import-doc-row {
   padding: 0.15rem 0;
+}
+
+.kb-import-row-inherited {
+  color: #64748b;
 }
 
 .kb-import-selection {

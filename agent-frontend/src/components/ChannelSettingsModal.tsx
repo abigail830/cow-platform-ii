@@ -211,6 +211,7 @@ export function ChannelSettingsModal({
                       <span className="checkbox-row">
                         <input
                           type="checkbox"
+                          className="brand-checkbox"
                           checked={autoStartPipeline}
                           onChange={(event) => setAutoStartPipeline(event.target.checked)}
                         />
