@@ -5,7 +5,6 @@ import {
   deleteModelConfig,
   listModelConfigs,
   MODEL_API_TYPE_LABELS,
-  setDefaultModelConfig,
   updateModelConfig,
   type ModelApiType,
   type ModelConfig,
@@ -24,7 +23,7 @@ const API_TYPE_FILTERS: Array<{ id: 'all' | ModelApiType; label: string }> = [
   { id: 'chat-completions', label: 'Chat completions' },
   { id: 'embeddings', label: 'Embeddings' },
   { id: 'rerank', label: 'Rerank' },
-  { id: 'vlm', label: 'Vision language (VLM)' },
+  { id: 'vlm', label: 'VLM' },
   { id: 'image-generation', label: 'Image generation' },
   { id: 'video-generation', label: 'Video generation' },
 ];
@@ -79,15 +78,6 @@ export function ModelsConfigPage() {
       await loadModels();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete');
-    }
-  }
-
-  async function handleSetDefault(model: ModelConfig) {
-    try {
-      await setDefaultModelConfig(model.id);
-      await loadModels();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to set default');
     }
   }
 
@@ -212,9 +202,7 @@ export function ModelsConfigPage() {
                       {model.isDefault ? (
                         <span className="default-badge">Default</span>
                       ) : (
-                        <button type="button" className="btn-link" onClick={() => void handleSetDefault(model)}>
-                          Set as default
-                        </button>
+                        <span className="admin-muted">—</span>
                       )}
                     </td>
                     <td className="mono-cell">{model.baseUrl ?? '—'}</td>

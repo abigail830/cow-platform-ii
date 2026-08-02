@@ -17,7 +17,7 @@ export const MODEL_API_TYPE_LABELS: Record<ModelApiType, string> = {
   'chat-completions': 'Chat completions',
   embeddings: 'Embeddings',
   rerank: 'Rerank',
-  vlm: 'Vision language (VLM)',
+  vlm: 'VLM',
   'image-generation': 'Image generation',
   'video-generation': 'Video generation',
 };
