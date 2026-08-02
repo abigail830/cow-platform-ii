@@ -7,7 +7,7 @@ import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
 import { routeParam } from '../http/route-param.ts';
 import { spawnKbPageIndexImportWorker } from '../services/kb-pageindex-import-runner.ts';
-import { deleteKbChunksForDocument, listIndexedDocuments } from '../services/kb-chunks.ts';
+import { deleteKbChunksForDocument, listIndexedDocuments, listKbChunksForDocument } from '../services/kb-chunks.ts';
 import {
   createKnowledgeBase,
   deleteKnowledgeBase,
@@ -202,6 +202,40 @@ knowledgeBases.get(
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to list indexed documents';
       return c.json({ error: message }, 400);
+    }
+  },
+);
+
+knowledgeBases.get(
+  '/:id/documents/:documentId/chunks',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    const documentId = routeParam(c, 'documentId');
+    if (!id || !documentId) {
+      return c.json({ error: 'Knowledge base id and document id are required' }, 400);
+    }
+
+    const kb = await getKnowledgeBaseById(id);
+    if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+    if (kb.type !== 'rag') {
+      return c.json({ error: 'Only RAG knowledge bases have indexed chunks' }, 400);
+    }
+
+    const offset = Number(c.req.query('offset') ?? 0);
+    const limit = Number(c.req.query('limit') ?? 100);
+
+    try {
+      const result = await listKbChunksForDocument(id, documentId, { offset, limit });
+      return c.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to list document chunks';
+      const status = message === 'Knowledge base not found' || message === 'Document not found' ? 404 : 400;
+      return c.json({ error: message }, status);
     }
   },
 );

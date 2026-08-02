@@ -45,6 +45,26 @@ export type KbIndexedDocument = {
   status: 'indexed';
 };
 
+export type KbChunk = {
+  id: string;
+  chunk_index: number;
+  content: string;
+  chunk_metadata: Record<string, unknown> | null;
+  doc_metadata: Record<string, unknown> | null;
+  content_hash: string | null;
+  indexed_at: string;
+};
+
+export type KbDocumentChunks = {
+  document_id: string;
+  document_name: string;
+  channel_path: string;
+  chunk_count: number;
+  indexed_at: string | null;
+  items: KbChunk[];
+  total: number;
+};
+
 export type KbItem = {
   id: string;
   knowledge_base_id: string;
@@ -241,6 +261,38 @@ export async function listIndexedDocuments(
     `/api/knowledge-bases/${knowledgeBaseId}/indexed-documents${qs ? `?${qs}` : ''}`,
   );
   return data as { items: KbIndexedDocument[]; total: number };
+}
+
+/** Paginate indexed-documents until all document ids are collected. */
+export async function listAllIndexedDocumentIds(knowledgeBaseId: string): Promise<string[]> {
+  const pageSize = 100;
+  const ids: string[] = [];
+  let offset = 0;
+  let total = 0;
+
+  do {
+    const page = await listIndexedDocuments(knowledgeBaseId, { offset, limit: pageSize });
+    total = page.total;
+    ids.push(...page.items.map((item) => item.document_id));
+    offset += pageSize;
+  } while (offset < total);
+
+  return ids;
+}
+
+export async function listDocumentChunks(
+  knowledgeBaseId: string,
+  documentId: string,
+  options?: { offset?: number; limit?: number },
+): Promise<KbDocumentChunks> {
+  const params = new URLSearchParams();
+  if (options?.offset != null) params.set('offset', String(options.offset));
+  if (options?.limit != null) params.set('limit', String(options.limit));
+  const qs = params.toString();
+  const data = await authFetch(
+    `/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/chunks${qs ? `?${qs}` : ''}`,
+  );
+  return data as KbDocumentChunks;
 }
 
 export async function deleteDocumentChunks(

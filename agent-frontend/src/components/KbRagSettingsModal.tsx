@@ -46,6 +46,8 @@ export function KbRagSettingsModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const showChunkSizeFields = chunkStrategy === 'fixed_size';
+
   useEffect(() => {
     setEmbeddingModelId(resolveEmbeddingModelId(kb.embedding_model_config_id, embeddingModels));
     setEmbeddingDimensions(kb.embedding_dimensions ?? 1024);
@@ -72,11 +74,14 @@ export function KbRagSettingsModal({
         description: kb.description,
         embedding_model_config_id: embeddingModelId || null,
         embedding_dimensions: embeddingDimensions,
-        chunk_config: {
-          strategy: chunkStrategy,
-          chunk_size: chunkSize,
-          chunk_overlap: chunkOverlap,
-        },
+        chunk_config:
+          chunkStrategy === 'fixed_size'
+            ? {
+                strategy: chunkStrategy,
+                chunk_size: chunkSize,
+                chunk_overlap: chunkOverlap,
+              }
+            : { strategy: chunkStrategy },
         metadata_keys: metadataKeys,
       });
       onSaved(updated);
@@ -144,28 +149,32 @@ export function KbRagSettingsModal({
               ))}
             </select>
           </label>
-          <label className="form-field">
-            <span>Chunk size</span>
-            <input
-              type="number"
-              min={100}
-              max={100000}
-              value={chunkSize}
-              onChange={(e) => setChunkSize(Number(e.target.value))}
-              required
-            />
-          </label>
-          <label className="form-field">
-            <span>Chunk overlap</span>
-            <input
-              type="number"
-              min={0}
-              max={10000}
-              value={chunkOverlap}
-              onChange={(e) => setChunkOverlap(Number(e.target.value))}
-              required
-            />
-          </label>
+          {showChunkSizeFields ? (
+            <>
+              <label className="form-field">
+                <span>Chunk size</span>
+                <input
+                  type="number"
+                  min={100}
+                  max={100000}
+                  value={chunkSize}
+                  onChange={(e) => setChunkSize(Number(e.target.value))}
+                  required
+                />
+              </label>
+              <label className="form-field">
+                <span>Chunk overlap</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={10000}
+                  value={chunkOverlap}
+                  onChange={(e) => setChunkOverlap(Number(e.target.value))}
+                  required
+                />
+              </label>
+            </>
+          ) : null}
           <label className="form-field form-field-wide">
             <span>Metadata keys (comma-separated)</span>
             <input

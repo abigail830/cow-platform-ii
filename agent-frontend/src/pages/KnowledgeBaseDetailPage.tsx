@@ -355,15 +355,16 @@ export function KnowledgeBaseDetailPage() {
                     <tr>
                       {canImport && <th className="kb-item-select-col" aria-hidden />}
                       <th>Document</th>
-                      <th>Path</th>
+                      <th>Channel</th>
                       <th className="kb-item-status-col">Status</th>
                       <th>Imported</th>
                       <th className="kb-item-actions-col">Actions</th>
+                      <th className="kb-item-detail-hint-col" aria-hidden />
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td colSpan={canImport ? 6 : 5} className="admin-table-empty">
+                      <td colSpan={canImport ? 7 : 6} className="admin-table-empty">
                         &nbsp;
                       </td>
                     </tr>
@@ -397,10 +398,11 @@ export function KnowledgeBaseDetailPage() {
                             </th>
                           )}
                           <th>Document</th>
-                          <th>Path</th>
+                          <th>Channel</th>
                           <th className="kb-item-status-col">Status</th>
                           <th>Imported</th>
                           <th className="kb-item-actions-col">Actions</th>
+                          <th className="kb-item-detail-hint-col" aria-hidden />
                         </tr>
                       </thead>
                       <tbody>
@@ -462,16 +464,18 @@ export function KnowledgeBaseDetailPage() {
                                       </button>
                                     </>
                                   )}
-                                  <button
-                                    type="button"
-                                    className="icon-btn"
-                                    title="View detail"
-                                    aria-label={`View detail for ${item.document_name}`}
-                                    onClick={() => setSelectedItemId(item.id)}
-                                  >
-                                    <ChevronRight {...iconProps()} />
-                                  </button>
                                 </div>
+                              </td>
+                              <td className="kb-item-detail-hint-col" onClick={stopRowAction}>
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  title="View detail"
+                                  aria-label={`View detail for ${item.document_name}`}
+                                  onClick={() => setSelectedItemId(item.id)}
+                                >
+                                  <ChevronRight {...iconProps()} />
+                                </button>
                               </td>
                             </tr>
                           );
