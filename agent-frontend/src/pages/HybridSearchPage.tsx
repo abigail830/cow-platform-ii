@@ -15,6 +15,7 @@ import {
 import { listModelConfigs } from '../api/models.ts';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { HybridSearchKbMultiSelect } from '../components/HybridSearchKbMultiSelect.tsx';
+import { Markdown } from '../chat/Markdown.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
@@ -102,10 +103,40 @@ function SettingsNumberRow({
   );
 }
 
+function RecallScores({ debug }: { debug?: HybridSearchResult['retrieval_debug'] }) {
+  return (
+    <div className="hybrid-search-result-recall-scores" aria-label="Retrieval scores">
+      <span className="hybrid-search-recall-cell">
+        <span className="hybrid-search-recall-label">dense</span>
+        <span className="hybrid-search-recall-value">{formatScore(debug?.dense_score)}</span>
+      </span>
+      <span className="hybrid-search-recall-sep" aria-hidden>
+        ·
+      </span>
+      <span className="hybrid-search-recall-cell">
+        <span className="hybrid-search-recall-label">lexical</span>
+        <span className="hybrid-search-recall-value">{formatScore(debug?.lexical_score)}</span>
+      </span>
+      <span className="hybrid-search-recall-sep" aria-hidden>
+        ·
+      </span>
+      <span className="hybrid-search-recall-cell">
+        <span className="hybrid-search-recall-label">rrf</span>
+        <span className="hybrid-search-recall-value">{formatScore(debug?.rrf_score)}</span>
+      </span>
+    </div>
+  );
+}
+
 function ResultCard({ item }: { item: HybridSearchResult }) {
   const [expanded, setExpanded] = useState(false);
   const debug = item.retrieval_debug;
-  const denseScore = debug?.dense_score;
+  const sourceLine = [
+    item.source_name,
+    item.chunk_index != null ? `chunk #${item.chunk_index}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <article className={`hybrid-search-result-card${expanded ? ' is-expanded' : ''}`}>
@@ -115,8 +146,8 @@ function ResultCard({ item }: { item: HybridSearchResult }) {
         aria-expanded={expanded}
         onClick={() => setExpanded((current) => !current)}
       >
-        <div className="hybrid-search-result-summary-main">
-          <div className="hybrid-search-result-badges">
+        <div className="hybrid-search-result-summary-left">
+          <div className="hybrid-search-result-summary-line1">
             <span
               className={`kb-status-badge hybrid-search-source-badge hybrid-search-source-badge--${item.source_type}`}
             >
@@ -124,18 +155,11 @@ function ResultCard({ item }: { item: HybridSearchResult }) {
             </span>
             <span className="hybrid-search-result-kb">{item.knowledge_base_name}</span>
           </div>
-          <div className="hybrid-search-result-meta">
-            {item.source_name ? (
-              <span className="hybrid-search-result-source">
-                {item.source_name}
-                {item.chunk_index != null ? ` · chunk #${item.chunk_index}` : ''}
-              </span>
-            ) : null}
-            <span className="hybrid-search-result-dense">
-              dense {formatScore(denseScore)}
-            </span>
-          </div>
+          {sourceLine ? (
+            <div className="hybrid-search-result-summary-line2">{sourceLine}</div>
+          ) : null}
         </div>
+        <RecallScores debug={debug} />
         <div className="hybrid-search-result-summary-side">
           <strong className="hybrid-search-result-score" title="Final score">
             {formatScore(item.score)}
@@ -148,13 +172,9 @@ function ResultCard({ item }: { item: HybridSearchResult }) {
       </button>
       {expanded ? (
         <div className="hybrid-search-result-body">
-          <pre className="hybrid-search-result-content">{item.content}</pre>
-          {debug ? (
-            <p className="hybrid-search-result-debug admin-muted">
-              dense {formatScore(debug.dense_score)} · lexical {formatScore(debug.lexical_score)} · rrf{' '}
-              {formatScore(debug.rrf_score)} · rerank {formatScore(debug.rerank_score)}
-            </p>
-          ) : null}
+          <div className="kb-item-markdown hybrid-search-result-markdown">
+            <Markdown content={item.content} />
+          </div>
         </div>
       ) : null}
     </article>
