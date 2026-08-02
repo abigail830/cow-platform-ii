@@ -9,16 +9,40 @@ export type KnowledgeBaseCapabilities = {
   index: boolean;
 };
 
+export type KbChunkConfig = {
+  strategy?: 'markdown_header' | 'fixed_size' | 'paragraph';
+  chunk_size?: number;
+  chunk_overlap?: number;
+};
+
 export type KnowledgeBase = {
   id: string;
   name: string;
   description: string | null;
   type: KnowledgeBaseType;
+  pipeline_id: string | null;
+  pipeline_name: string | null;
+  embedding_model_config_id?: string | null;
+  embedding_model_name?: string | null;
+  embedding_dimensions?: number;
+  chunk_config?: KbChunkConfig;
+  metadata_keys?: string[];
+  is_configured?: boolean;
+  chunk_count?: number;
   created_by: string | null;
   created_at: string;
   updated_at: string;
   capabilities: KnowledgeBaseCapabilities;
   item_count?: number;
+};
+
+export type KbIndexedDocument = {
+  document_id: string;
+  document_name: string;
+  channel_path: string;
+  chunk_count: number;
+  indexed_at: string;
+  status: 'indexed';
 };
 
 export type KbItem = {
@@ -112,14 +136,29 @@ export async function createKnowledgeBase(input: {
 
 export async function updateKnowledgeBase(
   id: string,
-  input: { name: string; description?: string | null },
+  input: {
+    name?: string;
+    description?: string | null;
+    embedding_model_config_id?: string | null;
+    embedding_dimensions?: number;
+    chunk_config?: KbChunkConfig;
+    metadata_keys?: string[];
+  },
 ): Promise<KnowledgeBase> {
   const data = await authFetch(`/api/knowledge-bases/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: input.name,
-      description: input.description ?? null,
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.embedding_model_config_id !== undefined
+        ? { embedding_model_config_id: input.embedding_model_config_id }
+        : {}),
+      ...(input.embedding_dimensions !== undefined
+        ? { embedding_dimensions: input.embedding_dimensions }
+        : {}),
+      ...(input.chunk_config !== undefined ? { chunk_config: input.chunk_config } : {}),
+      ...(input.metadata_keys !== undefined ? { metadata_keys: input.metadata_keys } : {}),
     }),
   });
   return data as KnowledgeBase;
@@ -188,6 +227,31 @@ export async function startKbImport(
 export async function getKbImportJob(knowledgeBaseId: string, jobId: string): Promise<KbImportJob> {
   const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/import-jobs/${jobId}`);
   return data as KbImportJob;
+}
+
+export async function listIndexedDocuments(
+  knowledgeBaseId: string,
+  options?: { offset?: number; limit?: number },
+): Promise<{ items: KbIndexedDocument[]; total: number }> {
+  const params = new URLSearchParams();
+  if (options?.offset != null) params.set('offset', String(options.offset));
+  if (options?.limit != null) params.set('limit', String(options.limit));
+  const qs = params.toString();
+  const data = await authFetch(
+    `/api/knowledge-bases/${knowledgeBaseId}/indexed-documents${qs ? `?${qs}` : ''}`,
+  );
+  return data as { items: KbIndexedDocument[]; total: number };
+}
+
+export async function deleteDocumentChunks(
+  knowledgeBaseId: string,
+  documentId: string,
+): Promise<number> {
+  const data = await authFetch(
+    `/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/chunks`,
+    { method: 'DELETE' },
+  );
+  return (data.deleted as number) ?? 0;
 }
 
 export type ImportSourceChannelNode = ImportSourceChannel & { children: ImportSourceChannelNode[] };

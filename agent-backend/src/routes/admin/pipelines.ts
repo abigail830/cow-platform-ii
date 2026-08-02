@@ -10,7 +10,6 @@ import {
   listPipelineConfigs,
   updatePipelineConfig,
 } from '../../shared/pipeline-config-store.ts';
-import { listSystemPipelineTemplates } from '../../shared/pipeline-catalog.ts';
 
 const pipelines = new Hono();
 
@@ -25,8 +24,7 @@ pipelines.get(
     const page = Math.max(Number(c.req.query('page') ?? 1), 1);
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 25), 1), 100);
     const result = await listPipelineConfigs({ search, enabledOnly, page, limit });
-    const systemPipelines = listSystemPipelineTemplates(search);
-    return c.json({ ...result, system_pipelines: systemPipelines, page, limit });
+    return c.json({ ...result, page, limit });
   },
 );
 
@@ -52,6 +50,7 @@ pipelines.post(
       description?: string | null;
       pipelineName?: string;
       commandTemplate?: string;
+      workflowFile?: string | null;
       modelConfigId?: string | null;
       isEnabled?: boolean;
     }>();
@@ -66,6 +65,7 @@ pipelines.post(
         description: body.description,
         pipelineName: body.pipelineName,
         commandTemplate: body.commandTemplate,
+        workflowFile: body.workflowFile,
         modelConfigId: body.modelConfigId,
         isEnabled: body.isEnabled,
       });
@@ -85,6 +85,7 @@ pipelines.patch(
       description?: string | null;
       pipelineName?: string;
       commandTemplate?: string;
+      workflowFile?: string | null;
       modelConfigId?: string | null;
       isEnabled?: boolean;
     }>();

@@ -148,7 +148,7 @@ export function KnowledgeBasesListPage() {
       <header className="admin-header">
         <AdminPageTitle main={PAGE.titleMain} accent={PAGE.titleAccent} />
         <AdminPageDescription>
-          Create PageIndex knowledge bases and import parsed documents from channels.
+          Create PageIndex or RAG knowledge bases and import parsed documents from channels.
         </AdminPageDescription>
       </header>
 
@@ -261,31 +261,38 @@ export function KnowledgeBasesListPage() {
                     <label className="kb-type-option">
                       <input
                         type="radio"
+                        className="brand-radio"
                         name="kb-type"
                         value="page_index"
                         checked={type === 'page_index'}
                         disabled={editingKb !== null}
                         onChange={() => setType('page_index')}
                       />
-                      <span>PageIndex</span>
+                      <span className="kb-type-option-text">
+                        PageIndex
+                        <span className="admin-form-hint kb-type-pipeline-hint">
+                          — <strong>PageIndex KB Import</strong> pipeline
+                        </span>
+                      </span>
                     </label>
                     <label className="kb-type-option">
                       <input
                         type="radio"
+                        className="brand-radio"
                         name="kb-type"
                         value="rag"
                         checked={type === 'rag'}
                         disabled={editingKb !== null}
                         onChange={() => setType('rag')}
                       />
-                      <span>RAG (coming soon)</span>
+                      <span className="kb-type-option-text">
+                        RAG
+                        <span className="admin-form-hint kb-type-pipeline-hint">
+                          — <strong>RAG KB Index</strong> pipeline · embedding in Settings
+                        </span>
+                      </span>
                     </label>
                   </div>
-                  {(type === 'page_index' || editingKb?.type === 'page_index') && (
-                    <p className="admin-form-hint kb-type-pipeline-hint">
-                      Uses built-in <strong>PageIndex KB Import</strong> (see Pipelines).
-                    </p>
-                  )}
                 </div>
               </div>
               <div className="modal-actions">

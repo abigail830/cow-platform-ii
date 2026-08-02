@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
+import { getKnowledgeBaseById } from '../../services/knowledge-bases.ts';
 import { resolveModelCliParams } from '../../services/model-cli-params.ts';
 
 const models = new Hono();
@@ -35,6 +36,36 @@ models.get('/document-parse-defaults', async (c) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to resolve model';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status);
+  }
+});
+
+models.get('/kb-embedding-credentials', async (c) => {
+  const knowledgeBaseId = c.req.query('knowledge_base_id')?.trim();
+  if (!knowledgeBaseId) {
+    return c.json({ error: 'knowledge_base_id is required' }, 400);
+  }
+
+  const kb = await getKnowledgeBaseById(knowledgeBaseId);
+  if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+  if (!kb.embeddingModelConfigId) {
+    return c.json({ error: 'Knowledge base has no embedding model configured' }, 400);
+  }
+
+  try {
+    const params = await resolveModelCliParams({
+      modelId: kb.embeddingModelConfigId,
+      expectedApiType: 'embeddings',
+    });
+    return c.json({
+      base_url: params.base_url,
+      model_name: params.model_name,
+      api_key: params.api_key,
+      dimensions: kb.embeddingDimensions,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to resolve embedding model';
     const status = message.includes('not found') ? 404 : 400;
     return c.json({ error: message }, status);
   }

@@ -155,6 +155,20 @@
       "when": 1785178000000,
       "tag": "0021_knowledge_bases",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785179000000,
+      "tag": "0022_kb_pipeline_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785180000000,
+      "tag": "0023_rag_kb_index",
+      "breakpoints": true
     }
   ]
 }

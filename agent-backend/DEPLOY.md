@@ -78,7 +78,7 @@ Do **not** set `PIPELINE_WORKER=spawn` on Vercel.
 
 ## KB PageIndex import (isolated from document parse)
 
-Knowledge base import uses **separate** jobs (`app_kb_import_jobs`), CLI (`openkms-cli kb pageindex-import`), and GHA workflow **`openkms-kb-pageindex-import.yml`** (`OpenKMS KB PageIndex Import`). It does **not** use `openkms-pipeline.yml` or `app_pipeline_jobs`.
+Knowledge base import uses **separate** jobs (`app_kb_import_jobs`) and GHA workflow from the linked pipeline row (`workflow_file`, default **`openkms-kb-pageindex-import.yml`**). CLI args come from `app_pipeline_configs.command_template` on the KB’s `pipeline_id` (PageIndex KBs auto-link to system `kb-pageindex-import` at creation). It does **not** use `openkms-pipeline.yml` or `app_pipeline_jobs`.
 
 | Variable | Notes |
 |----------|--------|

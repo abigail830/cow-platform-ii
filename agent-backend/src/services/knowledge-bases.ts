@@ -2,11 +2,13 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   appDocumentChannels,
   appDocuments,
+  appKbChunks,
   appKbImportJobs,
   appKbItems,
   appKnowledgeBases,
   db,
   type KnowledgeBaseType,
+  type KbChunkConfig,
   type KbImportJobStatus,
   type KbItemImportStatus,
 } from '../db/index.ts';
@@ -17,6 +19,10 @@ import {
   KB_IMPORT_MAX_MARKDOWN_BYTES,
   KB_IMPORT_MAX_PARSING_RESULT_BYTES,
 } from '../shared/kb-import-limits.ts';
+import { resolveDefaultPipelineIdForKbType } from '../shared/kb-pipeline-binding.ts';
+import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
+import { getModelConfigById } from '../shared/model-config-store.ts';
+import { countIndexedDocuments, countKbChunks } from './kb-chunks.ts';
 
 export type KnowledgeBaseRow = typeof appKnowledgeBases.$inferSelect;
 export type KbItemRow = typeof appKbItems.$inferSelect;
@@ -26,15 +32,41 @@ function kbCapabilities(type: string) {
   if (type === 'page_index') {
     return { import: true, index: false };
   }
+  if (type === 'rag') {
+    return { import: true, index: true };
+  }
   return { import: false, index: false };
 }
 
-function toKnowledgeBasePublic(row: KnowledgeBaseRow, itemCount?: number) {
+function isKbConfigured(row: KnowledgeBaseRow): boolean {
+  if (row.type !== 'rag') return true;
+  return row.embeddingModelConfigId != null;
+}
+
+function toKnowledgeBasePublic(
+  row: KnowledgeBaseRow,
+  options?: {
+    itemCount?: number;
+    pipelineName?: string | null;
+    embeddingModelName?: string | null;
+    chunkCount?: number;
+  },
+) {
+  const itemCount = options?.itemCount;
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     type: row.type,
+    pipeline_id: row.pipelineId,
+    pipeline_name: options?.pipelineName ?? null,
+    embedding_model_config_id: row.embeddingModelConfigId,
+    embedding_model_name: options?.embeddingModelName ?? null,
+    embedding_dimensions: row.embeddingDimensions,
+    chunk_config: row.chunkConfig,
+    metadata_keys: row.metadataKeys,
+    is_configured: isKbConfigured(row),
+    chunk_count: options?.chunkCount,
     created_by: row.createdBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
@@ -91,7 +123,7 @@ export async function listKnowledgeBases(): Promise<ReturnType<typeof toKnowledg
     .from(appKnowledgeBases)
     .orderBy(desc(appKnowledgeBases.updatedAt));
 
-  const counts = await db
+  const itemCounts = await db
     .select({
       knowledgeBaseId: appKbItems.knowledgeBaseId,
       count: sql<number>`count(*)::int`,
@@ -99,9 +131,24 @@ export async function listKnowledgeBases(): Promise<ReturnType<typeof toKnowledg
     .from(appKbItems)
     .groupBy(appKbItems.knowledgeBaseId);
 
-  const countMap = new Map(counts.map((c) => [c.knowledgeBaseId, c.count]));
+  const chunkDocCounts = await db
+    .select({
+      knowledgeBaseId: appKbChunks.knowledgeBaseId,
+      count: sql<number>`count(distinct ${appKbChunks.documentId})::int`,
+    })
+    .from(appKbChunks)
+    .groupBy(appKbChunks.knowledgeBaseId);
 
-  return rows.map((row) => toKnowledgeBasePublic(row, countMap.get(row.id) ?? 0));
+  const itemCountMap = new Map(itemCounts.map((c) => [c.knowledgeBaseId, c.count]));
+  const chunkDocCountMap = new Map(chunkDocCounts.map((c) => [c.knowledgeBaseId, c.count]));
+
+  return rows.map((row) => {
+    const itemCount =
+      row.type === 'rag'
+        ? (chunkDocCountMap.get(row.id) ?? 0)
+        : (itemCountMap.get(row.id) ?? 0);
+    return toKnowledgeBasePublic(row, { itemCount });
+  });
 }
 
 export async function getKnowledgeBaseById(id: string): Promise<KnowledgeBaseRow | null> {
@@ -109,16 +156,44 @@ export async function getKnowledgeBaseById(id: string): Promise<KnowledgeBaseRow
   return row ?? null;
 }
 
+async function enrichKbPublic(row: KnowledgeBaseRow) {
+  let pipelineName: string | null = null;
+  if (row.pipelineId) {
+    const pipeline = await getPipelineConfigById(row.pipelineId);
+    pipelineName = pipeline?.pipelineName ?? null;
+  }
+
+  let embeddingModelName: string | null = null;
+  if (row.embeddingModelConfigId) {
+    const model = await getModelConfigById(row.embeddingModelConfigId);
+    embeddingModelName = model?.name ?? null;
+  }
+
+  let itemCount = 0;
+  let chunkCount: number | undefined;
+  if (row.type === 'rag') {
+    itemCount = await countIndexedDocuments(row.id);
+    chunkCount = await countKbChunks(row.id);
+  } else {
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(appKbItems)
+      .where(eq(appKbItems.knowledgeBaseId, row.id));
+    itemCount = countRow?.count ?? 0;
+  }
+
+  return toKnowledgeBasePublic(row, {
+    itemCount,
+    pipelineName,
+    embeddingModelName,
+    chunkCount,
+  });
+}
+
 export async function getKnowledgeBasePublicById(id: string) {
   const row = await getKnowledgeBaseById(id);
   if (!row) return null;
-
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(appKbItems)
-    .where(eq(appKbItems.knowledgeBaseId, id));
-
-  return toKnowledgeBasePublic(row, countRow?.count ?? 0);
+  return enrichKbPublic(row);
 }
 
 export async function createKnowledgeBase(input: {
@@ -133,22 +208,38 @@ export async function createKnowledgeBase(input: {
     throw new Error('Invalid knowledge base type');
   }
 
+  const pipelineId = await resolveDefaultPipelineIdForKbType(input.type);
+
   const [row] = await db
     .insert(appKnowledgeBases)
     .values({
       name,
       description: input.description?.trim() || null,
       type: input.type,
+      pipelineId,
       createdBy: input.createdBy ?? null,
     })
     .returning();
 
-  return toKnowledgeBasePublic(row!, 0);
+  let pipelineName: string | null = null;
+  if (row!.pipelineId) {
+    const pipeline = await getPipelineConfigById(row!.pipelineId);
+    pipelineName = pipeline?.pipelineName ?? null;
+  }
+
+  return toKnowledgeBasePublic(row!, { itemCount: 0, pipelineName });
 }
 
 export async function updateKnowledgeBase(
   id: string,
-  input: { name?: string; description?: string | null },
+  input: {
+    name?: string;
+    description?: string | null;
+    embedding_model_config_id?: string | null;
+    embedding_dimensions?: number;
+    chunk_config?: KbChunkConfig;
+    metadata_keys?: string[];
+  },
 ) {
   const row = await getKnowledgeBaseById(id);
   if (!row) throw new Error('Knowledge base not found');
@@ -159,22 +250,43 @@ export async function updateKnowledgeBase(
   const description =
     input.description !== undefined ? input.description?.trim() || null : row.description;
 
+  if (input.embedding_model_config_id !== undefined && row.type === 'rag') {
+    const modelId = input.embedding_model_config_id?.trim() || null;
+    if (modelId) {
+      const model = await getModelConfigById(modelId);
+      if (!model) throw new Error('Embedding model not found');
+      if (model.apiType !== 'embeddings') {
+        throw new Error('Selected model must have api_type embeddings');
+      }
+    }
+  }
+
+  if (input.embedding_dimensions !== undefined) {
+    const dims = input.embedding_dimensions;
+    if (!Number.isInteger(dims) || dims < 1 || dims > 65536) {
+      throw new Error('embedding_dimensions must be a positive integer');
+    }
+  }
+
   const [updated] = await db
     .update(appKnowledgeBases)
     .set({
       name,
       description,
+      ...(input.embedding_model_config_id !== undefined && row.type === 'rag'
+        ? { embeddingModelConfigId: input.embedding_model_config_id?.trim() || null }
+        : {}),
+      ...(input.embedding_dimensions !== undefined
+        ? { embeddingDimensions: input.embedding_dimensions }
+        : {}),
+      ...(input.chunk_config !== undefined ? { chunkConfig: input.chunk_config } : {}),
+      ...(input.metadata_keys !== undefined ? { metadataKeys: input.metadata_keys } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appKnowledgeBases.id, id))
     .returning();
 
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(appKbItems)
-    .where(eq(appKbItems.knowledgeBaseId, id));
-
-  return toKnowledgeBasePublic(updated!, countRow?.count ?? 0);
+  return enrichKbPublic(updated!);
 }
 
 /** Deletes KB row; cascades to app_kb_items and app_kb_import_jobs (not app_documents). */
@@ -238,6 +350,9 @@ export async function listKbItems(
 ) {
   const kb = await getKnowledgeBaseById(knowledgeBaseId);
   if (!kb) throw new Error('Knowledge base not found');
+  if (kb.type === 'rag') {
+    throw new Error('Use indexed-documents for RAG knowledge bases');
+  }
 
   const offset = Math.max(input?.offset ?? 0, 0);
   const limit = Math.min(Math.max(input?.limit ?? 25, 1), 100);
@@ -457,12 +572,14 @@ export async function deleteKbItems(knowledgeBaseId: string, itemIds: string[]):
 export async function createKbImportJob(input: {
   knowledgeBaseId: string;
   documentIds: string[];
+  pipelineId?: string | null;
   createdBy?: string | null;
 }): Promise<KbImportJobRow> {
   const [row] = await db
     .insert(appKbImportJobs)
     .values({
       knowledgeBaseId: input.knowledgeBaseId,
+      pipelineId: input.pipelineId ?? null,
       status: 'pending',
       documentIds: input.documentIds,
       totalCount: input.documentIds.length,
@@ -517,6 +634,14 @@ export async function startKbPageIndexImport(input: {
   if (kb.type !== 'page_index') {
     throw new Error('Import is only supported for PageIndex knowledge bases');
   }
+  if (!kb.pipelineId) {
+    throw new Error('Knowledge base has no import pipeline configured');
+  }
+
+  const pipeline = await getPipelineConfigById(kb.pipelineId);
+  if (!pipeline || !pipeline.isEnabled) {
+    throw new Error('Knowledge base import pipeline is not available');
+  }
 
   const documentIds = await expandDocumentIdsForImport({
     channelIds: input.channelIds,
@@ -531,10 +656,82 @@ export async function startKbPageIndexImport(input: {
   const job = await createKbImportJob({
     knowledgeBaseId: input.knowledgeBaseId,
     documentIds,
+    pipelineId: kb.pipelineId,
     createdBy: input.createdBy,
   });
 
   return { job: toKbImportJobPublic(job), document_count: documentIds.length };
+}
+
+export async function startKbRagIndexImport(input: {
+  knowledgeBaseId: string;
+  channelIds?: string[];
+  documentIds?: string[];
+  createdBy?: string | null;
+}) {
+  const kb = await getKnowledgeBaseById(input.knowledgeBaseId);
+  if (!kb) throw new Error('Knowledge base not found');
+  if (kb.type !== 'rag') {
+    throw new Error('Indexing import is only supported for RAG knowledge bases');
+  }
+  if (!kb.embeddingModelConfigId) {
+    throw new Error('Configure an embedding model in settings before importing');
+  }
+  if (!kb.pipelineId) {
+    throw new Error('Knowledge base has no index pipeline configured');
+  }
+
+  const pipeline = await getPipelineConfigById(kb.pipelineId);
+  if (!pipeline || !pipeline.isEnabled) {
+    throw new Error('Knowledge base index pipeline is not available');
+  }
+
+  const documentIds = await expandDocumentIdsForImport({
+    channelIds: input.channelIds,
+    documentIds: input.documentIds,
+  });
+  if (documentIds.length === 0) throw new Error('No documents selected for import');
+
+  const job = await createKbImportJob({
+    knowledgeBaseId: input.knowledgeBaseId,
+    documentIds,
+    pipelineId: kb.pipelineId,
+    createdBy: input.createdBy,
+  });
+
+  return { job: toKbImportJobPublic(job), document_count: documentIds.length };
+}
+
+export async function getKbWorkerConfig(knowledgeBaseId: string) {
+  const kb = await getKnowledgeBaseById(knowledgeBaseId);
+  if (!kb) throw new Error('Knowledge base not found');
+  return {
+    id: kb.id,
+    type: kb.type,
+    embedding_model_config_id: kb.embeddingModelConfigId,
+    embedding_dimensions: kb.embeddingDimensions,
+    chunk_config: kb.chunkConfig,
+    metadata_keys: kb.metadataKeys,
+  };
+}
+
+export async function resolveKbImportPipelineForJob(jobId: string) {
+  const job = await getKbImportJobById(jobId);
+  if (!job) throw new Error('KB import job not found');
+
+  let pipelineId = job.pipelineId;
+  if (!pipelineId) {
+    const kb = await getKnowledgeBaseById(job.knowledgeBaseId);
+    pipelineId = kb?.pipelineId ?? null;
+  }
+  if (!pipelineId) throw new Error('KB import pipeline not configured');
+
+  const pipeline = await getPipelineConfigById(pipelineId);
+  if (!pipeline || !pipeline.isEnabled) {
+    throw new Error('KB import pipeline is not available');
+  }
+
+  return { job, pipeline };
 }
 
 export type KbImportJobWorkerContext = {

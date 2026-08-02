@@ -349,7 +349,27 @@ export function KnowledgeBaseDetailPage() {
             </div>
 
             {items.length === 0 ? (
-              <p className="admin-muted">No items imported yet.</p>
+              <div className="admin-table-wrap kb-detail-table-wrap">
+                <table className="admin-table kb-detail-table">
+                  <thead>
+                    <tr>
+                      {canImport && <th className="kb-item-select-col" aria-hidden />}
+                      <th>Document</th>
+                      <th>Path</th>
+                      <th className="kb-item-status-col">Status</th>
+                      <th>Imported</th>
+                      <th className="kb-item-actions-col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td colSpan={canImport ? 6 : 5} className="admin-table-empty">
+                        &nbsp;
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <div
                 ref={containerRef}

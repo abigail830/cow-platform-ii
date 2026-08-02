@@ -7,6 +7,7 @@ import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
 import { routeParam } from '../http/route-param.ts';
 import { spawnKbPageIndexImportWorker } from '../services/kb-pageindex-import-runner.ts';
+import { deleteKbChunksForDocument, listIndexedDocuments } from '../services/kb-chunks.ts';
 import {
   createKnowledgeBase,
   deleteKnowledgeBase,
@@ -14,11 +15,13 @@ import {
   deleteKbItems,
   getKbImportJobPublic,
   getKbItemById,
+  getKnowledgeBaseById,
   getKnowledgeBasePublicById,
   listImportSources,
   listKbItems,
   listKnowledgeBases,
   startKbPageIndexImport,
+  startKbRagIndexImport,
   updateKnowledgeBase,
   type KnowledgeBaseType,
 } from '../services/knowledge-bases.ts';
@@ -120,6 +123,10 @@ knowledgeBases.patch(
       name?: string;
       description?: string | null;
       type?: string;
+      embedding_model_config_id?: string | null;
+      embedding_dimensions?: number;
+      chunk_config?: { strategy?: string; chunk_size?: number; chunk_overlap?: number };
+      metadata_keys?: string[];
     }>().catch(() => ({}));
 
     if (body.type !== undefined) {
@@ -133,6 +140,10 @@ knowledgeBases.patch(
       const kb = await updateKnowledgeBase(id, {
         name: body.name,
         description: body.description,
+        embedding_model_config_id: body.embedding_model_config_id,
+        embedding_dimensions: body.embedding_dimensions,
+        chunk_config: body.chunk_config,
+        metadata_keys: body.metadata_keys,
       });
       return c.json(kb);
     } catch (error) {
@@ -162,6 +173,61 @@ knowledgeBases.delete(
       const status = message.includes('not found') ? 404 : 400;
       return c.json({ error: message }, status);
     }
+  },
+);
+
+knowledgeBases.get(
+  '/:id/indexed-documents',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const kb = await getKnowledgeBaseById(id);
+    if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+    if (kb.type !== 'rag') {
+      return c.json({ error: 'indexed-documents is only for RAG knowledge bases' }, 400);
+    }
+
+    const offset = Number(c.req.query('offset') ?? 0);
+    const limit = Number(c.req.query('limit') ?? 25);
+
+    try {
+      const result = await listIndexedDocuments(id, { offset, limit });
+      return c.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to list indexed documents';
+      return c.json({ error: message }, 400);
+    }
+  },
+);
+
+knowledgeBases.delete(
+  '/:id/documents/:documentId/chunks',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'write',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    const documentId = routeParam(c, 'documentId');
+    if (!id || !documentId) {
+      return c.json({ error: 'Knowledge base id and document id are required' }, 400);
+    }
+
+    const kb = await getKnowledgeBaseById(id);
+    if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+    if (kb.type !== 'rag') {
+      return c.json({ error: 'Only RAG knowledge bases support chunk removal' }, 400);
+    }
+
+    const deleted = await deleteKbChunksForDocument(id, documentId);
+    return c.json({ ok: true, deleted });
   },
 );
 
@@ -279,12 +345,23 @@ knowledgeBases.post(
     const user = getUser(c);
 
     try {
-      const result = await startKbPageIndexImport({
-        knowledgeBaseId: id,
-        channelIds: body.channel_ids,
-        documentIds: body.document_ids,
-        createdBy: user?.id,
-      });
+      const kb = await getKnowledgeBaseById(id);
+      if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+
+      const result =
+        kb.type === 'rag'
+          ? await startKbRagIndexImport({
+              knowledgeBaseId: id,
+              channelIds: body.channel_ids,
+              documentIds: body.document_ids,
+              createdBy: user?.id,
+            })
+          : await startKbPageIndexImport({
+              knowledgeBaseId: id,
+              channelIds: body.channel_ids,
+              documentIds: body.document_ids,
+              createdBy: user?.id,
+            });
 
       await spawnKbPageIndexImportWorker(result.job.id);
 

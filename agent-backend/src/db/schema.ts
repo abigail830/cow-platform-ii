@@ -1,5 +1,6 @@
 import {
   boolean,
+  customType,
   integer,
   jsonb,
   pgTable,
@@ -10,6 +11,36 @@ import {
   index,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+
+/** pgvector column — driver uses `[f1,f2,...]` string form. */
+export const pgVector = customType<{ data: number[]; driverData: string }>({
+  dataType() {
+    return 'vector';
+  },
+  toDriver(value: number[]): string {
+    if (!value.length) return '[]';
+    return `[${value.join(',')}]`;
+  },
+  fromDriver(value: string): number[] {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === '[]') return [];
+    const inner = trimmed.replace(/^\[/, '').replace(/\]$/, '');
+    if (!inner) return [];
+    return inner.split(',').map((part) => Number(part.trim()));
+  },
+});
+
+export type KbChunkConfig = {
+  strategy?: 'markdown_header' | 'fixed_size' | 'paragraph';
+  chunk_size?: number;
+  chunk_overlap?: number;
+};
+
+export const DEFAULT_KB_CHUNK_CONFIG: KbChunkConfig = {
+  strategy: 'markdown_header',
+  chunk_size: 8000,
+  chunk_overlap: 50,
+};
 
 export const MODEL_API_TYPES = [
   'chat-completions',
@@ -151,8 +182,10 @@ export const appPipelineConfigs = pgTable(
     description: text('description'),
     pipelineName: text('pipeline_name').notNull(),
     commandTemplate: text('command_template').notNull(),
+    workflowFile: text('workflow_file'),
     modelConfigId: uuid('model_config_id').references(() => appModelConfigs.id, { onDelete: 'set null' }),
     isEnabled: boolean('is_enabled').notNull().default(true),
+    isSystem: boolean('is_system').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -244,11 +277,22 @@ export const appKnowledgeBases = pgTable(
     name: text('name').notNull(),
     description: text('description'),
     type: text('type').notNull(),
+    pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
+    embeddingModelConfigId: uuid('embedding_model_config_id').references(() => appModelConfigs.id, {
+      onDelete: 'set null',
+    }),
+    embeddingDimensions: integer('embedding_dimensions').notNull().default(1024),
+    chunkConfig: jsonb('chunk_config').$type<KbChunkConfig>().notNull().default(DEFAULT_KB_CHUNK_CONFIG),
+    metadataKeys: jsonb('metadata_keys').$type<string[]>().notNull().default([]),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index('idx_knowledge_bases_type').on(t.type, t.updatedAt)],
+  (t) => [
+    index('idx_knowledge_bases_type').on(t.type, t.updatedAt),
+    index('idx_knowledge_bases_pipeline').on(t.pipelineId),
+    index('idx_knowledge_bases_embedding_model').on(t.embeddingModelConfigId),
+  ],
 );
 
 export const appKbImportJobs = pgTable(
@@ -258,6 +302,7 @@ export const appKbImportJobs = pgTable(
     knowledgeBaseId: uuid('knowledge_base_id')
       .notNull()
       .references(() => appKnowledgeBases.id, { onDelete: 'cascade' }),
+    pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
     status: text('status').notNull().default('pending'),
     documentIds: jsonb('document_ids').$type<string[]>().notNull().default([]),
     totalCount: integer('total_count').notNull().default(0),
@@ -302,6 +347,31 @@ export const appKbItems = pgTable(
     uniqueIndex('uq_kb_items_kb_document').on(t.knowledgeBaseId, t.documentId),
     index('idx_kb_items_kb').on(t.knowledgeBaseId, t.importedAt),
     index('idx_kb_items_document').on(t.documentId),
+  ],
+);
+
+export const appKbChunks = pgTable(
+  'app_kb_chunks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    knowledgeBaseId: uuid('knowledge_base_id')
+      .notNull()
+      .references(() => appKnowledgeBases.id, { onDelete: 'cascade' }),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => appDocuments.id, { onDelete: 'cascade' }),
+    chunkIndex: integer('chunk_index').notNull(),
+    content: text('content').notNull(),
+    embedding: pgVector('embedding').notNull(),
+    chunkMetadata: jsonb('chunk_metadata').$type<Record<string, unknown> | null>(),
+    docMetadata: jsonb('doc_metadata').$type<Record<string, unknown> | null>(),
+    contentHash: text('content_hash'),
+    indexedAt: timestamp('indexed_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_kb_chunks_kb_document').on(t.knowledgeBaseId, t.documentId),
+    index('idx_kb_chunks_kb').on(t.knowledgeBaseId, t.indexedAt),
   ],
 );
 

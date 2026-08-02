@@ -74,6 +74,28 @@ export function pageIndexStrategyFromCliArgs(args: string[]): string | undefined
   return undefined;
 }
 
+/** First non-comment line of a command template (worker entrypoint). */
+export function parseWorkerCommandLine(commandTemplate: string, fallback: string): string {
+  const lines = commandTemplate
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
+  return lines[0]?.trim() || fallback;
+}
+
+export function buildWorkerCliArgsFromTemplate(
+  commandTemplate: string,
+  fallbackTemplate: string,
+  values: Record<string, string>,
+): string[] {
+  const line = parseWorkerCommandLine(commandTemplate, fallbackTemplate);
+  const args = pipelineTemplateToCliArgs(line, values);
+  if (args.length === 0) {
+    return pipelineTemplateToCliArgs(fallbackTemplate, values);
+  }
+  return args;
+}
+
 /** Full async job in one CLI process (submit + poll + finalize worker). */
 export function defaultAsyncWorkerTemplate(pipelineName: string): string {
   if (pipelineName === 'aliyun-docmind-parse') {

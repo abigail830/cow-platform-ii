@@ -86,6 +86,14 @@ async function main() {
   if (!caps?.import) fail('page_index_capabilities', 'import should be true');
   else pass('create_page_index_kb', pageIndexKbId);
 
+  const pipelineId = createPageIndex.body.pipeline_id as string | null;
+  const pipelineName = createPageIndex.body.pipeline_name as string | null;
+  if (!pipelineId || pipelineName !== 'kb-pageindex-import') {
+    fail('page_index_pipeline_link', `expected kb-pageindex-import, got ${pipelineName}`);
+  } else {
+    pass('page_index_pipeline_link', pipelineName);
+  }
+
   const createRag = await authJson(adminToken, '/api/knowledge-bases', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -98,9 +106,23 @@ async function main() {
     fail('create_rag_kb', JSON.stringify(createRag.body));
   } else {
     ragKbId = createRag.body.id as string;
-    const ragCaps = createRag.body.capabilities as { import?: boolean };
-    if (ragCaps?.import) fail('rag_capabilities', 'import should be false');
+    const ragCaps = createRag.body.capabilities as { import?: boolean; index?: boolean };
+    if (!ragCaps?.import) fail('rag_capabilities', 'import should be true');
+    else if (!ragCaps?.index) fail('rag_capabilities', 'index should be true');
     else pass('create_rag_kb', ragKbId);
+
+    const ragPipelineName = createRag.body.pipeline_name as string | null;
+    if (ragPipelineName !== 'kb-rag-index') {
+      fail('rag_pipeline_link', `expected kb-rag-index, got ${ragPipelineName}`);
+    } else {
+      pass('rag_pipeline_link', ragPipelineName);
+    }
+
+    if (createRag.body.is_configured === true) {
+      fail('rag_not_configured', 'is_configured should be false without embedding model');
+    } else {
+      pass('rag_not_configured', 'embedding model not set');
+    }
   }
 
   const list = await authJson(adminToken, '/api/knowledge-bases');
@@ -120,13 +142,35 @@ async function main() {
   }
 
   if (ragKbId) {
-    const ragImport = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/import`, {
+    const ragImportNoConfig = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document_ids: ['00000000-0000-0000-0000-000000000001'] }),
+    });
+    if (ragImportNoConfig.status === 400) {
+      pass('rag_import_requires_embedding', '400 as expected without embedding model');
+    } else {
+      fail('rag_import_requires_embedding', `expected 400, got ${ragImportNoConfig.status}`);
+    }
+
+    const ragEmptyImport = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ document_ids: [] }),
     });
-    if (ragImport.status === 400) pass('rag_import_rejected', '400 as expected');
-    else fail('rag_import_rejected', `expected 400, got ${ragImport.status}`);
+    if (ragEmptyImport.status === 400) pass('rag_empty_import_rejected', '400 as expected');
+    else fail('rag_empty_import_rejected', `expected 400, got ${ragEmptyImport.status}`);
+
+    const ragIndexed = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/indexed-documents`);
+    if (ragIndexed.status !== 200 || !Array.isArray(ragIndexed.body.items)) {
+      fail('rag_indexed_documents', JSON.stringify(ragIndexed.body));
+    } else {
+      pass('rag_indexed_documents', `total=${ragIndexed.body.total}`);
+    }
+
+    const ragItems = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/items`);
+    if (ragItems.status === 400) pass('rag_items_rejected', '400 as expected');
+    else fail('rag_items_rejected', `expected 400, got ${ragItems.status}`);
   }
 
   const getKb = await authJson(adminToken, `/api/knowledge-bases/${pageIndexKbId}`);

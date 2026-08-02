@@ -1,10 +1,10 @@
 /**
- * Dispatch PageIndex KB import jobs to GitHub Actions (workflow_dispatch).
- * Isolated from document parse pipeline dispatch.
+ * Dispatch KB import jobs to GitHub Actions (workflow_dispatch).
  */
 
 export type KbPageIndexImportGithubDispatchInput = {
   jobId: string;
+  workerCliArgs?: string[];
 };
 
 export type KbPageIndexImportGithubConfig = {
@@ -43,10 +43,17 @@ export async function triggerKbPageIndexImportGithubActions(
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
   const url = kbPageIndexImportGithubDispatchUrl(config);
-  const body = {
+  const body: {
+    ref: string;
+    inputs: { job_id: string; worker_cli_args?: string };
+  } = {
     ref: config.ref,
     inputs: { job_id: input.jobId },
   };
+
+  if (input.workerCliArgs && input.workerCliArgs.length > 0) {
+    body.inputs.worker_cli_args = JSON.stringify(input.workerCliArgs);
+  }
 
   const response = await fetchImpl(url, {
     method: 'POST',
@@ -70,6 +77,6 @@ export async function triggerKbPageIndexImportGithubActions(
     // keep raw text
   }
   throw new Error(
-    `GitHub Actions KB PageIndex import dispatch failed (${response.status}): ${detail.slice(0, 500)}`,
+    `GitHub Actions KB import dispatch failed (${response.status}): ${detail.slice(0, 500)}`,
   );
 }

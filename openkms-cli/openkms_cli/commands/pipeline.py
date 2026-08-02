@@ -50,10 +50,6 @@ SUPPORTED_PIPELINES: dict[str, tuple[str, str]] = {
         "Aliyun Document Mind Parse",
         "Parse via Aliyun Document Mind (大模型版) with presigned OSS FileUrl; async job stages.",
     ),
-    "kb-index": (
-        "Knowledge Base Index",
-        "Chunk documents, generate embeddings, index FAQs; requires --knowledge-base-id.",
-    ),
 }
 
 pipeline_app = typer.Typer(
@@ -76,7 +72,6 @@ def pipeline_list() -> None:
     console.print(
         "[dim]Async cloud jobs: pipeline run-async --job-id <id> (baidu / aliyun)[/dim]"
     )
-    console.print("[dim]KB index:  pipeline run --pipeline-name kb-index --knowledge-base-id <id> [--wiki-space-id <id>] --api-url <url>[/dim]")
 
 
 @pipeline_app.command("run")
@@ -84,22 +79,12 @@ def pipeline_run(
     pipeline_name: str = typer.Option(
         "paddleocr-doc-parse",
         "--pipeline-name",
-        help="Pipeline name (e.g. paddleocr-doc-parse, kb-index)",
+        help="Pipeline name (e.g. paddleocr-doc-parse, baidu-doc-parse)",
     ),
     input_uri: Optional[str] = typer.Option(
         None,
         "--input",
         help="Input: S3 URI or local file path (required for doc-parse pipelines)",
-    ),
-    knowledge_base_id: Optional[str] = typer.Option(
-        None,
-        "--knowledge-base-id",
-        help="Knowledge base ID to index (required for kb-index pipeline)",
-    ),
-    wiki_space_id: Optional[str] = typer.Option(
-        None,
-        "--wiki-space-id",
-        help="When set with kb-index, re-index only this linked wiki space (one page per chunk)",
     ),
     s3_prefix: Optional[str] = typer.Option(
         None,
@@ -232,9 +217,6 @@ def pipeline_run(
     Baidu Cloud document parse (no local VLM):
       openkms-cli pipeline run --pipeline-name baidu-doc-parse \\
         --input ./doc.pdf --s3-prefix da46...
-
-    KB index example:
-      openkms-cli pipeline run --pipeline-name kb-index --knowledge-base-id <id> --api-url ...
     """
     if pipeline_name not in SUPPORTED_PIPELINES:
         console.print(
@@ -252,67 +234,6 @@ def pipeline_run(
         region = cfg.aws_region
     if api_url is None:
         api_url = cfg.openkms_api_url
-
-    # --- kb-index pipeline ---
-    if pipeline_name == "kb-index":
-        if not knowledge_base_id:
-            console.print("[red]kb-index pipeline requires --knowledge-base-id[/red]")
-            raise typer.Exit(1)
-        try:
-            if wiki_space_id:
-                from openkms_cli.kb.indexer import run_wiki_space_indexer as _run_kb_index
-            else:
-                from openkms_cli.kb.indexer import run_indexer as _run_kb_index
-        except ImportError as e:
-            console.print(f"[red]Missing dependencies: {e}. Install with: pip install openkms-cli[kb][/red]")
-            raise typer.Exit(1)
-
-        auth_headers: dict = {}
-        basic_auth: Optional[tuple[str, str]] = None
-        try:
-            from openkms_cli.core.auth import try_api_request_auth
-
-            cred = try_api_request_auth()
-            if cred:
-                auth_headers, basic_auth = cred
-                console.print("[dim]Using API authentication[/dim]")
-        except Exception:
-            console.print("[yellow]No API auth (proceeding without auth)[/yellow]")
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task(
-                "Indexing wiki space..." if wiki_space_id else "Indexing knowledge base...",
-                total=None,
-            )
-            try:
-                run_kwargs: dict = {
-                    "knowledge_base_id": knowledge_base_id,
-                    "api_url": api_url,
-                    "auth_headers": auth_headers,
-                    "basic": basic_auth,
-                    "progress": progress,
-                    "task": task,
-                    "output_dir": output_dir,
-                }
-                if wiki_space_id:
-                    run_kwargs["wiki_space_id"] = wiki_space_id
-                stats = _run_kb_index(**run_kwargs)
-                progress.update(task, description="Done!")
-                console.print(
-                    f"[green]Indexing complete: "
-                    f"{stats['chunks_created']} chunks, "
-                    f"{stats['faqs_indexed']} FAQs indexed[/green]"
-                )
-            except Exception as e:
-                console.print(f"[red]Indexing failed: {e}[/red]")
-                console.print("[dim]Traceback:[/dim]")
-                console.print(traceback.format_exc(), style="dim")
-                raise typer.Exit(1)
-        return
 
     # --- doc-parse pipelines (Baidu Cloud API; paddleocr-doc-parse is deprecated alias) ---
     use_baidu = pipeline_name in ("baidu-doc-parse", "paddleocr-doc-parse")

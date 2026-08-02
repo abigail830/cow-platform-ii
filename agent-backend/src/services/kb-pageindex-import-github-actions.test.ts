@@ -58,4 +58,32 @@ describe('kb-pageindex-import-github-actions', () => {
     assert.equal(body.ref, 'main');
     assert.equal(body.inputs.job_id, 'job-kb-1');
   });
+
+  it('triggerKbPageIndexImportGithubActions posts worker_cli_args when provided', async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return new Response(null, { status: 204 });
+    };
+
+    await triggerKbPageIndexImportGithubActions(
+      { jobId: 'job-kb-2', workerCliArgs: ['kb', 'pageindex-import', '--job-id', 'job-kb-2'] },
+      {
+        token: 'pat',
+        repository: 'abigail830/cow-platform-ii',
+        workflowFile: 'openkms-kb-pageindex-import.yml',
+        ref: 'main',
+      },
+      fetchImpl,
+    );
+
+    const body = JSON.parse(String(calls[0].init?.body)) as {
+      inputs: { job_id: string; worker_cli_args: string };
+    };
+    assert.equal(body.inputs.job_id, 'job-kb-2');
+    assert.equal(
+      body.inputs.worker_cli_args,
+      JSON.stringify(['kb', 'pageindex-import', '--job-id', 'job-kb-2']),
+    );
+  });
 });

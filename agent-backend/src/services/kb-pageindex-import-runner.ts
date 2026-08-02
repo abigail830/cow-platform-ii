@@ -2,11 +2,22 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE,
+  DEFAULT_KB_PAGEINDEX_IMPORT_WORKFLOW_FILE,
+} from '../shared/pipeline-catalog.ts';
+import {
+  buildWorkerCliArgsFromTemplate,
+} from '../shared/pipeline-command-template.ts';
+import {
+  resolveKbImportPipelineForJob,
+  updateKbImportJob,
+  getKbImportJobById,
+} from './knowledge-bases.ts';
+import {
   resolveKbPageIndexImportGithubConfig,
   triggerKbPageIndexImportGithubActions,
 } from './kb-pageindex-import-github-actions.ts';
 import { resolveKbPageIndexImportWorkerMode } from './kb-pageindex-import-worker-mode.ts';
-import { getKbImportJobById, updateKbImportJob } from './knowledge-bases.ts';
 
 const activeKbImportJobs = new Set<string>();
 
@@ -35,20 +46,30 @@ function cliSpawnEnv(apiUrl: string): NodeJS.ProcessEnv {
   };
 }
 
-function spawnKbPageIndexImportCliLocal(jobId: string, apiUrl?: string): void {
-  const resolvedApiUrl = apiUrl ?? resolveApiUrl();
-  const child = spawn(
-    resolveCliBin(),
-    ['kb', 'pageindex-import', '--job-id', jobId, '--api-url', resolvedApiUrl],
-    {
-      cwd: path.join(repoRootFromBackend(), '..', 'openkms-cli'),
-      env: cliSpawnEnv(resolvedApiUrl),
-      stdio: 'inherit',
-    },
+async function buildKbImportCliArgs(jobId: string): Promise<string[]> {
+  const { pipeline } = await resolveKbImportPipelineForJob(jobId);
+  return buildWorkerCliArgsFromTemplate(
+    pipeline.commandTemplate,
+    DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE,
+    { job_id: jobId },
   );
+}
+
+function spawnKbImportCliLocal(jobId: string, cliArgs: string[], apiUrl?: string): void {
+  const resolvedApiUrl = apiUrl ?? resolveApiUrl();
+  const args = [...cliArgs];
+  if (!args.includes('--api-url')) {
+    args.push('--api-url', resolvedApiUrl);
+  }
+
+  const child = spawn(resolveCliBin(), args, {
+    cwd: path.join(repoRootFromBackend(), '..', 'openkms-cli'),
+    env: cliSpawnEnv(resolvedApiUrl),
+    stdio: 'inherit',
+  });
 
   child.on('error', async (error) => {
-    console.error(`[kb-pageindex-import] spawn failed for job ${jobId}:`, error);
+    console.error(`[kb-import] spawn failed for job ${jobId}:`, error);
     activeKbImportJobs.delete(jobId);
     await updateKbImportJob(jobId, {
       status: 'failed',
@@ -59,7 +80,7 @@ function spawnKbPageIndexImportCliLocal(jobId: string, apiUrl?: string): void {
   child.on('close', async (code) => {
     activeKbImportJobs.delete(jobId);
     if (code !== 0) {
-      console.error(`[kb-pageindex-import] job ${jobId} exited with code ${code}`);
+      console.error(`[kb-import] job ${jobId} exited with code ${code}`);
       const job = await getKbImportJobById(jobId);
       if (job && job.status === 'running') {
         await updateKbImportJob(jobId, {
@@ -71,23 +92,35 @@ function spawnKbPageIndexImportCliLocal(jobId: string, apiUrl?: string): void {
   });
 }
 
-async function dispatchKbPageIndexImportGithub(jobId: string): Promise<void> {
-  const config = resolveKbPageIndexImportGithubConfig();
-  if (!config) {
+async function dispatchKbImportGithub(jobId: string): Promise<void> {
+  const { pipeline } = await resolveKbImportPipelineForJob(jobId);
+  const baseConfig = resolveKbPageIndexImportGithubConfig();
+  if (!baseConfig) {
     throw new Error(
       'KB_PAGEINDEX_IMPORT_WORKER=github_actions requires GITHUB_PIPELINE_TOKEN (or GITHUB_TOKEN) ' +
         'and GITHUB_PIPELINE_REPOSITORY (owner/repo).',
     );
   }
-  await triggerKbPageIndexImportGithubActions({ jobId }, config);
+
+  const workflowFile =
+    pipeline.workflowFile?.trim() ||
+    process.env.GITHUB_KB_PAGEINDEX_IMPORT_WORKFLOW?.trim() ||
+    DEFAULT_KB_PAGEINDEX_IMPORT_WORKFLOW_FILE;
+
+  const workerCliArgs = await buildKbImportCliArgs(jobId);
+
+  await triggerKbPageIndexImportGithubActions(
+    { jobId, workerCliArgs },
+    { ...baseConfig, workflowFile },
+  );
 }
 
 /**
- * Run PageIndex KB import worker (isolated from document parse pipeline).
+ * Run KB import worker using the knowledge base's linked pipeline template.
  */
 export async function spawnKbPageIndexImportWorker(jobId: string, apiUrl?: string): Promise<void> {
   if (activeKbImportJobs.has(jobId)) {
-    console.info(`[kb-pageindex-import] skip dispatch (worker already active): job ${jobId}`);
+    console.info(`[kb-import] skip dispatch (worker already active): job ${jobId}`);
     return;
   }
 
@@ -96,7 +129,7 @@ export async function spawnKbPageIndexImportWorker(jobId: string, apiUrl?: strin
   if (resolveKbPageIndexImportWorkerMode() === 'github_actions') {
     activeKbImportJobs.add(jobId);
     try {
-      await dispatchKbPageIndexImportGithub(jobId);
+      await dispatchKbImportGithub(jobId);
     } finally {
       activeKbImportJobs.delete(jobId);
     }
@@ -104,5 +137,6 @@ export async function spawnKbPageIndexImportWorker(jobId: string, apiUrl?: strin
   }
 
   activeKbImportJobs.add(jobId);
-  spawnKbPageIndexImportCliLocal(jobId, apiUrl);
+  const cliArgs = await buildKbImportCliArgs(jobId);
+  spawnKbImportCliLocal(jobId, cliArgs, apiUrl);
 }

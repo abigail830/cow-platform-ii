@@ -9,6 +9,7 @@ const internalApi = new Hono();
 
 internalApi.route('/documents', documents);
 internalApi.route('/kb-pageindex-import-jobs', kbPageIndexImportJobs);
+internalApi.route('/kb-import-jobs', kbPageIndexImportJobs);
 internalApi.route('/knowledge-bases', knowledgeBasesInternal);
 internalApi.route('/models', models);
 internalApi.route('/pipeline/jobs', pipelineJobs);
