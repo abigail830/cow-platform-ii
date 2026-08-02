@@ -474,6 +474,19 @@ export const appKbChunkDocuments = pgTable(
   ],
 );
 
+export const appUserPreferences = pgTable(
+  'app_user_preferences',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => appUsers.id, { onDelete: 'cascade' }),
+    prefKey: text('pref_key').notNull(),
+    prefValue: jsonb('pref_value').$type<Record<string, unknown>>().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.prefKey] })],
+);
+
 export const appPipelineJobs = pgTable(
   'app_pipeline_jobs',
   {

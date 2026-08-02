@@ -1,6 +1,7 @@
 import {
   Boxes,
   Bot,
+  Combine,
   Database,
   FileText,
   GitBranch,
@@ -26,6 +27,7 @@ const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   permissions: KeyRound,
   playground: Bot,
   'session-explorer': Search,
+  'hybrid-search': Combine,
 };
 
 export function NavPageIcon({ name, ...props }: LucideProps & { name: NavPageIcon }) {

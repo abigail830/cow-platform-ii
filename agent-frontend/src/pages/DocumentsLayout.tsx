@@ -100,6 +100,26 @@ export function DocumentsLayout() {
 
   if (forbidden) return <Navigate to="/agents/playground" replace />;
 
+  const createParentChannel =
+    channelModal?.mode === 'create' && channelModal.parentId
+      ? flattenChannels(channels).find((channel) => channel.id === channelModal.parentId) ?? null
+      : null;
+
+  const createInheritHint = createParentChannel
+    ? (() => {
+        const parts: string[] = [];
+        if (createParentChannel.pipeline_id) parts.push('pipeline');
+        if (createParentChannel.auto_start_pipeline && createParentChannel.pipeline_id) {
+          parts.push('auto-start on upload');
+        }
+        if (createParentChannel.metadata_extraction_model_id) {
+          parts.push('metadata extraction model');
+        }
+        if (parts.length === 0) return undefined;
+        return `On create, this sub-channel will copy ${parts.join(', ')} from "${createParentChannel.name}". You can change these later in channel settings.`;
+      })()
+    : undefined;
+
   const outletContext = {
     channels,
     selectedChannelId,
@@ -157,6 +177,7 @@ export function DocumentsLayout() {
         <ChannelFormModal
           title={channelModal.parentId ? 'New sub-channel' : 'New channel'}
           submitLabel="Create channel"
+          inheritHint={createInheritHint}
           onCancel={() => setChannelModal(null)}
           onSubmit={handleCreateChannel}
         />

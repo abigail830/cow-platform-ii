@@ -94,8 +94,9 @@ export async function createChannel(input: {
   const name = input.name.trim();
   if (!name || name.length > 256) throw new Error('Channel name must be 1–256 characters');
 
+  let parent: ChannelRow | null = null;
   if (input.parentId) {
-    const parent = await getChannelById(input.parentId);
+    parent = await getChannelById(input.parentId);
     if (!parent) throw new Error('Parent channel not found');
   }
 
@@ -117,6 +118,9 @@ export async function createChannel(input: {
       description: input.description?.trim() || null,
       parentId: input.parentId ?? null,
       sortOrder: maxSort + 1,
+      pipelineId: parent?.pipelineId ?? null,
+      autoStartPipeline: parent?.pipelineId ? parent.autoStartPipeline : false,
+      metadataExtractionModelId: parent?.metadataExtractionModelId ?? null,
       createdBy: input.createdBy ?? null,
     })
     .returning();

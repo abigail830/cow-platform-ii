@@ -6,6 +6,7 @@ import { ChatPage } from './pages/ChatPage.tsx';
 import { AgentPlaygroundPage } from './pages/AgentPlaygroundPage.tsx';
 import { SessionExplorerPage } from './pages/SessionExplorerPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
+import { HybridSearchPage } from './pages/HybridSearchPage.tsx';
 import { KnowledgeBaseDetailRouter } from './pages/KnowledgeBaseDetailRouter.tsx';
 import { KnowledgeBasesListPage } from './pages/KnowledgeBasesListPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/admin/models" element={<ModelsConfigPage />} />
           <Route path="/admin/pipelines" element={<PipelinesConfigPage />} />
           <Route path="/admin/storage" element={<ObjectStoragePage />} />
+          <Route path="/knowledge/hybrid-search" element={<HybridSearchPage />} />
           <Route path="/knowledge/knowledge-bases" element={<KnowledgeBasesListPage />} />
           <Route path="/knowledge/knowledge-bases/:knowledgeBaseId" element={<KnowledgeBaseDetailRouter />} />
           <Route path="/knowledge/documents" element={<DocumentsLayout />}>

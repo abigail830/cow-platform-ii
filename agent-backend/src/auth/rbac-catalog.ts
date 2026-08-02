@@ -21,6 +21,7 @@ export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'knowledge-management' as const;
 export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
   DOCUMENTS: 'documents',
   KNOWLEDGE_BASES: 'knowledge-bases',
+  HYBRID_SEARCH: 'hybrid-search',
 } as const;
 
 export type KnowledgeManagementResource =
@@ -88,6 +89,13 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
     description: 'PageIndex knowledge bases and document import.',
     routePatterns: ['/knowledge/knowledge-bases'],
     apiPatterns: ['/api/knowledge-bases', '/api/knowledge-bases/*'],
+  },
+  {
+    resource: KNOWLEDGE_MANAGEMENT_RESOURCES.HYBRID_SEARCH,
+    label: 'Hybrid search',
+    description: 'Cross-knowledge-base hybrid retrieval playground.',
+    routePatterns: ['/knowledge/hybrid-search'],
+    apiPatterns: ['/api/hybrid-search', '/api/hybrid-search/*'],
   },
 ];
 

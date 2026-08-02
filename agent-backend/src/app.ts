@@ -11,6 +11,7 @@ import consoleRoutes from './routes/console/index.ts';
 import documentChannels from './routes/document-channels.ts';
 import documents from './routes/documents.ts';
 import knowledgeBases from './routes/knowledge-bases.ts';
+import hybridSearch from './routes/hybrid-search.ts';
 import sessionExplorer from './routes/session-explorer.ts';
 import internalApi from './routes/internal-api/index.ts';
 import { ensureFlueReady } from './flue-vercel-init.ts';
@@ -47,6 +48,7 @@ app.route('/api/console', consoleRoutes);
 app.route('/api/document-channels', documentChannels);
 app.route('/api/documents', documents);
 app.route('/api/knowledge-bases', knowledgeBases);
+app.route('/api/hybrid-search', hybridSearch);
 app.route('/api/session-explorer', sessionExplorer);
 app.route('/internal-api', internalApi);
 

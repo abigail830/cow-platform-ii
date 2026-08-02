@@ -5,6 +5,7 @@ type ChannelFormModalProps = {
   initialName?: string;
   initialDescription?: string;
   submitLabel: string;
+  inheritHint?: string;
   onCancel: () => void;
   onSubmit: (input: { name: string; description: string }) => Promise<void>;
 };
@@ -14,6 +15,7 @@ export function ChannelFormModal({
   initialName = '',
   initialDescription = '',
   submitLabel,
+  inheritHint,
   onCancel,
   onSubmit,
 }: ChannelFormModalProps) {
@@ -54,6 +56,7 @@ export function ChannelFormModal({
               />
             </label>
           </div>
+          {inheritHint ? <p className="admin-form-hint form-field-wide">{inheritHint}</p> : null}
           {error && <p className="error">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>

@@ -8,7 +8,8 @@ export type NavPageIcon =
   | 'roles'
   | 'permissions'
   | 'playground'
-  | 'session-explorer';
+  | 'session-explorer'
+  | 'hybrid-search';
 
 export type NavPage = {
   path: string;
@@ -90,6 +91,14 @@ export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
     titleAccent: 'Bases',
     permissionKey: 'knowledge-management:knowledge-bases',
     icon: 'knowledge',
+  },
+  {
+    path: '/knowledge/hybrid-search',
+    navLabel: 'Hybrid Search',
+    titleMain: 'Hybrid',
+    titleAccent: 'Search',
+    permissionKey: 'knowledge-management:hybrid-search',
+    icon: 'hybrid-search',
   },
 ];
 
