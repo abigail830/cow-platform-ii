@@ -2092,6 +2092,7 @@ dev = [
     { name = "pytest" },
 ]
 kb = [
+    { name = "boto3" },
     { name = "openai" },
     { name = "pgvector" },
     { name = "psycopg", extra = ["binary"] },
@@ -2109,6 +2110,7 @@ requires-dist = [
     { name = "alibabacloud-docmind-api20220711", marker = "extra == 'aliyun'", specifier = ">=1.4.0" },
     { name = "alibabacloud-tea-openapi", marker = "extra == 'aliyun'", specifier = ">=0.3.0" },
     { name = "bce-python-sdk", marker = "extra == 'baidu'", specifier = ">=0.9.0" },
+    { name = "boto3", marker = "extra == 'kb'", specifier = ">=1.26.0" },
     { name = "boto3", marker = "extra == 'pipeline'", specifier = ">=1.26.0" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "openai", marker = "extra == 'kb'", specifier = ">=1.0.0" },

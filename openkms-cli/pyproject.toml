@@ -29,6 +29,7 @@ metadata = [
     "openai>=1.0.0",
 ]
 kb = [
+    "boto3>=1.26.0",
     "psycopg[binary]>=3.0.0",
     "pgvector>=0.3.0",
     "openai>=1.0.0",

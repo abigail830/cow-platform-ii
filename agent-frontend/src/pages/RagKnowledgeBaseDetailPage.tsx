@@ -348,14 +348,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
 
           {error && <p className="admin-error" role="alert">{error}</p>}
 
-          {importJobActive && activeJob && (
-            <div className="kb-import-progress" role="status">
-              <Loader2 {...iconProps({ size: 16, className: 'icon-btn-spin' })} aria-hidden />
-              Indexing: {activeJob.completed_count}/{activeJob.total_count} documents
-              {activeJob.failed_count > 0 ? ` (${activeJob.failed_count} failed)` : ''}
-            </div>
-          )}
-
           <section className="kb-items-section">
             <div className="kb-items-header">
               <h2 className="kb-section-title">Indexed documents ({total})</h2>
