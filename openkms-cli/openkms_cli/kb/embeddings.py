@@ -3,7 +3,7 @@ import base64
 import struct
 from typing import Any
 
-from openkms_cli.kb.embedding_provider import embedding_supports_dimensions
+from openkms_cli.kb.embedding_provider import embedding_batch_size, embedding_supports_dimensions
 
 
 def generate_embeddings(
@@ -24,7 +24,7 @@ def generate_embeddings(
         api_key=model_config.get("api_key") or "no-key",
     )
 
-    batch_size = 32
+    batch_size = embedding_batch_size(model_config)
     all_embeddings: list[str] = []
     supports_dimensions = embedding_supports_dimensions(model_config)
     for i in range(0, len(texts), batch_size):

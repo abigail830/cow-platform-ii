@@ -271,6 +271,8 @@ def generate_embeddings(texts: list[str], model_config: dict[str, Any]) -> list[
     """Generate embeddings using OpenAI-compatible API with base64 encoding. Returns list of base64 strings."""
     from openai import OpenAI
 
+    from openkms_cli.kb.embedding_provider import embedding_batch_size
+
     base_url = model_config["base_url"].rstrip("/")
     if not base_url.endswith("/v1"):
         base_url = f"{base_url}/v1"
@@ -280,10 +282,10 @@ def generate_embeddings(texts: list[str], model_config: dict[str, Any]) -> list[
         api_key=model_config.get("api_key") or "no-key",
     )
 
-    BATCH_SIZE = 32
+    batch_size = embedding_batch_size(model_config)
     all_embeddings: list[str] = []
-    for i in range(0, len(texts), BATCH_SIZE):
-        batch = texts[i : i + BATCH_SIZE]
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
         response = client.embeddings.create(
             model=model_config.get("model_name", "text-embedding-ada-002"),
             input=batch,
