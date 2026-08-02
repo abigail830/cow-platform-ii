@@ -24,6 +24,7 @@
     "verify:documents": "tsx scripts/verify-documents.ts",
     "verify:knowledge-bases": "tsx scripts/verify-knowledge-bases.ts",
     "verify:resource-access": "tsx scripts/verify-resource-access.ts",
+    "verify:user-api-key": "tsx scripts/verify-user-api-key.ts",
     "test": "tsx --test src/**/*.test.ts",
     "test:documents": "tsx --test src/storage/document-files.test.ts src/services/channel-tree.test.ts && tsx scripts/verify-documents.ts",
     "e2b:build-content-studio-template": "tsx e2b-templates/content-studio/build.ts"

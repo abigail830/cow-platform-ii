@@ -513,6 +513,28 @@ export const appUserPreferences = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.prefKey] })],
 );
 
+/** Personal API keys for programmatic access (hash only; plaintext shown once at creation). */
+export const appUserApiKeys = pgTable(
+  'app_user_api_keys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => appUsers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull().default('Default'),
+    keyPrefix: text('key_prefix').notNull(),
+    keyHash: text('key_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('idx_user_api_keys_user').on(t.userId, t.createdAt),
+    index('idx_user_api_keys_prefix').on(t.keyPrefix),
+  ],
+);
+
 export const appPipelineJobs = pgTable(
   'app_pipeline_jobs',
   {

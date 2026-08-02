@@ -25,6 +25,15 @@ export const sandboxSchema = z.object({
   templateId: z.string().optional(),
 });
 
+export const agentContextSchema = z.object({
+  /** Append session date/time to agent instructions (resolved at session init). */
+  temporal: z.boolean().default(false),
+  /** IANA timezone for temporal block (default UTC). */
+  timezone: z.string().min(1).optional(),
+});
+
+export type AgentContextYaml = z.infer<typeof agentContextSchema>;
+
 export const a2aSkillSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -74,6 +83,7 @@ export const agentYamlSchema = z.object({
     .default({ packs: [] }),
   mcp: z.array(mcpServerSchema).default([]),
   sandbox: sandboxSchema.default({ provider: 'none' }),
+  context: agentContextSchema.optional(),
   access: z
     .object({
       defaultForRoles: z.array(z.string()).default(['admin']),

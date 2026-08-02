@@ -169,6 +169,17 @@ export function AppSideNav({
                   role="menuitem"
                   onClick={() => {
                     setUserMenuOpen(false);
+                    onNavigate('/settings/api-keys');
+                  }}
+                >
+                  API keys
+                </button>
+                <button
+                  type="button"
+                  className="sidenav-user-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setUserMenuOpen(false);
                     onLogout();
                   }}
                 >

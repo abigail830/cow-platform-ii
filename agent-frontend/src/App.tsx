@@ -5,6 +5,7 @@ import { AppLayout } from './layouts/AppLayout.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
 import { AgentPlaygroundPage } from './pages/AgentPlaygroundPage.tsx';
 import { SessionExplorerPage } from './pages/SessionExplorerPage.tsx';
+import { ApiKeysSettingsPage } from './pages/ApiKeysSettingsPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { HybridSearchPage } from './pages/HybridSearchPage.tsx';
 import { KnowledgeBaseDetailRouter } from './pages/KnowledgeBaseDetailRouter.tsx';
@@ -29,7 +30,7 @@ export default function App() {
   return (
     <FlueAuthProvider>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<LoginPage />} />
         <Route
           element={
             <RequireAuth>
@@ -37,6 +38,7 @@ export default function App() {
             </RequireAuth>
           }
         >
+          <Route path="/settings/api-keys" element={<ApiKeysSettingsPage />} />
           <Route path="/agents/playground" element={<AgentPlaygroundPage />} />
           <Route path="/agents/session-explorer" element={<SessionExplorerPage />} />
           <Route path="/chat" element={<ChatPage />} />

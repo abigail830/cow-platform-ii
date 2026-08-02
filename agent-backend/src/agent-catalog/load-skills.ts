@@ -14,6 +14,18 @@ const SENSITIVE_NAMES = new Set([
   'secrets.json',
 ]);
 
+function collectOpenkmsSharedFiles(skillDir: string, files: Record<string, string>): void {
+  const sharedDir = join(skillDir, '..', 'shared');
+  if (!existsSync(sharedDir)) return;
+  for (const name of readdirSync(sharedDir)) {
+    if (name.startsWith('.')) continue;
+    const full = join(sharedDir, name);
+    if (!statSync(full).isFile()) continue;
+    const rel = `shared/${name}`.replace(/\\/g, '/');
+    if (!files[rel]) files[rel] = readFileSync(full, 'utf-8');
+  }
+}
+
 function collectSkillFiles(skillDir: string): Record<string, string> {
   const files: Record<string, string> = {};
   const walk = (dir: string) => {
@@ -31,6 +43,7 @@ function collectSkillFiles(skillDir: string): Record<string, string> {
     }
   };
   walk(skillDir);
+  collectOpenkmsSharedFiles(skillDir, files);
   return files;
 }
 

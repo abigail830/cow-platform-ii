@@ -1,6 +1,21 @@
 # Knowledge base retrieval (search & hybrid retrieve)
 
-Technical reference for **`POST /api/knowledge-bases/{id}/search`** (product API) and **`POST {qa-agent}/retrieve`** (hybrid pipeline used when a KB has an **agent URL**). For product overview and UI surfaces, see [Knowledge bases](knowledge-bases.md).
+> **2026 update:** Cross-KB hybrid search lives at **`POST /api/hybrid-search`** (UI: Hybrid Search). Agent skill pack: [`openkms-skill/hybrid-search`](../openkms-skill/hybrid-search/) — auth via personal **API key** (`okf_…`), not JWT login scripts.
+
+Technical reference for **`POST /api/knowledge-bases/{id}/search`** (per-KB product API) and **`POST {qa-agent}/retrieve`** (legacy qa-agent hybrid pipeline). For product overview and UI surfaces, see [Knowledge bases](knowledge-bases.md).
+
+---
+
+## openkms-skill (agents)
+
+| Item | Location |
+|------|----------|
+| Skill package | [`openkms-skill/`](../openkms-skill/) |
+| Scripts | `list_knowledge_bases.mjs`, `hybrid_search.mjs` (Node 18+) |
+| Auth | `OPENKMS_API_URL` + `OPENKMS_API_KEY` (Settings → API keys) |
+| Playground | Same key → Settings → **Playground agent API key** (`localStorage`) |
+
+Verify: `cd agent-backend && npm run verify:user-api-key`
 
 ---
 

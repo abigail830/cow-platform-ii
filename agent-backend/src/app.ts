@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import './load-env.ts';
 import { registerModelProviders } from './providers.ts';
 import auth from './routes/auth.ts';
+import userApiKeys from './routes/user-api-keys.ts';
 import agents from './routes/agents.ts';
 import conversations from './routes/conversations.ts';
 import admin from './routes/admin/index.ts';
@@ -15,6 +16,8 @@ import hybridSearch from './routes/hybrid-search.ts';
 import users from './routes/users.ts';
 import sessionExplorer from './routes/session-explorer.ts';
 import internalApi from './routes/internal-api/index.ts';
+import { rememberOpenKmsApiKeyForInstance } from './auth/openkms-instance-env.ts';
+import { OPENKMS_API_KEY_HEADER } from './auth/openkms-headers.ts';
 import { ensureFlueReady } from './flue-vercel-init.ts';
 import { agentInstanceStreamRegistry } from './flue/agent-instance-stream-registry.ts';
 import { isAgentLiveSseRequest, parseAgentInstancePath } from './flue/agent-instance-path.ts';
@@ -34,7 +37,7 @@ app.use(
   '*',
   cors({
     origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5180').split(','),
-    allowHeaders: ['Authorization', 'Content-Type'],
+    allowHeaders: ['Authorization', 'Content-Type', OPENKMS_API_KEY_HEADER],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
 );
@@ -42,6 +45,7 @@ app.use(
 app.get('/health', (c) => c.json({ ok: true, service: 'agent-backend' }));
 
 app.route('/api/auth', auth);
+app.route('/api/user/api-keys', userApiKeys);
 app.route('/api/agents', agents);
 app.route('/api/conversations', conversations);
 app.route('/api/admin', admin);
@@ -58,6 +62,7 @@ const flueRoutes = new Hono();
 flueRoutes.use('*', async (c, next) => {
   const parsed = parseAgentInstancePath(new URL(c.req.url).pathname);
   if (parsed) {
+    rememberOpenKmsApiKeyForInstance(parsed.instanceId, c.req.raw);
     const method = c.req.method;
     const isSse = isAgentLiveSseRequest(c.req.url, c.req.header('accept'));
     if (method === 'POST') {

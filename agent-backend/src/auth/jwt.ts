@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono';
 import jwt, { type SignOptions } from 'jsonwebtoken';
+import { isApiKeyToken } from './api-key.ts';
 
 export type UserRole = 'user' | 'operator' | 'admin';
 
@@ -9,6 +10,8 @@ export type AuthUser = {
   displayName: string | null;
   role: UserRole;
 };
+
+export type AuthMethod = 'jwt' | 'api-key';
 
 export type JwtPayload = AuthUser;
 
@@ -36,9 +39,35 @@ export function bearerToken(c: Context): string | undefined {
 export async function requireAuth(c: Context, next: Next) {
   const token = bearerToken(c);
   if (!token) return c.json({ error: 'Unauthorized' }, 401);
+
+  if (isApiKeyToken(token)) {
+    const { resolveUserFromApiKey } = await import('./resolve-user-api-key.ts');
+    const user = await resolveUserFromApiKey(token);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    c.set('user', user);
+    c.set('authMethod', 'api-key');
+    await next();
+    return;
+  }
+
   try {
     const user = verifyToken(token);
     c.set('user', user);
+    c.set('authMethod', 'jwt');
+    await next();
+  } catch {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+}
+
+/** Session-only routes (API key management, etc.) — rejects Bearer okf_ keys. */
+export async function requireSessionAuth(c: Context, next: Next) {
+  const token = bearerToken(c);
+  if (!token || isApiKeyToken(token)) return c.json({ error: 'Unauthorized' }, 401);
+  try {
+    const user = verifyToken(token);
+    c.set('user', user);
+    c.set('authMethod', 'jwt');
     await next();
   } catch {
     return c.json({ error: 'Unauthorized' }, 401);
@@ -62,5 +91,6 @@ export function requireRole(...roles: UserRole[]) {
 declare module 'hono' {
   interface ContextVariableMap {
     user: AuthUser;
+    authMethod?: AuthMethod;
   }
 }

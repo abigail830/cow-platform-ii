@@ -816,10 +816,15 @@ textarea {
   width: 100%;
 }
 
-.message-stack .message.user,
-.message-stack .message.assistant {
+.message-stack .message.user {
   align-self: auto;
   width: auto;
+  max-width: 100%;
+}
+
+.message-stack .message.assistant {
+  align-self: auto;
+  width: 100%;
   max-width: 100%;
 }
 
@@ -888,6 +893,7 @@ textarea {
 }
 
 .fold-block {
+  width: 100%;
   max-width: 100%;
   border: 1px solid #eceef1;
   border-radius: 6px;
@@ -899,6 +905,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.1rem 0.35rem;
   min-height: 1.25rem;
   font-family: var(--font-chat-sans);
@@ -5387,4 +5395,50 @@ textarea {
 
 .resource-sharing-modal-actions {
   padding: 0 1.25rem 1.25rem;
+}
+
+.api-keys-section {
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border-subtle, #e8e8e8);
+  border-radius: 8px;
+  background: var(--surface-elevated, #fff);
+}
+
+.api-keys-section + .api-keys-section {
+  margin-top: 1rem;
+}
+
+.api-key-reveal {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px dashed var(--border-subtle, #ddd);
+  border-radius: 6px;
+}
+
+.api-key-reveal-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: flex-start;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.api-key-reveal-value {
+  word-break: break-all;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.api-key-copy-btn {
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+.admin-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
 }

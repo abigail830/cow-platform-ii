@@ -22,6 +22,7 @@ import { getCatalogA2aChannelModules } from './flue/a2a/create-channel.ts';
 import db from './db.ts';
 import { setPlatformFlueStores } from './flue/platform-flue-stores.ts';
 import { runSubmissionGovernanceAtStartup } from './flue/submission-governance.ts';
+import { buildOpenKmsSandboxEnv } from './auth/openkms-headers.ts';
 
 type AgentModule = {
   default?: {
@@ -149,15 +150,22 @@ function normalizeBuiltModules(
   return { agents, workflows, channelHandlers };
 }
 
-async function createDefaultEnv() {
-  const fs = new InMemoryFs();
-  return bashFactoryToSessionEnv(
-    () =>
-      new Bash({
-        fs,
-        network: { dangerouslyAllowFullInternetAccess: true },
-      }),
-  );
+async function createDefaultEnvFactory(request: Request) {
+  const openkmsEnv = buildOpenKmsSandboxEnv(request);
+  return async function createDefaultEnv() {
+    const fs = new InMemoryFs();
+    return bashFactoryToSessionEnv(
+      () =>
+        new Bash({
+          fs,
+          network: { dangerouslyAllowFullInternetAccess: true },
+          env: {
+            ...process.env,
+            ...openkmsEnv,
+          },
+        }),
+    );
+  };
 }
 
 let initialized = false;
@@ -285,7 +293,7 @@ async function runFlueRuntimeInit(): Promise<void> {
       env: process.env,
       req: request,
       agentConfig: { resolveModel },
-      createDefaultEnv,
+      createDefaultEnv: createDefaultEnvFactory(request),
       submissionStore: executionStore.submissions,
     });
   }
@@ -298,7 +306,7 @@ async function runFlueRuntimeInit(): Promise<void> {
       env: process.env,
       req: request,
       agentConfig: { resolveModel },
-      createDefaultEnv,
+      createDefaultEnv: createDefaultEnvFactory(request),
       submissionStore: executionStore.submissions,
     });
   }
