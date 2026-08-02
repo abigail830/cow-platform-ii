@@ -25,6 +25,14 @@ function placeholdersForApiType(apiType: ModelApiType) {
       baseUrl: 'http://localhost:8101/',
     };
   }
+  if (apiType === 'rerank') {
+    return {
+      name: 'BGE Reranker v2 M3',
+      modelId: 'BAAI/bge-reranker-v2-m3',
+      provider: 'BAAI',
+      baseUrl: 'https://api.siliconflow.cn/v1',
+    };
+  }
   return {
     name: 'My model',
     modelId: 'provider/model-name',

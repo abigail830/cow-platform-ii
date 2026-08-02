@@ -9,7 +9,7 @@ import { closePool } from '../src/db/pool.ts';
 import { getModelConfigByName } from '../src/shared/model-config-store.ts';
 import { resolveOkfBundleRoot } from '../src/shared/okf-bundle.ts';
 
-const CHAT_AGENT_API_TYPES = new Set(['chat-completions', 'custom-endpoint']);
+const CHAT_AGENT_API_TYPES = new Set(['chat-completions']);
 
 type ValidationIssue = { agentId?: string; message: string };
 
@@ -121,7 +121,7 @@ async function validateAgentModelConfig(spec: {
   if (!CHAT_AGENT_API_TYPES.has(config.apiType)) {
     issues.push({
       agentId: spec.id,
-      message: `model.configName "${configName}" must use apiType chat-completions or custom-endpoint (got ${config.apiType})`,
+      message: `model.configName "${configName}" must use apiType chat-completions (got ${config.apiType})`,
     });
   }
 

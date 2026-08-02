@@ -2,7 +2,7 @@ import { registerProvider } from '@flue/runtime';
 import type { RuntimeModelConfig } from './model-config-store.ts';
 import { syncProviderEnv } from '../providers.ts';
 
-const CHAT_AGENT_API_TYPES = new Set(['chat-completions', 'custom-endpoint']);
+const CHAT_AGENT_API_TYPES = new Set(['chat-completions']);
 
 function providerIdForConfig(config: RuntimeModelConfig): string {
   return `okf-model-${config.id.replace(/-/g, '')}`;
@@ -73,7 +73,7 @@ function registerConfigProvider(config: RuntimeModelConfig): string {
 export function resolveFlueModelFromConfig(config: RuntimeModelConfig): string {
   if (!CHAT_AGENT_API_TYPES.has(config.apiType)) {
     throw new Error(
-      `Model config "${config.name}" must be apiType chat-completions or custom-endpoint for chat agents`,
+      `Model config "${config.name}" must be apiType chat-completions for chat agents`,
     );
   }
   return registerConfigProvider(config);

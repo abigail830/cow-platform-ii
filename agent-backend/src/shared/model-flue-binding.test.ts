@@ -27,7 +27,7 @@ test('resolveFlueModelFromConfig uses catalog openai provider when configured', 
 test('resolveFlueModelFromConfig rejects unsupported api types', () => {
   assert.throws(
     () => resolveFlueModelFromConfig(sampleConfig({ apiType: 'embeddings' })),
-    /must be apiType chat-completions or custom-endpoint/,
+    /must be apiType chat-completions/,
   );
 });
 

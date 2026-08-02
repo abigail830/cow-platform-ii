@@ -45,8 +45,8 @@ export const DEFAULT_KB_CHUNK_CONFIG: KbChunkConfig = {
 export const MODEL_API_TYPES = [
   'chat-completions',
   'embeddings',
+  'rerank',
   'vlm',
-  'custom-endpoint',
   'image-generation',
   'video-generation',
 ] as const;
