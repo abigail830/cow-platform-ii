@@ -20,7 +20,10 @@ function toSearchable(
 
 export function createDrizzleKnowledgeBaseStore(): KnowledgeBaseStore {
   return {
-    async listSearchable() {
+    async listSearchable(input) {
+      const types = input.types ?? ['rag', 'faq'];
+      if (input.ids && input.ids.length === 0) return [];
+
       const rows = await db
         .select({
           kb: appKnowledgeBases,
@@ -28,7 +31,11 @@ export function createDrizzleKnowledgeBaseStore(): KnowledgeBaseStore {
         })
         .from(appKnowledgeBases)
         .leftJoin(appModelConfigs, eq(appKnowledgeBases.embeddingModelConfigId, appModelConfigs.id))
-        .where(inArray(appKnowledgeBases.type, ['rag', 'faq']));
+        .where(
+          input.ids && input.ids.length > 0
+            ? and(inArray(appKnowledgeBases.type, types), inArray(appKnowledgeBases.id, input.ids))
+            : inArray(appKnowledgeBases.type, types),
+        );
 
       return rows
         .map((row) => toSearchable(row.kb, row.modelName))

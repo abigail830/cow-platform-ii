@@ -1,6 +1,7 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
+import type { ResourcePermissionFlags } from './resourceAccess.ts';
 
 export type DocumentChannel = {
   id: string;
@@ -13,6 +14,7 @@ export type DocumentChannel = {
   metadata_extraction_model_id: string | null;
   created_at: string;
   updated_at: string;
+  my_access?: ResourcePermissionFlags;
   children: DocumentChannel[];
 };
 

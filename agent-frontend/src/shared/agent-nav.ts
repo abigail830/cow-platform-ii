@@ -59,10 +59,6 @@ export function canAccessAppPath(user: AuthUser, path: string): boolean {
     return hasAgentFeaturePermission(user, 'playground');
   }
 
-  if (isRestrictedAgentPlayer(user)) {
-    return false;
-  }
-
   const pages: readonly NavPage[] = [
     ...AGENT_PAGES,
     ...KNOWLEDGE_MANAGEMENT_PAGES,
@@ -74,4 +70,20 @@ export function canAccessAppPath(user: AuthUser, path: string): boolean {
   if (!page) return true;
   if (!page.permissionKey) return true;
   return hasPermission(user, page.permissionKey, 'read');
+}
+
+/** First route the user may open after login or when denied the current path. */
+export function resolveAppHomePath(user: AuthUser): string {
+  const pages: readonly NavPage[] = [
+    ...visibleAgentPages(user),
+    ...KNOWLEDGE_MANAGEMENT_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
+    ...PLATFORM_BASIC_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
+    ...ADMIN_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
+  ];
+
+  for (const page of pages) {
+    if (canAccessAppPath(user, page.path)) return page.path;
+  }
+
+  return AGENT_PLAYGROUND_PATH;
 }

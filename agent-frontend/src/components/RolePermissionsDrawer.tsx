@@ -19,12 +19,13 @@ function groupPermissions(permissions: PermissionRecord[]): ResourceGroup[] {
   for (const perm of permissions) {
     const parts = perm.key.split(':');
 
-    if (parts.length === 2 && parts[0] === 'agent') {
-      const resource = parts[1];
-      if (!resource) continue;
-      const group = groups.get(resource) ?? { resource, label: perm.label };
+    if (parts.length === 2) {
+      const [category, resource] = parts;
+      if (!category || !resource) continue;
+      const groupKey = `${category}:${resource}`;
+      const group = groups.get(groupKey) ?? { resource: groupKey, label: perm.label };
       group.access = perm;
-      groups.set(resource, group);
+      groups.set(groupKey, group);
       continue;
     }
 

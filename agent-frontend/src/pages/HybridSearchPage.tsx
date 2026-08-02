@@ -213,8 +213,7 @@ function ResultCard({ item }: { item: HybridSearchResult }) {
 
 export function HybridSearchPage() {
   const { user } = useAppOutletContext();
-  const canRead = hasPermission(user, 'knowledge-management:hybrid-search', 'read');
-  const canWrite = hasPermission(user, 'knowledge-management:hybrid-search', 'write');
+  const canAccess = hasPermission(user, 'knowledge-management:hybrid-search', 'read');
 
   const [knowledgeBases, setKnowledgeBases] = useState<SearchableKnowledgeBase[]>([]);
   const [preferences, setPreferences] = useState<HybridSearchPreferences | null>(null);
@@ -264,9 +263,9 @@ export function HybridSearchPage() {
   }, []);
 
   useEffect(() => {
-    if (!canRead) return;
+    if (!canAccess) return;
     void loadPage();
-  }, [canRead, loadPage]);
+  }, [canAccess, loadPage]);
 
   async function handleSearch(event: React.FormEvent) {
     event.preventDefault();
@@ -298,9 +297,7 @@ export function HybridSearchPage() {
         },
       });
       setResponse(result);
-      if (canWrite) {
-        await patchHybridSearchPreferences({ selected_knowledge_base_ids: selectedKbIds });
-      }
+      await patchHybridSearchPreferences({ selected_knowledge_base_ids: selectedKbIds });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
@@ -322,11 +319,6 @@ export function HybridSearchPage() {
   }
 
   async function savePreferences(next: HybridSearchPreferences) {
-    if (!canWrite) {
-      setPreferences(next);
-      closeSettings();
-      return;
-    }
     setSavingPrefs(true);
     setError('');
     try {
@@ -340,7 +332,7 @@ export function HybridSearchPage() {
     }
   }
 
-  if (!canRead) return <Navigate to="/agents/playground" replace />;
+  if (!canAccess) return <Navigate to="/agents/playground" replace />;
 
   return (
     <main className="admin-page hybrid-search-page">

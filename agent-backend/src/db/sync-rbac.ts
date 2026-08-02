@@ -47,6 +47,7 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
     'platform-basic:storage:read',
     'platform-basic:storage:write',
     'platform-basic:models:read',
+    'knowledge-management:hybrid-search',
   ],
 };
 
@@ -136,6 +137,37 @@ async function upsertPermission(def: (typeof PERMISSION_CATALOG)[number]) {
   return row;
 }
 
+async function migrateLegacyHybridSearchGrants(
+  permissions: Awaited<ReturnType<typeof upsertPermission>>[],
+) {
+  const newPermission = permissions.find((row) => row.key === 'knowledge-management:hybrid-search');
+  if (!newPermission) return;
+
+  const legacyKeys = ['knowledge-management:hybrid-search:read', 'knowledge-management:hybrid-search:write'];
+  const legacyPermissions = await db
+    .select({ id: appPermissions.id })
+    .from(appPermissions)
+    .where(inArray(appPermissions.key, legacyKeys));
+
+  for (const legacy of legacyPermissions) {
+    const grants = await db
+      .select({ roleId: appRolePermissions.roleId })
+      .from(appRolePermissions)
+      .where(eq(appRolePermissions.permissionId, legacy.id));
+
+    for (const grant of grants) {
+      await db
+        .insert(appRolePermissions)
+        .values({
+          roleId: grant.roleId,
+          permissionId: newPermission.id,
+          accessLevel: 'read',
+        })
+        .onConflictDoNothing();
+    }
+  }
+}
+
 async function removeObsoletePermissions() {
   const keys = [...OBSOLETE_PERMISSION_KEYS];
   if (keys.length === 0) return;
@@ -158,12 +190,14 @@ async function removeObsoletePermissions() {
  */
 export async function syncRbac(): Promise<{ permissionCount: number }> {
   console.log('Syncing RBAC catalog…');
-  await removeObsoletePermissions();
 
   const permissions = [];
   for (const def of PERMISSION_CATALOG) {
     permissions.push(await upsertPermission(def));
   }
+
+  await migrateLegacyHybridSearchGrants(permissions);
+  await removeObsoletePermissions();
 
   let adminRole = await upsertSystemRole(ADMIN_ROLE);
   const agentPlayerRole = await upsertSystemRole(AGENT_PLAYER_ROLE);

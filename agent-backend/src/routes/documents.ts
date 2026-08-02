@@ -3,6 +3,8 @@ import { Readable } from 'node:stream';
 import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
+import { listAccessibleChannelIds } from '../auth/resource-access.ts';
+import { denyUnlessChannelAccess, denyUnlessDocumentAccess } from '../auth/require-resource-access.ts';
 import { routeParam } from '../http/route-param.ts';
 import { isStorageEnabled } from '../storage/s3-config.ts';
 import {
@@ -92,7 +94,9 @@ documents.get(
   '/stats',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
-    const stats = await getDocumentStats();
+    const user = getUser(c);
+    const channelIds = await listAccessibleChannelIds(user.id);
+    const stats = await getDocumentStats(channelIds);
     return c.json(stats);
   },
 );
@@ -103,6 +107,9 @@ documents.get(
   async (c) => {
     const channelId = c.req.query('channel_id');
     if (!channelId) return c.json({ error: 'channel_id is required' }, 400);
+
+    const denied = await denyUnlessChannelAccess(c, channelId, 'read');
+    if (denied) return denied;
 
     try {
       const result = await listDocuments({
@@ -129,6 +136,9 @@ documents.get(
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Document id is required' }, 400);
 
+    const denied = await denyUnlessDocumentAccess(c, id, 'read');
+    if (denied) return denied;
+
     const row = await getDocumentById(id);
     if (!row) return c.json({ error: 'Document not found' }, 404);
 
@@ -154,6 +164,9 @@ documents.post(
 
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const denied = await denyUnlessDocumentAccess(c, id, 'read');
+    if (denied) return denied;
 
     const body = await c.req.json<{ paths?: string[] }>().catch((): { paths?: string[] } => ({}));
     if (!Array.isArray(body.paths) || body.paths.length === 0) {
@@ -185,6 +198,9 @@ documents.get(
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Document id is required' }, 400);
 
+    const denied = await denyUnlessDocumentAccess(c, id, 'read');
+    if (denied) return denied;
+
     const row = await getDocumentById(id);
     if (!row) return c.json({ error: 'Document not found' }, 404);
 
@@ -215,6 +231,9 @@ documents.get(
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Document id is required' }, 400);
 
+    const denied = await denyUnlessDocumentAccess(c, id, 'read');
+    if (denied) return denied;
+
     const row = await getDocumentById(id);
     if (!row) return c.json({ error: 'Document not found' }, 404);
 
@@ -242,6 +261,9 @@ documents.put(
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Document id is required' }, 400);
 
+    const denied = await denyUnlessDocumentAccess(c, id, 'write');
+    if (denied) return denied;
+
     try {
       const result = await updateDocumentMetadata(id, body.metadata);
       return c.json({ ok: true, metadata: result.metadata });
@@ -266,6 +288,12 @@ documents.put(
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Document id is required' }, 400);
 
+    const denied = await denyUnlessDocumentAccess(c, id, 'write');
+    if (denied) return denied;
+
+    const targetDenied = await denyUnlessChannelAccess(c, channelId, 'write');
+    if (targetDenied) return targetDenied;
+
     try {
       const document = await moveDocument(id, channelId);
       return c.json(document);
@@ -287,6 +315,9 @@ documents.get(
       const id = routeParam(c, 'id');
       if (!id) return c.json({ error: 'Document id is required' }, 400);
 
+      const denied = await denyUnlessDocumentAccess(c, id, 'read');
+      if (denied) return denied;
+
       const content = await getDocumentContentManifest(id);
       return c.json(content);
     } catch (error) {
@@ -303,6 +334,9 @@ documents.get(
   async (c) => {
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const denied = await denyUnlessDocumentAccess(c, id, 'read');
+    if (denied) return denied;
 
     const row = await getDocumentById(id);
     if (!row) return c.json({ error: 'Document not found' }, 404);
@@ -325,6 +359,9 @@ documents.post(
 
     if (!channelId) return c.json({ error: 'channel_id is required' }, 400);
     if (!file) return c.json({ error: 'file is required' }, 400);
+
+    const denied = await denyUnlessChannelAccess(c, channelId, 'write');
+    if (denied) return denied;
 
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
@@ -363,6 +400,9 @@ documents.post(
       return c.json({ error: 'chunk_index and total_chunks are required' }, 400);
     }
     if (!chunk) return c.json({ error: 'file_chunk is required' }, 400);
+
+    const denied = await denyUnlessChannelAccess(c, channelId, 'write');
+    if (denied) return denied;
 
     try {
       validateDocumentFilename(filename);
@@ -409,6 +449,9 @@ documents.post(
       const id = routeParam(c, 'id');
       if (!id) return c.json({ error: 'Document id is required' }, 400);
 
+      const denied = await denyUnlessDocumentAccess(c, id, 'write');
+      if (denied) return denied;
+
       const result = await startDocumentPipeline(id);
       return c.json(result, 202);
     } catch (error) {
@@ -426,6 +469,9 @@ documents.delete(
     try {
       const id = routeParam(c, 'id');
       if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+      const denied = await denyUnlessDocumentAccess(c, id, 'write');
+      if (denied) return denied;
 
       const row = await deleteDocument(id);
       if (isStorageEnabled()) {

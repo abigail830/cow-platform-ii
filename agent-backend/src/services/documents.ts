@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { appDocumentChannels, appDocuments, appPipelineJobs, db } from '../db/index.ts';
 import { getModelConfigById } from '../shared/model-config-store.ts';
 import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
@@ -350,9 +350,27 @@ export async function updateDocumentMetadata(
   return { metadata: merged };
 }
 
-export async function getDocumentStats(): Promise<{ channels: number; documents: number }> {
-  const [channelRow] = await db.select({ count: sql<number>`count(*)::int` }).from(appDocumentChannels);
-  const [docRow] = await db.select({ count: sql<number>`count(*)::int` }).from(appDocuments);
+export async function getDocumentStats(channelIds?: Set<string>): Promise<{ channels: number; documents: number }> {
+  if (channelIds && channelIds.size === 0) {
+    return { channels: 0, documents: 0 };
+  }
+
+  const channelCountQuery = channelIds
+    ? db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(appDocumentChannels)
+        .where(inArray(appDocumentChannels.id, [...channelIds]))
+    : db.select({ count: sql<number>`count(*)::int` }).from(appDocumentChannels);
+
+  const docCountQuery = channelIds
+    ? db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(appDocuments)
+        .where(inArray(appDocuments.channelId, [...channelIds]))
+    : db.select({ count: sql<number>`count(*)::int` }).from(appDocuments);
+
+  const [channelRow] = await channelCountQuery;
+  const [docRow] = await docCountQuery;
   return {
     channels: channelRow?.count ?? 0,
     documents: docRow?.count ?? 0,

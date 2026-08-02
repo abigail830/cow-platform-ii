@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Search, Share2, Trash2 } from 'lucide-react';
 import {
   createKnowledgeBase,
   deleteKnowledgeBase,
@@ -10,6 +10,7 @@ import {
   type KnowledgeBaseType,
 } from '../api/knowledgeBases.ts';
 import { KbDeleteConfirmModal } from '../components/KbDeleteConfirmModal.tsx';
+import { ResourceSharingModal } from '../components/ResourceSharingModal.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
@@ -37,6 +38,7 @@ export function KnowledgeBasesListPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingKb, setEditingKb] = useState<KnowledgeBase | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeBase | null>(null);
+  const [sharingTarget, setSharingTarget] = useState<KnowledgeBase | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<KnowledgeBaseType>('page_index');
@@ -203,8 +205,18 @@ export function KnowledgeBasesListPage() {
               </Link>
               <div className="kb-card-footer">
                 <p className="kb-card-meta">{kb.item_count ?? 0} items</p>
-                {canWrite && (
-                  <div className="kb-card-actions row-actions">
+                <div className="kb-card-actions row-actions">
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="Sharing & access"
+                    aria-label={`Sharing settings for ${kb.name}`}
+                    onClick={() => setSharingTarget(kb)}
+                  >
+                    <Share2 {...iconProps()} />
+                  </button>
+                  {canWrite && (
+                    <>
                     <button
                       type="button"
                       className="icon-btn"
@@ -223,8 +235,9 @@ export function KnowledgeBasesListPage() {
                     >
                       <Trash2 {...iconProps()} />
                     </button>
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
             </article>
           ))}
@@ -325,6 +338,15 @@ export function KnowledgeBasesListPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {sharingTarget && (
+        <ResourceSharingModal
+          resourceType="knowledge_base"
+          resourceId={sharingTarget.id}
+          resourceLabel={sharingTarget.name}
+          onClose={() => setSharingTarget(null)}
+        />
       )}
 
       {deleteTarget && (

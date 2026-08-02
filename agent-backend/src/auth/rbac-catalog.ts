@@ -90,6 +90,9 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
     routePatterns: ['/knowledge/knowledge-bases'],
     apiPatterns: ['/api/knowledge-bases', '/api/knowledge-bases/*'],
   },
+];
+
+const KNOWLEDGE_MANAGEMENT_FEATURE_DEFS: ResourceDefinition[] = [
   {
     resource: KNOWLEDGE_MANAGEMENT_RESOURCES.HYBRID_SEARCH,
     label: 'Hybrid search',
@@ -174,13 +177,16 @@ function buildPermissions(
   );
 }
 
-/** Agent pages are all-or-nothing — one permission per feature, no read/write split. */
-function buildAgentPermissions(defs: ResourceDefinition[]): PermissionDefinition[] {
+/** Features with a single on/off grant — no read/write split. */
+function buildFeaturePermissions(
+  category: PermissionCategory,
+  defs: ResourceDefinition[],
+): PermissionDefinition[] {
   return defs.map((def) => ({
-    key: `${AGENT_CATEGORY}:${def.resource}`,
+    key: `${category}:${def.resource}`,
     label: def.label,
     description: def.description,
-    category: AGENT_CATEGORY,
+    category,
     resource: def.resource,
     access: 'read' as const,
     routePatterns: def.routePatterns,
@@ -192,7 +198,8 @@ function buildAgentPermissions(defs: ResourceDefinition[]): PermissionDefinition
 export const PERMISSION_CATALOG: PermissionDefinition[] = [
   ...buildPermissions(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCE_DEFS),
   ...buildPermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS),
-  ...buildAgentPermissions(AGENT_RESOURCE_DEFS),
+  ...buildFeaturePermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_FEATURE_DEFS),
+  ...buildFeaturePermissions(AGENT_CATEGORY, AGENT_RESOURCE_DEFS),
   ...buildPermissions('admin', ADMIN_RESOURCE_DEFS),
 ];
 
@@ -209,6 +216,8 @@ export const OBSOLETE_PERMISSION_KEYS = [
   'agent:playground:write',
   'agent:session-explorer:read',
   'agent:session-explorer:write',
+  'knowledge-management:hybrid-search:read',
+  'knowledge-management:hybrid-search:write',
 ] as const;
 
 export function permissionKey(category: string, resource: string, access: AccessLevel): string {

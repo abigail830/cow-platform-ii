@@ -24,8 +24,8 @@ export function createHybridSearchService(deps: HybridSearchDeps = createDefault
     search(request: HybridSearchRequest) {
       return runHybridSearch(deps, request);
     },
-    listSearchableKnowledgeBases() {
-      return deps.kbStore.listSearchable({ types: ['rag', 'faq'] });
+    listSearchableKnowledgeBases(visibleIds?: string[]) {
+      return deps.kbStore.listSearchable({ types: ['rag', 'faq'], ids: visibleIds });
     },
     getPreferences(userId: string) {
       return deps.preferencesStore.get(userId);

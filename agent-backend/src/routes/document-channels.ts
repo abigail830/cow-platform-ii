@@ -2,7 +2,14 @@ import { Hono } from 'hono';
 import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
+import { buildChannelTreeForUser } from '../auth/resource-access.ts';
+import { denyUnlessChannelAccess } from '../auth/require-resource-access.ts';
 import { routeParam } from '../http/route-param.ts';
+import {
+  handleGetResourceAccess,
+  handlePutResourceAccess,
+  handleTransferResourceOwner,
+} from './resource-access-handlers.ts';
 import {
   createChannel,
   deleteChannel,
@@ -47,8 +54,40 @@ channels.get(
   '/',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
+    const user = getUser(c);
     const tree = await listChannelTree();
-    return c.json({ channels: tree });
+    const filtered = await buildChannelTreeForUser(user.id, tree);
+    return c.json({ channels: filtered });
+  },
+);
+
+channels.get(
+  '/:id/access',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Channel id is required' }, 400);
+    return handleGetResourceAccess(c, 'document_channel', id);
+  },
+);
+
+channels.put(
+  '/:id/access',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Channel id is required' }, 400);
+    return handlePutResourceAccess(c, 'document_channel', id);
+  },
+);
+
+channels.post(
+  '/:id/access/transfer-owner',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Channel id is required' }, 400);
+    return handleTransferResourceOwner(c, 'document_channel', id);
   },
 );
 
@@ -58,6 +97,9 @@ channels.get(
   async (c) => {
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Channel id is required' }, 400);
+
+    const denied = await denyUnlessChannelAccess(c, id, 'read');
+    if (denied) return denied;
 
     const row = await getChannelById(id);
     if (!row) return c.json({ error: 'Channel not found' }, 404);
@@ -70,6 +112,7 @@ channels.get(
       metadata_extraction_model_id: row.metadataExtractionModelId,
       pipeline_id: row.pipelineId,
       auto_start_pipeline: row.autoStartPipeline,
+      created_by: row.createdBy,
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
     });
@@ -83,6 +126,11 @@ channels.post(
     const user = getUser(c);
     const body = await c.req.json<{ name?: string; description?: string; parent_id?: string | null }>();
     if (!body.name?.trim()) return c.json({ error: 'name is required' }, 400);
+
+    if (body.parent_id) {
+      const denied = await denyUnlessChannelAccess(c, body.parent_id, 'manage');
+      if (denied) return denied;
+    }
 
     try {
       const channel = await createChannel({
@@ -102,6 +150,12 @@ channels.put(
   '/:id',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
   async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Channel id is required' }, 400);
+
+    const denied = await denyUnlessChannelAccess(c, id, 'manage');
+    if (denied) return denied;
+
     const body = await c.req.json<{
       name?: string;
       description?: string | null;
@@ -122,9 +176,6 @@ channels.put(
 
       const autoStartPipeline =
         body.auto_start_pipeline === undefined ? undefined : Boolean(body.auto_start_pipeline);
-
-      const id = routeParam(c, 'id');
-      if (!id) return c.json({ error: 'Channel id is required' }, 400);
 
       const channel = await updateChannel(id, {
         name: body.name,
@@ -147,10 +198,13 @@ channels.delete(
   '/:id',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
   async (c) => {
-    try {
-      const id = routeParam(c, 'id');
-      if (!id) return c.json({ error: 'Channel id is required' }, 400);
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Channel id is required' }, 400);
 
+    const denied = await denyUnlessChannelAccess(c, id, 'manage');
+    if (denied) return denied;
+
+    try {
       await deleteChannel(id);
       return c.json({ ok: true });
     } catch (error) {

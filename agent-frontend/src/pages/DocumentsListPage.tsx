@@ -24,7 +24,6 @@ export function DocumentsListPage() {
   const {
     channels,
     selectedChannelId,
-    canWrite,
     loadingChannels,
   } = useDocumentsOutletContext();
 
@@ -41,6 +40,7 @@ export function DocumentsListPage() {
 
   const flatChannels = useMemo(() => flattenChannels(channels), [channels]);
   const selectedChannel = flatChannels.find((channel) => channel.id === selectedChannelId) ?? null;
+  const canWriteChannel = Boolean(selectedChannel?.my_access?.write);
   const channelHasPipeline = Boolean(selectedChannel?.pipeline_id);
 
   const loadDocuments = useCallback(async (options?: { silent?: boolean }) => {
@@ -154,7 +154,7 @@ export function DocumentsListPage() {
             Refresh
           </button>
         </div>
-        {canWrite && (
+        {canWriteChannel && (
           <button
             type="button"
             className="btn-primary"
@@ -232,7 +232,7 @@ export function DocumentsListPage() {
                         documentName={document.name}
                         onError={setError}
                       />
-                      {canWrite && (
+                      {canWriteChannel && (
                         <>
                           <button
                             type="button"

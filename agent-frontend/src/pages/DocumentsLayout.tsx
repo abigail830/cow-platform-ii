@@ -149,7 +149,7 @@ export function DocumentsLayout() {
           <ChannelTreePanel
             channels={channels}
             selectedId={selectedChannelId}
-            canWrite={canWrite}
+            canCreateRoot={canWrite}
             onSelect={setSelectedChannelId}
             onCreateRoot={() => setChannelModal({ mode: 'create', parentId: null })}
             onCreateChild={(parentId) => setChannelModal({ mode: 'create', parentId })}
@@ -184,6 +184,7 @@ export function DocumentsLayout() {
       )}
       {channelModal?.mode === 'settings' && (
         <ChannelSettingsModal
+          channelId={channelModal.channel.id}
           initialName={channelModal.channel.name}
           initialDescription={channelModal.channel.description ?? ''}
           initialPipelineId={channelModal.channel.pipeline_id}

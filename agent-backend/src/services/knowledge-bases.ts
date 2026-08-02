@@ -174,11 +174,16 @@ export function toKbImportJobPublic(row: KbImportJobRow) {
   };
 }
 
-export async function listKnowledgeBases(): Promise<ReturnType<typeof toKnowledgeBasePublic>[]> {
+export async function listKnowledgeBases(
+  visibleIds?: Set<string>,
+): Promise<ReturnType<typeof toKnowledgeBasePublic>[]> {
   const rows = await db
     .select()
     .from(appKnowledgeBases)
     .orderBy(desc(appKnowledgeBases.updatedAt));
+
+  const filteredRows =
+    visibleIds === undefined ? rows : rows.filter((row) => visibleIds.has(row.id));
 
   const itemCounts = await db
     .select({
@@ -192,7 +197,7 @@ export async function listKnowledgeBases(): Promise<ReturnType<typeof toKnowledg
   const faqCountMap = await faqCountByKbId();
   const itemCountMap = new Map(itemCounts.map((c) => [c.knowledgeBaseId, c.count]));
 
-  return rows.map((row) => {
+  return filteredRows.map((row) => {
     let itemCount = 0;
     if (row.type === 'rag') {
       itemCount = chunkDocCountMap.get(row.id) ?? 0;

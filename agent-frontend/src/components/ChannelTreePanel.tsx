@@ -2,10 +2,14 @@ import { Folder, Plus, Settings, Trash2 } from 'lucide-react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
 import { iconProps } from './icons/icon-props.ts';
 
+function channelCanManage(channel: DocumentChannel): boolean {
+  return Boolean(channel.my_access?.manage);
+}
+
 type ChannelTreePanelProps = {
   channels: DocumentChannel[];
   selectedId: string | null;
-  canWrite: boolean;
+  canCreateRoot: boolean;
   onSelect: (channelId: string) => void;
   onCreateRoot: () => void;
   onCreateChild: (parentId: string) => void;
@@ -17,7 +21,7 @@ function ChannelTreeNode({
   channel,
   depth,
   selectedId,
-  canWrite,
+  canCreateRoot,
   onSelect,
   onCreateChild,
   onSettings,
@@ -26,13 +30,14 @@ function ChannelTreeNode({
   channel: DocumentChannel;
   depth: number;
   selectedId: string | null;
-  canWrite: boolean;
+  canCreateRoot: boolean;
   onSelect: (channelId: string) => void;
   onCreateChild: (parentId: string) => void;
   onSettings: (channel: DocumentChannel) => void;
   onDelete: (channel: DocumentChannel) => void;
 }) {
   const active = selectedId === channel.id;
+  const canManage = channelCanManage(channel);
 
   return (
     <li className="channel-tree-item">
@@ -43,7 +48,7 @@ function ChannelTreeNode({
             {channel.name}
           </span>
         </button>
-        {canWrite && (
+        {canManage && (
           <div className="channel-tree-actions">
             <button type="button" className="icon-btn" title="Add sub-channel" onClick={() => onCreateChild(channel.id)}>
               <Plus {...iconProps()} />
@@ -65,7 +70,7 @@ function ChannelTreeNode({
               channel={child}
               depth={depth + 1}
               selectedId={selectedId}
-              canWrite={canWrite}
+              canCreateRoot={canCreateRoot}
               onSelect={onSelect}
               onCreateChild={onCreateChild}
               onSettings={onSettings}
@@ -81,7 +86,7 @@ function ChannelTreeNode({
 export function ChannelTreePanel({
   channels,
   selectedId,
-  canWrite,
+  canCreateRoot,
   onSelect,
   onCreateRoot,
   onCreateChild,
@@ -92,7 +97,7 @@ export function ChannelTreePanel({
     <aside className="documents-channel-panel">
       <div className="documents-channel-panel-header">
         <h2>Channels</h2>
-        {canWrite && (
+        {canCreateRoot && (
           <button type="button" className="btn-secondary" onClick={onCreateRoot}>
             + New
           </button>
@@ -108,7 +113,7 @@ export function ChannelTreePanel({
               channel={channel}
               depth={0}
               selectedId={selectedId}
-              canWrite={canWrite}
+              canCreateRoot={canCreateRoot}
               onSelect={onSelect}
               onCreateChild={onCreateChild}
               onSettings={onSettings}

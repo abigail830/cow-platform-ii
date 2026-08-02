@@ -205,6 +205,32 @@ export const appUserRoles = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.roleId] })],
 );
 
+export const RESOURCE_TYPES = ['document_channel', 'knowledge_base'] as const;
+export type ResourceType = (typeof RESOURCE_TYPES)[number];
+
+export const GRANTEE_TYPES = ['user', 'others'] as const;
+export type GranteeType = (typeof GRANTEE_TYPES)[number];
+
+export const appResourceGrants = pgTable(
+  'app_resource_grants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    resourceType: text('resource_type').notNull(),
+    resourceId: uuid('resource_id').notNull(),
+    granteeType: text('grantee_type').notNull(),
+    granteeUserId: uuid('grantee_user_id').references(() => appUsers.id, { onDelete: 'cascade' }),
+    canRead: boolean('can_read').notNull().default(false),
+    canWrite: boolean('can_write').notNull().default(false),
+    canManage: boolean('can_manage').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_resource_grants_resource').on(t.resourceType, t.resourceId),
+    index('idx_resource_grants_user').on(t.granteeUserId),
+  ],
+);
+
 export const appDocumentChannels = pgTable(
   'app_document_channels',
   {

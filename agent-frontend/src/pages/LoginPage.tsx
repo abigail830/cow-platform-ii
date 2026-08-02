@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../api/auth.ts';
+import { resolveAppHomePath } from '../shared/agent-nav.ts';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -14,8 +15,8 @@ export function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await login(email, password);
-      navigate('/agents/playground', { replace: true });
+      const user = await login(email, password);
+      navigate(resolveAppHomePath(user), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {

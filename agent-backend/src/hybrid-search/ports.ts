@@ -21,7 +21,7 @@ export type RerankScore = {
 };
 
 export interface KnowledgeBaseStore {
-  listSearchable(input: { types?: Array<'rag' | 'faq'> }): Promise<SearchableKnowledgeBase[]>;
+  listSearchable(input: { types?: Array<'rag' | 'faq'>; ids?: string[] }): Promise<SearchableKnowledgeBase[]>;
   loadForSearch(ids: string[]): Promise<SearchableKnowledgeBase[]>;
 }
 

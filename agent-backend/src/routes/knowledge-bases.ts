@@ -5,7 +5,14 @@ import {
 } from '../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
+import { listAccessibleKnowledgeBaseIds } from '../auth/resource-access.ts';
+import { knowledgeBaseAccessMiddleware } from '../auth/require-resource-access.ts';
 import { routeParam } from '../http/route-param.ts';
+import {
+  handleGetResourceAccess,
+  handlePutResourceAccess,
+  handleTransferResourceOwner,
+} from './resource-access-handlers.ts';
 import { spawnKbImportWorker } from '../services/kb-import-runner.ts';
 import {
   batchDraftKbFaqs,
@@ -47,6 +54,8 @@ import {
 const knowledgeBases = new Hono();
 
 knowledgeBases.use('*', requireAuth);
+knowledgeBases.use('/:id', knowledgeBaseAccessMiddleware());
+knowledgeBases.use('/:id/*', knowledgeBaseAccessMiddleware());
 
 knowledgeBases.get(
   '/import-sources',
@@ -69,7 +78,9 @@ knowledgeBases.get(
     'read',
   ),
   async (c) => {
-    const items = await listKnowledgeBases();
+    const user = getUser(c);
+    const visibleIds = await listAccessibleKnowledgeBaseIds(user.id);
+    const items = await listKnowledgeBases(visibleIds);
     return c.json({ items });
   },
 );
@@ -106,6 +117,48 @@ knowledgeBases.post(
       const message = error instanceof Error ? error.message : 'Failed to create knowledge base';
       return c.json({ error: message }, 400);
     }
+  },
+);
+
+knowledgeBases.get(
+  '/:id/access',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+    return handleGetResourceAccess(c, 'knowledge_base', id);
+  },
+);
+
+knowledgeBases.put(
+  '/:id/access',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+    return handlePutResourceAccess(c, 'knowledge_base', id);
+  },
+);
+
+knowledgeBases.post(
+  '/:id/access/transfer-owner',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+    return handleTransferResourceOwner(c, 'knowledge_base', id);
   },
 );
 

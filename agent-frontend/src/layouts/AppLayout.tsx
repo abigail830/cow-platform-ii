@@ -3,8 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { clearSession, fetchMe, getToken, setSession, type AuthUser } from '../api/auth.ts';
 import { listAgents, type AgentInfo } from '../api/conversations.ts';
 import { AppSideNav } from '../components/AppSideNav.tsx';
-import { AGENT_PLAYGROUND_PATH } from '../shared/admin-nav.ts';
-import { canAccessAppPath } from '../shared/agent-nav.ts';
+import { canAccessAppPath, resolveAppHomePath } from '../shared/agent-nav.ts';
 
 export type AppOutletContext = {
   user: AuthUser;
@@ -52,7 +51,7 @@ export function AppLayout() {
   useEffect(() => {
     if (!user || booting) return;
     if (!canAccessAppPath(user, location.pathname)) {
-      navigate(AGENT_PLAYGROUND_PATH, { replace: true });
+      navigate(resolveAppHomePath(user), { replace: true });
     }
   }, [booting, location.pathname, navigate, user]);
 
