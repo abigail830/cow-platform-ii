@@ -124,6 +124,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
   const [deleting, setDeleting] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
+  const [publishingFaqId, setPublishingFaqId] = useState<string | null>(null);
   const [indexing, setIndexing] = useState(false);
   const [extractBusy, setExtractBusy] = useState(false);
   const { notice: transientNotice, showNotice, clearNotice } = useTransientNotice(4500);
@@ -299,20 +300,38 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
     setExtractOpen(true);
   }
 
+  async function publishFaqs(faqIds: string[]) {
+    if (!knowledgeBaseId || faqIds.length === 0) return;
+    const result = await batchPublishKbFaqs(knowledgeBaseId, faqIds);
+    if (result.index_job) {
+      setActiveJob(result.index_job);
+    }
+    await load({ silent: true });
+  }
+
   async function handleBatchPublish() {
     if (!knowledgeBaseId || selectionCount === 0) return;
     setBatchBusy(true);
     setError('');
     try {
-      const result = await batchPublishKbFaqs(knowledgeBaseId, [...selectedFaqIds]);
-      if (result.index_job) {
-        setActiveJob(result.index_job);
-      }
-      await load({ silent: true });
+      await publishFaqs([...selectedFaqIds]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to publish FAQs');
     } finally {
       setBatchBusy(false);
+    }
+  }
+
+  async function handlePublishFaq(faqId: string) {
+    if (!knowledgeBaseId) return;
+    setPublishingFaqId(faqId);
+    setError('');
+    try {
+      await publishFaqs([faqId]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to publish FAQ');
+    } finally {
+      setPublishingFaqId(null);
     }
   }
 
@@ -608,17 +627,42 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                                         className="icon-btn"
                                         title="Edit FAQ"
                                         aria-label={`Edit ${faq.question}`}
-                                        disabled={jobActive}
+                                        disabled={jobActive || batchBusy || publishingFaqId !== null}
                                         onClick={() => openEditModal(faq)}
                                       >
                                         <Pencil {...iconProps()} />
                                       </button>
+                                      {faq.publication_status === 'draft' && (
+                                        <button
+                                          type="button"
+                                          className="icon-btn"
+                                          title="Publish FAQ"
+                                          aria-label={`Publish ${faq.question}`}
+                                          disabled={
+                                            jobActive ||
+                                            batchBusy ||
+                                            indexing ||
+                                            (publishingFaqId !== null &&
+                                              publishingFaqId !== faq.id)
+                                          }
+                                          onClick={() => void handlePublishFaq(faq.id)}
+                                        >
+                                          {publishingFaqId === faq.id ? (
+                                            <Loader2
+                                              {...iconProps({ className: 'icon-btn-spin' })}
+                                              aria-hidden
+                                            />
+                                          ) : (
+                                            <Upload {...iconProps()} aria-hidden />
+                                          )}
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         className="icon-btn icon-btn--run"
                                         title="Run index for this FAQ"
                                         aria-label={`Run index for ${faq.question}`}
-                                        disabled={!kb.is_configured || jobActive || indexing}
+                                        disabled={!kb.is_configured || jobActive || indexing || publishingFaqId !== null}
                                         onClick={() => void handleRunIndex([faq.id])}
                                       >
                                         <IconRun {...iconProps()} />
@@ -628,7 +672,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                                         className="icon-btn danger"
                                         title="Delete FAQ"
                                         aria-label={`Delete ${faq.question}`}
-                                        disabled={jobActive || deleting}
+                                        disabled={jobActive || deleting || publishingFaqId !== null}
                                         onClick={() =>
                                           setDeleteConfirm({ mode: 'single', faq })
                                         }

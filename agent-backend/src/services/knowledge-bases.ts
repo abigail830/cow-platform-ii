@@ -57,6 +57,22 @@ async function ragDocumentCountByKbId(): Promise<Map<string, number>> {
   }
 }
 
+async function faqCountByKbId(): Promise<Map<string, number>> {
+  try {
+    const rows = await db
+      .select({
+        knowledgeBaseId: appKbFaqs.knowledgeBaseId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(appKbFaqs)
+      .groupBy(appKbFaqs.knowledgeBaseId);
+    return new Map(rows.map((c) => [c.knowledgeBaseId, c.count]));
+  } catch (error) {
+    console.warn('[kb] FAQ counts unavailable:', error);
+    return new Map();
+  }
+}
+
 export type KnowledgeBaseRow = typeof appKnowledgeBases.$inferSelect;
 export type KbItemRow = typeof appKbItems.$inferSelect;
 export type KbImportJobRow = typeof appKbImportJobs.$inferSelect;
@@ -173,6 +189,7 @@ export async function listKnowledgeBases(): Promise<ReturnType<typeof toKnowledg
     .groupBy(appKbItems.knowledgeBaseId);
 
   const chunkDocCountMap = await ragDocumentCountByKbId();
+  const faqCountMap = await faqCountByKbId();
   const itemCountMap = new Map(itemCounts.map((c) => [c.knowledgeBaseId, c.count]));
 
   return rows.map((row) => {
@@ -180,7 +197,7 @@ export async function listKnowledgeBases(): Promise<ReturnType<typeof toKnowledg
     if (row.type === 'rag') {
       itemCount = chunkDocCountMap.get(row.id) ?? 0;
     } else if (row.type === 'faq') {
-      itemCount = 0;
+      itemCount = faqCountMap.get(row.id) ?? 0;
     } else {
       itemCount = itemCountMap.get(row.id) ?? 0;
     }
