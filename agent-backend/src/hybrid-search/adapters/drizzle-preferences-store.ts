@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { appUserPreferences, db } from '../../db/index.ts';
+import { getDefaultModelConfig } from '../../shared/model-config-store.ts';
 import {
   DEFAULT_HYBRID_SEARCH_PREFERENCES,
   HYBRID_SEARCH_PREF_KEY,
@@ -32,6 +33,15 @@ function normalizePreferences(value: Record<string, unknown> | null | undefined)
   return base;
 }
 
+async function initialPreferences(): Promise<HybridSearchPreferences> {
+  const prefs = { ...DEFAULT_HYBRID_SEARCH_PREFERENCES };
+  const defaultRerank = await getDefaultModelConfig('rerank');
+  if (defaultRerank) {
+    prefs.rerank_model_config_id = defaultRerank.id;
+  }
+  return prefs;
+}
+
 export function createDrizzlePreferencesStore(): PreferencesStore {
   return {
     async get(userId) {
@@ -45,7 +55,7 @@ export function createDrizzlePreferencesStore(): PreferencesStore {
           ),
         )
         .limit(1);
-      if (!row) return { ...DEFAULT_HYBRID_SEARCH_PREFERENCES };
+      if (!row) return initialPreferences();
       return normalizePreferences(row.prefValue);
     },
 

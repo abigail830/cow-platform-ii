@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Loader2, Search, Settings2 } from 'lucide-react';
+import { ChevronDown, CircleHelp, Loader2, Search, Settings2 } from 'lucide-react';
 import {
   getHybridSearchPreferences,
   groupKnowledgeBasesByEmbedding,
@@ -21,34 +21,141 @@ import { hasPermission } from '../shared/permissions.ts';
 
 const PAGE = getNavPage('/knowledge/hybrid-search')!;
 
+type SettingsTab = 'retrieval' | 'rerank';
+
 function formatScore(value?: number): string {
   if (value == null || Number.isNaN(value)) return '—';
   return value.toFixed(4);
 }
 
-function ResultCard({ item }: { item: HybridSearchResult }) {
-  const debug = item.retrieval_debug;
+function SettingsFieldTooltip({ label, text }: { label: string; text: string }) {
   return (
-    <article className="hybrid-search-result-card">
-      <header className="hybrid-search-result-header">
-        <div className="hybrid-search-result-badges">
-          <span className="kb-status-badge">{item.source_type}</span>
-          <span className="admin-muted">{item.knowledge_base_name}</span>
+    <span className="field-tooltip">
+      <button type="button" className="field-tooltip-trigger" aria-label={`${label} help`}>
+        <CircleHelp {...iconProps({ size: 14 })} aria-hidden />
+      </button>
+      <span className="field-tooltip-panel" role="tooltip">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function SettingsInlineRow({
+  label,
+  tooltip,
+  control,
+}: {
+  label: string;
+  tooltip: string;
+  control: ReactNode;
+}) {
+  return (
+    <div className="hybrid-search-settings-inline-row">
+      <div className="hybrid-search-settings-inline-label">
+        <span className="form-field-label-row">
+          <span>{label}</span>
+          <SettingsFieldTooltip label={label} text={tooltip} />
+        </span>
+      </div>
+      <div className="hybrid-search-settings-inline-control">{control}</div>
+    </div>
+  );
+}
+
+function SettingsNumberRow({
+  id,
+  label,
+  tooltip,
+  value,
+  min,
+  max,
+  fallback,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  tooltip: string;
+  value: number;
+  min: number;
+  max: number;
+  fallback: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <SettingsInlineRow
+      label={label}
+      tooltip={tooltip}
+      control={
+        <input
+          id={id}
+          className="hybrid-search-settings-inline-input"
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value) || fallback)}
+          aria-label={label}
+        />
+      }
+    />
+  );
+}
+
+function ResultCard({ item }: { item: HybridSearchResult }) {
+  const [expanded, setExpanded] = useState(false);
+  const debug = item.retrieval_debug;
+  const denseScore = debug?.dense_score;
+
+  return (
+    <article className={`hybrid-search-result-card${expanded ? ' is-expanded' : ''}`}>
+      <button
+        type="button"
+        className="hybrid-search-result-summary"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <div className="hybrid-search-result-summary-main">
+          <div className="hybrid-search-result-badges">
+            <span
+              className={`kb-status-badge hybrid-search-source-badge hybrid-search-source-badge--${item.source_type}`}
+            >
+              {item.source_type}
+            </span>
+            <span className="hybrid-search-result-kb">{item.knowledge_base_name}</span>
+          </div>
+          <div className="hybrid-search-result-meta">
+            {item.source_name ? (
+              <span className="hybrid-search-result-source">
+                {item.source_name}
+                {item.chunk_index != null ? ` · chunk #${item.chunk_index}` : ''}
+              </span>
+            ) : null}
+            <span className="hybrid-search-result-dense">
+              dense {formatScore(denseScore)}
+            </span>
+          </div>
         </div>
-        <strong className="hybrid-search-result-score">{formatScore(item.score)}</strong>
-      </header>
-      {item.source_name ? (
-        <p className="hybrid-search-result-source">
-          {item.source_name}
-          {item.chunk_index != null ? ` · chunk #${item.chunk_index}` : ''}
-        </p>
-      ) : null}
-      <pre className="hybrid-search-result-content">{item.content}</pre>
-      {debug ? (
-        <p className="hybrid-search-result-debug admin-muted">
-          dense {formatScore(debug.dense_score)} · lexical {formatScore(debug.lexical_score)} · rrf{' '}
-          {formatScore(debug.rrf_score)} · rerank {formatScore(debug.rerank_score)}
-        </p>
+        <div className="hybrid-search-result-summary-side">
+          <strong className="hybrid-search-result-score" title="Final score">
+            {formatScore(item.score)}
+          </strong>
+          <ChevronDown
+            {...iconProps({ className: 'hybrid-search-result-chevron' })}
+            aria-hidden
+          />
+        </div>
+      </button>
+      {expanded ? (
+        <div className="hybrid-search-result-body">
+          <pre className="hybrid-search-result-content">{item.content}</pre>
+          {debug ? (
+            <p className="hybrid-search-result-debug admin-muted">
+              dense {formatScore(debug.dense_score)} · lexical {formatScore(debug.lexical_score)} · rrf{' '}
+              {formatScore(debug.rrf_score)} · rerank {formatScore(debug.rerank_score)}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </article>
   );
@@ -64,8 +171,10 @@ export function HybridSearchPage() {
   const [selectedKbIds, setSelectedKbIds] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState<HybridSearchResponse | null>(null);
-  const [rerankModels, setRerankModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [rerankModels, setRerankModels] = useState<Array<{ id: string; name: string; isDefault: boolean }>>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState<HybridSearchPreferences | null>(null);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('retrieval');
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -90,7 +199,13 @@ export function HybridSearchPage() {
       setKnowledgeBases(kbs);
       setPreferences(prefs);
       setSelectedKbIds(prefs.selected_knowledge_base_ids);
-      setRerankModels(models.models.map((model) => ({ id: model.id, name: model.name })));
+      setRerankModels(
+        models.models.map((model) => ({
+          id: model.id,
+          name: model.name,
+          isDefault: model.isDefault,
+        })),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load hybrid search');
     } finally {
@@ -108,7 +223,11 @@ export function HybridSearchPage() {
     if (!preferences || !query.trim() || selectedKbIds.length === 0) return;
     if (requiresRerank && !preferences.rerank_model_config_id) {
       setError('Select a rerank model in Settings when searching across multiple embedding models.');
-      setSettingsOpen(true);
+      if (preferences) {
+        setSettingsDraft({ ...preferences });
+        setSettingsTab('rerank');
+        setSettingsOpen(true);
+      }
       return;
     }
 
@@ -139,10 +258,23 @@ export function HybridSearchPage() {
     }
   }
 
+  function openSettings() {
+    if (!preferences) return;
+    setSettingsDraft({ ...preferences });
+    setSettingsTab('retrieval');
+    setSettingsOpen(true);
+  }
+
+  function closeSettings() {
+    setSettingsOpen(false);
+    setSettingsDraft(null);
+    setSettingsTab('retrieval');
+  }
+
   async function savePreferences(next: HybridSearchPreferences) {
     if (!canWrite) {
       setPreferences(next);
-      setSettingsOpen(false);
+      closeSettings();
       return;
     }
     setSavingPrefs(true);
@@ -150,7 +282,7 @@ export function HybridSearchPage() {
     try {
       const saved = await patchHybridSearchPreferences(next);
       setPreferences(saved);
-      setSettingsOpen(false);
+      closeSettings();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
@@ -194,8 +326,9 @@ export function HybridSearchPage() {
         </button>
         <button
           type="button"
-          className="btn-secondary"
-          onClick={() => setSettingsOpen(true)}
+          className="btn-dark hybrid-search-settings-btn"
+          onClick={openSettings}
+          disabled={!preferences}
           aria-label="Open search settings"
         >
           <Settings2 {...iconProps()} aria-hidden />
@@ -245,8 +378,8 @@ export function HybridSearchPage() {
         )}
       </section>
 
-      {settingsOpen && preferences ? (
-        <div className="modal-backdrop" role="presentation" onClick={() => setSettingsOpen(false)}>
+      {settingsOpen && settingsDraft ? (
+        <div className="modal-backdrop" role="presentation" onClick={closeSettings}>
           <div
             className="modal-card model-config-form hybrid-search-settings-modal"
             role="dialog"
@@ -255,101 +388,142 @@ export function HybridSearchPage() {
             onClick={(event) => event.stopPropagation()}
           >
             <h2 id="hybrid-search-settings-title">Search settings</h2>
-            <div className="form-grid">
-              <label>
-                Top K
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={preferences.top_k}
-                  onChange={(event) =>
-                    setPreferences({ ...preferences, top_k: Number(event.target.value) || 10 })
-                  }
-                />
-              </label>
-              <label>
-                Recall K (per embedding group)
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={preferences.recall_k}
-                  onChange={(event) =>
-                    setPreferences({ ...preferences, recall_k: Number(event.target.value) || 25 })
-                  }
-                />
-              </label>
-              <label>
-                Search type
-                <select
-                  value={preferences.search_type}
-                  onChange={(event) =>
-                    setPreferences({
-                      ...preferences,
-                      search_type: event.target.value as HybridSearchPreferences['search_type'],
-                    })
-                  }
-                >
-                  <option value="all">All</option>
-                  <option value="chunks">Chunks only</option>
-                  <option value="faqs">FAQs only</option>
-                </select>
-              </label>
-              <label>
-                Rerank model
-                <select
-                  value={preferences.rerank_model_config_id ?? ''}
-                  onChange={(event) =>
-                    setPreferences({
-                      ...preferences,
-                      rerank_model_config_id: event.target.value || null,
-                    })
-                  }
-                >
-                  <option value="">None</option>
-                  {rerankModels.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-grid-full">
-                <span className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={preferences.bm25_enabled}
-                    onChange={(event) =>
-                      setPreferences({ ...preferences, bm25_enabled: event.target.checked })
+
+            <div className="modal-tabs" role="tablist" aria-label="Search settings">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={settingsTab === 'retrieval'}
+                className={`modal-tab${settingsTab === 'retrieval' ? ' active' : ''}`}
+                onClick={() => setSettingsTab('retrieval')}
+              >
+                Retrieval
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={settingsTab === 'rerank'}
+                className={`modal-tab${settingsTab === 'rerank' ? ' active' : ''}`}
+                onClick={() => setSettingsTab('rerank')}
+              >
+                Rerank
+              </button>
+            </div>
+
+            <div className="hybrid-search-settings-body">
+              {settingsTab === 'retrieval' ? (
+                <div className="hybrid-search-settings-fields">
+                  <SettingsNumberRow
+                    id="hybrid-recall-k"
+                    label="Recall K (per embedding group)"
+                    tooltip="Candidates per dense/lexical path before fusion."
+                    value={settingsDraft.recall_k}
+                    min={1}
+                    max={100}
+                    fallback={25}
+                    onChange={(recall_k) => setSettingsDraft({ ...settingsDraft, recall_k })}
+                  />
+                  <SettingsNumberRow
+                    id="hybrid-top-k"
+                    label="Top K"
+                    tooltip="Final number of results returned."
+                    value={settingsDraft.top_k}
+                    min={1}
+                    max={50}
+                    fallback={10}
+                    onChange={(top_k) => setSettingsDraft({ ...settingsDraft, top_k })}
+                  />
+                  <SettingsInlineRow
+                    label="Search type"
+                    tooltip="Limit retrieval to document chunks, FAQ entries, or both."
+                    control={
+                      <select
+                        id="hybrid-search-type"
+                        className="hybrid-search-settings-inline-select"
+                        value={settingsDraft.search_type}
+                        onChange={(event) =>
+                          setSettingsDraft({
+                            ...settingsDraft,
+                            search_type: event.target.value as HybridSearchPreferences['search_type'],
+                          })
+                        }
+                        aria-label="Search type"
+                      >
+                        <option value="all">All</option>
+                        <option value="chunks">Chunks only</option>
+                        <option value="faqs">FAQs only</option>
+                      </select>
                     }
                   />
-                  Enable lexical (BM25) recall
-                </span>
-              </label>
-              <label className="form-grid-full">
-                Rerank instruct (optional)
-                <textarea
-                  rows={3}
-                  value={preferences.rerank_instruct ?? ''}
-                  onChange={(event) =>
-                    setPreferences({
-                      ...preferences,
-                      rerank_instruct: event.target.value.trim() ? event.target.value : null,
-                    })
-                  }
-                />
-              </label>
+                  <SettingsInlineRow
+                    label="Enable lexical (BM25) recall"
+                    tooltip="Run global BM25 lexical recall in parallel with dense vector search before fusion."
+                    control={
+                      <input
+                        id="hybrid-bm25-enabled"
+                        type="checkbox"
+                        className="brand-checkbox"
+                        checked={settingsDraft.bm25_enabled}
+                        onChange={(event) =>
+                          setSettingsDraft({ ...settingsDraft, bm25_enabled: event.target.checked })
+                        }
+                        aria-label="Enable lexical (BM25) recall"
+                      />
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="form-grid">
+                  <label className="form-field form-field-wide">
+                    <span>Rerank model</span>
+                    <select
+                      value={settingsDraft.rerank_model_config_id ?? ''}
+                      onChange={(event) =>
+                        setSettingsDraft({
+                          ...settingsDraft,
+                          rerank_model_config_id: event.target.value || null,
+                        })
+                      }
+                    >
+                      <option value="">None (skip rerank)</option>
+                      {rerankModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                          {model.isDefault ? ' (platform default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="admin-form-hint">
+                      Required when searching across multiple embedding model groups.
+                    </span>
+                  </label>
+                  <label className="form-field form-field-wide">
+                    <span>Rerank instruct (optional)</span>
+                    <textarea
+                      rows={4}
+                      value={settingsDraft.rerank_instruct ?? ''}
+                      placeholder="Optional instruction passed to the rerank model."
+                      onChange={(event) =>
+                        setSettingsDraft({
+                          ...settingsDraft,
+                          rerank_instruct: event.target.value.trim() ? event.target.value : null,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              )}
             </div>
+
             <div className="modal-actions">
-              <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(false)}>
+              <button type="button" className="btn-secondary" onClick={closeSettings}>
                 Cancel
               </button>
               <button
                 type="button"
                 className="btn-primary"
                 disabled={savingPrefs}
-                onClick={() => void savePreferences(preferences)}
+                onClick={() => void savePreferences(settingsDraft)}
               >
                 {savingPrefs ? 'Saving…' : 'Save'}
               </button>

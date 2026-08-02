@@ -442,7 +442,9 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                                           )}
                                         </button>
                                       ) : null}
-                                      {doc.status === 'indexed' || doc.status === 'indexing' ? (
+                                      {doc.status === 'indexed' ||
+                                      doc.status === 'indexing' ||
+                                      doc.status === 'failed' ? (
                                         <button
                                           type="button"
                                           className="icon-btn danger"
