@@ -3,7 +3,6 @@ import {
   appDocumentChannels,
   appDocuments,
   appKbChunkDocuments,
-  appKbChunks,
   appKbImportJobs,
   appKbItems,
   appKnowledgeBases,
@@ -43,27 +42,12 @@ async function ragDocumentCountByKbId(): Promise<Map<string, number>> {
   try {
     const rows = await db
       .select({
-        knowledgeBaseId: appKbChunks.knowledgeBaseId,
-        count: sql<number>`count(distinct ${appKbChunks.documentId})::int`,
+        knowledgeBaseId: appKbChunkDocuments.knowledgeBaseId,
+        count: sql<number>`count(*)::int`,
       })
-      .from(appKbChunks)
-      .groupBy(appKbChunks.knowledgeBaseId);
-    const counts = new Map(rows.map((c) => [c.knowledgeBaseId, c.count]));
-
-    const statusOnly = await db
-      .select({ knowledgeBaseId: appKbChunkDocuments.knowledgeBaseId })
       .from(appKbChunkDocuments)
-      .where(
-        sql`not exists (
-          select 1 from ${appKbChunks}
-          where ${appKbChunks.knowledgeBaseId} = ${appKbChunkDocuments.knowledgeBaseId}
-            and ${appKbChunks.documentId} = ${appKbChunkDocuments.documentId}
-        )`,
-      );
-    for (const row of statusOnly) {
-      counts.set(row.knowledgeBaseId, (counts.get(row.knowledgeBaseId) ?? 0) + 1);
-    }
-    return counts;
+      .groupBy(appKbChunkDocuments.knowledgeBaseId);
+    return new Map(rows.map((c) => [c.knowledgeBaseId, c.count]));
   } catch (error) {
     console.warn('[kb] chunk document counts unavailable:', error);
     return new Map();

@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
   appDocumentChannels,
   appKbChunkDocuments,
@@ -9,13 +9,6 @@ import {
 import { buildChannelPath } from './channel-tree.ts';
 import { getDocumentById } from './documents.ts';
 import { decodeEmbeddingBase64 } from '../shared/kb-chunk-embedding.ts';
-import {
-  collectRagReindexDocumentIds,
-  countDistinctRagIndexedDocuments,
-  mergeRagIndexedDocuments,
-  resolveRagIndexedDocumentStatus,
-  type RagChunkDocumentRow,
-} from '../shared/kb-indexed-documents-merge.ts';
 import {
   deleteKbChunkDocument,
   type KbChunkDocumentIndexStatus,
@@ -91,61 +84,24 @@ export async function countKbChunks(knowledgeBaseId: string): Promise<number> {
   return row?.count ?? 0;
 }
 
-function toStatusRows(
-  rows: Array<{
-    documentId: string;
-    documentName: string;
-    channelPath: string;
-    indexStatus: string;
-    indexError: string | null;
-    indexedAt: Date | null;
-    updatedAt: Date;
-  }>,
-): RagChunkDocumentRow[] {
-  return rows.map((row) => ({
-    documentId: row.documentId,
-    documentName: row.documentName,
-    channelPath: row.channelPath,
-    indexStatus: row.indexStatus,
-    indexError: row.indexError,
-    indexedAt: row.indexedAt,
-    updatedAt: row.updatedAt,
-  }));
-}
-
-async function loadChunkAggregates(knowledgeBaseId: string) {
-  return db
+async function loadChunkCountByDocument(knowledgeBaseId: string): Promise<Map<string, number>> {
+  const rows = await db
     .select({
       documentId: appKbChunks.documentId,
       chunkCount: sql<number>`count(*)::int`,
-      indexedAt: sql<Date>`max(${appKbChunks.indexedAt})`,
     })
     .from(appKbChunks)
     .where(eq(appKbChunks.knowledgeBaseId, knowledgeBaseId))
     .groupBy(appKbChunks.documentId);
+  return new Map(rows.map((row) => [row.documentId, row.chunkCount]));
 }
 
 export async function countIndexedDocuments(knowledgeBaseId: string): Promise<number> {
-  const [chunkAggregates, statusRows] = await Promise.all([
-    loadChunkAggregates(knowledgeBaseId),
-    db
-      .select({
-        documentId: appKbChunkDocuments.documentId,
-        documentName: appKbChunkDocuments.documentName,
-        channelPath: appKbChunkDocuments.channelPath,
-        indexStatus: appKbChunkDocuments.indexStatus,
-        indexError: appKbChunkDocuments.indexError,
-        indexedAt: appKbChunkDocuments.indexedAt,
-        updatedAt: appKbChunkDocuments.updatedAt,
-      })
-      .from(appKbChunkDocuments)
-      .where(eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId)),
-  ]);
-
-  return countDistinctRagIndexedDocuments({
-    chunkDocumentIds: chunkAggregates.map((row) => row.documentId),
-    statusRows: toStatusRows(statusRows),
-  });
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(appKbChunkDocuments)
+    .where(eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId));
+  return row?.count ?? 0;
 }
 
 export type KbIndexedDocumentRow = {
@@ -172,104 +128,45 @@ export async function listIndexedDocuments(
   const offset = Math.max(input?.offset ?? 0, 0);
   const limit = Math.min(Math.max(input?.limit ?? 25, 1), 100);
 
-  const [statusRows, chunkAggregates] = await Promise.all([
+  const [countRow, rows, chunkCountByDoc] = await Promise.all([
     db
-      .select({
-        documentId: appKbChunkDocuments.documentId,
-        documentName: appKbChunkDocuments.documentName,
-        channelPath: appKbChunkDocuments.channelPath,
-        indexStatus: appKbChunkDocuments.indexStatus,
-        indexError: appKbChunkDocuments.indexError,
-        indexedAt: appKbChunkDocuments.indexedAt,
-        updatedAt: appKbChunkDocuments.updatedAt,
-      })
+      .select({ count: sql<number>`count(*)::int` })
       .from(appKbChunkDocuments)
       .where(eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId)),
-    loadChunkAggregates(knowledgeBaseId),
+    db
+      .select()
+      .from(appKbChunkDocuments)
+      .where(eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId))
+      .orderBy(desc(appKbChunkDocuments.updatedAt))
+      .limit(limit)
+      .offset(offset),
+    loadChunkCountByDocument(knowledgeBaseId),
   ]);
 
-  const merged = mergeRagIndexedDocuments({
-    chunkAggregates: chunkAggregates.map((row) => ({
-      documentId: row.documentId,
-      chunkCount: row.chunkCount,
-      indexedAt:
-        row.indexedAt instanceof Date
-          ? row.indexedAt
-          : row.indexedAt
-            ? new Date(row.indexedAt)
-            : null,
-    })),
-    statusRows: toStatusRows(statusRows),
-  });
+  const items: KbIndexedDocumentRow[] = rows.map((row) => ({
+    document_id: row.documentId,
+    document_name: row.documentName,
+    channel_path: row.channelPath,
+    chunk_count: chunkCountByDoc.get(row.documentId) ?? null,
+    indexed_at: row.indexedAt?.toISOString() ?? null,
+    status: row.indexStatus as KbChunkDocumentIndexStatus,
+    index_error: row.indexError ?? null,
+  }));
 
-  const page = merged.slice(offset, offset + limit);
-
-  const channelRows = await db
-    .select({
-      id: appDocumentChannels.id,
-      name: appDocumentChannels.name,
-      parentId: appDocumentChannels.parentId,
-    })
-    .from(appDocumentChannels);
-  const channelTree = channelRows.map((r) => ({ id: r.id, name: r.name, parent_id: r.parentId }));
-
-  const items: KbIndexedDocumentRow[] = [];
-  for (const row of page) {
-    const status = resolveRagIndexedDocumentStatus({
-      statusRow: row.statusRow,
-      chunkCount: row.chunkCount,
-    });
-
-    if (row.statusRow) {
-      items.push({
-        document_id: row.documentId,
-        document_name: row.statusRow.documentName,
-        channel_path: row.statusRow.channelPath,
-        chunk_count: row.chunkCount,
-        indexed_at: (row.statusRow.indexedAt ?? row.indexedAt)?.toISOString() ?? null,
-        status,
-        index_error: row.statusRow.indexError ?? null,
-      });
-      continue;
-    }
-
-    const doc = await getDocumentById(row.documentId);
-    if (!doc) continue;
-    items.push({
-      document_id: row.documentId,
-      document_name: doc.name,
-      channel_path: buildChannelPath(doc.channelId, channelTree),
-      chunk_count: row.chunkCount,
-      indexed_at: row.indexedAt?.toISOString() ?? null,
-      status,
-      index_error: null,
-    });
-  }
-
-  return { items, total: merged.length };
+  return { items, total: countRow?.count ?? 0 };
 }
 
 export async function getDistinctIndexedDocumentIds(knowledgeBaseId: string): Promise<string[]> {
-  const [chunkAggregates, statusRows] = await Promise.all([
-    loadChunkAggregates(knowledgeBaseId),
-    db
-      .select({
-        documentId: appKbChunkDocuments.documentId,
-        documentName: appKbChunkDocuments.documentName,
-        channelPath: appKbChunkDocuments.channelPath,
-        indexStatus: appKbChunkDocuments.indexStatus,
-        indexError: appKbChunkDocuments.indexError,
-        indexedAt: appKbChunkDocuments.indexedAt,
-        updatedAt: appKbChunkDocuments.updatedAt,
-      })
-      .from(appKbChunkDocuments)
-      .where(eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId)),
-  ]);
-
-  return collectRagReindexDocumentIds({
-    chunkDocumentIds: chunkAggregates.map((row) => row.documentId),
-    statusRows: toStatusRows(statusRows),
-  });
+  const rows = await db
+    .select({ documentId: appKbChunkDocuments.documentId })
+    .from(appKbChunkDocuments)
+    .where(
+      and(
+        eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId),
+        eq(appKbChunkDocuments.indexStatus, 'indexed'),
+      ),
+    );
+  return rows.map((r) => r.documentId);
 }
 
 export type KbChunkListItem = {
