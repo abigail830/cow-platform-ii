@@ -1,19 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { getKnowledgeBase, type KnowledgeBase } from '../api/knowledgeBases.ts';
-import { iconProps } from '../components/icons/icon-props.ts';
+import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
 import { KnowledgeBaseDetailPage } from './KnowledgeBaseDetailPage.tsx';
 import { RagKnowledgeBaseDetailPage } from './RagKnowledgeBaseDetailPage.tsx';
 
 function RouterLoadingState() {
   return (
-    <main className="admin-page kb-page">
+    <main className="admin-page kb-page kb-detail-page">
       <Link to="/knowledge/knowledge-bases" className="kb-back-link">← Knowledge bases</Link>
-      <p className="session-explorer-loading" role="status" aria-live="polite">
-        <Loader2 {...iconProps({ size: 18, className: 'session-explorer-loading-icon' })} aria-hidden />
-        Loading knowledge base…
-      </p>
+      <KbPageLoadingState label="Loading knowledge base…" />
     </main>
   );
 }
@@ -84,7 +80,7 @@ export function KnowledgeBaseDetailRouter() {
 
   if (!kb) {
     return (
-      <main className="admin-page kb-page">
+      <main className="admin-page kb-page kb-detail-page">
         <Link to="/knowledge/knowledge-bases" className="kb-back-link">← Knowledge bases</Link>
         <p className="admin-error" role="alert">
           {error || 'Failed to load knowledge base.'}

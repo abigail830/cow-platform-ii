@@ -4087,6 +4087,19 @@ textarea {
   min-height: 0;
 }
 
+.kb-page-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  padding: 2rem 1rem;
+}
+
+.kb-page-loading .session-explorer-loading {
+  width: auto;
+}
+
 .kb-rag-settings-modal .kb-rag-form-hint {
   white-space: normal;
   overflow: visible;
@@ -4211,7 +4224,7 @@ textarea {
 
 .kb-detail-table .kb-item-actions-col {
   width: 5.25rem;
-  padding-right: 0.75rem;
+  padding-right: 1.5rem;
 }
 
 .kb-detail-table .kb-item-actions-col .row-actions {
@@ -4219,9 +4232,10 @@ textarea {
 }
 
 .kb-detail-table .kb-item-detail-hint-col {
-  width: 2.25rem;
-  padding-left: 0;
-  padding-right: 0.25rem;
+  width: 2.5rem;
+  padding-left: 1rem;
+  padding-right: 0.5rem;
+  border-left: 1px solid #e2e8f0;
 }
 
 .kb-item-status-loading {

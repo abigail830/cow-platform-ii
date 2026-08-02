@@ -1,5 +1,7 @@
 type KbItemDeleteConfirmModalProps = {
   mode: 'single' | 'bulk';
+  /** PageIndex items vs RAG chunk index rows */
+  variant?: 'pageindex' | 'rag-chunks';
   documentName?: string;
   count?: number;
   deleting?: boolean;
@@ -9,13 +11,19 @@ type KbItemDeleteConfirmModalProps = {
 
 export function KbItemDeleteConfirmModal({
   mode,
+  variant = 'pageindex',
   documentName,
   count = 0,
   deleting = false,
   onCancel,
   onConfirm,
 }: KbItemDeleteConfirmModalProps) {
-  const title = mode === 'single' ? 'Remove knowledge item' : 'Remove knowledge items';
+  const title =
+    variant === 'rag-chunks'
+      ? 'Remove indexed chunks'
+      : mode === 'single'
+        ? 'Remove knowledge item'
+        : 'Remove knowledge items';
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
@@ -41,8 +49,18 @@ export function KbItemDeleteConfirmModal({
             )}
           </p>
           <p className="document-delete-confirm-warn">
-            This removes the imported snapshot from this knowledge base only. Source documents in
-            Document Management are not deleted.
+            {variant === 'rag-chunks' ? (
+              <>
+                This deletes all chunks and embeddings for{' '}
+                {mode === 'single' ? 'this document' : 'the selected documents'} in this knowledge
+                base. Source documents in Document Management are not deleted.
+              </>
+            ) : (
+              <>
+                This removes the imported snapshot from this knowledge base only. Source documents
+                in Document Management are not deleted.
+              </>
+            )}
           </p>
         </div>
         <div className="modal-actions">

@@ -15,6 +15,7 @@ import {
 } from '../api/knowledgeBases.ts';
 import { IconDelete, IconRun } from '../components/AdminActionIcons.tsx';
 import { KbImportModal } from '../components/KbImportModal.tsx';
+import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
 import { KbItemDeleteConfirmModal } from '../components/KbItemDeleteConfirmModal.tsx';
 import { KbItemDetailPanel } from '../components/KbItemDetailPanel.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -301,7 +302,7 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
       <Link to="/knowledge/knowledge-bases" className="kb-back-link">← Knowledge bases</Link>
 
       {loading && !kb ? (
-        <p className="admin-muted">Loading…</p>
+        <KbPageLoadingState label="Loading knowledge base…" />
       ) : kb ? (
         <>
           <header className="admin-header kb-page-header">

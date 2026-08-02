@@ -17,6 +17,8 @@ import {
 import { listModelConfigs, type ModelConfig } from '../api/models.ts';
 import { IconRun } from '../components/AdminActionIcons.tsx';
 import { KbImportModal } from '../components/KbImportModal.tsx';
+import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
+import { KbItemDeleteConfirmModal } from '../components/KbItemDeleteConfirmModal.tsx';
 import { KbRagDocumentDetailPanel } from '../components/KbRagDocumentDetailPanel.tsx';
 import { KbRagSettingsModal } from '../components/KbRagSettingsModal.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -88,6 +90,10 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeJob, setActiveJob] = useState<KbImportJob | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    documentId: string;
+    documentName: string;
+  } | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [rerunningDocId, setRerunningDocId] = useState<string | null>(null);
   const [reindexingAll, setReindexingAll] = useState(false);
@@ -263,12 +269,18 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
         setSelectedDocumentId(null);
         setDetailChunks(null);
       }
+      setDeleteConfirm(null);
       await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove indexed chunks');
     } finally {
       setDeletingDocId(null);
     }
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteConfirm) return;
+    await handleDeleteChunks(deleteConfirm.documentId);
   }
 
   if (forbidden) {
@@ -284,7 +296,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
       <Link to="/knowledge/knowledge-bases" className="kb-back-link">← Knowledge bases</Link>
 
       {loading && !kb ? (
-        <ListLoadingState label="Loading knowledge base…" />
+        <KbPageLoadingState label="Loading knowledge base…" />
       ) : kb ? (
         <>
           <header className="admin-header kb-page-header">
@@ -445,7 +457,12 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                                             importJobActive ||
                                             doc.status === 'indexing'
                                           }
-                                          onClick={() => void handleDeleteChunks(doc.document_id)}
+                                          onClick={() =>
+                                            setDeleteConfirm({
+                                              documentId: doc.document_id,
+                                              documentName: doc.document_name,
+                                            })
+                                          }
                                         >
                                           {deletingDocId === doc.document_id ? (
                                             <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
@@ -522,6 +539,19 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
             setKb(updated);
             setSettingsOpen(false);
           }}
+        />
+      )}
+
+      {deleteConfirm && (
+        <KbItemDeleteConfirmModal
+          variant="rag-chunks"
+          mode="single"
+          documentName={deleteConfirm.documentName}
+          deleting={deletingDocId === deleteConfirm.documentId}
+          onCancel={() => {
+            if (deletingDocId !== deleteConfirm.documentId) setDeleteConfirm(null);
+          }}
+          onConfirm={handleDeleteConfirm}
         />
       )}
     </main>
