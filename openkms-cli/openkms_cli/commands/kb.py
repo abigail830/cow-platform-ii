@@ -30,3 +30,25 @@ def kb_rag_index(
     from openkms_cli.kb.rag_index import run_rag_index
 
     run_rag_index(job_id, api_url=api_url)
+
+
+@kb_app.command("faq-index")
+def kb_faq_index(
+    job_id: str = typer.Option(..., "--job-id", help="FAQ KB index job UUID"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", help="Backend API URL"),
+) -> None:
+    """Embed published FAQ questions for a FAQ knowledge base."""
+    from openkms_cli.kb.faq_index import run_faq_index
+
+    run_faq_index(job_id, api_url=api_url)
+
+
+@kb_app.command("faq-extract")
+def kb_faq_extract(
+    job_id: str = typer.Option(..., "--job-id", help="FAQ extract job UUID"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", help="Backend API URL"),
+) -> None:
+    """Extract FAQ drafts from document markdown using configured LLM."""
+    from openkms_cli.kb.faq_extract import run_faq_extract
+
+    run_faq_extract(job_id, api_url=api_url)

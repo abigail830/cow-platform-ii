@@ -4,10 +4,13 @@ import type { KnowledgeBaseType } from '../db/index.ts';
 
 export const PAGE_INDEX_KB_PIPELINE_NAME = 'kb-pageindex-import';
 export const RAG_KB_PIPELINE_NAME = 'kb-rag-index';
+export const FAQ_KB_INDEX_PIPELINE_NAME = 'kb-faq-index';
+export const FAQ_KB_EXTRACT_PIPELINE_NAME = 'kb-faq-extract';
 
 export const KB_DEFAULT_PIPELINE_BY_TYPE: Record<KnowledgeBaseType, string | null> = {
   page_index: PAGE_INDEX_KB_PIPELINE_NAME,
   rag: RAG_KB_PIPELINE_NAME,
+  faq: FAQ_KB_INDEX_PIPELINE_NAME,
 };
 
 export type KbPipelineUiMeta = {
@@ -24,6 +27,14 @@ export const KB_PIPELINE_UI_META: Record<string, KbPipelineUiMeta> = {
     category: 'knowledge',
     boundTo: 'KnowledgeBase (type: rag)',
   },
+  [FAQ_KB_INDEX_PIPELINE_NAME]: {
+    category: 'knowledge',
+    boundTo: 'KnowledgeBase (type: faq)',
+  },
+  [FAQ_KB_EXTRACT_PIPELINE_NAME]: {
+    category: 'knowledge',
+    boundTo: 'FAQ extract jobs',
+  },
 };
 
 export function kbPipelineUiMeta(pipelineName: string): KbPipelineUiMeta | null {
@@ -39,3 +50,13 @@ export const DEFAULT_KB_RAG_INDEX_COMMAND_TEMPLATE =
   'openkms-cli kb rag-index --job-id {job_id}';
 
 export const DEFAULT_KB_RAG_INDEX_WORKFLOW_FILE = 'openkms-kb-rag-index.yml';
+
+export const DEFAULT_KB_FAQ_INDEX_COMMAND_TEMPLATE =
+  'openkms-cli kb faq-index --job-id {job_id}';
+
+export const DEFAULT_KB_FAQ_INDEX_WORKFLOW_FILE = 'openkms-kb-faq-index.yml';
+
+export const DEFAULT_KB_FAQ_EXTRACT_COMMAND_TEMPLATE =
+  'openkms-cli kb faq-extract --job-id {job_id}';
+
+export const DEFAULT_KB_FAQ_EXTRACT_WORKFLOW_FILE = 'openkms-kb-faq-extract.yml';

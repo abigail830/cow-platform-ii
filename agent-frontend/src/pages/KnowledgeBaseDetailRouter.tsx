@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { getKnowledgeBase, type KnowledgeBase } from '../api/knowledgeBases.ts';
 import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
+import { FaqKnowledgeBaseDetailPage } from './FaqKnowledgeBaseDetailPage.tsx';
 import { KnowledgeBaseDetailPage } from './KnowledgeBaseDetailPage.tsx';
 import { RagKnowledgeBaseDetailPage } from './RagKnowledgeBaseDetailPage.tsx';
 
@@ -91,6 +92,10 @@ export function KnowledgeBaseDetailRouter() {
 
   if (kb.type === 'rag') {
     return <RagKnowledgeBaseDetailPage initialKb={kb} />;
+  }
+
+  if (kb.type === 'faq') {
+    return <FaqKnowledgeBaseDetailPage initialKb={kb} />;
   }
 
   return <KnowledgeBaseDetailPage initialKb={kb} />;

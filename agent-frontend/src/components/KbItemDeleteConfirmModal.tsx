@@ -1,7 +1,7 @@
 type KbItemDeleteConfirmModalProps = {
   mode: 'single' | 'bulk';
-  /** PageIndex items vs RAG chunk index rows */
-  variant?: 'pageindex' | 'rag-chunks';
+  /** PageIndex items vs RAG chunk index rows vs FAQ entries */
+  variant?: 'pageindex' | 'rag-chunks' | 'faq';
   documentName?: string;
   count?: number;
   deleting?: boolean;
@@ -21,9 +21,13 @@ export function KbItemDeleteConfirmModal({
   const title =
     variant === 'rag-chunks'
       ? 'Remove indexed chunks'
-      : mode === 'single'
-        ? 'Remove knowledge item'
-        : 'Remove knowledge items';
+      : variant === 'faq'
+        ? mode === 'single'
+          ? 'Delete FAQ'
+          : 'Delete FAQs'
+        : mode === 'single'
+          ? 'Remove knowledge item'
+          : 'Remove knowledge items';
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
@@ -55,6 +59,12 @@ export function KbItemDeleteConfirmModal({
                 {mode === 'single' ? 'this document' : 'the selected documents'} in this knowledge
                 base. Source documents in Document Management are not deleted.
               </>
+            ) : variant === 'faq' ? (
+              <>
+                This permanently deletes{' '}
+                {mode === 'single' ? 'this FAQ entry' : 'the selected FAQ entries'} from this
+                knowledge base, including any indexed embeddings.
+              </>
             ) : (
               <>
                 This removes the imported snapshot from this knowledge base only. Source documents
@@ -73,7 +83,7 @@ export function KbItemDeleteConfirmModal({
             onClick={() => void onConfirm()}
             disabled={deleting}
           >
-            {deleting ? 'Removing…' : 'Remove'}
+            {deleting ? (variant === 'faq' ? 'Deleting…' : 'Removing…') : variant === 'faq' ? 'Delete' : 'Remove'}
           </button>
         </div>
       </div>

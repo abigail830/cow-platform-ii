@@ -18,7 +18,9 @@ import { hasPermission } from '../shared/permissions.ts';
 const PAGE = getNavPage('/knowledge/knowledge-bases')!;
 
 function typeLabel(type: KnowledgeBaseType): string {
-  return type === 'page_index' ? 'PageIndex' : 'RAG';
+  if (type === 'page_index') return 'PageIndex';
+  if (type === 'faq') return 'FAQ';
+  return 'RAG';
 }
 
 export function KnowledgeBasesListPage() {
@@ -148,7 +150,7 @@ export function KnowledgeBasesListPage() {
       <header className="admin-header">
         <AdminPageTitle main={PAGE.titleMain} accent={PAGE.titleAccent} />
         <AdminPageDescription>
-          Create PageIndex or RAG knowledge bases and import parsed documents from channels.
+          Create PageIndex, RAG, or FAQ knowledge bases and manage imported or extracted content.
         </AdminPageDescription>
       </header>
 
@@ -289,6 +291,23 @@ export function KnowledgeBasesListPage() {
                         RAG
                         <span className="admin-form-hint kb-type-pipeline-hint">
                           — <strong>RAG KB Index</strong> pipeline · embedding in Settings
+                        </span>
+                      </span>
+                    </label>
+                    <label className="kb-type-option">
+                      <input
+                        type="radio"
+                        className="brand-radio"
+                        name="kb-type"
+                        value="faq"
+                        checked={type === 'faq'}
+                        disabled={editingKb !== null}
+                        onChange={() => setType('faq')}
+                      />
+                      <span className="kb-type-option-text">
+                        FAQ
+                        <span className="admin-form-hint kb-type-pipeline-hint">
+                          — <strong>FAQ KB Index</strong> pipeline · manual Q&amp;A and extraction
                         </span>
                       </span>
                     </label>

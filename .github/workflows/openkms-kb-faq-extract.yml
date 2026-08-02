@@ -1,16 +1,12 @@
-# PageIndex knowledge base import — isolated from document parse pipeline.
-#
-# Manual: Actions → OpenKMS KB PageIndex Import → Run workflow → job_id from app_kb_import_jobs.
-# Trigger API (backend):
-#   POST /repos/{owner}/{repo}/actions/workflows/openkms-kb-pageindex-import.yml/dispatches
+# FAQ extract — LLM extraction of draft FAQs from document markdown.
 
-name: OpenKMS KB PageIndex Import
+name: OpenKMS KB FAQ Extract
 
 on:
   workflow_dispatch:
     inputs:
       job_id:
-        description: PageIndex KB import job UUID (app_kb_import_jobs.id)
+        description: FAQ extract job UUID (app_kb_import_jobs.id)
         required: true
         type: string
       worker_cli_args:
@@ -19,7 +15,7 @@ on:
         type: string
 
 concurrency:
-  group: openkms-kb-pageindex-import-${{ inputs.job_id }}
+  group: openkms-kb-faq-extract-${{ inputs.job_id }}
   cancel-in-progress: false
 
 defaults:
@@ -27,8 +23,8 @@ defaults:
     working-directory: openkms-cli
 
 jobs:
-  pageindex-import:
-    name: pageindex-import (${{ inputs.job_id }})
+  faq-extract:
+    name: faq-extract (${{ inputs.job_id }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -47,15 +43,8 @@ jobs:
           enable-cache: true
           cache-dependency-glob: openkms-cli/uv.lock
 
-      - name: Restore virtualenv cache
-        id: venv-cache
-        uses: actions/cache@v4
-        with:
-          path: openkms-cli/.venv
-          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('openkms-cli/uv.lock') }}
-
       - name: Install dependencies
-        run: uv sync --frozen --extra pipeline
+        run: uv sync --frozen --extra kb --extra pipeline
 
       - name: Validate backend URL
         env:
@@ -65,18 +54,9 @@ jobs:
             echo "::error::GitHub secret OPENKMS_API_URL is not set."
             exit 1
           fi
-          case "$OPENKMS_API_URL" in
-            http://127.0.0.1:*|http://localhost:*|https://127.0.0.1:*|https://localhost:*)
-              echo "::error::OPENKMS_API_URL points to localhost — GitHub runners cannot reach your machine."
-              exit 1
-              ;;
-          esac
-          curl -fsS --max-time 15 "${OPENKMS_API_URL%/}/health" || {
-            echo "::error::Backend health check failed."
-            exit 1
-          }
+          curl -fsS --max-time 15 "${OPENKMS_API_URL%/}/health"
 
-      - name: Run PageIndex KB import
+      - name: Run FAQ extract
         env:
           OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
           OPENKMS_AUTH_MODE: local
@@ -92,7 +72,7 @@ jobs:
           if [ -n "$ARGS_JSON" ] && [ "$ARGS_JSON" != "null" ]; then
             uv run openkms-cli $(python3 -c 'import json,sys; print(" ".join(json.loads(sys.argv[1])))' "$ARGS_JSON")
           else
-            uv run openkms-cli kb pageindex-import --job-id "${{ inputs.job_id }}"
+            uv run openkms-cli kb faq-extract --job-id "${{ inputs.job_id }}"
           fi
 
       - name: Mark job failed on workflow error
@@ -106,5 +86,5 @@ jobs:
           curl -fsS -X PATCH "${OPENKMS_API_URL%/}/internal-api/kb-import-jobs/${JOB_ID}" \
             -u "${OPENKMS_CLI_BASIC_USER}:${OPENKMS_CLI_BASIC_PASSWORD}" \
             -H "Content-Type: application/json" \
-            -d '{"status":"failed","error_message":"GitHub Actions worker failed before pageindex-import completed"}' \
-            || echo "::warning::Could not mark KB import job as failed"
+            -d '{"status":"failed","error_message":"GitHub Actions worker failed before faq-extract completed"}' \
+            || true

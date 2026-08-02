@@ -5,16 +5,14 @@ import {
   buildKbImportJobWorkerContext,
   getKbImportJobById,
   updateKbImportJob,
-  upsertKbItemFromWorker,
   type KbImportJobStatus,
-  type KbItemImportStatus,
 } from '../../services/knowledge-bases.ts';
 
-const kbPageIndexImportJobs = new Hono();
+const kbImportJobs = new Hono();
 
-kbPageIndexImportJobs.use('*', requireCliInternalAuth);
+kbImportJobs.use('*', requireCliInternalAuth);
 
-kbPageIndexImportJobs.get('/:id', async (c) => {
+kbImportJobs.get('/:id', async (c) => {
   const id = routeParam(c, 'id');
   if (!id) return c.json({ error: 'Job id is required' }, 400);
 
@@ -28,7 +26,7 @@ kbPageIndexImportJobs.get('/:id', async (c) => {
   }
 });
 
-kbPageIndexImportJobs.patch('/:id', async (c) => {
+kbImportJobs.patch('/:id', async (c) => {
   const id = routeParam(c, 'id');
   if (!id) return c.json({ error: 'Job id is required' }, 400);
 
@@ -52,4 +50,4 @@ kbPageIndexImportJobs.patch('/:id', async (c) => {
   return c.json({ ok: true, job: updated });
 });
 
-export default kbPageIndexImportJobs;
+export default kbImportJobs;

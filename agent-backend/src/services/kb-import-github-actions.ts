@@ -1,33 +1,36 @@
 /**
- * Dispatch KB import jobs to GitHub Actions (workflow_dispatch).
+ * Dispatch KB import/index jobs to GitHub Actions (workflow_dispatch).
+ * Shared by PageIndex, RAG, and FAQ knowledge base workers.
  */
 
-export type KbPageIndexImportGithubDispatchInput = {
+export type KbImportGithubDispatchInput = {
   jobId: string;
   workerCliArgs?: string[];
 };
 
-export type KbPageIndexImportGithubConfig = {
+export type KbImportGithubConfig = {
   token: string;
   repository: string;
   workflowFile: string;
   ref: string;
 };
 
-export function resolveKbPageIndexImportGithubConfig(
+export function resolveKbImportGithubConfig(
   env: NodeJS.ProcessEnv = process.env,
-): KbPageIndexImportGithubConfig | null {
+): KbImportGithubConfig | null {
   const token = env.GITHUB_PIPELINE_TOKEN?.trim() || env.GITHUB_TOKEN?.trim();
   const repository = env.GITHUB_PIPELINE_REPOSITORY?.trim();
   const workflowFile =
-    env.GITHUB_KB_PAGEINDEX_IMPORT_WORKFLOW?.trim() || 'openkms-kb-pageindex-import.yml';
+    env.GITHUB_KB_IMPORT_WORKFLOW?.trim() ||
+    env.GITHUB_KB_PAGEINDEX_IMPORT_WORKFLOW?.trim() ||
+    'openkms-kb-pageindex-import.yml';
   const ref = env.GITHUB_PIPELINE_REF?.trim() || 'main';
 
   if (!token || !repository) return null;
   return { token, repository, workflowFile, ref };
 }
 
-export function kbPageIndexImportGithubDispatchUrl(config: KbPageIndexImportGithubConfig): string {
+export function kbImportGithubDispatchUrl(config: KbImportGithubConfig): string {
   const [owner, repo] = config.repository.split('/');
   if (!owner || !repo) {
     throw new Error(
@@ -37,12 +40,12 @@ export function kbPageIndexImportGithubDispatchUrl(config: KbPageIndexImportGith
   return `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(config.workflowFile)}/dispatches`;
 }
 
-export async function triggerKbPageIndexImportGithubActions(
-  input: KbPageIndexImportGithubDispatchInput,
-  config: KbPageIndexImportGithubConfig,
+export async function triggerKbImportGithubActions(
+  input: KbImportGithubDispatchInput,
+  config: KbImportGithubConfig,
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
-  const url = kbPageIndexImportGithubDispatchUrl(config);
+  const url = kbImportGithubDispatchUrl(config);
   const body: {
     ref: string;
     inputs: { job_id: string; worker_cli_args?: string };

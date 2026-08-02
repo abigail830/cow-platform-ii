@@ -16,6 +16,12 @@ import {
   upsertKbItemFromWorker,
   type KbItemImportStatus,
 } from '../../services/knowledge-bases.ts';
+import {
+  batchCreateKbFaqsFromWorker,
+  getKbFaqsForWorker,
+  refreshFaqDocMetadataForIndex,
+  updateKbFaqFromWorker,
+} from '../../services/kb-faqs.ts';
 
 const knowledgeBasesInternal = new Hono();
 
@@ -164,6 +170,94 @@ knowledgeBasesInternal.put('/:kbId/items/:documentId', async (c) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to upsert KB item';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status);
+  }
+});
+
+knowledgeBasesInternal.get('/:kbId/faqs', async (c) => {
+  const kbId = routeParam(c, 'kbId');
+  if (!kbId) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+  const faqIds = (c.req.query('faq_ids') ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (faqIds.length === 0) return c.json({ error: 'faq_ids query is required' }, 400);
+
+  try {
+    const items = await getKbFaqsForWorker(kbId, faqIds);
+    return c.json({ items });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to list FAQs';
+    return c.json({ error: message }, 400);
+  }
+});
+
+knowledgeBasesInternal.post('/:kbId/faqs/batch', async (c) => {
+  const kbId = routeParam(c, 'kbId');
+  if (!kbId) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+  const body = await c.req.json<{
+    items?: Array<{
+      question: string;
+      answer: string;
+      source_document_id?: string | null;
+      source_document_name?: string | null;
+      doc_metadata?: Record<string, unknown> | null;
+    }>;
+  }>().catch(() => ({}));
+
+  const items = body.items ?? [];
+  if (!Array.isArray(items) || items.length === 0) {
+    return c.json({ error: 'items is required' }, 400);
+  }
+
+  const kb = await getKnowledgeBaseById(kbId);
+  if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+  if (kb.type !== 'faq') return c.json({ error: 'Knowledge base is not FAQ type' }, 400);
+
+  try {
+    const inserted = await batchCreateKbFaqsFromWorker(kbId, items);
+    return c.json({ ok: true, inserted });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to batch create FAQs';
+    return c.json({ error: message }, 400);
+  }
+});
+
+knowledgeBasesInternal.put('/:kbId/faqs/:faqId', async (c) => {
+  const kbId = routeParam(c, 'kbId');
+  const faqId = routeParam(c, 'faqId');
+  if (!kbId || !faqId) return c.json({ error: 'Knowledge base id and FAQ id are required' }, 400);
+
+  const body = await c.req.json<{
+    embedding?: string;
+    index_status?: 'indexed' | 'failed';
+    index_error?: string | null;
+    doc_metadata?: Record<string, unknown> | null;
+  }>().catch(() => ({}));
+
+  if (!body.index_status) return c.json({ error: 'index_status is required' }, 400);
+
+  const kb = await getKnowledgeBaseById(kbId);
+  if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  let docMetadata = body.doc_metadata;
+  if (docMetadata === undefined) {
+    docMetadata = await refreshFaqDocMetadataForIndex(kbId, faqId);
+  }
+
+  try {
+    const faq = await updateKbFaqFromWorker(kbId, faqId, {
+      embedding: body.embedding,
+      index_status: body.index_status,
+      index_error: body.index_error,
+      doc_metadata: docMetadata,
+    }, kb.embeddingDimensions);
+    return c.json({ ok: true, faq });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update FAQ';
     const status = message.includes('not found') ? 404 : 400;
     return c.json({ error: message }, status);
   }

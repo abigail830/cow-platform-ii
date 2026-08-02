@@ -2,11 +2,21 @@ import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
 
-export type KnowledgeBaseType = 'page_index' | 'rag';
+export type KnowledgeBaseType = 'page_index' | 'rag' | 'faq';
 
 export type KnowledgeBaseCapabilities = {
   import: boolean;
   index: boolean;
+  manual_create?: boolean;
+  extract?: boolean;
+};
+
+export type KbFaqSettings = {
+  auto_index_on_publish?: boolean;
+  extraction_model_config_id?: string | null;
+  extraction_prompt?: string;
+  polish_model_config_id?: string | null;
+  polish_prompt?: string;
 };
 
 export type KbChunkConfig = {
@@ -27,6 +37,7 @@ export type KnowledgeBase = {
   embedding_dimensions?: number;
   chunk_config?: KbChunkConfig;
   metadata_keys?: string[];
+  faq_settings?: KbFaqSettings;
   is_configured?: boolean;
   chunk_count?: number;
   created_by: string | null;
@@ -90,11 +101,32 @@ export type KbImportJob = {
   id: string;
   knowledge_base_id: string;
   status: string;
+  job_kind?: string | null;
   document_ids: string[];
+  faq_ids?: string[];
   total_count: number;
   completed_count: number;
   failed_count: number;
   error_message: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type KbFaq = {
+  id: string;
+  knowledge_base_id: string;
+  question: string;
+  answer: string;
+  source_type: 'manual' | 'extracted';
+  source_document_id: string | null;
+  source_document_name: string | null;
+  publication_status: 'draft' | 'published';
+  index_status: 'pending' | 'indexing' | 'indexed' | 'failed' | null;
+  index_error: string | null;
+  indexed_at: string | null;
+  doc_metadata: Record<string, unknown> | null;
+  content_hash: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -164,6 +196,7 @@ export async function updateKnowledgeBase(
     embedding_dimensions?: number;
     chunk_config?: KbChunkConfig;
     metadata_keys?: string[];
+    faq_settings?: KbFaqSettings;
   },
 ): Promise<KnowledgeBase> {
   const data = await authFetch(`/api/knowledge-bases/${id}`, {
@@ -180,6 +213,7 @@ export async function updateKnowledgeBase(
         : {}),
       ...(input.chunk_config !== undefined ? { chunk_config: input.chunk_config } : {}),
       ...(input.metadata_keys !== undefined ? { metadata_keys: input.metadata_keys } : {}),
+      ...(input.faq_settings !== undefined ? { faq_settings: input.faq_settings } : {}),
     }),
   });
   return data as KnowledgeBase;
@@ -305,6 +339,122 @@ export async function deleteDocumentChunks(
     { method: 'DELETE' },
   );
   return (data.deleted as number) ?? 0;
+}
+
+export async function listKbFaqs(
+  knowledgeBaseId: string,
+  options?: {
+    offset?: number;
+    limit?: number;
+    publication_status?: 'draft' | 'published';
+    q?: string;
+  },
+): Promise<{ items: KbFaq[]; total: number }> {
+  const params = new URLSearchParams();
+  if (options?.offset != null) params.set('offset', String(options.offset));
+  if (options?.limit != null) params.set('limit', String(options.limit));
+  if (options?.publication_status) params.set('publication_status', options.publication_status);
+  if (options?.q) params.set('q', options.q);
+  const qs = params.toString();
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs${qs ? `?${qs}` : ''}`);
+  return data as { items: KbFaq[]; total: number };
+}
+
+export async function createKbFaq(
+  knowledgeBaseId: string,
+  input: { question: string; answer: string },
+): Promise<KbFaq> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return data as KbFaq;
+}
+
+export async function updateKbFaq(
+  knowledgeBaseId: string,
+  faqId: string,
+  input: { question?: string; answer?: string },
+): Promise<KbFaq> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/${faqId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return data as KbFaq;
+}
+
+export async function deleteKbFaqs(knowledgeBaseId: string, faqIds: string[]): Promise<number> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/batch-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ faq_ids: faqIds }),
+  });
+  return (data.deleted_count as number) ?? faqIds.length;
+}
+
+export async function batchPublishKbFaqs(
+  knowledgeBaseId: string,
+  faqIds: string[],
+): Promise<{ published_count: number; index_job?: KbImportJob }> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/batch-publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ faq_ids: faqIds }),
+  });
+  return data as { published_count: number; index_job?: KbImportJob };
+}
+
+export async function batchDraftKbFaqs(
+  knowledgeBaseId: string,
+  faqIds: string[],
+): Promise<{ draft_count: number }> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/batch-draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ faq_ids: faqIds }),
+  });
+  return data as { draft_count: number };
+}
+
+export async function polishKbFaqAnswer(
+  knowledgeBaseId: string,
+  input: { faq_id?: string; question?: string; answer?: string },
+): Promise<{ answer: string }> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/polish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return data as { answer: string };
+}
+
+export async function startKbFaqExtract(
+  knowledgeBaseId: string,
+  input: { channelIds?: string[]; documentIds?: string[] },
+): Promise<{ job: KbImportJob; document_count: number }> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/extract`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel_ids: input.channelIds ?? [],
+      document_ids: input.documentIds ?? [],
+    }),
+  });
+  return data as { job: KbImportJob; document_count: number };
+}
+
+export async function startKbFaqIndex(
+  knowledgeBaseId: string,
+  faqIds: string[],
+): Promise<{ job: KbImportJob; faq_count: number }> {
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/index-faqs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ faq_ids: faqIds }),
+  });
+  return data as { job: KbImportJob; faq_count: number };
 }
 
 export type ImportSourceChannelNode = ImportSourceChannel & { children: ImportSourceChannelNode[] };

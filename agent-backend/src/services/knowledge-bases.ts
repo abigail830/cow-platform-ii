@@ -5,11 +5,14 @@ import {
   appKbChunkDocuments,
   appKbImportJobs,
   appKbItems,
+  appKbFaqs,
   appKnowledgeBases,
   db,
   type KnowledgeBaseType,
   type KbChunkConfig,
   type KbImportJobStatus,
+  type KbImportJobKind,
+  type KbFaqSettings,
   type KbItemImportStatus,
 } from '../db/index.ts';
 import { buildChannelPath, collectDescendantIds } from './channel-tree.ts';
@@ -60,17 +63,22 @@ export type KbImportJobRow = typeof appKbImportJobs.$inferSelect;
 
 function kbCapabilities(type: string) {
   if (type === 'page_index') {
-    return { import: true, index: false };
+    return { import: true, index: false, manual_create: false, extract: false };
   }
   if (type === 'rag') {
-    return { import: true, index: true };
+    return { import: true, index: true, manual_create: false, extract: false };
   }
-  return { import: false, index: false };
+  if (type === 'faq') {
+    return { import: false, index: true, manual_create: true, extract: true };
+  }
+  return { import: false, index: false, manual_create: false, extract: false };
 }
 
 function isKbConfigured(row: KnowledgeBaseRow): boolean {
-  if (row.type !== 'rag') return true;
-  return row.embeddingModelConfigId != null;
+  if (row.type === 'rag' || row.type === 'faq') {
+    return row.embeddingModelConfigId != null;
+  }
+  return true;
 }
 
 function toKnowledgeBasePublic(
@@ -95,6 +103,7 @@ function toKnowledgeBasePublic(
     embedding_dimensions: row.embeddingDimensions,
     chunk_config: row.chunkConfig,
     metadata_keys: row.metadataKeys,
+    faq_settings: row.type === 'faq' ? row.faqSettings : undefined,
     is_configured: isKbConfigured(row),
     chunk_count: options?.chunkCount,
     created_by: row.createdBy,
@@ -131,12 +140,14 @@ function toKbItemPublic(
   };
 }
 
-function toKbImportJobPublic(row: KbImportJobRow) {
+export function toKbImportJobPublic(row: KbImportJobRow) {
   return {
     id: row.id,
     knowledge_base_id: row.knowledgeBaseId,
     status: row.status,
+    job_kind: row.jobKind,
     document_ids: row.documentIds,
+    faq_ids: row.faqIds,
     total_count: row.totalCount,
     completed_count: row.completedCount,
     failed_count: row.failedCount,
@@ -165,10 +176,14 @@ export async function listKnowledgeBases(): Promise<ReturnType<typeof toKnowledg
   const itemCountMap = new Map(itemCounts.map((c) => [c.knowledgeBaseId, c.count]));
 
   return rows.map((row) => {
-    const itemCount =
-      row.type === 'rag'
-        ? (chunkDocCountMap.get(row.id) ?? 0)
-        : (itemCountMap.get(row.id) ?? 0);
+    let itemCount = 0;
+    if (row.type === 'rag') {
+      itemCount = chunkDocCountMap.get(row.id) ?? 0;
+    } else if (row.type === 'faq') {
+      itemCount = 0;
+    } else {
+      itemCount = itemCountMap.get(row.id) ?? 0;
+    }
     return toKnowledgeBasePublic(row, { itemCount });
   });
 }
@@ -197,6 +212,12 @@ async function enrichKbPublic(row: KnowledgeBaseRow) {
     const counts = await ragKbCounts(row.id);
     itemCount = counts.indexedDocuments;
     chunkCount = counts.chunks;
+  } else if (row.type === 'faq') {
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(appKbFaqs)
+      .where(eq(appKbFaqs.knowledgeBaseId, row.id));
+    itemCount = countRow?.count ?? 0;
   } else {
     const [countRow] = await db
       .select({ count: sql<number>`count(*)::int` })
@@ -227,7 +248,7 @@ export async function createKnowledgeBase(input: {
 }) {
   const name = input.name.trim();
   if (!name || name.length > 256) throw new Error('Name must be 1–256 characters');
-  if (input.type !== 'page_index' && input.type !== 'rag') {
+  if (input.type !== 'page_index' && input.type !== 'rag' && input.type !== 'faq') {
     throw new Error('Invalid knowledge base type');
   }
 
@@ -262,6 +283,7 @@ export async function updateKnowledgeBase(
     embedding_dimensions?: number;
     chunk_config?: KbChunkConfig;
     metadata_keys?: string[];
+    faq_settings?: KbFaqSettings;
   },
 ) {
   const row = await getKnowledgeBaseById(id);
@@ -273,7 +295,10 @@ export async function updateKnowledgeBase(
   const description =
     input.description !== undefined ? input.description?.trim() || null : row.description;
 
-  if (input.embedding_model_config_id !== undefined && row.type === 'rag') {
+  if (
+    input.embedding_model_config_id !== undefined &&
+    (row.type === 'rag' || row.type === 'faq')
+  ) {
     const modelId = input.embedding_model_config_id?.trim() || null;
     if (modelId) {
       const model = await getModelConfigById(modelId);
@@ -296,14 +321,23 @@ export async function updateKnowledgeBase(
     .set({
       name,
       description,
-      ...(input.embedding_model_config_id !== undefined && row.type === 'rag'
+      ...(input.embedding_model_config_id !== undefined &&
+      (row.type === 'rag' || row.type === 'faq')
         ? { embeddingModelConfigId: input.embedding_model_config_id?.trim() || null }
         : {}),
       ...(input.embedding_dimensions !== undefined
         ? { embeddingDimensions: input.embedding_dimensions }
         : {}),
-      ...(input.chunk_config !== undefined ? { chunkConfig: input.chunk_config } : {}),
-      ...(input.metadata_keys !== undefined ? { metadataKeys: input.metadata_keys } : {}),
+      ...(input.chunk_config !== undefined && row.type === 'rag'
+        ? { chunkConfig: input.chunk_config }
+        : {}),
+      ...(input.metadata_keys !== undefined &&
+      (row.type === 'rag' || row.type === 'faq')
+        ? { metadataKeys: input.metadata_keys }
+        : {}),
+      ...(input.faq_settings !== undefined && row.type === 'faq'
+        ? { faqSettings: { ...row.faqSettings, ...input.faq_settings } }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(appKnowledgeBases.id, id))
@@ -595,17 +629,26 @@ export async function deleteKbItems(knowledgeBaseId: string, itemIds: string[]):
 export async function createKbImportJob(input: {
   knowledgeBaseId: string;
   documentIds: string[];
+  faqIds?: string[];
+  jobKind?: KbImportJobKind | null;
   pipelineId?: string | null;
   createdBy?: string | null;
 }): Promise<KbImportJobRow> {
+  const faqIds = input.faqIds ?? [];
+  const documentIds = input.documentIds;
+  const totalCount =
+    faqIds.length > 0 ? faqIds.length : documentIds.length;
+
   const [row] = await db
     .insert(appKbImportJobs)
     .values({
       knowledgeBaseId: input.knowledgeBaseId,
       pipelineId: input.pipelineId ?? null,
+      jobKind: input.jobKind ?? null,
       status: 'pending',
-      documentIds: input.documentIds,
-      totalCount: input.documentIds.length,
+      documentIds,
+      faqIds,
+      totalCount,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -679,6 +722,8 @@ export async function startKbPageIndexImport(input: {
   const job = await createKbImportJob({
     knowledgeBaseId: input.knowledgeBaseId,
     documentIds,
+    faqIds: [],
+    jobKind: 'pageindex_import',
     pipelineId: kb.pipelineId,
     createdBy: input.createdBy,
   });
@@ -722,6 +767,8 @@ export async function startKbRagIndexImport(input: {
   const job = await createKbImportJob({
     knowledgeBaseId: input.knowledgeBaseId,
     documentIds,
+    faqIds: [],
+    jobKind: 'rag_index',
     pipelineId: kb.pipelineId,
     createdBy: input.createdBy,
   });
@@ -739,6 +786,7 @@ export async function getKbWorkerConfig(knowledgeBaseId: string) {
     embedding_dimensions: kb.embeddingDimensions,
     chunk_config: kb.chunkConfig,
     metadata_keys: kb.metadataKeys,
+    faq_settings: kb.type === 'faq' ? kb.faqSettings : undefined,
   };
 }
 
@@ -765,7 +813,9 @@ export type KbImportJobWorkerContext = {
   id: string;
   knowledge_base_id: string;
   status: KbImportJobStatus;
+  job_kind: string | null;
   document_ids: string[];
+  faq_ids: string[];
   total_count: number;
   completed_count: number;
   failed_count: number;
@@ -784,7 +834,9 @@ export async function buildKbImportJobWorkerContext(jobId: string): Promise<KbIm
     id: job.id,
     knowledge_base_id: job.knowledgeBaseId,
     status: job.status as KbImportJobStatus,
+    job_kind: job.jobKind,
     document_ids: job.documentIds,
+    faq_ids: job.faqIds,
     total_count: job.totalCount,
     completed_count: job.completedCount,
     failed_count: job.failedCount,

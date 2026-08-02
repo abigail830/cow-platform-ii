@@ -4,7 +4,6 @@ import { ChevronRight, Loader2, Plus } from 'lucide-react';
 import {
   deleteKbItem,
   deleteKbItems,
-  getKbImportJob,
   getKbItem,
   getKnowledgeBase,
   listKbItems,
@@ -21,6 +20,7 @@ import { KbItemDetailPanel } from '../components/KbItemDetailPanel.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
+import { isKbImportJobActive, useKbImportJobPolling } from '../hooks/useKbImportJobPolling.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
 function statusClass(status: string): string {
@@ -90,8 +90,15 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
   const [rerunning, setRerunning] = useState(false);
   const selectedItemIdRef = useRef<string | null>(null);
 
-  const importJobActive =
-    activeJob !== null && activeJob.status !== 'completed' && activeJob.status !== 'failed';
+  const importJobActive = isKbImportJobActive(activeJob);
+
+  const listImportInProgress = useMemo(
+    () =>
+      items.some(
+        (item) => item.import_status === 'importing' || item.import_status === 'pending',
+      ),
+    [items],
+  );
 
   const canImport = Boolean(canWrite && kb?.capabilities.import);
   const selectionCount = selectedItemIds.size;
@@ -106,9 +113,9 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
     selectedItemIdRef.current = selectedItemId;
   }, [selectedItemId]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!knowledgeBaseId) return;
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     setError('');
     try {
       const [kbRow, itemResult] = await Promise.all([
@@ -138,7 +145,7 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
         setError(message);
       }
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [knowledgeBaseId]);
 
@@ -146,33 +153,23 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!activeJob || !knowledgeBaseId) return;
-    if (activeJob.status === 'completed' || activeJob.status === 'failed') return;
-
-    const intervalId = window.setInterval(() => {
-      void (async () => {
-        try {
-          const job = await getKbImportJob(knowledgeBaseId, activeJob.id);
-          setActiveJob(job);
-          await load();
-          const currentItemId = selectedItemIdRef.current;
-          if (currentItemId) {
-            try {
-              const item = await getKbItem(knowledgeBaseId, currentItemId);
-              setDetailItem(item);
-            } catch {
-              // ignore detail refresh errors during poll
-            }
-          }
-        } catch {
-          // ignore poll errors
-        }
-      })();
-    }, 3000);
-
-    return () => window.clearInterval(intervalId);
-  }, [activeJob, knowledgeBaseId, load]);
+  useKbImportJobPolling({
+    knowledgeBaseId,
+    activeJob,
+    setActiveJob,
+    listInProgress: listImportInProgress,
+    onRefresh: () => load({ silent: true }),
+    onAfterJobPoll: async () => {
+      const currentItemId = selectedItemIdRef.current;
+      if (!knowledgeBaseId || !currentItemId) return;
+      try {
+        const item = await getKbItem(knowledgeBaseId, currentItemId);
+        setDetailItem(item);
+      } catch {
+        /* ignore detail refresh errors during poll */
+      }
+    },
+  });
 
   useEffect(() => {
     if (!selectedItemId || !knowledgeBaseId) {

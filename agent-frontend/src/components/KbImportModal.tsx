@@ -9,6 +9,8 @@ import {
 } from '../api/knowledgeBases.ts';
 
 type KbImportModalProps = {
+  title?: string;
+  confirmLabel?: string;
   onCancel: () => void;
   onConfirm: (input: { channelIds: string[]; documentIds: string[] }) => Promise<void>;
 };
@@ -80,7 +82,12 @@ function ChannelTreeNode({
   );
 }
 
-export function KbImportModal({ onCancel, onConfirm }: KbImportModalProps) {
+export function KbImportModal({
+  title = 'Import knowledge',
+  confirmLabel = 'Import',
+  onCancel,
+  onConfirm,
+}: KbImportModalProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [flatChannels, setFlatChannels] = useState<ImportSourceChannel[]>([]);
@@ -161,7 +168,7 @@ export function KbImportModal({ onCancel, onConfirm }: KbImportModalProps) {
         aria-labelledby="kb-import-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="kb-import-title">Import knowledge</h2>
+        <h2 id="kb-import-title">{title}</h2>
         <p className="admin-muted">
           Select channels (all documents in subtree) or individual documents.
         </p>
@@ -199,7 +206,7 @@ export function KbImportModal({ onCancel, onConfirm }: KbImportModalProps) {
             disabled={submitting || selectionCount === 0}
             onClick={() => void handleConfirm()}
           >
-            {submitting ? 'Starting import…' : 'Import'}
+            {submitting ? 'Starting…' : confirmLabel}
           </button>
         </div>
       </div>

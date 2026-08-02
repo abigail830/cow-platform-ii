@@ -2,24 +2,23 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  DEFAULT_KB_FAQ_EXTRACT_COMMAND_TEMPLATE,
+  DEFAULT_KB_FAQ_INDEX_COMMAND_TEMPLATE,
   DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE,
   DEFAULT_KB_PAGEINDEX_IMPORT_WORKFLOW_FILE,
   DEFAULT_KB_RAG_INDEX_COMMAND_TEMPLATE,
+  FAQ_KB_EXTRACT_PIPELINE_NAME,
+  FAQ_KB_INDEX_PIPELINE_NAME,
   RAG_KB_PIPELINE_NAME,
 } from '../shared/pipeline-catalog.ts';
-import {
-  buildWorkerCliArgsFromTemplate,
-} from '../shared/pipeline-command-template.ts';
+import { buildWorkerCliArgsFromTemplate } from '../shared/pipeline-command-template.ts';
 import {
   resolveKbImportPipelineForJob,
   updateKbImportJob,
   getKbImportJobById,
 } from './knowledge-bases.ts';
-import {
-  resolveKbPageIndexImportGithubConfig,
-  triggerKbPageIndexImportGithubActions,
-} from './kb-pageindex-import-github-actions.ts';
-import { resolveKbPageIndexImportWorkerMode } from './kb-pageindex-import-worker-mode.ts';
+import { resolveKbImportGithubConfig, triggerKbImportGithubActions } from './kb-import-github-actions.ts';
+import { resolveKbImportWorkerMode } from './kb-import-worker-mode.ts';
 
 const activeKbImportJobs = new Set<string>();
 
@@ -50,10 +49,14 @@ function cliSpawnEnv(apiUrl: string): NodeJS.ProcessEnv {
 
 async function buildKbImportCliArgs(jobId: string): Promise<string[]> {
   const { pipeline } = await resolveKbImportPipelineForJob(jobId);
-  const fallback =
-    pipeline.pipelineName === RAG_KB_PIPELINE_NAME
-      ? DEFAULT_KB_RAG_INDEX_COMMAND_TEMPLATE
-      : DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE;
+  let fallback = DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE;
+  if (pipeline.pipelineName === RAG_KB_PIPELINE_NAME) {
+    fallback = DEFAULT_KB_RAG_INDEX_COMMAND_TEMPLATE;
+  } else if (pipeline.pipelineName === FAQ_KB_INDEX_PIPELINE_NAME) {
+    fallback = DEFAULT_KB_FAQ_INDEX_COMMAND_TEMPLATE;
+  } else if (pipeline.pipelineName === FAQ_KB_EXTRACT_PIPELINE_NAME) {
+    fallback = DEFAULT_KB_FAQ_EXTRACT_COMMAND_TEMPLATE;
+  }
   return buildWorkerCliArgsFromTemplate(pipeline.commandTemplate, fallback, { job_id: jobId });
 }
 
@@ -96,31 +99,32 @@ function spawnKbImportCliLocal(jobId: string, cliArgs: string[], apiUrl?: string
 
 async function dispatchKbImportGithub(jobId: string): Promise<void> {
   const { pipeline } = await resolveKbImportPipelineForJob(jobId);
-  const baseConfig = resolveKbPageIndexImportGithubConfig();
+  const baseConfig = resolveKbImportGithubConfig();
   if (!baseConfig) {
     throw new Error(
-      'KB_PAGEINDEX_IMPORT_WORKER=github_actions requires GITHUB_PIPELINE_TOKEN (or GITHUB_TOKEN) ' +
+      'KB_IMPORT_WORKER=github_actions requires GITHUB_PIPELINE_TOKEN (or GITHUB_TOKEN) ' +
         'and GITHUB_PIPELINE_REPOSITORY (owner/repo).',
     );
   }
 
   const workflowFile =
     pipeline.workflowFile?.trim() ||
+    process.env.GITHUB_KB_IMPORT_WORKFLOW?.trim() ||
     process.env.GITHUB_KB_PAGEINDEX_IMPORT_WORKFLOW?.trim() ||
     DEFAULT_KB_PAGEINDEX_IMPORT_WORKFLOW_FILE;
 
   const workerCliArgs = await buildKbImportCliArgs(jobId);
 
-  await triggerKbPageIndexImportGithubActions(
+  await triggerKbImportGithubActions(
     { jobId, workerCliArgs },
     { ...baseConfig, workflowFile },
   );
 }
 
 /**
- * Run KB import worker using the knowledge base's linked pipeline template.
+ * Run KB import/index worker using the job's linked pipeline template.
  */
-export async function spawnKbPageIndexImportWorker(jobId: string, apiUrl?: string): Promise<void> {
+export async function spawnKbImportWorker(jobId: string, apiUrl?: string): Promise<void> {
   if (activeKbImportJobs.has(jobId)) {
     console.info(`[kb-import] skip dispatch (worker already active): job ${jobId}`);
     return;
@@ -128,7 +132,7 @@ export async function spawnKbPageIndexImportWorker(jobId: string, apiUrl?: strin
 
   await updateKbImportJob(jobId, { status: 'running' });
 
-  if (resolveKbPageIndexImportWorkerMode() === 'github_actions') {
+  if (resolveKbImportWorkerMode() === 'github_actions') {
     activeKbImportJobs.add(jobId);
     try {
       await dispatchKbImportGithub(jobId);

@@ -85,7 +85,7 @@ def _patch_job(
 ) -> None:
     try:
         requests.patch(
-            f"{base}/internal-api/kb-pageindex-import-jobs/{job_id}",
+            f"{base}/internal-api/kb-import-jobs/{job_id}",
             json=payload,
             headers={**headers, "Content-Type": "application/json"},
             auth=basic,

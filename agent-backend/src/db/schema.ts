@@ -261,14 +261,49 @@ export type PipelineJobStage = (typeof PIPELINE_JOB_STAGES)[number];
 export const PIPELINE_PROVIDERS = ['baidu', 'aliyun'] as const;
 export type PipelineProvider = (typeof PIPELINE_PROVIDERS)[number];
 
-export const KNOWLEDGE_BASE_TYPES = ['page_index', 'rag'] as const;
+export const KNOWLEDGE_BASE_TYPES = ['page_index', 'rag', 'faq'] as const;
 export type KnowledgeBaseType = (typeof KNOWLEDGE_BASE_TYPES)[number];
 
 export const KB_IMPORT_JOB_STATUSES = ['pending', 'running', 'completed', 'failed'] as const;
 export type KbImportJobStatus = (typeof KB_IMPORT_JOB_STATUSES)[number];
 
+export const KB_IMPORT_JOB_KINDS = [
+  'pageindex_import',
+  'rag_index',
+  'faq_extract',
+  'faq_index',
+] as const;
+export type KbImportJobKind = (typeof KB_IMPORT_JOB_KINDS)[number];
+
 export const KB_ITEM_IMPORT_STATUSES = ['pending', 'importing', 'completed', 'failed'] as const;
 export type KbItemImportStatus = (typeof KB_ITEM_IMPORT_STATUSES)[number];
+
+export const KB_FAQ_SOURCE_TYPES = ['manual', 'extracted'] as const;
+export type KbFaqSourceType = (typeof KB_FAQ_SOURCE_TYPES)[number];
+
+export const KB_FAQ_PUBLICATION_STATUSES = ['draft', 'published'] as const;
+export type KbFaqPublicationStatus = (typeof KB_FAQ_PUBLICATION_STATUSES)[number];
+
+export const KB_FAQ_INDEX_STATUSES = ['pending', 'indexing', 'indexed', 'failed'] as const;
+export type KbFaqIndexStatus = (typeof KB_FAQ_INDEX_STATUSES)[number];
+
+export type KbFaqSettings = {
+  auto_index_on_publish?: boolean;
+  extraction_model_config_id?: string | null;
+  extraction_prompt?: string;
+  polish_model_config_id?: string | null;
+  polish_prompt?: string;
+};
+
+export const DEFAULT_KB_FAQ_SETTINGS: KbFaqSettings = {
+  auto_index_on_publish: false,
+  extraction_model_config_id: null,
+  extraction_prompt:
+    'Extract FAQ pairs from the document markdown below. Return a JSON array of objects with "question" and "answer" fields. Only include substantive Q&A from the content.\n\nDocument: {document_name}\n\n{markdown}',
+  polish_model_config_id: null,
+  polish_prompt:
+    'Polish the following FAQ answer for clarity and professionalism. Keep the same language as the input. Return only the polished answer text.\n\nQuestion: {question}\n\nAnswer: {answer}',
+};
 
 export const appKnowledgeBases = pgTable(
   'app_knowledge_bases',
@@ -284,6 +319,10 @@ export const appKnowledgeBases = pgTable(
     embeddingDimensions: integer('embedding_dimensions').notNull().default(1024),
     chunkConfig: jsonb('chunk_config').$type<KbChunkConfig>().notNull().default(DEFAULT_KB_CHUNK_CONFIG),
     metadataKeys: jsonb('metadata_keys').$type<string[]>().notNull().default([]),
+    faqSettings: jsonb('faq_settings')
+      .$type<KbFaqSettings>()
+      .notNull()
+      .default(DEFAULT_KB_FAQ_SETTINGS),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -304,7 +343,9 @@ export const appKbImportJobs = pgTable(
       .references(() => appKnowledgeBases.id, { onDelete: 'cascade' }),
     pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
     status: text('status').notNull().default('pending'),
+    jobKind: text('job_kind'),
     documentIds: jsonb('document_ids').$type<string[]>().notNull().default([]),
+    faqIds: jsonb('faq_ids').$type<string[]>().notNull().default([]),
     totalCount: integer('total_count').notNull().default(0),
     completedCount: integer('completed_count').notNull().default(0),
     failedCount: integer('failed_count').notNull().default(0),
@@ -372,6 +413,38 @@ export const appKbChunks = pgTable(
   (t) => [
     index('idx_kb_chunks_kb_document').on(t.knowledgeBaseId, t.documentId),
     index('idx_kb_chunks_kb').on(t.knowledgeBaseId, t.indexedAt),
+  ],
+);
+
+export const appKbFaqs = pgTable(
+  'app_kb_faqs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    knowledgeBaseId: uuid('knowledge_base_id')
+      .notNull()
+      .references(() => appKnowledgeBases.id, { onDelete: 'cascade' }),
+    question: text('question').notNull(),
+    answer: text('answer').notNull(),
+    sourceType: text('source_type').notNull().default('manual'),
+    sourceDocumentId: uuid('source_document_id').references(() => appDocuments.id, {
+      onDelete: 'set null',
+    }),
+    sourceDocumentName: text('source_document_name'),
+    publicationStatus: text('publication_status').notNull().default('draft'),
+    indexStatus: text('index_status'),
+    indexError: text('index_error'),
+    indexedAt: timestamp('indexed_at', { withTimezone: true }),
+    embedding: pgVector('embedding'),
+    docMetadata: jsonb('doc_metadata').$type<Record<string, unknown> | null>(),
+    contentHash: text('content_hash'),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_kb_faqs_kb_status').on(t.knowledgeBaseId, t.publicationStatus, t.updatedAt),
+    index('idx_kb_faqs_kb_index').on(t.knowledgeBaseId, t.indexStatus),
+    index('idx_kb_faqs_source_document').on(t.sourceDocumentId),
   ],
 );
 

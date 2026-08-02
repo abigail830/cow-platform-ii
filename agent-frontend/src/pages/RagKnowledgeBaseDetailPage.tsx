@@ -3,7 +3,6 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { ChevronRight, Loader2, Plus, Settings, Trash2 } from 'lucide-react';
 import {
   deleteDocumentChunks,
-  getKbImportJob,
   getKnowledgeBase,
   listAllIndexedDocumentIds,
   listDocumentChunks,
@@ -24,6 +23,7 @@ import { KbRagSettingsModal } from '../components/KbRagSettingsModal.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
+import { isKbImportJobActive, useKbImportJobPolling } from '../hooks/useKbImportJobPolling.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
 type RagKnowledgeBaseDetailPageProps = {
@@ -36,8 +36,14 @@ function ragStatusClass(status: KbIndexedDocument['status']): string {
   return 'kb-status-pending';
 }
 
-function RagDocumentStatusCell({ doc }: { doc: KbIndexedDocument }) {
-  if (doc.status === 'indexing' || doc.status === 'pending') {
+function RagDocumentStatusCell({
+  doc,
+  jobActive,
+}: {
+  doc: KbIndexedDocument;
+  jobActive: boolean;
+}) {
+  if (doc.status === 'indexing' || (jobActive && doc.status === 'pending')) {
     return (
       <span className="kb-item-status-loading">
         <Loader2 {...iconProps({ size: 14, className: 'icon-btn-spin' })} aria-hidden />
@@ -108,8 +114,12 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
     maxPct: 72,
   });
 
-  const importJobActive =
-    activeJob !== null && activeJob.status !== 'completed' && activeJob.status !== 'failed';
+  const importJobActive = isKbImportJobActive(activeJob);
+
+  const listIndexInProgress = useMemo(
+    () => docs.some((doc) => doc.status === 'indexing' || doc.status === 'pending'),
+    [docs],
+  );
 
   const canImport = Boolean(canWrite && kb?.capabilities.import);
 
@@ -157,27 +167,13 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
       .catch(() => setEmbeddingModels([]));
   }, [canWrite]);
 
-  useEffect(() => {
-    if (!activeJob || !knowledgeBaseId) return;
-    if (activeJob.status === 'completed' || activeJob.status === 'failed') {
-      void load({ silent: true });
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      void (async () => {
-        try {
-          const job = await getKbImportJob(knowledgeBaseId, activeJob.id);
-          setActiveJob(job);
-          await load({ silent: true });
-        } catch {
-          /* ignore poll errors */
-        }
-      })();
-    }, 3000);
-
-    return () => window.clearInterval(intervalId);
-  }, [activeJob, knowledgeBaseId, load]);
+  useKbImportJobPolling({
+    knowledgeBaseId,
+    activeJob,
+    setActiveJob,
+    listInProgress: listIndexInProgress,
+    onRefresh: () => load({ silent: true }),
+  });
 
   useEffect(() => {
     if (!selectedDocumentId || !knowledgeBaseId) {
@@ -415,7 +411,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                               <td>{doc.document_name}</td>
                               <td className="kb-path-cell">{doc.channel_path}</td>
                               <td className="kb-item-status-col">
-                                <RagDocumentStatusCell doc={doc} />
+                                <RagDocumentStatusCell doc={doc} jobActive={importJobActive} />
                               </td>
                               <td>{doc.chunk_count ?? '—'}</td>
                               <td>{doc.indexed_at ? new Date(doc.indexed_at).toLocaleString() : '—'}</td>

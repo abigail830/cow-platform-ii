@@ -4473,3 +4473,84 @@ textarea {
   font-size: 0.8125rem;
   color: #64748b;
 }
+
+.kb-faq-question-cell {
+  max-width: 220px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.kb-faq-answer-cell {
+  max-width: 260px;
+  color: #64748b;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-faq-detail-section {
+  margin-bottom: 1rem;
+}
+
+.kb-faq-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.kb-faq-detail-title-row h2 {
+  flex: 1;
+  min-width: 0;
+}
+
+.kb-faq-detail-header-muted {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+.kb-faq-detail-title-row .kb-status-badge {
+  flex-shrink: 0;
+}
+
+.kb-faq-detail-header-error {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+}
+
+.kb-faq-detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.kb-faq-detail-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.kb-faq-detail-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #0f172a;
+}
+
+.kb-faq-polish-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.kb-faq-checkbox-field .kb-faq-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: #0f172a;
+}

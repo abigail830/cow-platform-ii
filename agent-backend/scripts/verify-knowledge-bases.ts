@@ -68,6 +68,8 @@ async function main() {
   }
 
   const stamp = Date.now();
+  let faqKbId = '';
+
   const createPageIndex = await authJson(adminToken, '/api/knowledge-bases', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -171,6 +173,82 @@ async function main() {
     const ragItems = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/items`);
     if (ragItems.status === 400) pass('rag_items_rejected', '400 as expected');
     else fail('rag_items_rejected', `expected 400, got ${ragItems.status}`);
+  }
+
+  const createFaq = await authJson(adminToken, '/api/knowledge-bases', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: `Verify FAQ ${stamp}`,
+      type: 'faq',
+    }),
+  });
+  if (createFaq.status !== 201) {
+    fail('create_faq_kb', JSON.stringify(createFaq.body));
+  } else {
+    faqKbId = createFaq.body.id as string;
+    const faqCaps = createFaq.body.capabilities as {
+      index?: boolean;
+      manual_create?: boolean;
+      extract?: boolean;
+    };
+    if (!faqCaps?.manual_create) fail('faq_capabilities', 'manual_create should be true');
+    else if (!faqCaps?.extract) fail('faq_capabilities', 'extract should be true');
+    else pass('create_faq_kb', faqKbId);
+
+    if (createFaq.body.is_configured === true) {
+      fail('faq_not_configured', 'is_configured should be false without embedding model');
+    } else {
+      pass('faq_not_configured');
+    }
+
+    const faqPipelineName = createFaq.body.pipeline_name as string | null;
+    if (faqPipelineName !== 'kb-faq-index') {
+      fail('faq_pipeline_link', `expected kb-faq-index, got ${faqPipelineName}`);
+    } else {
+      pass('faq_pipeline_link', faqPipelineName);
+    }
+  }
+
+  if (faqKbId) {
+    const createManualFaq = await authJson(adminToken, `/api/knowledge-bases/${faqKbId}/faqs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: 'What is OKF?',
+        answer: 'Open Knowledge Format.',
+      }),
+    });
+    if (createManualFaq.status !== 201) {
+      fail('create_manual_faq', JSON.stringify(createManualFaq.body));
+    } else {
+      pass('create_manual_faq', createManualFaq.body.id as string);
+    }
+
+    const listFaqs = await authJson(adminToken, `/api/knowledge-bases/${faqKbId}/faqs`);
+    if (listFaqs.status !== 200 || !Array.isArray(listFaqs.body.items)) {
+      fail('list_faqs', JSON.stringify(listFaqs.body));
+    } else {
+      pass('list_faqs', `total=${listFaqs.body.total}`);
+      const faqId = (listFaqs.body.items as Array<{ id: string }>)?.[0]?.id;
+      if (faqId) {
+        const publish = await authJson(adminToken, `/api/knowledge-bases/${faqKbId}/faqs/batch-publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ faq_ids: [faqId] }),
+        });
+        if (publish.status !== 200) fail('batch_publish_faq', JSON.stringify(publish.body));
+        else pass('batch_publish_faq');
+
+        const indexNoEmbed = await authJson(adminToken, `/api/knowledge-bases/${faqKbId}/index-faqs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ faq_ids: [faqId] }),
+        });
+        if (indexNoEmbed.status === 400) pass('faq_index_requires_embedding', '400 as expected');
+        else fail('faq_index_requires_embedding', `expected 400, got ${indexNoEmbed.status}`);
+      }
+    }
   }
 
   const getKb = await authJson(adminToken, `/api/knowledge-bases/${pageIndexKbId}`);
