@@ -60,7 +60,11 @@ type DeleteConfirmState =
   | { mode: 'bulk'; itemIds: string[] }
   | null;
 
-export function KnowledgeBaseDetailPage() {
+type KnowledgeBaseDetailPageProps = {
+  initialKb?: KnowledgeBase;
+};
+
+export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPageProps) {
   const { knowledgeBaseId } = useParams<{ knowledgeBaseId: string }>();
   const { user } = useAppOutletContext();
   const canWrite = useMemo(
@@ -68,7 +72,7 @@ export function KnowledgeBaseDetailPage() {
     [user],
   );
 
-  const [kb, setKb] = useState<KnowledgeBase | null>(null);
+  const [kb, setKb] = useState<KnowledgeBase | null>(initialKb ?? null);
   const [items, setItems] = useState<KbItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -509,7 +513,7 @@ export function KnowledgeBaseDetailPage() {
           </section>
         </>
       ) : (
-        <p className="admin-error">Knowledge base not found.</p>
+        <p className="admin-error" role="alert">{error || 'Knowledge base not found.'}</p>
       )}
 
       {importOpen && (

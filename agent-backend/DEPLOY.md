@@ -92,7 +92,7 @@ See `docs/knowledge-bases.md` for API and data model.
 
 ## Database migrate
 
-Run once after first deploy (or in CI):
+`npm run build:vercel` runs `npm run db:migrate` automatically when `DATABASE_URL` is set on the Vercel project (recommended). You can still run it manually:
 
 ```bash
 npm run db:migrate

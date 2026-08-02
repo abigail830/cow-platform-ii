@@ -1,5 +1,6 @@
 import esbuild from 'esbuild';
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { vendorOkfBundle } from './vendor-okf-bundle.mjs';
@@ -14,6 +15,20 @@ const regions = (process.env.VERCEL_REGIONS ?? 'hkg1')
   .split(',')
   .map((r) => r.trim())
   .filter(Boolean);
+
+if (process.env.DATABASE_URL?.trim()) {
+  console.log('Running db:migrate before Vercel bundle...');
+  const migrate = spawnSync('npm', ['run', 'db:migrate'], {
+    cwd: root,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (migrate.status !== 0) {
+    throw new Error('db:migrate failed during Vercel build');
+  }
+} else {
+  console.warn('DATABASE_URL not set — skipping db:migrate at build time');
+}
 
 rmSync(outRoot, { recursive: true, force: true });
 mkdirSync(funcDir, { recursive: true });

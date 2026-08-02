@@ -567,7 +567,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
           </section>
         </>
       ) : (
-        <p className="admin-muted">Knowledge base not found.</p>
+        <p className="admin-error" role="alert">{error || 'Knowledge base not found.'}</p>
       )}
 
       {importOpen && (

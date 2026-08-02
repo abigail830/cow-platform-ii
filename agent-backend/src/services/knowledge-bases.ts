@@ -24,6 +24,35 @@ import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { getModelConfigById } from '../shared/model-config-store.ts';
 import { countIndexedDocuments, countKbChunks } from './kb-chunks.ts';
 
+async function ragKbCounts(knowledgeBaseId: string): Promise<{ indexedDocuments: number; chunks: number }> {
+  try {
+    const [indexedDocuments, chunks] = await Promise.all([
+      countIndexedDocuments(knowledgeBaseId),
+      countKbChunks(knowledgeBaseId),
+    ]);
+    return { indexedDocuments, chunks };
+  } catch (error) {
+    console.warn(`[kb] RAG count query failed for ${knowledgeBaseId}:`, error);
+    return { indexedDocuments: 0, chunks: 0 };
+  }
+}
+
+async function ragDocumentCountByKbId(): Promise<Map<string, number>> {
+  try {
+    const chunkDocCounts = await db
+      .select({
+        knowledgeBaseId: appKbChunks.knowledgeBaseId,
+        count: sql<number>`count(distinct ${appKbChunks.documentId})::int`,
+      })
+      .from(appKbChunks)
+      .groupBy(appKbChunks.knowledgeBaseId);
+    return new Map(chunkDocCounts.map((c) => [c.knowledgeBaseId, c.count]));
+  } catch (error) {
+    console.warn('[kb] chunk document counts unavailable:', error);
+    return new Map();
+  }
+}
+
 export type KnowledgeBaseRow = typeof appKnowledgeBases.$inferSelect;
 export type KbItemRow = typeof appKbItems.$inferSelect;
 export type KbImportJobRow = typeof appKbImportJobs.$inferSelect;
@@ -131,16 +160,8 @@ export async function listKnowledgeBases(): Promise<ReturnType<typeof toKnowledg
     .from(appKbItems)
     .groupBy(appKbItems.knowledgeBaseId);
 
-  const chunkDocCounts = await db
-    .select({
-      knowledgeBaseId: appKbChunks.knowledgeBaseId,
-      count: sql<number>`count(distinct ${appKbChunks.documentId})::int`,
-    })
-    .from(appKbChunks)
-    .groupBy(appKbChunks.knowledgeBaseId);
-
+  const chunkDocCountMap = await ragDocumentCountByKbId();
   const itemCountMap = new Map(itemCounts.map((c) => [c.knowledgeBaseId, c.count]));
-  const chunkDocCountMap = new Map(chunkDocCounts.map((c) => [c.knowledgeBaseId, c.count]));
 
   return rows.map((row) => {
     const itemCount =
@@ -172,8 +193,9 @@ async function enrichKbPublic(row: KnowledgeBaseRow) {
   let itemCount = 0;
   let chunkCount: number | undefined;
   if (row.type === 'rag') {
-    itemCount = await countIndexedDocuments(row.id);
-    chunkCount = await countKbChunks(row.id);
+    const counts = await ragKbCounts(row.id);
+    itemCount = counts.indexedDocuments;
+    chunkCount = counts.chunks;
   } else {
     const [countRow] = await db
       .select({ count: sql<number>`count(*)::int` })
