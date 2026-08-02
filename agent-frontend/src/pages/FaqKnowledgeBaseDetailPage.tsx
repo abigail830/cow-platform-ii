@@ -151,6 +151,22 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
 
   const canManage = Boolean(canWrite);
   const selectionCount = selectedFaqIds.size;
+  const selectedPublishedFaqIds = useMemo(
+    () =>
+      faqs
+        .filter((faq) => selectedFaqIds.has(faq.id) && faq.publication_status === 'published')
+        .map((faq) => faq.id),
+    [faqs, selectedFaqIds],
+  );
+  const selectedPublishedCount = selectedPublishedFaqIds.length;
+  const selectedDraftFaqIds = useMemo(
+    () =>
+      faqs
+        .filter((faq) => selectedFaqIds.has(faq.id) && faq.publication_status === 'draft')
+        .map((faq) => faq.id),
+    [faqs, selectedFaqIds],
+  );
+  const selectedDraftCount = selectedDraftFaqIds.length;
   const allPageSelected = faqs.length > 0 && faqs.every((faq) => selectedFaqIds.has(faq.id));
   const selectedFaq = useMemo(
     () => faqs.find((faq) => faq.id === selectedFaqId) ?? null,
@@ -310,11 +326,11 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   }
 
   async function handleBatchPublish() {
-    if (!knowledgeBaseId || selectionCount === 0) return;
+    if (!knowledgeBaseId || selectedDraftCount === 0) return;
     setBatchBusy(true);
     setError('');
     try {
-      await publishFaqs([...selectedFaqIds]);
+      await publishFaqs(selectedDraftFaqIds);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to publish FAQs');
     } finally {
@@ -336,11 +352,11 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   }
 
   async function handleBatchDraft() {
-    if (!knowledgeBaseId || selectionCount === 0) return;
+    if (!knowledgeBaseId || selectedPublishedCount === 0) return;
     setBatchBusy(true);
     setError('');
     try {
-      await batchDraftKbFaqs(knowledgeBaseId, [...selectedFaqIds]);
+      await batchDraftKbFaqs(knowledgeBaseId, selectedPublishedFaqIds);
       await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to move FAQs to draft');
@@ -351,10 +367,28 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
 
   async function handleRunIndex(faqIds: string[]) {
     if (!knowledgeBaseId || faqIds.length === 0) return;
+
+    const publishedIds = faqIds.filter((faqId) => {
+      const faq = faqs.find((item) => item.id === faqId);
+      return faq?.publication_status === 'published';
+    });
+
+    if (publishedIds.length === 0) {
+      setError('');
+      showNotice('Publish FAQs before running index.');
+      return;
+    }
+
+    if (publishedIds.length < faqIds.length) {
+      showNotice(
+        `Indexing ${publishedIds.length} published FAQ${publishedIds.length === 1 ? '' : 's'}; draft items were skipped.`,
+      );
+    }
+
     setIndexing(true);
     setError('');
     try {
-      const result = await startKbFaqIndex(knowledgeBaseId, faqIds);
+      const result = await startKbFaqIndex(knowledgeBaseId, publishedIds);
       setActiveJob(result.job);
       await load({ silent: true });
     } catch (err) {
@@ -439,31 +473,51 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                       <button
                         type="button"
                         className="btn-secondary"
-                        disabled={selectionCount === 0 || batchBusy || jobActive}
+                        disabled={selectedDraftCount === 0 || batchBusy || jobActive}
+                        title={
+                          selectionCount > 0 && selectedDraftCount === 0
+                            ? 'Selected FAQs are already published'
+                            : undefined
+                        }
                         onClick={() => void handleBatchPublish()}
                       >
                         <Upload {...iconProps({ size: 16 })} aria-hidden />
-                        Publish selected{selectionCount > 0 ? ` (${selectionCount})` : ''}
+                        Publish selected
+                        {selectedDraftCount > 0 ? ` (${selectedDraftCount})` : ''}
                       </button>
                       <button
                         type="button"
                         className="btn-secondary"
-                        disabled={selectionCount === 0 || batchBusy || jobActive}
+                        disabled={selectedPublishedCount === 0 || batchBusy || jobActive}
+                        title={
+                          selectionCount > 0 && selectedPublishedCount === 0
+                            ? 'Selected FAQs are already draft'
+                            : undefined
+                        }
                         onClick={() => void handleBatchDraft()}
                       >
                         <FileInput {...iconProps({ size: 16 })} aria-hidden />
-                        Move to draft{selectionCount > 0 ? ` (${selectionCount})` : ''}
+                        Move to draft
+                        {selectedPublishedCount > 0 ? ` (${selectedPublishedCount})` : ''}
                       </button>
                       <button
                         type="button"
                         className="btn-secondary"
                         disabled={
-                          selectionCount === 0 ||
+                          selectedPublishedCount === 0 ||
                           !kb.is_configured ||
                           jobActive ||
                           indexing
                         }
-                        title={!kb.is_configured ? 'Configure embedding model in Settings first' : undefined}
+                        title={
+                          !kb.is_configured
+                            ? 'Configure embedding model in Settings first'
+                            : selectionCount > 0 && selectedPublishedCount === 0
+                              ? 'Publish selected FAQs before indexing'
+                              : selectionCount > selectedPublishedCount
+                                ? `Only published FAQs can be indexed (${selectedPublishedCount} of ${selectionCount} selected)`
+                                : undefined
+                        }
                         onClick={() => void handleRunIndex([...selectedFaqIds])}
                       >
                         {indexing ? (
@@ -471,7 +525,8 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                         ) : (
                           <IconRun {...iconProps({ size: 16 })} aria-hidden />
                         )}
-                        Run index{selectionCount > 0 ? ` (${selectionCount})` : ''}
+                        Run index
+                        {selectedPublishedCount > 0 ? ` (${selectedPublishedCount})` : ''}
                       </button>
                       <button
                         type="button"
@@ -657,16 +712,23 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                                           )}
                                         </button>
                                       )}
-                                      <button
-                                        type="button"
-                                        className="icon-btn icon-btn--run"
-                                        title="Run index for this FAQ"
-                                        aria-label={`Run index for ${faq.question}`}
-                                        disabled={!kb.is_configured || jobActive || indexing || publishingFaqId !== null}
-                                        onClick={() => void handleRunIndex([faq.id])}
-                                      >
-                                        <IconRun {...iconProps()} />
-                                      </button>
+                                      {faq.publication_status === 'published' && (
+                                        <button
+                                          type="button"
+                                          className="icon-btn icon-btn--run"
+                                          title="Run index for this FAQ"
+                                          aria-label={`Run index for ${faq.question}`}
+                                          disabled={
+                                            !kb.is_configured ||
+                                            jobActive ||
+                                            indexing ||
+                                            publishingFaqId !== null
+                                          }
+                                          onClick={() => void handleRunIndex([faq.id])}
+                                        >
+                                          <IconRun {...iconProps()} />
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         className="icon-btn danger"

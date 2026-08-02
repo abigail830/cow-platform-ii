@@ -4913,8 +4913,8 @@ textarea {
 }
 
 .hybrid-search-result-card .hybrid-search-source-badge--faq {
-  background: #f1f5f9;
-  color: #64748b;
+  background: rgb(251 192 45 / 0.12);
+  color: #b89400;
 }
 
 .hybrid-search-result-kb {
