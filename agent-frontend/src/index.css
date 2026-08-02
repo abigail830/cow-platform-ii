@@ -4851,6 +4851,26 @@ textarea {
   color: #0f172a;
 }
 
+.hybrid-search-section-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hybrid-search-results-scores-tooltip .field-tooltip-panel {
+  width: min(30rem, calc(100vw - 2rem));
+}
+
+.hybrid-search-results-scores-list li {
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 0.5rem 0.85rem;
+}
+
+.hybrid-search-results-scores-list li strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
 .hybrid-search-results-section > .admin-muted {
   margin: 0 0 0.5rem;
 }

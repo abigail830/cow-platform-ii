@@ -42,6 +42,36 @@ function SettingsFieldTooltip({ label, text }: { label: string; text: string }) 
   );
 }
 
+function ResultScoresHelpTooltip() {
+  return (
+    <span className="field-tooltip hybrid-search-results-scores-tooltip">
+      <button type="button" className="field-tooltip-trigger" aria-label="Result score legend">
+        <CircleHelp {...iconProps({ size: 14 })} aria-hidden />
+      </button>
+      <span className="field-tooltip-panel" role="tooltip">
+        <ul className="field-tooltip-list field-tooltip-list-compact hybrid-search-results-scores-list">
+          <li>
+            <strong>dense</strong>
+            <span>Vector similarity from embedding search.</span>
+          </li>
+          <li>
+            <strong>lexical</strong>
+            <span>BM25 keyword match (full-text search).</span>
+          </li>
+          <li>
+            <strong>rrf</strong>
+            <span>Rank fusion score combining dense and lexical order.</span>
+          </li>
+          <li>
+            <strong>rerank</strong>
+            <span>Final relevance from the rerank model (orange score).</span>
+          </li>
+        </ul>
+      </span>
+    </span>
+  );
+}
+
 function SettingsInlineRow({
   label,
   tooltip,
@@ -369,8 +399,9 @@ export function HybridSearchPage() {
       ) : null}
 
       <section className="hybrid-search-results-section">
-        <h2 className="hybrid-search-section-title">
-          Results{response ? ` (${response.results.length})` : ''}
+        <h2 className="hybrid-search-section-title hybrid-search-section-title-row">
+          <span>Results{response ? ` (${response.results.length})` : ''}</span>
+          <ResultScoresHelpTooltip />
         </h2>
         {searching ? (
           <p className="admin-muted" role="status">
