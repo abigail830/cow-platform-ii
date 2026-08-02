@@ -7,6 +7,10 @@
   --brand-orange-hover: #e85c0f;
   --brand-orange-soft: #fff0e7;
   --brand-orange-muted: #ffe8d9;
+  --brand-green: #628141;
+  --brand-green-hover: #4f6834;
+  --brand-green-soft: rgb(98 129 65 / 0.12);
+  --brand-green-muted: rgb(98 129 65 / 0.28);
   --app-page-bg: #f8fafb;
 }
 
@@ -2596,8 +2600,8 @@ textarea {
 }
 
 .document-status-badge.status-completed {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--brand-green-soft);
+  color: var(--brand-green);
 }
 
 .document-status-badge.status-failed {
@@ -2676,7 +2680,7 @@ textarea {
 }
 
 .pipeline-step-segment.complete {
-  background: #22c55e;
+  background: var(--brand-green);
 }
 
 .pipeline-step-segment.failed {
@@ -2694,8 +2698,8 @@ textarea {
 }
 
 .pipeline-step-dot.complete {
-  background: #22c55e;
-  border-color: #16a34a;
+  background: var(--brand-green);
+  border-color: var(--brand-green-hover);
 }
 
 .pipeline-step-dot.active {
@@ -4102,8 +4106,8 @@ textarea {
 }
 
 .kb-status-completed {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--brand-green-soft);
+  color: var(--brand-green);
 }
 
 .kb-status-failed {
@@ -4246,7 +4250,7 @@ textarea {
 }
 
 .kb-detail-table tbody tr.kb-item-row.selected {
-  background: #fff4ec;
+  background: #f1f5f9;
 }
 
 .kb-detail-table tbody tr.kb-item-row:hover {
@@ -4254,7 +4258,7 @@ textarea {
 }
 
 .kb-detail-table tbody tr.kb-item-row.selected:hover {
-  background: #ffedd5;
+  background: #e8edf3;
 }
 
 .kb-item-detail-hint-col {
@@ -4550,9 +4554,9 @@ textarea {
 }
 
 .app-transient-notice-success {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #047857;
+  background: var(--brand-green-soft);
+  border: 1px solid var(--brand-green-muted);
+  color: var(--brand-green);
 }
 
 .app-transient-notice-info {
