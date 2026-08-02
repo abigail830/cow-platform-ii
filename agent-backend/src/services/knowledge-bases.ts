@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   appDocumentChannels,
   appDocuments,
+  appKbChunkDocuments,
   appKbChunks,
   appKbImportJobs,
   appKbItems,
@@ -40,15 +41,29 @@ async function ragKbCounts(knowledgeBaseId: string): Promise<{ indexedDocuments:
 
 async function ragDocumentCountByKbId(): Promise<Map<string, number>> {
   try {
-    const { appKbChunkDocuments } = await import('../db/index.ts');
-    const chunkDocCounts = await db
+    const rows = await db
       .select({
-        knowledgeBaseId: appKbChunkDocuments.knowledgeBaseId,
-        count: sql<number>`count(*)::int`,
+        knowledgeBaseId: appKbChunks.knowledgeBaseId,
+        count: sql<number>`count(distinct ${appKbChunks.documentId})::int`,
       })
+      .from(appKbChunks)
+      .groupBy(appKbChunks.knowledgeBaseId);
+    const counts = new Map(rows.map((c) => [c.knowledgeBaseId, c.count]));
+
+    const statusOnly = await db
+      .select({ knowledgeBaseId: appKbChunkDocuments.knowledgeBaseId })
       .from(appKbChunkDocuments)
-      .groupBy(appKbChunkDocuments.knowledgeBaseId);
-    return new Map(chunkDocCounts.map((c) => [c.knowledgeBaseId, c.count]));
+      .where(
+        sql`not exists (
+          select 1 from ${appKbChunks}
+          where ${appKbChunks.knowledgeBaseId} = ${appKbChunkDocuments.knowledgeBaseId}
+            and ${appKbChunks.documentId} = ${appKbChunkDocuments.documentId}
+        )`,
+      );
+    for (const row of statusOnly) {
+      counts.set(row.knowledgeBaseId, (counts.get(row.knowledgeBaseId) ?? 0) + 1);
+    }
+    return counts;
   } catch (error) {
     console.warn('[kb] chunk document counts unavailable:', error);
     return new Map();
