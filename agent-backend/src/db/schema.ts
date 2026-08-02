@@ -375,6 +375,32 @@ export const appKbChunks = pgTable(
   ],
 );
 
+/** RAG per-document index row — parallel to app_kb_items for PageIndex. */
+export const appKbChunkDocuments = pgTable(
+  'app_kb_chunk_documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    knowledgeBaseId: uuid('knowledge_base_id')
+      .notNull()
+      .references(() => appKnowledgeBases.id, { onDelete: 'cascade' }),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => appDocuments.id, { onDelete: 'cascade' }),
+    documentName: text('document_name').notNull(),
+    channelPath: text('channel_path').notNull().default(''),
+    indexStatus: text('index_status').notNull().default('pending'),
+    indexError: text('index_error'),
+    indexedAt: timestamp('indexed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('uq_kb_chunk_documents_kb_document').on(t.knowledgeBaseId, t.documentId),
+    index('idx_kb_chunk_documents_kb').on(t.knowledgeBaseId, t.updatedAt),
+    index('idx_kb_chunk_documents_document').on(t.documentId),
+  ],
+);
+
 export const appPipelineJobs = pgTable(
   'app_pipeline_jobs',
   {

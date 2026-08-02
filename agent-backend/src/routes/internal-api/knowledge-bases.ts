@@ -7,6 +7,10 @@ import {
   type KbChunkBatchItem,
 } from '../../services/kb-chunks.ts';
 import {
+  upsertKbChunkDocumentFromWorker,
+  type KbChunkDocumentIndexStatus,
+} from '../../services/kb-chunk-documents.ts';
+import {
   getKbWorkerConfig,
   getKnowledgeBaseById,
   upsertKbItemFromWorker,
@@ -66,6 +70,52 @@ knowledgeBasesInternal.delete('/:kbId/documents/:documentId/chunks', async (c) =
 
   const deleted = await deleteKbChunksForDocument(kbId, documentId);
   return c.json({ ok: true, deleted });
+});
+
+knowledgeBasesInternal.put('/:kbId/chunk-documents/:documentId', async (c) => {
+  const kbId = routeParam(c, 'kbId');
+  const documentId = routeParam(c, 'documentId');
+  if (!kbId || !documentId) {
+    return c.json({ error: 'Knowledge base id and document id are required' }, 400);
+  }
+
+  const body = await c.req
+    .json<{
+      document_name?: string;
+      channel_path?: string;
+      index_status?: KbChunkDocumentIndexStatus;
+      index_error?: string | null;
+    }>()
+    .catch(() => ({}));
+
+  if (!body.index_status) {
+    return c.json({ error: 'index_status is required' }, 400);
+  }
+  if (!['pending', 'indexing', 'indexed', 'failed'].includes(body.index_status)) {
+    return c.json({ error: 'Invalid index_status' }, 400);
+  }
+
+  try {
+    const row = await upsertKbChunkDocumentFromWorker(kbId, documentId, {
+      document_name: body.document_name,
+      channel_path: body.channel_path,
+      index_status: body.index_status,
+      index_error: body.index_error,
+    });
+    return c.json({
+      ok: true,
+      document: {
+        id: row.id,
+        document_id: row.documentId,
+        index_status: row.indexStatus,
+        index_error: row.indexError,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to upsert chunk document';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status);
+  }
 });
 
 knowledgeBasesInternal.put('/:kbId/items/:documentId', async (c) => {

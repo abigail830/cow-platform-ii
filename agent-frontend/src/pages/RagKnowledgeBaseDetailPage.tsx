@@ -3,14 +3,12 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { ChevronRight, Loader2, Plus, Settings, Trash2 } from 'lucide-react';
 import {
   deleteDocumentChunks,
-  fetchImportSources,
   getKbImportJob,
   getKnowledgeBase,
   listAllIndexedDocumentIds,
   listDocumentChunks,
   listIndexedDocuments,
   startKbImport,
-  type ImportSources,
   type KbDocumentChunks,
   type KbImportJob,
   type KbIndexedDocument,
@@ -30,33 +28,32 @@ type RagKnowledgeBaseDetailPageProps = {
   initialKb?: KnowledgeBase;
 };
 
-type RagDisplayRow = {
-  document_id: string;
-  document_name: string;
-  channel_path: string;
-  chunk_count: number | null;
-  indexed_at: string | null;
-  status: 'indexed' | 'indexing' | 'failed';
-};
-
-function resolveDocMeta(
-  documentId: string,
-  sources: ImportSources | null,
-): { name: string; channelPath: string } {
-  if (!sources) return { name: documentId, channelPath: '' };
-  for (const channel of sources.channels) {
-    const doc = (sources.documents_by_channel[channel.id] ?? []).find((d) => d.id === documentId);
-    if (doc) {
-      return { name: doc.name, channelPath: channel.name };
-    }
-  }
-  return { name: documentId, channelPath: '' };
-}
-
-function ragStatusClass(status: RagDisplayRow['status']): string {
+function ragStatusClass(status: KbIndexedDocument['status']): string {
   if (status === 'indexed') return 'kb-status-completed';
   if (status === 'failed') return 'kb-status-failed';
   return 'kb-status-pending';
+}
+
+function RagDocumentStatusCell({ doc }: { doc: KbIndexedDocument }) {
+  if (doc.status === 'indexing' || doc.status === 'pending') {
+    return (
+      <span className="kb-item-status-loading">
+        <Loader2 {...iconProps({ size: 14, className: 'icon-btn-spin' })} aria-hidden />
+        indexing
+      </span>
+    );
+  }
+
+  return (
+    <div className="kb-item-status-cell">
+      <span className={`kb-status-badge ${ragStatusClass(doc.status)}`}>{doc.status}</span>
+      {doc.status === 'failed' && doc.index_error && (
+        <span className="kb-item-status-error" title={doc.index_error}>
+          {doc.index_error}
+        </span>
+      )}
+    </div>
+  );
 }
 
 const RERUN_DOCUMENT_TITLE =
@@ -64,10 +61,6 @@ const RERUN_DOCUMENT_TITLE =
 
 const REINDEX_ALL_TITLE =
   'Reindex every indexed document: delete all existing chunks and embeddings, then rebuild from source markdown.';
-
-function isImportJobInProgress(job: KbImportJob | null): boolean {
-  return job !== null && job.status !== 'completed' && job.status !== 'failed';
-}
 
 function ListLoadingState({ label }: { label: string }) {
   return (
@@ -99,7 +92,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   const [rerunningDocId, setRerunningDocId] = useState<string | null>(null);
   const [reindexingAll, setReindexingAll] = useState(false);
   const [embeddingModels, setEmbeddingModels] = useState<ModelConfig[]>([]);
-  const [importSources, setImportSources] = useState<ImportSources | null>(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [detailChunks, setDetailChunks] = useState<KbDocumentChunks | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -150,9 +142,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
 
   useEffect(() => {
     void load();
-    void fetchImportSources()
-      .then(setImportSources)
-      .catch(() => setImportSources(null));
   }, [load]);
 
   useEffect(() => {
@@ -164,14 +153,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
 
   useEffect(() => {
     if (!activeJob || !knowledgeBaseId) return;
-
-    if (activeJob.status === 'completed') {
-      void load({ silent: true });
-      return;
-    }
-
-    if (activeJob.status === 'failed') {
-      setError(activeJob.error_message || 'Indexing failed');
+    if (activeJob.status === 'completed' || activeJob.status === 'failed') {
       void load({ silent: true });
       return;
     }
@@ -203,9 +185,8 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
       .then((detail) => {
         if (!cancelled) setDetailChunks(detail);
       })
-      .catch((err) => {
+      .catch(() => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load document chunks');
           setDetailChunks(null);
         }
       })
@@ -218,50 +199,19 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
     };
   }, [selectedDocumentId, knowledgeBaseId]);
 
-  const displayRows = useMemo((): RagDisplayRow[] => {
-    const jobInProgress = isImportJobInProgress(activeJob);
-    const jobDocumentIds = new Set(activeJob?.document_ids ?? []);
-    const indexedById = new Map(docs.map((doc) => [doc.document_id, doc]));
-    const rows: RagDisplayRow[] = docs.map((doc) => ({
-      document_id: doc.document_id,
-      document_name: doc.document_name,
-      channel_path: doc.channel_path,
-      chunk_count: doc.chunk_count,
-      indexed_at: doc.indexed_at,
-      status:
-        jobInProgress && jobDocumentIds.has(doc.document_id) ? 'indexing' : 'indexed',
-    }));
-
-    for (const documentId of activeJob?.document_ids ?? []) {
-      if (indexedById.has(documentId)) continue;
-      const meta = resolveDocMeta(documentId, importSources);
-      rows.push({
-        document_id: documentId,
-        document_name: meta.name,
-        channel_path: meta.channelPath,
-        chunk_count: null,
-        indexed_at: null,
-        status:
-          activeJob?.status === 'failed'
-            ? 'failed'
-            : activeJob?.status === 'running' || activeJob?.status === 'pending'
-              ? 'indexing'
-              : 'failed',
-      });
-    }
-
-    return rows;
-  }, [docs, activeJob, importSources]);
-
   function stopRowAction(event: { stopPropagation: () => void }) {
     event.stopPropagation();
+  }
+
+  async function trackActiveJob(job: KbImportJob) {
+    setActiveJob(job);
   }
 
   async function handleImport(input: { channelIds: string[]; documentIds: string[] }) {
     if (!knowledgeBaseId) return;
     setError('');
     const result = await startKbImport(knowledgeBaseId, input);
-    setActiveJob(result.job);
+    await trackActiveJob(result.job);
     setImportOpen(false);
     await load({ silent: true });
   }
@@ -270,7 +220,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
     if (!knowledgeBaseId || documentIds.length === 0) return;
     setError('');
     const result = await startKbImport(knowledgeBaseId, { documentIds });
-    setActiveJob(result.job);
+    await trackActiveJob(result.job);
     await load({ silent: true });
   }
 
@@ -345,8 +295,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
               </AdminPageDescription>
             </div>
           </header>
-
-          {error && <p className="admin-error" role="alert">{error}</p>}
 
           <section className="kb-items-section">
             <div className="kb-items-header">
@@ -425,20 +373,20 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                             <ListLoadingState label="Loading indexed documents…" />
                           </td>
                         </tr>
-                      ) : displayRows.length === 0 ? (
+                      ) : docs.length === 0 ? (
                         <tr>
                           <td colSpan={7} className="admin-table-empty">
                             &nbsp;
                           </td>
                         </tr>
                       ) : (
-                        displayRows.map((row) => {
-                          const selected = selectedDocumentId === row.document_id;
-                          const canOpenDetail = row.status === 'indexed';
+                        docs.map((doc) => {
+                          const selected = selectedDocumentId === doc.document_id;
+                          const canOpenDetail = doc.status === 'indexed';
 
                           return (
                             <tr
-                              key={row.document_id}
+                              key={doc.document_id}
                               className={
                                 canOpenDetail
                                   ? selected
@@ -448,68 +396,64 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                               }
                               onClick={
                                 canOpenDetail
-                                  ? () => setSelectedDocumentId(row.document_id)
+                                  ? () => setSelectedDocumentId(doc.document_id)
                                   : undefined
                               }
                             >
-                              <td>{row.document_name}</td>
-                              <td className="kb-path-cell">{row.channel_path}</td>
+                              <td>{doc.document_name}</td>
+                              <td className="kb-path-cell">{doc.channel_path}</td>
                               <td className="kb-item-status-col">
-                                {row.status === 'indexing' ? (
-                                  <span className="kb-item-status-loading">
-                                    <Loader2 {...iconProps({ size: 14, className: 'icon-btn-spin' })} aria-hidden />
-                                    indexing
-                                  </span>
-                                ) : (
-                                  <span className={`kb-status-badge ${ragStatusClass(row.status)}`}>
-                                    {row.status}
-                                  </span>
-                                )}
+                                <RagDocumentStatusCell doc={doc} />
                               </td>
-                              <td>{row.chunk_count ?? '—'}</td>
-                              <td>{row.indexed_at ? new Date(row.indexed_at).toLocaleString() : '—'}</td>
+                              <td>{doc.chunk_count ?? '—'}</td>
+                              <td>{doc.indexed_at ? new Date(doc.indexed_at).toLocaleString() : '—'}</td>
                               <td className="kb-item-actions-col" onClick={stopRowAction}>
                                 <div className="row-actions">
-                                  {canWrite && (row.status === 'indexed' || row.status === 'indexing') ? (
+                                  {canWrite &&
+                                  (doc.status === 'indexed' ||
+                                    doc.status === 'indexing' ||
+                                    doc.status === 'failed') ? (
                                     <>
-                                      {row.status === 'indexed' ? (
+                                      {doc.status === 'indexed' || doc.status === 'failed' ? (
                                         <button
                                           type="button"
                                           className="icon-btn icon-btn--run"
                                           title={RERUN_DOCUMENT_TITLE}
-                                          aria-label={`Rerun indexing for ${row.document_name}`}
+                                          aria-label={`Rerun indexing for ${doc.document_name}`}
                                           disabled={
                                             importJobActive ||
                                             reindexingAll ||
-                                            rerunningDocId === row.document_id
+                                            rerunningDocId === doc.document_id
                                           }
-                                          onClick={() => void handleRerunDocument(row.document_id)}
+                                          onClick={() => void handleRerunDocument(doc.document_id)}
                                         >
-                                          {rerunningDocId === row.document_id ? (
+                                          {rerunningDocId === doc.document_id ? (
                                             <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
                                           ) : (
                                             <IconRun {...iconProps()} />
                                           )}
                                         </button>
                                       ) : null}
-                                      <button
-                                        type="button"
-                                        className="icon-btn danger"
-                                        title="Remove indexed chunks from this knowledge base"
-                                        aria-label={`Remove chunks for ${row.document_name}`}
-                                        disabled={
-                                          deletingDocId === row.document_id ||
-                                          importJobActive ||
-                                          row.status === 'indexing'
-                                        }
-                                        onClick={() => void handleDeleteChunks(row.document_id)}
-                                      >
-                                        {deletingDocId === row.document_id ? (
-                                          <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
-                                        ) : (
-                                          <Trash2 {...iconProps()} />
-                                        )}
-                                      </button>
+                                      {doc.status === 'indexed' || doc.status === 'indexing' ? (
+                                        <button
+                                          type="button"
+                                          className="icon-btn danger"
+                                          title="Remove indexed chunks from this knowledge base"
+                                          aria-label={`Remove chunks for ${doc.document_name}`}
+                                          disabled={
+                                            deletingDocId === doc.document_id ||
+                                            importJobActive ||
+                                            doc.status === 'indexing'
+                                          }
+                                          onClick={() => void handleDeleteChunks(doc.document_id)}
+                                        >
+                                          {deletingDocId === doc.document_id ? (
+                                            <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                                          ) : (
+                                            <Trash2 {...iconProps()} />
+                                          )}
+                                        </button>
+                                      ) : null}
                                     </>
                                   ) : null}
                                 </div>
@@ -520,8 +464,8 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                                     type="button"
                                     className="icon-btn"
                                     title="View chunks"
-                                    aria-label={`View chunks for ${row.document_name}`}
-                                    onClick={() => setSelectedDocumentId(row.document_id)}
+                                    aria-label={`View chunks for ${doc.document_name}`}
+                                    onClick={() => setSelectedDocumentId(doc.document_id)}
                                   >
                                     <ChevronRight {...iconProps()} />
                                   </button>

@@ -169,6 +169,13 @@
       "when": 1785180000000,
       "tag": "0023_rag_kb_index",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785181000000,
+      "tag": "0024_kb_chunk_documents",
+      "breakpoints": true
     }
   ]
 }

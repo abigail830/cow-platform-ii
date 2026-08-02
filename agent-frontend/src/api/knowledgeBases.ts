@@ -40,9 +40,10 @@ export type KbIndexedDocument = {
   document_id: string;
   document_name: string;
   channel_path: string;
-  chunk_count: number;
-  indexed_at: string;
-  status: 'indexed';
+  chunk_count: number | null;
+  indexed_at: string | null;
+  status: 'pending' | 'indexed' | 'indexing' | 'failed';
+  index_error: string | null;
 };
 
 export type KbChunk = {

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
   appDocumentChannels,
+  appKbChunkDocuments,
   appKbChunks,
   appKnowledgeBases,
   db,
@@ -8,17 +9,10 @@ import {
 import { buildChannelPath } from './channel-tree.ts';
 import { getDocumentById } from './documents.ts';
 import { decodeEmbeddingBase64 } from '../shared/kb-chunk-embedding.ts';
-
-async function allChannelRows() {
-  const rows = await db
-    .select({
-      id: appDocumentChannels.id,
-      name: appDocumentChannels.name,
-      parentId: appDocumentChannels.parentId,
-    })
-    .from(appDocumentChannels);
-  return rows.map((r) => ({ id: r.id, name: r.name, parent_id: r.parentId }));
-}
+import {
+  deleteKbChunkDocument,
+  type KbChunkDocumentIndexStatus,
+} from './kb-chunk-documents.ts';
 
 export type KbChunkBatchItem = {
   id: string;
@@ -44,6 +38,7 @@ export async function deleteKbChunksForDocument(
       ),
     )
     .returning({ id: appKbChunks.id });
+  await deleteKbChunkDocument(knowledgeBaseId, documentId);
   return deleted.length;
 }
 
@@ -91,11 +86,21 @@ export async function countKbChunks(knowledgeBaseId: string): Promise<number> {
 
 export async function countIndexedDocuments(knowledgeBaseId: string): Promise<number> {
   const [row] = await db
-    .select({ count: sql<number>`count(distinct ${appKbChunks.documentId})::int` })
-    .from(appKbChunks)
-    .where(eq(appKbChunks.knowledgeBaseId, knowledgeBaseId));
+    .select({ count: sql<number>`count(*)::int` })
+    .from(appKbChunkDocuments)
+    .where(eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId));
   return row?.count ?? 0;
 }
+
+export type KbIndexedDocumentRow = {
+  document_id: string;
+  document_name: string;
+  channel_path: string;
+  chunk_count: number | null;
+  indexed_at: string | null;
+  status: KbChunkDocumentIndexStatus;
+  index_error: string | null;
+};
 
 export async function listIndexedDocuments(
   knowledgeBaseId: string,
@@ -111,52 +116,52 @@ export async function listIndexedDocuments(
   const offset = Math.max(input?.offset ?? 0, 0);
   const limit = Math.min(Math.max(input?.limit ?? 25, 1), 100);
 
-  const aggregated = await db
-    .select({
-      documentId: appKbChunks.documentId,
-      chunkCount: sql<number>`count(*)::int`,
-      indexedAt: sql<Date>`max(${appKbChunks.indexedAt})`,
-    })
-    .from(appKbChunks)
-    .where(eq(appKbChunks.knowledgeBaseId, knowledgeBaseId))
-    .groupBy(appKbChunks.documentId)
-    .orderBy(desc(sql`max(${appKbChunks.indexedAt})`))
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(appKbChunkDocuments)
+    .where(eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId));
+
+  const rows = await db
+    .select()
+    .from(appKbChunkDocuments)
+    .where(eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId))
+    .orderBy(desc(appKbChunkDocuments.updatedAt))
     .limit(limit)
     .offset(offset);
 
-  const [countRow] = await db
-    .select({ count: sql<number>`count(distinct ${appKbChunks.documentId})::int` })
+  const chunkCounts = await db
+    .select({
+      documentId: appKbChunks.documentId,
+      chunkCount: sql<number>`count(*)::int`,
+    })
     .from(appKbChunks)
-    .where(eq(appKbChunks.knowledgeBaseId, knowledgeBaseId));
+    .where(eq(appKbChunks.knowledgeBaseId, knowledgeBaseId))
+    .groupBy(appKbChunks.documentId);
+  const chunkCountByDoc = new Map(chunkCounts.map((row) => [row.documentId, row.chunkCount]));
 
-  const channelRows = await allChannelRows();
-  const items = [];
-  for (const row of aggregated) {
-    const doc = await getDocumentById(row.documentId);
-    if (!doc) continue;
-    const channelPath = buildChannelPath(doc.channelId, channelRows);
-    const indexedAt =
-      row.indexedAt instanceof Date
-        ? row.indexedAt.toISOString()
-        : new Date(row.indexedAt as string).toISOString();
-    items.push({
-      document_id: row.documentId,
-      document_name: doc.name,
-      channel_path: channelPath,
-      chunk_count: row.chunkCount,
-      indexed_at: indexedAt,
-      status: 'indexed' as const,
-    });
-  }
+  const items: KbIndexedDocumentRow[] = rows.map((row) => ({
+    document_id: row.documentId,
+    document_name: row.documentName,
+    channel_path: row.channelPath,
+    chunk_count: chunkCountByDoc.get(row.documentId) ?? null,
+    indexed_at: row.indexedAt?.toISOString() ?? null,
+    status: row.indexStatus as KbChunkDocumentIndexStatus,
+    index_error: row.indexError ?? null,
+  }));
 
   return { items, total: countRow?.count ?? 0 };
 }
 
 export async function getDistinctIndexedDocumentIds(knowledgeBaseId: string): Promise<string[]> {
   const rows = await db
-    .selectDistinct({ documentId: appKbChunks.documentId })
-    .from(appKbChunks)
-    .where(eq(appKbChunks.knowledgeBaseId, knowledgeBaseId));
+    .select({ documentId: appKbChunkDocuments.documentId })
+    .from(appKbChunkDocuments)
+    .where(
+      and(
+        eq(appKbChunkDocuments.knowledgeBaseId, knowledgeBaseId),
+        eq(appKbChunkDocuments.indexStatus, 'indexed'),
+      ),
+    );
   return rows.map((r) => r.documentId);
 }
 
@@ -223,8 +228,17 @@ export async function listKbChunksForDocument(
       ),
     );
 
-  const channelRows = await allChannelRows();
-  const channelPath = buildChannelPath(doc.channelId, channelRows);
+  const channelRows = await db
+    .select({
+      id: appDocumentChannels.id,
+      name: appDocumentChannels.name,
+      parentId: appDocumentChannels.parentId,
+    })
+    .from(appDocumentChannels);
+  const channelPath = buildChannelPath(
+    doc.channelId,
+    channelRows.map((r) => ({ id: r.id, name: r.name, parent_id: r.parentId })),
+  );
   const indexedAt = rows.reduce<string | null>((latest, row) => {
     const value = formatChunkTimestamp(row.indexedAt);
     return latest == null || value > latest ? value : latest;

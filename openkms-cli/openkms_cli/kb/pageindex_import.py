@@ -76,6 +76,43 @@ def _trim_markdown(text: str | None, warnings: list[str]) -> str | None:
     return encoded[:MAX_MARKDOWN_BYTES].decode("utf-8", errors="ignore")
 
 
+def _patch_job(
+    base: str,
+    job_id: str,
+    headers: dict,
+    basic,
+    payload: dict[str, Any],
+) -> None:
+    try:
+        requests.patch(
+            f"{base}/internal-api/kb-pageindex-import-jobs/{job_id}",
+            json=payload,
+            headers={**headers, "Content-Type": "application/json"},
+            auth=basic,
+            timeout=30,
+        )
+    except Exception as exc:
+        console.print(f"[yellow]Failed to update job {job_id}: {exc}[/yellow]")
+
+
+def _build_job_error_message(
+    failure_notes: list[str],
+    *,
+    failed: int,
+    completed: int,
+) -> str | None:
+    if not failure_notes:
+        return None
+    summary = "; ".join(failure_notes[:8])
+    if len(failure_notes) > 8:
+        summary += f" (+{len(failure_notes) - 8} more)"
+    if failed and completed:
+        return f"{failed} of {failed + completed} document(s) failed: {summary}"
+    if failed:
+        return f"All documents failed to import: {summary}"
+    return summary
+
+
 def run_pageindex_import(job_id: str, api_url: Optional[str] = None) -> None:
     cfg = get_cli_settings()
     base = (api_url or cfg.openkms_api_url or "").rstrip("/")
@@ -102,117 +139,159 @@ def run_pageindex_import(job_id: str, api_url: Optional[str] = None) -> None:
     job = job_resp.json()
     kb_id = job["knowledge_base_id"]
     document_ids = job.get("document_ids") or []
+    completed = int(job.get("completed_count") or 0)
+    failed = int(job.get("failed_count") or 0)
+    failure_notes: list[str] = []
+
+    def fail_job(message: str, *, status_failed: bool = True) -> None:
+        payload: dict[str, Any] = {
+            "error_message": message[:2000],
+            "completed_count": completed,
+            "failed_count": failed if failed else len(document_ids),
+        }
+        if status_failed:
+            payload["status"] = "failed"
+        _patch_job(base, job_id, auth_headers, basic, payload)
+
     if not document_ids:
-        requests.patch(
-            f"{base}/internal-api/kb-pageindex-import-jobs/{job_id}",
-            json={"status": "completed"},
-            headers={**auth_headers, "Content-Type": "application/json"},
-            auth=basic,
-            timeout=30,
+        _patch_job(
+            base,
+            job_id,
+            auth_headers,
+            basic,
+            {"status": "completed", "error_message": None},
         )
         console.print("[green]No documents to import[/green]")
         return
 
-    s3_client = get_s3_client(
-        cfg.aws_endpoint_url or None,
-        cfg.aws_access_key_id,
-        cfg.aws_secret_access_key,
-        cfg.aws_region,
-    )
-    bucket = cfg.aws_bucket_name
+    try:
+        try:
+            s3_client = get_s3_client(
+                cfg.aws_endpoint_url or None,
+                cfg.aws_access_key_id,
+                cfg.aws_secret_access_key,
+                cfg.aws_region,
+            )
+        except typer.Exit:
+            fail_job(
+                "boto3 not installed. Install openkms-cli with pipeline or kb extras (boto3)."
+            )
+            raise
 
-    completed = int(job.get("completed_count") or 0)
-    failed = int(job.get("failed_count") or 0)
+        bucket = cfg.aws_bucket_name
 
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        task = progress.add_task("Importing...", total=len(document_ids))
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Importing...", total=len(document_ids))
 
-        for document_id in document_ids:
-            progress.update(task, description=f"Importing document {document_id}...")
-            warnings: list[str] = []
-            try:
-                ctx_resp = requests.get(
-                    f"{base}/internal-api/documents/{document_id}/import-context",
-                    headers=auth_headers,
-                    auth=basic,
-                    timeout=60,
-                )
-                if not ctx_resp.ok:
-                    raise RuntimeError(f"import-context {ctx_resp.status_code}")
-
-                ctx = ctx_resp.json()
-                prefix = ctx["s3_prefix"]
-
-                markdown = _read_s3_text(s3_client, bucket, f"{prefix}/markdown.md")
-                page_index = _read_s3_json(s3_client, bucket, f"{prefix}/page_index.json")
-                parsing_result = _read_s3_json(s3_client, bucket, f"{prefix}/result.json")
-                extracted = _read_s3_json(s3_client, bucket, f"{prefix}/extracted_metadata.json")
-                metadata = _merge_metadata(ctx.get("metadata"), extracted)
-
-                markdown = _trim_markdown(markdown, warnings)
-                if parsing_result:
-                    parsing_result = _slim_parsing_result(parsing_result, warnings)
-
-                put_resp = requests.put(
-                    f"{base}/internal-api/knowledge-bases/{kb_id}/items/{document_id}",
-                    headers={**auth_headers, "Content-Type": "application/json"},
-                    auth=basic,
-                    json={
-                        "document_name": ctx.get("name"),
-                        "channel_path": ctx.get("channel_path"),
-                        "original_s3_key": ctx.get("original_s3_key"),
-                        "metadata": metadata,
-                        "page_index": page_index,
-                        "markdown": markdown,
-                        "parsing_result": parsing_result,
-                        "import_status": "completed",
-                        "import_warnings": warnings or None,
-                    },
-                    timeout=300,
-                )
-                if not put_resp.ok:
-                    raise RuntimeError(f"PUT item {put_resp.status_code} {put_resp.text[:200]}")
-
-                completed += 1
-            except Exception as e:
-                failed += 1
-                console.print(f"[yellow]Document {document_id} failed: {e}[/yellow]")
+            for document_id in document_ids:
+                progress.update(task, description=f"Importing document {document_id}...")
+                warnings: list[str] = []
                 try:
-                    requests.put(
+                    ctx_resp = requests.get(
+                        f"{base}/internal-api/documents/{document_id}/import-context",
+                        headers=auth_headers,
+                        auth=basic,
+                        timeout=60,
+                    )
+                    if not ctx_resp.ok:
+                        raise RuntimeError(f"import-context {ctx_resp.status_code}")
+
+                    ctx = ctx_resp.json()
+                    prefix = ctx["s3_prefix"]
+
+                    markdown = _read_s3_text(s3_client, bucket, f"{prefix}/markdown.md")
+                    page_index = _read_s3_json(s3_client, bucket, f"{prefix}/page_index.json")
+                    parsing_result = _read_s3_json(s3_client, bucket, f"{prefix}/result.json")
+                    extracted = _read_s3_json(s3_client, bucket, f"{prefix}/extracted_metadata.json")
+                    metadata = _merge_metadata(ctx.get("metadata"), extracted)
+
+                    markdown = _trim_markdown(markdown, warnings)
+                    if parsing_result:
+                        parsing_result = _slim_parsing_result(parsing_result, warnings)
+
+                    put_resp = requests.put(
                         f"{base}/internal-api/knowledge-bases/{kb_id}/items/{document_id}",
                         headers={**auth_headers, "Content-Type": "application/json"},
                         auth=basic,
                         json={
-                            "import_status": "failed",
-                            "import_error": str(e)[:500],
+                            "document_name": ctx.get("name"),
+                            "channel_path": ctx.get("channel_path"),
+                            "original_s3_key": ctx.get("original_s3_key"),
+                            "metadata": metadata,
+                            "page_index": page_index,
+                            "markdown": markdown,
+                            "parsing_result": parsing_result,
+                            "import_status": "completed",
+                            "import_warnings": warnings or None,
                         },
-                        timeout=60,
+                        timeout=300,
                     )
-                except Exception:
-                    pass
+                    if not put_resp.ok:
+                        raise RuntimeError(f"PUT item {put_resp.status_code} {put_resp.text[:200]}")
 
-            requests.patch(
-                f"{base}/internal-api/kb-pageindex-import-jobs/{job_id}",
-                json={"completed_count": completed, "failed_count": failed},
-                headers={**auth_headers, "Content-Type": "application/json"},
-                auth=basic,
-                timeout=30,
+                    completed += 1
+                except Exception as e:
+                    failed += 1
+                    note = f"{document_id}: {e}"
+                    failure_notes.append(note)
+                    console.print(f"[yellow]Document {document_id} failed: {e}[/yellow]")
+                    try:
+                        requests.put(
+                            f"{base}/internal-api/knowledge-bases/{kb_id}/items/{document_id}",
+                            headers={**auth_headers, "Content-Type": "application/json"},
+                            auth=basic,
+                            json={
+                                "import_status": "failed",
+                                "import_error": str(e)[:500],
+                            },
+                            timeout=60,
+                        )
+                    except Exception:
+                        pass
+
+                _patch_job(
+                    base,
+                    job_id,
+                    auth_headers,
+                    basic,
+                    {"completed_count": completed, "failed_count": failed},
+                )
+                progress.advance(task)
+
+        final_status = "failed" if failed and completed == 0 else "completed"
+        error_message = _build_job_error_message(
+            failure_notes,
+            failed=failed,
+            completed=completed,
+        )
+        _patch_job(
+            base,
+            job_id,
+            auth_headers,
+            basic,
+            {
+                "status": final_status,
+                "completed_count": completed,
+                "failed_count": failed,
+                "error_message": error_message,
+            },
+        )
+        if final_status == "failed":
+            console.print(f"[red]PageIndex import failed: {error_message}[/red]")
+            raise typer.Exit(1)
+        if failed:
+            console.print(
+                f"[yellow]PageIndex import finished with failures: {completed} completed, {failed} failed[/yellow]"
             )
-            progress.advance(task)
-
-    final_status = "failed" if failed and completed == 0 else "completed"
-    requests.patch(
-        f"{base}/internal-api/kb-pageindex-import-jobs/{job_id}",
-        json={
-            "status": final_status,
-            "completed_count": completed,
-            "failed_count": failed,
-            "error_message": None if final_status == "completed" else "All documents failed to import",
-        },
-        headers={**auth_headers, "Content-Type": "application/json"},
-        auth=basic,
-        timeout=30,
-    )
-    console.print(
-        f"[green]PageIndex import done: {completed} completed, {failed} failed[/green]"
-    )
+        else:
+            console.print(f"[green]PageIndex import done: {completed} completed[/green]")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        fail_job(f"Import failed: {e}")
+        console.print(f"[red]PageIndex import failed: {e}[/red]")
+        raise typer.Exit(1) from e

@@ -92,3 +92,17 @@ jobs:
           else
             uv run openkms-cli kb rag-index --job-id "${{ inputs.job_id }}"
           fi
+
+      - name: Mark job failed on workflow error
+        if: failure()
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+          OPENKMS_CLI_BASIC_USER: ${{ secrets.OPENKMS_CLI_BASIC_USER }}
+          OPENKMS_CLI_BASIC_PASSWORD: ${{ secrets.OPENKMS_CLI_BASIC_PASSWORD }}
+        run: |
+          JOB_ID="${{ inputs.job_id }}"
+          curl -fsS -X PATCH "${OPENKMS_API_URL%/}/internal-api/kb-import-jobs/${JOB_ID}" \
+            -u "${OPENKMS_CLI_BASIC_USER}:${OPENKMS_CLI_BASIC_PASSWORD}" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"failed","error_message":"GitHub Actions worker failed before rag-index completed"}' \
+            || echo "::warning::Could not mark KB import job as failed"

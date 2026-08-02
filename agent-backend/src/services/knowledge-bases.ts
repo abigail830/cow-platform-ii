@@ -23,6 +23,7 @@ import { resolveDefaultPipelineIdForKbType } from '../shared/kb-pipeline-binding
 import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { getModelConfigById } from '../shared/model-config-store.ts';
 import { countIndexedDocuments, countKbChunks } from './kb-chunks.ts';
+import { upsertKbChunkDocumentIndexing } from './kb-chunk-documents.ts';
 
 async function ragKbCounts(knowledgeBaseId: string): Promise<{ indexedDocuments: number; chunks: number }> {
   try {
@@ -39,13 +40,14 @@ async function ragKbCounts(knowledgeBaseId: string): Promise<{ indexedDocuments:
 
 async function ragDocumentCountByKbId(): Promise<Map<string, number>> {
   try {
+    const { appKbChunkDocuments } = await import('../db/index.ts');
     const chunkDocCounts = await db
       .select({
-        knowledgeBaseId: appKbChunks.knowledgeBaseId,
-        count: sql<number>`count(distinct ${appKbChunks.documentId})::int`,
+        knowledgeBaseId: appKbChunkDocuments.knowledgeBaseId,
+        count: sql<number>`count(*)::int`,
       })
-      .from(appKbChunks)
-      .groupBy(appKbChunks.knowledgeBaseId);
+      .from(appKbChunkDocuments)
+      .groupBy(appKbChunkDocuments.knowledgeBaseId);
     return new Map(chunkDocCounts.map((c) => [c.knowledgeBaseId, c.count]));
   } catch (error) {
     console.warn('[kb] chunk document counts unavailable:', error);
@@ -713,6 +715,10 @@ export async function startKbRagIndexImport(input: {
     documentIds: input.documentIds,
   });
   if (documentIds.length === 0) throw new Error('No documents selected for import');
+
+  for (const documentId of documentIds) {
+    await upsertKbChunkDocumentIndexing(input.knowledgeBaseId, documentId);
+  }
 
   const job = await createKbImportJob({
     knowledgeBaseId: input.knowledgeBaseId,
