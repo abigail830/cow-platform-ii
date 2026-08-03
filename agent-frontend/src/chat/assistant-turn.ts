@@ -22,6 +22,23 @@ export function latestTurnAssistantParts(messages: FlueConversationMessage[]): F
   return latestTurnAssistantMessages(messages).flatMap((message) => message.parts);
 }
 
+export function isLatestAssistantTurn(
+  turnMessages: FlueConversationMessage[],
+  allMessages: FlueConversationMessage[],
+): boolean {
+  const lastUser = lastUserMessage(allMessages);
+  if (!lastUser?.submissionId || turnMessages.length === 0) return false;
+
+  const turnSubmissionId = turnMessages.find((message) => message.submissionId)?.submissionId;
+  if (!turnSubmissionId || turnSubmissionId !== lastUser.submissionId) return false;
+
+  const latest = latestTurnAssistantMessages(allMessages);
+  if (latest.length === 0) return false;
+
+  const latestIds = new Set(latest.map((message) => message.id));
+  return turnMessages.some((message) => latestIds.has(message.id));
+}
+
 export function inProgressStatusLabel(status: AgentStatus): string {
   switch (status) {
     case 'connecting':

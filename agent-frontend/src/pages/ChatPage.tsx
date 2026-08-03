@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import type { AuthUser } from '../api/auth.ts';
+import { AgentA2aInfoButton } from '../components/AgentA2aInfoButton.tsx';
 import { AgentChatPanel } from '../components/AgentChatPanel.tsx';
 import { ChatComposer } from '../components/ChatComposer.tsx';
 import { ChatHistoryPanel } from '../components/ChatHistoryPanel.tsx';
@@ -100,6 +101,7 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
           <div className="chat-header-title">
             {selectedAgent && <AgentMenuIcon className="chat-header-icon" />}
             <h2>{selectedAgentInfo?.displayName ?? 'Chat'}</h2>
+            {selectedAgentInfo?.a2a ? <AgentA2aInfoButton a2a={selectedAgentInfo.a2a} /> : null}
           </div>
           <div className="chat-header-actions">
             <button

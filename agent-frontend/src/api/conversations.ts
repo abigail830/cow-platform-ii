@@ -2,11 +2,27 @@ import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
 
+export type AgentA2aSkillInfo = {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  examples: string[];
+};
+
+export type AgentA2aInfo = {
+  channelName: string;
+  endpointUrl: string;
+  agentCardUrl: string;
+  skills: AgentA2aSkillInfo[];
+};
+
 export type AgentInfo = {
   name: string;
   displayName: string;
   description?: string;
   icon?: string;
+  a2a?: AgentA2aInfo;
 };
 
 export type Conversation = {

@@ -5,6 +5,7 @@ import { loadAgentSpec } from '../../agent-catalog/discover.ts';
 import { agentCatalogRoot } from '../../agent-catalog/paths.ts';
 import { a2aChannelName, isA2aEnabledForSpec } from './config.ts';
 import { buildAgentCardForSpec } from './build-agent-card.ts';
+import { buildAgentA2aPublicInfo } from './public-info.ts';
 import { extractTextFromA2aMessage } from './extract-text.ts';
 import { Message, Role } from '@a2a-js/sdk';
 
@@ -28,6 +29,19 @@ describe('buildAgentCardForSpec', () => {
     assert.equal(card.skills.length, spec.a2a!.skills.length);
     assert.deepEqual(card.skills[0]?.tags, spec.a2a!.skills[0]!.tags);
     assert.ok(card.defaultOutputModes.includes('application/json'));
+  });
+});
+
+describe('buildAgentA2aPublicInfo', () => {
+  it('exposes channel URLs and configured skills for enabled agents', () => {
+    const spec = loadAgentSpec(join(agentCatalogRoot(), 'kb-qa'));
+    const info = buildAgentA2aPublicInfo(spec);
+    assert.ok(info);
+    assert.equal(info.channelName, 'kb-qa-a2a');
+    assert.match(info.endpointUrl, /\/api\/channels\/kb-qa-a2a\/v1\/message:send$/);
+    assert.match(info.agentCardUrl, /\/api\/channels\/kb-qa-a2a\/\.well-known\/agent-card\.json$/);
+    assert.equal(info.skills.length, spec.a2a!.skills.length);
+    assert.deepEqual(info.skills[0]?.tags, spec.a2a!.skills[0]!.tags);
   });
 });
 

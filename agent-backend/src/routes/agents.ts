@@ -4,6 +4,7 @@ import { getAgentRegistry } from '../agent-catalog/registry.ts';
 import { getUser, requireAuth } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
 import { listAllowedAgents } from '../auth/permissions.ts';
+import { buildAgentA2aPublicInfo } from '../flue/a2a/public-info.ts';
 
 const agents = new Hono();
 
@@ -19,11 +20,13 @@ agents.get(
     return c.json({
       agents: names.map((name) => {
         const meta = registry.get(name)?.spec;
+        const a2a = meta ? buildAgentA2aPublicInfo(meta) : null;
         return {
           name,
           displayName: meta?.displayName ?? name,
           description: meta?.description,
           icon: meta?.icon,
+          ...(a2a ? { a2a } : {}),
         };
       }),
     });

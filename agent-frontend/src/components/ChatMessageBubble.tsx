@@ -28,9 +28,14 @@ export function UserMessageBubble({ message }: UserMessageBubbleProps) {
 type AssistantMessageBubbleProps = {
   messages: FlueConversationMessage[];
   children: ReactNode;
+  showCopy?: boolean;
 };
 
-export function AssistantMessageBubble({ messages, children }: AssistantMessageBubbleProps) {
+export function AssistantMessageBubble({
+  messages,
+  children,
+  showCopy = true,
+}: AssistantMessageBubbleProps) {
   const text = assistantMessageText(messages);
   const resolveLinkHref = useMemo(
     () => buildArtifactHrefResolver(extractPublishedArtifacts(messages)),
@@ -41,7 +46,7 @@ export function AssistantMessageBubble({ messages, children }: AssistantMessageB
     <ChatLinkResolveContext.Provider value={resolveLinkHref}>
       <div className="message-stack assistant">
         <div className="message assistant">{children}</div>
-        <MessageCopyButton text={text} />
+        {showCopy ? <MessageCopyButton text={text} /> : null}
       </div>
     </ChatLinkResolveContext.Provider>
   );

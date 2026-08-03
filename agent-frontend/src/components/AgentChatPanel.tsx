@@ -13,6 +13,7 @@ import {
   userMessageText,
 } from '../chat/groupMessages.ts';
 import { isActiveStreaming, shouldShowThinkingIndicator } from '../chat/typing-indicator.ts';
+import { isLatestAssistantTurn } from '../chat/assistant-turn.ts';
 import { useChatAutoScroll } from '../chat/use-chat-auto-scroll.ts';
 import { useThrottledMessages } from '../chat/use-throttled-messages.ts';
 import { MessagePart } from '../chat/MessagePart.tsx';
@@ -168,10 +169,12 @@ export function AgentChatPanel({
             const parts = filterRenderableParts(mergeAssistantParts(row.messages));
             const submissionId = assistantTurnSubmissionId(row.messages);
             const showAborted = submissionId ? abortedSubmissionIds.has(submissionId) : false;
+            const showCopy = !(busy && isLatestAssistantTurn(row.messages, agent.messages));
             return (
               <AssistantMessageBubble
                 key={row.messages.map((message) => message.id).join(':') || 'assistant'}
                 messages={row.messages}
+                showCopy={showCopy}
               >
                 {parts.map((part, index) => (
                   <MessagePart key={partRenderKey(part, index)} part={part} />
