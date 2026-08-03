@@ -5,7 +5,7 @@ icon: ChefHat
 
 model:
   configName: gpt-5.4-mini
-  profile: azure-openai
+  profile: glm-4.7-flash
 
 prompt: ./prompt.md
 

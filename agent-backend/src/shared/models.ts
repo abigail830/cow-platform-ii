@@ -1,3 +1,14 @@
+/** Env-based model profiles resolved synchronously by `resolveModel()`. */
+export const LEGACY_MODEL_PROFILES = new Set([
+  'openai',
+  'azure-openai',
+  'siliconflow',
+  'anthropic',
+]);
+
+/** Default catalog config name when agent.yaml omits `configName` and `profile`. */
+export const DEFAULT_CATALOG_MODEL_PROFILE = 'glm-4.7-flash';
+
 export function resolveModel(profile?: string): string {
   const p = profile ?? process.env.MODEL_PROFILE ?? 'azure-openai';
   const azureDeployment =

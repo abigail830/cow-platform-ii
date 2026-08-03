@@ -5,7 +5,7 @@ icon: Presentation
 
 model:
   configName: gpt-5.4
-  profile: azure-openai
+  profile: glm-4.7-flash
 
 prompt: ./prompt.md
 
