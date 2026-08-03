@@ -56,3 +56,16 @@ test('resolveFlueModelFromConfig uses azure-openai-responses catalog provider fo
   );
   assert.equal(model, 'azure-openai-responses/gpt-5.4-mini');
 });
+
+test('resolveFlueModelFromConfig uses opencode-go catalog for Alibaba Qwen MaaS', () => {
+  const model = resolveFlueModelFromConfig(
+    sampleConfig({
+      name: 'qwen3.7-flash',
+      modelId: 'qwen3.7-flash',
+      provider: 'Qwen',
+      baseUrl:
+        'https://llm-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+    }),
+  );
+  assert.equal(model, 'opencode-go/qwen3.7-flash');
+});

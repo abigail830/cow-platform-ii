@@ -70,6 +70,8 @@ export const agentYamlSchema = z.object({
     .object({
       configName: z.string().min(1).optional(),
       profile: z.string().min(1).optional(),
+      /** Overrides Flue default reasoning effort (medium) for this agent. */
+      thinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
     })
     .refine((value) => Boolean(value.configName?.trim() || value.profile?.trim()), {
       message: 'model.configName or model.profile is required',

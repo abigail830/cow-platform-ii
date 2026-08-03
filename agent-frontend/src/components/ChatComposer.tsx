@@ -1,17 +1,16 @@
-import { X } from 'lucide-react';
 import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import {
-  buildPromptImagePreviewUrl,
   fileToAgentPromptImage,
   type AgentPromptImage,
   type ChatSendPayload,
 } from '../chat/prompt-images.ts';
-import { iconProps } from './icons/icon-props.ts';
+import { ChatImageChip } from './ChatImageChip.tsx';
 import { IconPaperclip, IconSend, IconStop, IconStopSpinner } from './icons/ChatIcons.tsx';
 
 type PendingPromptImage = {
   id: string;
   image: AgentPromptImage;
+  label: string;
   previewUrl: string;
 };
 
@@ -30,7 +29,8 @@ function createPendingImage(image: AgentPromptImage): PendingPromptImage {
   return {
     id: crypto.randomUUID(),
     image,
-    previewUrl: buildPromptImagePreviewUrl(image),
+    label: image.filename?.trim() || 'Image',
+    previewUrl: `data:${image.mimeType};base64,${image.data}`,
   };
 }
 
@@ -116,18 +116,13 @@ export function ChatComposer({
         {pendingImages.length > 0 ? (
           <div className="chat-pending-images" aria-label="Attached images">
             {pendingImages.map((pending) => (
-              <div key={pending.id} className="chat-pending-image">
-                <img src={pending.previewUrl} alt={pending.image.filename ?? 'Attached image'} />
-                <button
-                  type="button"
-                  className="chat-pending-image-remove"
-                  onClick={() => removePendingImage(pending.id)}
-                  title="Remove image"
-                  aria-label="Remove image"
-                >
-                  <X {...iconProps({ size: 14 })} />
-                </button>
-              </div>
+              <ChatImageChip
+                key={pending.id}
+                label={pending.label}
+                previewUrl={pending.previewUrl}
+                variant="composer"
+                onRemove={() => removePendingImage(pending.id)}
+              />
             ))}
           </div>
         ) : null}

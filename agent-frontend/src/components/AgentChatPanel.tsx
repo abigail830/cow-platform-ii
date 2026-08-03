@@ -2,6 +2,7 @@ import { useFlueAgent, useFlueClient } from '@flue/react';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { isAgentBusy } from '../chat/agentStatus.ts';
 import { sendMessageWithAdmissionRetry } from '../chat/agent-send-retry.ts';
+import { bindPendingPromptImageCache, stagePromptImagesForNextSend } from '../chat/prompt-image-preview-cache.ts';
 import { normalizePromptMessage, type AgentPromptImage } from '../chat/prompt-images.ts';
 import { resolveFlueLiveMode } from '../chat/flue-live-mode.ts';
 import {
@@ -92,6 +93,10 @@ export function AgentChatPanel({
   }, [busy]);
 
   useEffect(() => {
+    bindPendingPromptImageCache(agent.messages);
+  }, [agent.messages]);
+
+  useEffect(() => {
     initialSentRef.current = false;
   }, [conversationId, agentInstanceId]);
 
@@ -102,6 +107,7 @@ export function AgentChatPanel({
     if (initialSentRef.current || !agent.historyReady) return;
     initialSentRef.current = true;
     const sendOptions = images.length > 0 ? { images } : undefined;
+    if (images.length > 0) stagePromptImagesForNextSend(images);
     void sendMessageWithAdmissionRetry((m, opts) => agent.sendMessage(m, opts), message, sendOptions)
       .then(() => {
         const titleSource = initialMessage?.trim() || (images.length > 0 ? 'Image' : '');
@@ -123,6 +129,7 @@ export function AgentChatPanel({
     if (!message || busy || !agent.historyReady) return;
     onInputChange('');
     const sendOptions = payload.images.length > 0 ? { images: payload.images } : undefined;
+    if (payload.images.length > 0) stagePromptImagesForNextSend(payload.images);
     try {
       await sendMessageWithAdmissionRetry(
         (m, opts) => agent.sendMessage(m, opts),

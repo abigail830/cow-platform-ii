@@ -1,4 +1,6 @@
 import { resolveAgentModel } from '../shared/resolve-agent-model.ts';
+import { resolveAgentThinkingLevel } from '../shared/resolve-agent-thinking-level.ts';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { augmentInstructionsWithAgentContext } from './agent-context.ts';
 import { connectAgentMcpTools } from './load-mcp.ts';
 import { createKbQaBrowserSandboxFactory } from '../sandboxes/kb-qa-browser-sandbox.ts';
@@ -14,6 +16,7 @@ export type CatalogAgentRuntimeConfig = {
   tools: Awaited<ReturnType<typeof connectAgentMcpTools>>;
   sandbox?: ReturnType<typeof resolveSandboxFactory>;
   cwd?: string;
+  thinkingLevel?: ThinkingLevel;
 };
 
 const runtimeByAgentId = new Map<string, Promise<CatalogAgentRuntimeConfig>>();
@@ -30,6 +33,11 @@ async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAg
   // (it produces a different env object and breaks session-scoped tool binding).
   const cwd = spec.sandbox.provider === 'e2b' ? undefined : resolveAgentCwd(spec.sandbox);
 
+  const thinkingLevel = await resolveAgentThinkingLevel({
+    configName: spec.model.configName,
+    yamlThinkingLevel: spec.model.thinkingLevel,
+  });
+
   return {
     model: await resolveAgentModel(spec.model),
     instructions: augmentInstructionsWithAgentContext(spec.instructions, spec.context),
@@ -37,6 +45,7 @@ async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAg
     tools: [...packTools, ...mcpTools],
     ...(sandbox ? { sandbox } : {}),
     ...(cwd ? { cwd } : {}),
+    ...(thinkingLevel ? { thinkingLevel } : {}),
   };
 }
 
@@ -54,5 +63,10 @@ export async function warmCatalogAgentRuntimes(specs: LoadedAgentSpec[]): Promis
 }
 
 export function resetCatalogAgentRuntimeCacheForTests(): void {
+  runtimeByAgentId.clear();
+}
+
+/** Clear cached agent runtimes after model config or thinking-level changes. */
+export function invalidateCatalogAgentRuntimeCache(): void {
   runtimeByAgentId.clear();
 }

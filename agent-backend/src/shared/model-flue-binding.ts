@@ -1,11 +1,36 @@
 import { registerProvider } from '@flue/runtime';
 import type { RuntimeModelConfig } from './model-config-store.ts';
 import { syncProviderEnv } from '../providers.ts';
+import {
+  ensureQwenOpenCodeGoCatalogEntry,
+  qwenCatalogTemplateId,
+} from './model-qwen-catalog-overlay.ts';
 
 const CHAT_AGENT_API_TYPES = new Set(['chat-completions']);
 
 function providerIdForConfig(config: RuntimeModelConfig): string {
   return `okf-model-${config.id.replace(/-/g, '')}`;
+}
+
+function isQwenAlibabaMaaSConfig(config: RuntimeModelConfig): boolean {
+  const provider = config.provider.trim().toLowerCase();
+  if (
+    provider.includes('qwen') ||
+    provider.includes('alibaba') ||
+    provider.includes('dashscope')
+  ) {
+    return true;
+  }
+
+  const baseUrl = config.baseUrl?.trim();
+  if (!baseUrl) return false;
+
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase();
+    return hostname.includes('aliyuncs.com') || hostname.includes('dashscope');
+  } catch {
+    return false;
+  }
 }
 
 function isAzureHostedModelConfig(config: RuntimeModelConfig): boolean {
@@ -51,6 +76,7 @@ function catalogProviderIdForConfig(config: RuntimeModelConfig): string | null {
   const provider = config.provider.trim().toLowerCase();
   if (provider.includes('siliconflow')) return 'siliconflow';
   if (provider === 'openai') return 'openai';
+  if (isQwenAlibabaMaaSConfig(config)) return 'opencode-go';
   return null;
 }
 
@@ -61,12 +87,21 @@ function registerConfigProvider(config: RuntimeModelConfig): string {
 
   const catalogProviderId = catalogProviderIdForConfig(config);
   const providerId = catalogProviderId ?? providerIdForConfig(config);
+  const modelId = config.modelId.trim();
+
+  if (catalogProviderId === 'opencode-go') {
+    ensureQwenOpenCodeGoCatalogEntry(modelId, qwenCatalogTemplateId(modelId));
+  }
+
   registerProvider(providerId, {
-    api: resolveApiSlug(config),
+    api:
+      catalogProviderId === 'opencode-go'
+        ? 'openai-completions'
+        : resolveApiSlug(config),
     baseUrl: requireBaseUrl(config),
     ...(config.apiKey?.trim() ? { apiKey: config.apiKey.trim() } : {}),
   });
-  return `${providerId}/${config.modelId}`;
+  return `${providerId}/${modelId}`;
 }
 
 /** Map an Admin model config row to a Flue model specifier string. */

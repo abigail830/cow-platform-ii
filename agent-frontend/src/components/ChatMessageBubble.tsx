@@ -1,12 +1,11 @@
 import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
 import { useMemo, type ReactNode } from 'react';
 import { ChatLinkResolveContext } from '../chat/chat-link-resolve-context.ts';
+import { getCachedPromptImagePreviews } from '../chat/prompt-image-preview-cache.ts';
 import { isImageMediaType } from '../chat/prompt-images.ts';
 import { assistantMessageText, userMessageText } from '../chat/groupMessages.ts';
-import {
-  buildArtifactHrefResolver,
-  extractPublishedArtifacts,
-} from '../chat/published-artifacts.ts';
+import { normalizeAttachmentDownloadUrl, buildArtifactHrefResolver, extractPublishedArtifacts } from '../chat/published-artifacts.ts';
+import { ChatImageChip } from './ChatImageChip.tsx';
 import { MessageCopyButton } from './MessageCopyButton.tsx';
 
 type UserMessageBubbleProps = {
@@ -21,9 +20,19 @@ function userImageParts(message: FlueConversationMessage): UserFilePart[] {
   );
 }
 
+function imagePartLabel(part: UserFilePart, index: number): string {
+  const filename = part.filename?.trim();
+  if (filename) return filename;
+  return `Image ${index + 1}`;
+}
+
 export function UserMessageBubble({ message }: UserMessageBubbleProps) {
   const text = userMessageText(message).trim();
   const images = userImageParts(message);
+  const cachedPreviews = useMemo(
+    () => getCachedPromptImagePreviews(message.submissionId),
+    [message.submissionId],
+  );
 
   return (
     <div className="message-stack user">
@@ -31,14 +40,21 @@ export function UserMessageBubble({ message }: UserMessageBubbleProps) {
         {text ? <p>{text}</p> : null}
         {images.length > 0 ? (
           <div className="user-message-images">
-            {images.map((part, index) => (
-              <img
-                key={`${part.url ?? part.filename ?? 'image'}-${index}`}
-                className="user-message-image"
-                src={part.url}
-                alt={part.filename ?? 'Uploaded image'}
-              />
-            ))}
+            {images.map((part, index) => {
+              const cached = cachedPreviews?.[index];
+              const label = cached?.label ?? imagePartLabel(part, index);
+              const previewUrl =
+                cached?.previewUrl ??
+                (part.url ? normalizeAttachmentDownloadUrl(part.url) : null);
+              return (
+                <ChatImageChip
+                  key={`${part.filename ?? 'image'}-${index}`}
+                  label={label}
+                  previewUrl={previewUrl}
+                  variant="message"
+                />
+              );
+            })}
           </div>
         ) : null}
       </div>

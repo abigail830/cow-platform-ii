@@ -5,6 +5,7 @@ import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rb
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
+import { invalidateCatalogAgentRuntimeCache } from '../../agent-catalog/resolve-agent-runtime.ts';
 import { invalidateModelConfigCache } from '../../shared/model-registry.ts';
 import {
   decryptModelConfigApiKey,
@@ -177,6 +178,7 @@ models.post('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BAS
   }
 
   invalidateModelConfigCache();
+  invalidateCatalogAgentRuntimeCache();
   return c.json({ model: toPublicModel(row) }, 201);
 });
 
@@ -249,6 +251,7 @@ models.patch('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM
   }
 
   invalidateModelConfigCache();
+  invalidateCatalogAgentRuntimeCache();
   return c.json({ model: toPublicModel(row) });
 });
 
@@ -270,6 +273,7 @@ models.post('/:id/set-default', requireResourcePermission(PLATFORM_BASIC_CATEGOR
     .returning();
 
   invalidateModelConfigCache();
+  invalidateCatalogAgentRuntimeCache();
   return c.json({ model: toPublicModel(row!) });
 });
 
@@ -283,6 +287,7 @@ models.delete('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFOR
 
   if (!row) return c.json({ error: 'Not found' }, 404);
   invalidateModelConfigCache();
+  invalidateCatalogAgentRuntimeCache();
   return c.json({ ok: true });
 });
 

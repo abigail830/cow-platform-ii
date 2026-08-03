@@ -50,6 +50,20 @@ function copyDisplayName(name: string) {
   return `${name}${suffix}`;
 }
 
+const THINKING_LEVEL_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: '', label: 'Default (medium)' },
+  { id: 'off', label: 'Off' },
+  { id: 'minimal', label: 'Minimal' },
+  { id: 'low', label: 'Low' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'high', label: 'High' },
+];
+
+function readThinkingLevel(extraConfig: Record<string, unknown> | undefined): string {
+  const raw = extraConfig?.thinkingLevel ?? extraConfig?.thinking_level;
+  return typeof raw === 'string' ? raw : '';
+}
+
 export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: ModelConfigFormProps) {
   const isCopy = Boolean(duplicateFrom);
   const [name, setName] = useState(
@@ -67,6 +81,9 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
   );
   const [capabilityInput, setCapabilityInput] = useState('');
   const [isDefault, setIsDefault] = useState(initial?.isDefault ?? false);
+  const [thinkingLevel, setThinkingLevel] = useState(
+    readThinkingLevel(initial?.extraConfig ?? duplicateFrom?.extraConfig),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -80,6 +97,7 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
       setApiKey('');
       setCapabilities(initial.capabilities);
       setIsDefault(initial.isDefault);
+      setThinkingLevel(readThinkingLevel(initial.extraConfig));
     } else if (duplicateFrom) {
       setName(copyDisplayName(duplicateFrom.name));
       setModelId(duplicateFrom.modelId);
@@ -89,6 +107,7 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
       setApiKey(duplicateFrom.apiKey ?? '');
       setCapabilities(duplicateFrom.capabilities);
       setIsDefault(false);
+      setThinkingLevel(readThinkingLevel(duplicateFrom.extraConfig));
     } else {
       setName('');
       setModelId('');
@@ -98,6 +117,7 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
       setApiKey('');
       setCapabilities([]);
       setIsDefault(false);
+      setThinkingLevel('');
     }
     setCapabilityInput('');
     setError('');
@@ -119,6 +139,13 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
     setError('');
     setBusy(true);
     try {
+      const extraConfig = {
+        ...(initial?.extraConfig ?? duplicateFrom?.extraConfig ?? {}),
+      };
+      if (thinkingLevel) extraConfig.thinkingLevel = thinkingLevel;
+      else delete extraConfig.thinkingLevel;
+      delete extraConfig.thinking_level;
+
       const input: ModelConfigInput = {
         name: name.trim(),
         modelId: modelId.trim(),
@@ -127,6 +154,7 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
         capabilities,
         baseUrl: baseUrl.trim() || null,
         isDefault,
+        extraConfig,
       };
       if (apiKey.trim()) input.apiKey = apiKey.trim();
       await onSubmit(input);
@@ -247,6 +275,22 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
                 </div>
               </div>
             </div>
+            <label className="form-field">
+              <span>Reasoning effort</span>
+              <select
+                value={thinkingLevel}
+                onChange={(event) => setThinkingLevel(event.target.value)}
+              >
+                {THINKING_LEVEL_OPTIONS.map((option) => (
+                  <option key={option.id || 'default'} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="admin-form-hint">
+                Use Off for models that stall after a short Reasoning block (e.g. some Qwen 3.7 routes).
+              </span>
+            </label>
             <label className="form-checkbox">
               <input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
               <span>Set as default for this API format</span>
