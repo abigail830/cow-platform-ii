@@ -1,4 +1,4 @@
-/** Shared HTTP client for openkms-skill Node scripts. */
+/** Shared HTTP client for openkms-skill Node scripts (CLI fallback; prefer MCP tools). */
 
 export class OpenKmsClientError extends Error {
   /** @param {string} message */

@@ -1,18 +1,20 @@
-# Hybrid Search API
+# Hybrid Search REST API
 
 Base URL: `OPENKMS_API_URL` (no trailing slash).
 
-**Agents:** use `scripts/*.mjs` — they read `OPENKMS_API_KEY` from the environment. Do **not** call these endpoints with `curl` or print auth headers.
+**Agents:** prefer [MCP tools](mcp.md) at `/api/mcp/hybrid-search`. The Node **scripts** and MCP tools both use these REST endpoints under the hood. Do **not** call them with `curl` and manual auth.
 
-## Endpoints (skill uses)
+## Endpoints
 
 ### `GET /api/hybrid-search/knowledge-bases`
 
-Returns `{ "items": [...] }` — only KBs with embedding configured **and** readable by the key owner.
+Returns `{ "items": [...] }` — KBs with embedding configured and readable by the caller.
+
+MCP equivalent: `list_knowledge_bases`.
 
 ### `POST /api/hybrid-search`
 
-Request body (skill defaults in parentheses):
+Request body (defaults in parentheses):
 
 ```json
 {
@@ -32,6 +34,8 @@ Request body (skill defaults in parentheses):
 
 Response: `{ "items": [ { "knowledge_base_name", "source_name", "source_type", "document_id", "chunk_index", "content", "score", "debug": { ... } } ] }`
 
-## Not used by skill
+MCP equivalent: `hybrid_search` (maps `kb_ids` → `knowledge_base_ids`, etc.).
+
+## Not for agents
 
 - `GET/PATCH /api/hybrid-search/preferences` — UI only

@@ -3,7 +3,6 @@ import { resolveAgentThinkingLevel } from '../shared/resolve-agent-thinking-leve
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { augmentInstructionsWithAgentContext } from './agent-context.ts';
 import { connectAgentMcpTools } from './load-mcp.ts';
-import { createKbQaBrowserSandboxFactory } from '../sandboxes/kb-qa-browser-sandbox.ts';
 import { resolveAgentCwd, resolveSandboxFactory } from './load-sandbox.ts';
 import { loadAgentSkills } from './load-skills.ts';
 import type { LoadedAgentSpec } from './schema.ts';
@@ -25,10 +24,7 @@ async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAg
   const packTools = resolveToolPacks(spec);
   const mcpTools = await connectAgentMcpTools(spec);
   const skills = loadAgentSkills(spec);
-  const sandbox =
-    spec.id === 'kb-qa'
-      ? createKbQaBrowserSandboxFactory()
-      : resolveSandboxFactory(spec.sandbox, spec.id);
+  const sandbox = resolveSandboxFactory(spec.sandbox, spec.id);
   // E2B workspace cwd is applied inside the sandbox SessionEnv — avoid Flue's second cwd wrapper
   // (it produces a different env object and breaks session-scoped tool binding).
   const cwd = spec.sandbox.provider === 'e2b' ? undefined : resolveAgentCwd(spec.sandbox);

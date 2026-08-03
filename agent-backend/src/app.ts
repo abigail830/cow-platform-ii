@@ -13,12 +13,14 @@ import documentChannels from './routes/document-channels.ts';
 import documents from './routes/documents.ts';
 import knowledgeBases from './routes/knowledge-bases.ts';
 import hybridSearch from './routes/hybrid-search.ts';
+import hybridSearchMcp from './routes/mcp/hybrid-search.ts';
 import users from './routes/users.ts';
 import sessionExplorer from './routes/session-explorer.ts';
 import internalApi from './routes/internal-api/index.ts';
 import { rememberOpenKmsApiKeyForInstance } from './auth/openkms-instance-env.ts';
 import { OPENKMS_API_KEY_HEADER } from './auth/openkms-headers.ts';
 import { ensureFlueReady } from './flue-vercel-init.ts';
+import { runWithAgentRequestContext } from './flue/agent-request-context.ts';
 import { agentInstanceStreamRegistry } from './flue/agent-instance-stream-registry.ts';
 import { isAgentLiveSseRequest, parseAgentInstancePath } from './flue/agent-instance-path.ts';
 import { recoverOrphanedPipelineWorkOnStartup, startPipelinePollScheduler } from './services/pipeline-poller.ts';
@@ -37,7 +39,15 @@ app.use(
   '*',
   cors({
     origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5180').split(','),
-    allowHeaders: ['Authorization', 'Content-Type', OPENKMS_API_KEY_HEADER],
+    allowHeaders: [
+      'Authorization',
+      'Content-Type',
+      OPENKMS_API_KEY_HEADER,
+      'x-flue-instance-id',
+      'mcp-session-id',
+      'Last-Event-ID',
+      'mcp-protocol-version',
+    ],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
 );
@@ -54,6 +64,7 @@ app.route('/api/document-channels', documentChannels);
 app.route('/api/documents', documents);
 app.route('/api/knowledge-bases', knowledgeBases);
 app.route('/api/hybrid-search', hybridSearch);
+app.route('/api/mcp/hybrid-search', hybridSearchMcp);
 app.route('/api/users', users);
 app.route('/api/session-explorer', sessionExplorer);
 app.route('/internal-api', internalApi);
@@ -61,24 +72,35 @@ app.route('/internal-api', internalApi);
 const flueRoutes = new Hono();
 flueRoutes.use('*', async (c, next) => {
   const parsed = parseAgentInstancePath(new URL(c.req.url).pathname);
-  if (parsed) {
-    rememberOpenKmsApiKeyForInstance(parsed.instanceId, c.req.raw);
-    const method = c.req.method;
-    const isSse = isAgentLiveSseRequest(c.req.url, c.req.header('accept'));
-    if (method === 'POST') {
-      agentInstanceStreamRegistry.touchActivity(parsed.instanceId, { extendMs: 10 * 60 * 1000 });
-    } else if ((method === 'GET' || method === 'HEAD') && isSse) {
-      agentInstanceStreamRegistry.addSubscriber(parsed.instanceId);
-      c.req.raw.signal.addEventListener(
-        'abort',
-        () => agentInstanceStreamRegistry.removeSubscriber(parsed.instanceId),
-        { once: true },
-      );
-    } else if (method === 'GET' || method === 'HEAD') {
-      agentInstanceStreamRegistry.touchActivity(parsed.instanceId);
+  const run = async () => {
+    if (parsed) {
+      rememberOpenKmsApiKeyForInstance(parsed.instanceId, c.req.raw);
+      const method = c.req.method;
+      const isSse = isAgentLiveSseRequest(c.req.url, c.req.header('accept'));
+      if (method === 'POST') {
+        agentInstanceStreamRegistry.touchActivity(parsed.instanceId, { extendMs: 10 * 60 * 1000 });
+      } else if ((method === 'GET' || method === 'HEAD') && isSse) {
+        agentInstanceStreamRegistry.addSubscriber(parsed.instanceId);
+        c.req.raw.signal.addEventListener(
+          'abort',
+          () => agentInstanceStreamRegistry.removeSubscriber(parsed.instanceId),
+          { once: true },
+        );
+      } else if (method === 'GET' || method === 'HEAD') {
+        agentInstanceStreamRegistry.touchActivity(parsed.instanceId);
+      }
     }
-  }
-  await next();
+    await next();
+  };
+
+  return runWithAgentRequestContext(
+    {
+      instanceId: parsed?.instanceId,
+      authorization: c.req.header('authorization'),
+      openkmsApiKey: c.req.header(OPENKMS_API_KEY_HEADER),
+    },
+    run,
+  );
 });
 if (process.env.VERCEL) {
   flueRoutes.use('*', async (c, next) => {

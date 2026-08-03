@@ -1,38 +1,40 @@
 # Authentication
 
-## Personal API key (only supported method)
+## Personal API key (`okf_…`)
 
-1. Log in to the web UI (JWT — for browsing only).
-2. Open **Settings → API keys** → **Generate API key**.
-3. Copy `okf_…` immediately (shown once).
+1. Log in to the web UI.
+2. **Settings → API keys** → generate and copy `okf_…` (shown once).
 
-### Local / CLI / external agents
+### MCP clients (Cursor, Claude Desktop, scripts)
 
 ```bash
 export OPENKMS_API_URL=http://127.0.0.1:8787
 export OPENKMS_API_KEY=okf_…
 ```
 
-Scripts read these variables; do not embed the key in commands or logs.
+- **MCP:** `Authorization: Bearer okf_…` on `{OPENKMS_API_URL}/api/mcp/hybrid-search`
+- **Scripts:** read `OPENKMS_API_KEY` from the environment (see [mcp.md](mcp.md) for MCP-first workflow)
 
 ### OKF Agent Playground (kb-qa)
 
-Save the same key under **Settings → API keys → Playground agent API key** (browser `localStorage`). Requests send `X-OpenKMS-Api-Key`; the backend injects `OPENKMS_API_KEY` into the agent sandbox.
+- Session **JWT** is sent on agent requests (`Authorization: Bearer …`).
+- Optionally save the same `okf_…` under **Settings → API keys → Playground agent API key** (`x-openkms-api-key`).
+- Hybrid-search **MCP** is called on loopback with those headers forwarded—no sandbox env injection.
 
 ## Server-side storage
 
-| Stored in DB | Stored client-side only |
-|--------------|-------------------------|
+| In database | Client only |
+|---------------|-------------|
 | `key_hash`, `key_prefix`, user id, revoke time | Full `okf_…` plaintext |
 
 ## Permissions
 
-1. API key → user identity
+1. API key or JWT → user identity
 2. RBAC: `knowledge-management:hybrid-search:read`
 3. KB ACL: owner + share grants
 
 ## Do not use
 
-- `POST /api/auth/login` + JWT in scripts (use API keys)
+- Login password or `POST /api/auth/login` in automation (use API keys)
 - `/internal-api/*` with `OPENKMS_CLI_BASIC_*` (bypasses user ACL)
-- `A2A_API_KEY` (not for hybrid-search)
+- `A2A_API_KEY` for hybrid-search retrieval

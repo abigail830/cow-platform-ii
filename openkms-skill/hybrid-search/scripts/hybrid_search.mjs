@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Run hybrid search over visible knowledge bases. */
+/** CLI fallback: run hybrid search. Prefer MCP tool hybrid_search. */
 
 import { parseArgs } from 'node:util';
 import { OpenKmsClientError, eprintError, requestJson } from '../../shared/_client.mjs';

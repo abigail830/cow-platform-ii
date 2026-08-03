@@ -1,7 +1,17 @@
 import { connectMcpServer, type McpServerConnection, type ToolDefinition } from '@flue/runtime';
+import {
+  createAgentRequestForwardingFetch,
+} from '../flue/agent-request-context.ts';
 import type { LoadedAgentSpec, McpServerYaml } from './schema.ts';
 
 const connectionCache = new Map<string, McpServerConnection[]>();
+
+const DEFAULT_HYBRID_SEARCH_MCP_URL_ENV = 'HYBRID_SEARCH_MCP_URL';
+export const HYBRID_SEARCH_MCP_API_KEY_ENV = 'HYBRID_SEARCH_MCP_API_KEY';
+
+export function resolveOpenkmsApiBaseUrl(): string {
+  return process.env.OPENKMS_API_URL?.trim()?.replace(/\/$/, '') ?? 'http://127.0.0.1:8787';
+}
 
 function resolveHeaders(headersEnv?: Record<string, string>): HeadersInit | undefined {
   if (!headersEnv) return undefined;
@@ -16,16 +26,35 @@ function resolveHeaders(headersEnv?: Record<string, string>): HeadersInit | unde
   return headers;
 }
 
-async function connectServer(server: McpServerYaml): Promise<McpServerConnection> {
-  const url = process.env[server.urlEnv]?.trim();
-  if (!url) {
-    throw new Error(`Missing MCP url env ${server.urlEnv} for server "${server.name}"`);
+export function resolveMcpServerUrl(server: McpServerYaml): string {
+  const internalPath = server.internalPath?.trim();
+  if (internalPath) {
+    return `${resolveOpenkmsApiBaseUrl()}${internalPath}`;
   }
+
+  const urlEnv = server.urlEnv?.trim();
+  if (!urlEnv) {
+    throw new Error(`MCP server "${server.name}" requires urlEnv or internalPath`);
+  }
+
+  const fromEnv = process.env[urlEnv]?.trim();
+  if (fromEnv) return fromEnv;
+
+  if (urlEnv === DEFAULT_HYBRID_SEARCH_MCP_URL_ENV) {
+    return `${resolveOpenkmsApiBaseUrl()}/api/mcp/hybrid-search`;
+  }
+
+  throw new Error(`Missing MCP url env ${urlEnv} for server "${server.name}"`);
+}
+
+async function connectServer(server: McpServerYaml): Promise<McpServerConnection> {
+  const url = resolveMcpServerUrl(server);
 
   return connectMcpServer(server.name, {
     url,
     transport: server.transport,
     headers: resolveHeaders(server.headersEnv),
+    ...(server.useAgentRequestHeaders ? { fetch: createAgentRequestForwardingFetch() } : {}),
   });
 }
 

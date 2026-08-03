@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { discoverAgentDirectories, loadAgentSpec } from '../src/agent-catalog/discover.ts';
 import { agentCatalogRoot, resolveCatalogPath } from '../src/agent-catalog/paths.ts';
 import { listKnownToolPacks } from '../src/agent-catalog/tool-packs.ts';
+import { resolveMcpServerUrl } from '../src/agent-catalog/load-mcp.ts';
 import { isOkfToolPack } from '../src/agent-catalog/tool-pack-schema.ts';
 import { closePool } from '../src/db/pool.ts';
 import { getModelConfigByName } from '../src/shared/model-config-store.ts';
@@ -63,11 +64,15 @@ function validateAgentSync(agentDir: string): ValidationIssue[] {
       issues.push({ agentId: spec.id, message: `Duplicate MCP server name "${server.name}"` });
     }
     mcpNames.add(server.name);
-    if (!process.env[server.urlEnv]?.trim()) {
-      issues.push({
-        agentId: spec.id,
-        message: `MCP server "${server.name}" references unset env ${server.urlEnv}`,
-      });
+    if (server.urlEnv && !process.env[server.urlEnv]?.trim() && !server.internalPath) {
+      try {
+        resolveMcpServerUrl(server);
+      } catch {
+        issues.push({
+          agentId: spec.id,
+          message: `MCP server "${server.name}" references unset env ${server.urlEnv}`,
+        });
+      }
     }
   }
 

@@ -12,12 +12,32 @@ model:
 prompt: ./prompt.md
 
 skills:
-  - ../../openkms-skill/hybrid-search
+  - ./skills/kb-qa
 
 tools:
   packs: []
 
+#-------------------------------------------------
+# {
+#   "mcpServers": {
+#     "okf-hybrid-search": {
+#       "url": "https://cow-platform.vercel.app/api/mcp/hybrid-search",
+#       "headers": {
+#         "Authorization": "Bearer okf_你的密钥"
+#       }
+#     }
+#   }
+# }
+#-------------------------------------------------
 mcp:
+  - name: hybrid-search
+    urlEnv: HYBRID_SEARCH_MCP_URL
+    transport: streamable-http
+    headersEnv:
+      Authorization: HYBRID_SEARCH_MCP_API_KEY
+    allowTools:
+      - mcp__hybrid-search__list_knowledge_bases
+      - mcp__hybrid-search__hybrid_search
   - name: zhipu-web-search
     urlEnv: ZHIPU_WEB_SEARCH_MCP_URL
     transport: streamable-http
@@ -26,9 +46,6 @@ mcp:
     allowTools:
       - mcp__zhipu-web-search__web_search_prime
 
-sandbox:
-  provider: none
-  cwd: /home/user/kb-qa
 
 context:
   temporal: true

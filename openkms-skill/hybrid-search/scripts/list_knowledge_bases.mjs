@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** List hybrid-searchable knowledge bases visible to the current API key user. */
+/** CLI fallback: list hybrid-searchable knowledge bases. Prefer MCP tool list_knowledge_bases. */
 
 import { parseArgs } from 'node:util';
 import { OpenKmsClientError, eprintError, requestJson } from '../../shared/_client.mjs';

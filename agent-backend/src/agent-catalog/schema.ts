@@ -7,17 +7,26 @@ const agentIdSchema = z
   .max(64)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'id must be lowercase letters, numbers, and hyphens');
 
-export const mcpServerSchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(64)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  urlEnv: z.string().min(1),
-  transport: z.enum(['streamable-http', 'sse']).default('streamable-http'),
-  headersEnv: z.record(z.string(), z.string()).optional(),
-  allowTools: z.array(z.string()).optional(),
-});
+export const mcpServerSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    /** Full MCP URL from process.env[urlEnv]. Optional when {@link internalPath} is set. */
+    urlEnv: z.string().min(1).optional(),
+    /** Loopback path on OPENKMS_API_URL (e.g. /api/mcp/hybrid-search). */
+    internalPath: z.string().regex(/^\//).optional(),
+    transport: z.enum(['streamable-http', 'sse']).default('streamable-http'),
+    headersEnv: z.record(z.string(), z.string()).optional(),
+    /** Forward Playground Authorization / OpenKMS API key headers on loopback MCP calls. */
+    useAgentRequestHeaders: z.boolean().default(false).optional(),
+    allowTools: z.array(z.string()).optional(),
+  })
+  .refine((value) => Boolean(value.urlEnv?.trim() || value.internalPath?.trim()), {
+    message: 'MCP server requires urlEnv or internalPath',
+  });
 
 export const sandboxSchema = z.object({
   provider: z.enum(['none', 'e2b']).default('none'),

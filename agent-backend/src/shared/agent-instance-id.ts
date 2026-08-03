@@ -8,6 +8,15 @@ export function toAgentInstanceId(userId: string, sessionId: string): string {
   return `${encodeUserIdForInstanceId(userId)}--${sessionId}`;
 }
 
+/** Reverse {@link encodeUserIdForInstanceId} from a Flue agent instance id prefix. */
+export function decodeUserIdFromInstanceId(instanceId: string): string | null {
+  const separator = instanceId.indexOf('--');
+  if (separator < 0) return null;
+  const encoded = instanceId.slice(0, separator).trim();
+  if (!encoded) return null;
+  return encoded.replace(/_at_/g, '@');
+}
+
 export function parseSessionIdFromAgentInstanceId(instanceId: string): string | null {
   const separator = instanceId.indexOf('--');
   if (separator < 0) return null;
