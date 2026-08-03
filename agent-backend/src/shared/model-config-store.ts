@@ -1,5 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { appModelConfigs, db } from '../db/index.ts';
+import { decryptModelConfigApiKey } from './model-config-secret.ts';
 
 export type RuntimeModelConfig = {
   id: string;
@@ -23,7 +24,7 @@ function toRuntimeModel(row: typeof appModelConfigs.$inferSelect): RuntimeModelC
     apiType: row.apiType,
     capabilities: row.capabilities ?? [],
     baseUrl: row.baseUrl,
-    apiKey: row.apiKey,
+    apiKey: decryptModelConfigApiKey(row.apiKey),
     isDefault: row.isDefault,
     extraConfig: row.extraConfig ?? {},
   };

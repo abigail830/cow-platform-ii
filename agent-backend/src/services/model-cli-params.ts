@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { appModelConfigs, db } from '../db/index.ts';
+import { decryptModelConfigApiKey } from '../shared/model-config-secret.ts';
 
 export type ModelCliParams = {
   model_id: string;
@@ -29,7 +30,7 @@ function toCliParams(row: typeof appModelConfigs.$inferSelect): ModelCliParams {
     api_type: row.apiType,
     base_url: row.baseUrl?.trim() || '',
     model_name: row.modelId.trim(),
-    api_key: row.apiKey?.trim() || null,
+    api_key: decryptModelConfigApiKey(row.apiKey)?.trim() || null,
     max_concurrency: readMaxConcurrency(extraConfig),
   };
 }

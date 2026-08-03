@@ -6,6 +6,11 @@ import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
 import { invalidateModelConfigCache } from '../../shared/model-registry.ts';
+import {
+  decryptModelConfigApiKey,
+  hasStoredModelConfigApiKey,
+  sealModelConfigApiKeyForStorage,
+} from '../../shared/model-config-secret.ts';
 
 const models = new Hono();
 
@@ -22,7 +27,7 @@ function toPublicModel(row: ModelRow) {
     apiType: row.apiType,
     capabilities: row.capabilities ?? [],
     baseUrl: row.baseUrl,
-    hasApiKey: Boolean(row.apiKey),
+    hasApiKey: hasStoredModelConfigApiKey(row.apiKey),
     isDefault: row.isDefault,
     extraConfig: row.extraConfig ?? {},
     createdAt: row.createdAt,
@@ -34,7 +39,7 @@ function toPublicModel(row: ModelRow) {
 function toAdminDetailModel(row: ModelRow) {
   return {
     ...toPublicModel(row),
-    apiKey: row.apiKey,
+    apiKey: decryptModelConfigApiKey(row.apiKey),
   };
 }
 
@@ -142,7 +147,7 @@ models.post('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BAS
 
   const capabilities = parseCapabilities(body.capabilities);
   const baseUrl = body.baseUrl?.trim() || null;
-  const apiKey = body.apiKey?.trim() || null;
+  const apiKey = sealModelConfigApiKeyForStorage(body.apiKey);
   const extraConfig = body.extraConfig ?? {};
 
   if (await findModelConfigByName(name)) {
@@ -222,7 +227,9 @@ models.patch('/:id', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM
   }
   if (body.capabilities !== undefined) updates.capabilities = parseCapabilities(body.capabilities);
   if (body.baseUrl !== undefined) updates.baseUrl = body.baseUrl?.trim() || null;
-  if (body.apiKey !== undefined) updates.apiKey = body.apiKey?.trim() || null;
+  if (body.apiKey !== undefined) {
+    updates.apiKey = sealModelConfigApiKeyForStorage(body.apiKey);
+  }
   if (body.extraConfig !== undefined) updates.extraConfig = body.extraConfig;
   if (body.isDefault !== undefined) updates.isDefault = Boolean(body.isDefault);
 
