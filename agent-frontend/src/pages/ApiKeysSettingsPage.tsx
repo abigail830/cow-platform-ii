@@ -193,7 +193,7 @@ export function ApiKeysSettingsPage() {
       <section className="admin-card api-keys-section">
         <h2 className="admin-section-title">Playground agent API key</h2>
         <p className="admin-form-hint">
-          Paste the same API key here so Playground agents can run openkms-skill scripts. Stored in
+          Paste the same API key here so Playground agents can call hybrid-search MCP tools. Stored in
           this browser only (<code>localStorage</code>), not on the server.
         </p>
         <div className="form-field">

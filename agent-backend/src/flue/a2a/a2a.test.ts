@@ -20,7 +20,7 @@ describe('a2a config', () => {
 
 describe('buildAgentCardForSpec', () => {
   it('builds a card with HTTP+JSON interface, streaming, and configured skills', () => {
-    const spec = loadAgentSpec(join(agentCatalogRoot(), 'smart-proposal'));
+    const spec = loadAgentSpec(join(agentCatalogRoot(), 'content-studio'));
     const card = buildAgentCardForSpec(spec);
     assert.equal(card.name, spec.displayName);
     assert.equal(card.capabilities?.streaming, true);

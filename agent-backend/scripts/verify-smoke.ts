@@ -119,7 +119,7 @@ async function main() {
   const convRes = await fetch(`${BASE}/api/conversations`, {
     method: 'POST',
     headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agentName: 'smart-proposal', title: 'Smoke test' }),
+    body: JSON.stringify({ agentName: 'kb-qa', title: 'Smoke test' }),
   });
   const convBody = await convRes.json();
   if (!convRes.ok) {
@@ -139,13 +139,13 @@ async function main() {
 
   const client = createFlueClient({ baseUrl: `${BASE}/api`, token });
 
-  await client.agents.send('smart-proposal', instanceId, {
+  await client.agents.send('kb-qa', instanceId, {
     message: 'Reply with exactly: smoke-ok',
   });
 
   let streamText = '';
   try {
-    streamText = await waitForAssistantText(client, 'smart-proposal', instanceId, '');
+    streamText = await waitForAssistantText(client, 'kb-qa', instanceId, '');
   } catch (e) {
     fail('streaming_turn_1', e instanceof Error ? e.message : String(e));
     return summarize();
@@ -153,17 +153,17 @@ async function main() {
   if (!streamText) fail('streaming_turn_1', 'empty stream');
   else pass('streaming_turn_1', streamText.slice(0, 80));
 
-  const history = await client.agents.history('smart-proposal', instanceId);
+  const history = await client.agents.history('kb-qa', instanceId);
   if (!history.messages.length) fail('history_api', 'empty');
   else pass('history_api', `${history.messages.length} messages`);
 
-  await client.agents.send('smart-proposal', instanceId, {
+  await client.agents.send('kb-qa', instanceId, {
     message: 'What was your previous one-word reply? Answer with that word only.',
   });
 
   let turn2 = '';
   try {
-    turn2 = await waitForAssistantText(client, 'smart-proposal', instanceId, '');
+    turn2 = await waitForAssistantText(client, 'kb-qa', instanceId, '');
   } catch (e) {
     fail('multi_turn_stream', e instanceof Error ? e.message : String(e));
     return summarize();

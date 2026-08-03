@@ -92,7 +92,10 @@ export const appConversations = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index('idx_conversations_user').on(t.userId, t.updatedAt)],
+  (t) => [
+    index('idx_conversations_user').on(t.userId, t.updatedAt),
+    index('idx_conversations_agent_updated').on(t.agentName, t.updatedAt),
+  ],
 );
 
 /** Platform-owned E2B sandbox lease keyed by Flue agent instance id (`userId--conversationId`). */

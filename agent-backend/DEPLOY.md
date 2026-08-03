@@ -47,30 +47,6 @@ Run `npx tsc --noEmit` locally before deploy to catch type errors.
 | `GITHUB_PIPELINE_REPOSITORY` | `abigail830/cow-platform-ii` |
 | `MODEL_PROFILE` + provider keys | Agent models |
 | `AWS_*` | OSS document storage |
-| `OKF_BUNDLE_PATH` | **Required** for Proposal Chef — see below |
-
-### OKF knowledge bundle (Proposal Chef tools)
-
-`npm run build:vercel` downloads [okf-knowledge-bundle](https://github.com/abigail830/okf-knowledge-bundle) and copies `smart-proposal-knowledge/` into the function as `okf-bundle/` (all Word/PPTX examples, markdown, extractions committed in that repo).
-
-**Runtime env (required):**
-
-| Variable | Vercel value | Local dev value |
-|----------|--------------|-----------------|
-| `OKF_BUNDLE_PATH` | `okf-bundle` | Absolute path to a directory containing `index.md` |
-
-There is no automatic fallback if `OKF_BUNDLE_PATH` is unset — startup or first agent request will fail with an explicit configuration error.
-
-Build-time vendor overrides (optional):
-
-| Variable | Default | Notes |
-|----------|---------|--------|
-| `OKF_BUNDLE_GIT_REPO` | `abigail830/okf-knowledge-bundle` | `owner/repo` |
-| `OKF_BUNDLE_GIT_REF` | `main` | Branch to vendor |
-| `OKF_BUNDLE_GIT_SUBDIR` | `smart-proposal-knowledge` | Subfolder in repo |
-| `OKF_BUNDLE_LOCAL_PATH` | — | Optional: copy local path instead of GitHub fetch |
-
-Push bundle changes to GitHub, then **redeploy backend** to pick them up.
 
 **OSS CORS (required for document detail):** Parsed content (`markdown.md`, `page_index.json`) is fetched by the **browser** via presigned URLs. In Aliyun OSS → bucket → **Cross-Origin Resource Sharing**, allow your frontend origin, e.g. `https://cow-platform.vercel.app`, with methods `GET` and headers `*`. Without CORS, the detail page shows storage read errors while the list still works.
 
@@ -115,4 +91,3 @@ After a good deploy, the Vercel function size should be ~10 MB (full esbuild bun
 
 - No in-process pipeline watchdog (stuck jobs need manual retry or GHA re-run)
 - Chunked upload sessions are in-memory (single-instance assumption); large multi-part uploads may fail under concurrent instances
-- OKF bundle is vendored at build (~tens of MB); update knowledge by pushing to [okf-knowledge-bundle](https://github.com/abigail830/okf-knowledge-bundle) and redeploying backend

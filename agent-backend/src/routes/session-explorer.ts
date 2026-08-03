@@ -18,6 +18,7 @@ import {
   agentConversationStreamPath,
   toAgentInstanceId,
 } from '../shared/agent-instance-id.ts';
+import { countSessionTurnsFromSubmissions } from './session-explorer-turn-count.ts';
 
 const sessionExplorer = new Hono();
 
@@ -55,7 +56,6 @@ sessionExplorer.get('/sessions', async (c) => {
   const sessionId = c.req.query('sessionId')?.trim();
   const keyword = c.req.query('keyword')?.trim();
   const limit = Math.min(Number(c.req.query('limit') ?? 100), 200);
-  const includeStats = c.req.query('includeStats') !== 'false';
 
   const isAdmin = await isPlatformAdmin(user);
 
@@ -97,49 +97,24 @@ sessionExplorer.get('/sessions', async (c) => {
     .orderBy(desc(appConversations.updatedAt))
     .limit(limit);
 
-  let flueReady = false;
-  if (includeStats && rows.length > 0) {
-    try {
-      await ensureFlueReady();
-      flueReady = true;
-    } catch {
-      flueReady = false;
-    }
-  }
-
-  const { conversationStreamStore } = flueReady ? await getPlatformFlueStores() : { conversationStreamStore: null };
-
-  const sessions = await Promise.all(
-    rows.map(async (row) => {
-      let turnCount = 0;
-
-      if (includeStats && conversationStreamStore) {
-        const streamPath = agentConversationStreamPath(
-          row.agentName,
-          toAgentInstanceId(row.userId, row.id),
-        );
-        const snapshot = await loadAgentConversationSnapshot(conversationStreamStore, streamPath);
-        if (snapshot) {
-          turnCount = countUserTurns(snapshot.messages);
-        }
-      }
-
-      return {
-        id: row.id,
-        title: row.title,
-        agentName: row.agentName,
-        userId: row.userId,
-        user: {
-          id: row.userId,
-          email: row.userEmail,
-          displayName: row.userDisplayName,
-        },
-        turnCount,
-        updatedAt: row.updatedAt.toISOString(),
-        createdAt: row.createdAt.toISOString(),
-      };
-    }),
+  const turnCounts = await countSessionTurnsFromSubmissions(
+    rows.map((row) => ({ conversationId: row.id, userId: row.userId })),
   );
+
+  const sessions = rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    agentName: row.agentName,
+    userId: row.userId,
+    user: {
+      id: row.userId,
+      email: row.userEmail,
+      displayName: row.userDisplayName,
+    },
+    turnCount: turnCounts.get(row.id) ?? 0,
+    updatedAt: row.updatedAt.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+  }));
 
   return c.json({ sessions, isAdmin });
 });
@@ -158,6 +133,7 @@ sessionExplorer.get('/sessions/:conversationId/messages', async (c) => {
       agentName: appConversations.agentName,
       userId: appConversations.userId,
       updatedAt: appConversations.updatedAt,
+      createdAt: appConversations.createdAt,
       userEmail: appUsers.email,
       userDisplayName: appUsers.displayName,
     })
@@ -187,6 +163,7 @@ sessionExplorer.get('/sessions/:conversationId/messages', async (c) => {
       agentName: row.agentName,
       turnCount: snapshot ? countUserTurns(snapshot.messages) : 0,
       updatedAt: row.updatedAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
       user: {
         id: row.userId,
         email: row.userEmail,

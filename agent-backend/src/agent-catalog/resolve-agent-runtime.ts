@@ -6,7 +6,6 @@ import { connectAgentMcpTools } from './load-mcp.ts';
 import { resolveAgentCwd, resolveSandboxFactory } from './load-sandbox.ts';
 import { loadAgentSkills } from './load-skills.ts';
 import type { LoadedAgentSpec } from './schema.ts';
-import { resolveToolPacks } from './tool-packs.ts';
 
 export type CatalogAgentRuntimeConfig = {
   model: string;
@@ -21,7 +20,6 @@ export type CatalogAgentRuntimeConfig = {
 const runtimeByAgentId = new Map<string, Promise<CatalogAgentRuntimeConfig>>();
 
 async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAgentRuntimeConfig> {
-  const packTools = resolveToolPacks(spec);
   const mcpTools = await connectAgentMcpTools(spec);
   const skills = loadAgentSkills(spec);
   const sandbox = resolveSandboxFactory(spec.sandbox, spec.id);
@@ -38,7 +36,7 @@ async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAg
     model: await resolveAgentModel(spec.model),
     instructions: augmentInstructionsWithAgentContext(spec.instructions, spec.context),
     skills,
-    tools: [...packTools, ...mcpTools],
+    tools: mcpTools,
     ...(sandbox ? { sandbox } : {}),
     ...(cwd ? { cwd } : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),

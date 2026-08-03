@@ -11,7 +11,7 @@ const SEED_USERS = [
     password: 'admin123',
     displayName: 'Admin',
     role: 'admin' as const,
-    agents: ['smart-proposal', 'generic-okf'],
+    agents: ['kb-qa'],
     rbacRoles: [] as string[],
   },
   {
@@ -19,7 +19,7 @@ const SEED_USERS = [
     password: 'user123',
     displayName: 'Demo User',
     role: 'user' as const,
-    agents: ['smart-proposal'],
+    agents: ['kb-qa'],
     rbacRoles: [] as string[],
   },
   {

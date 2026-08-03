@@ -3,12 +3,9 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { discoverAgentDirectories, loadAgentSpec } from '../src/agent-catalog/discover.ts';
 import { agentCatalogRoot, resolveCatalogPath } from '../src/agent-catalog/paths.ts';
-import { listKnownToolPacks } from '../src/agent-catalog/tool-packs.ts';
 import { resolveMcpServerUrl } from '../src/agent-catalog/load-mcp.ts';
-import { isOkfToolPack } from '../src/agent-catalog/tool-pack-schema.ts';
 import { closePool } from '../src/db/pool.ts';
 import { getModelConfigByName } from '../src/shared/model-config-store.ts';
-import { resolveOkfBundleRoot } from '../src/shared/okf-bundle.ts';
 
 const CHAT_AGENT_API_TYPES = new Set(['chat-completions']);
 
@@ -39,23 +36,6 @@ function validateAgentSync(agentDir: string): ValidationIssue[] {
       issues.push({ agentId: spec.id, message: `Duplicate skill directory ${dirName}` });
     }
     skillNames.add(dirName);
-  }
-
-  for (const pack of spec.tools.packs) {
-    if (!listKnownToolPacks().includes(pack.name)) {
-      issues.push({ agentId: spec.id, message: `Unknown tool pack "${pack.name}"` });
-      continue;
-    }
-    if (isOkfToolPack(pack)) {
-      try {
-        resolveOkfBundleRoot(pack.bundle);
-      } catch (error) {
-        issues.push({
-          agentId: spec.id,
-          message: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
   }
 
   const mcpNames = new Set<string>();

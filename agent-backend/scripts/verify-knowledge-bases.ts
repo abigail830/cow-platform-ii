@@ -215,8 +215,8 @@ async function main() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        question: 'What is OKF?',
-        answer: 'Open Knowledge Format.',
+        question: 'What is hybrid search?',
+        answer: 'Dense + lexical recall fused with reciprocal rank fusion.',
       }),
     });
     if (createManualFaq.status !== 201) {

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { toolPacksSchema } from './tool-pack-schema.ts';
 
 const agentIdSchema = z
   .string()
@@ -87,11 +86,6 @@ export const agentYamlSchema = z.object({
     }),
   prompt: z.string().default('./prompt.md'),
   skills: z.array(z.string()).default([]),
-  tools: z
-    .object({
-      packs: toolPacksSchema,
-    })
-    .default({ packs: [] }),
   mcp: z.array(mcpServerSchema).default([]),
   sandbox: sandboxSchema.default({ provider: 'none' }),
   context: agentContextSchema.optional(),

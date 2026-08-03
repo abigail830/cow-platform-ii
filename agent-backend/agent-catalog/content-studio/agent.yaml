@@ -14,9 +14,6 @@ skills:
   - ./skills/pptx
   - ./skills/docx
 
-tools:
-  packs: []
-
 mcp: []
 
 sandbox:

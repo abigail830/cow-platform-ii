@@ -1,10 +1,8 @@
 import esbuild from 'esbuild';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { vendorOkfBundle } from './vendor-okf-bundle.mjs';
-
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outRoot = path.join(root, '.vercel', 'output');
 const funcDir = path.join(outRoot, 'functions', 'index.func');
@@ -77,17 +75,6 @@ if (patched === bundle) {
   throw new Error('expected import_meta.url placeholders in CJS bundle — esbuild output changed?');
 }
 writeFileSync(outfile, patched);
-
-vendorOkfBundle(funcDir);
-
-const openkmsSkillSrc = path.join(root, '..', 'openkms-skill');
-const openkmsSkillDest = path.join(funcDir, 'openkms-skill');
-if (existsSync(openkmsSkillSrc)) {
-  cpSync(openkmsSkillSrc, openkmsSkillDest, { recursive: true });
-  console.log('Vendored openkms-skill into serverless bundle.');
-} else {
-  console.warn('openkms-skill not found at repo root — skipping vendor (kb-qa skill paths may break on Vercel).');
-}
 
 const catalogSrc = path.join(root, 'agent-catalog');
 const catalogDest = path.join(funcDir, 'agent-catalog');
