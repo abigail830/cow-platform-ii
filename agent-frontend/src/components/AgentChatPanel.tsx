@@ -4,6 +4,16 @@ import { isAgentBusy } from '../chat/agentStatus.ts';
 import { sendMessageWithAdmissionRetry } from '../chat/agent-send-retry.ts';
 import { bindPendingPromptImageCache, stagePromptImagesForNextSend } from '../chat/prompt-image-preview-cache.ts';
 import { normalizePromptMessage, type AgentPromptImage } from '../chat/prompt-images.ts';
+import {
+  composerReadySessionFiles,
+  hasProcessingSessionFiles,
+  messageWithSessionFiles,
+  type SessionFile,
+} from '../chat/session-files.ts';
+import {
+  deleteSessionFile as deleteSessionFileApi,
+  uploadSessionFile,
+} from '../api/session-files.ts';
 import { resolveFlueLiveMode } from '../chat/flue-live-mode.ts';
 import {
   filterRenderableParts,
@@ -66,9 +76,88 @@ export function AgentChatPanel({
   });
 
   const [canceling, setCanceling] = useState(false);
+  /** Documents staged for the next outgoing message only; cleared after a successful send. */
+  const [pendingSessionFiles, setPendingSessionFiles] = useState<SessionFile[]>([]);
   const [abortedSubmissionIds, setAbortedSubmissionIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+
+  function includedSessionFiles(files: SessionFile[]): SessionFile[] {
+    return composerReadySessionFiles(files).filter((file) => file.includedInContext);
+  }
+
+  function buildModelMessage(userText: string, files: SessionFile[], imageCount = 0): string {
+    const included = includedSessionFiles(files);
+    const messageForModel = messageWithSessionFiles(userText, included);
+    return normalizePromptMessage(messageForModel, imageCount, included.length > 0);
+  }
+
+  async function onUploadSessionFiles(files: File[]) {
+    for (const file of files) {
+      const localId = crypto.randomUUID();
+      setPendingSessionFiles((current) => [
+        ...current,
+        {
+          localId,
+          fileId: localId,
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          sizeBytes: file.size,
+          includedInContext: true,
+          status: 'processing',
+        },
+      ]);
+
+      try {
+        const uploaded = await uploadSessionFile(agentName, agentInstanceId, file);
+        setPendingSessionFiles((current) =>
+          current.map((item) =>
+            item.localId === localId
+              ? {
+                  localId,
+                  fileId: uploaded.fileId,
+                  filename: uploaded.filename,
+                  mimeType: uploaded.mimeType,
+                  sizeBytes: uploaded.sizeBytes,
+                  includedInContext: true,
+                  status: 'ready' as const,
+                }
+              : item,
+          ),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to process file.';
+        setPendingSessionFiles((current) =>
+          current.map((item) =>
+            item.localId === localId
+              ? { ...item, status: 'error' as const, errorMessage: message }
+              : item,
+          ),
+        );
+      }
+    }
+  }
+
+  async function onRemoveSessionFile(fileId: string, localId?: string) {
+    if (fileId.startsWith('sf_')) {
+      await deleteSessionFileApi(agentName, agentInstanceId, fileId);
+    }
+    setPendingSessionFiles((current) =>
+      current.filter((file) => file.fileId !== fileId && file.localId !== localId),
+    );
+  }
+
+  function onToggleSessionFileIncluded(fileId: string) {
+    setPendingSessionFiles((current) =>
+      current.map((file) =>
+        file.fileId === fileId ? { ...file, includedInContext: !file.includedInContext } : file,
+      ),
+    );
+  }
+
+  function clearPendingSessionFilesAfterSend() {
+    setPendingSessionFiles([]);
+  }
 
   const busy = isAgentBusy(agent.status);
   const activeStreaming = isActiveStreaming(agent.messages);
@@ -98,11 +187,12 @@ export function AgentChatPanel({
 
   useEffect(() => {
     initialSentRef.current = false;
+    setPendingSessionFiles([]);
   }, [conversationId, agentInstanceId]);
 
   useEffect(() => {
     const images = initialImages ?? [];
-    const message = normalizePromptMessage(initialMessage ?? '', images.length);
+    const message = buildModelMessage(initialMessage ?? '', pendingSessionFiles, images.length);
     if (!message && images.length === 0) return;
     if (initialSentRef.current || !agent.historyReady) return;
     initialSentRef.current = true;
@@ -110,6 +200,7 @@ export function AgentChatPanel({
     if (images.length > 0) stagePromptImagesForNextSend(images);
     void sendMessageWithAdmissionRetry((m, opts) => agent.sendMessage(m, opts), message, sendOptions)
       .then(() => {
+        clearPendingSessionFilesAfterSend();
         const titleSource = initialMessage?.trim() || (images.length > 0 ? 'Image' : '');
         if (titleSource) onTitleFromMessage?.(titleSource.slice(0, 48));
         onInitialMessageSent?.();
@@ -118,6 +209,7 @@ export function AgentChatPanel({
   }, [
     initialMessage,
     initialImages,
+    pendingSessionFiles,
     agent.historyReady,
     agent.sendMessage,
     onTitleFromMessage,
@@ -125,8 +217,8 @@ export function AgentChatPanel({
   ]);
 
   async function onSend(payload: { text: string; images: AgentPromptImage[] }) {
-    const message = normalizePromptMessage(payload.text, payload.images.length);
-    if (!message || busy || !agent.historyReady) return;
+    const message = buildModelMessage(payload.text, pendingSessionFiles, payload.images.length);
+    if ((!message && payload.images.length === 0) || busy || !agent.historyReady) return;
     onInputChange('');
     const sendOptions = payload.images.length > 0 ? { images: payload.images } : undefined;
     if (payload.images.length > 0) stagePromptImagesForNextSend(payload.images);
@@ -136,7 +228,8 @@ export function AgentChatPanel({
         message,
         sendOptions,
       );
-      const titleSource = payload.text.trim() || (payload.images.length > 0 ? 'Image' : '');
+      clearPendingSessionFilesAfterSend();
+      const titleSource = payload.text.trim() || (payload.images.length > 0 ? 'Image' : 'Document');
       if (titleSource) onTitleFromMessage?.(titleSource.slice(0, 48));
     } catch (err) {
       console.error('[chat] send failed', err);
@@ -224,6 +317,13 @@ export function AgentChatPanel({
         disabled={!agent.historyReady}
         busy={busy}
         canceling={canceling}
+        sessionFiles={{
+          files: pendingSessionFiles,
+          processing: hasProcessingSessionFiles(pendingSessionFiles),
+          onUpload: onUploadSessionFiles,
+          onRemove: onRemoveSessionFile,
+          onToggleIncluded: onToggleSessionFileIncluded,
+        }}
       />
     </>
   );

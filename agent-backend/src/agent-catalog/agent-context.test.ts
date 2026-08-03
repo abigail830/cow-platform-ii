@@ -16,11 +16,15 @@ describe('agent-context', () => {
     assert.match(result, /Current date and time \(UTC\): 2026-08-02 14:30:00/);
   });
 
-  it('leaves instructions unchanged when temporal is off', () => {
-    assert.equal(augmentInstructionsWithAgentContext('Base prompt.', undefined, fixed), 'Base prompt.');
-    assert.equal(
-      augmentInstructionsWithAgentContext('Base prompt.', { temporal: false }, fixed),
-      'Base prompt.',
-    );
+  it('leaves temporal block off when disabled', () => {
+    const result = augmentInstructionsWithAgentContext('Base prompt.', { temporal: false }, fixed);
+    assert.doesNotMatch(result, /## Temporal context/);
+    assert.match(result, /## Session document attachments/);
+  });
+
+  it('always appends session files guidance', () => {
+    const result = augmentInstructionsWithAgentContext('Base prompt.', undefined, fixed);
+    assert.match(result, /## Session document attachments/);
+    assert.match(result, /list_session_files/);
   });
 });

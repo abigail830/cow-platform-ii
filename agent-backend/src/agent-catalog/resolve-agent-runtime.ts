@@ -1,6 +1,7 @@
 import { resolveAgentModel } from '../shared/resolve-agent-model.ts';
 import { resolveAgentThinkingLevel } from '../shared/resolve-agent-thinking-level.ts';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
+import { createSessionFileTools } from '../shared/session-file-tools.ts';
 import { augmentInstructionsWithAgentContext } from './agent-context.ts';
 import { connectAgentMcpTools } from './load-mcp.ts';
 import { resolveAgentCwd, resolveSandboxFactory } from './load-sandbox.ts';
@@ -20,6 +21,7 @@ export type CatalogAgentRuntimeConfig = {
 const runtimeByAgentId = new Map<string, Promise<CatalogAgentRuntimeConfig>>();
 
 async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAgentRuntimeConfig> {
+  const sessionFileTools = createSessionFileTools();
   const mcpTools = await connectAgentMcpTools(spec);
   const skills = loadAgentSkills(spec);
   const sandbox = resolveSandboxFactory(spec.sandbox, spec.id);
@@ -36,7 +38,7 @@ async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAg
     model: await resolveAgentModel(spec.model),
     instructions: augmentInstructionsWithAgentContext(spec.instructions, spec.context),
     skills,
-    tools: mcpTools,
+    tools: [...sessionFileTools, ...mcpTools],
     ...(sandbox ? { sandbox } : {}),
     ...(cwd ? { cwd } : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),

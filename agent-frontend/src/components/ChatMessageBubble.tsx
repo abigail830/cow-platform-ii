@@ -3,9 +3,11 @@ import { useMemo, type ReactNode } from 'react';
 import { ChatLinkResolveContext } from '../chat/chat-link-resolve-context.ts';
 import { getCachedPromptImagePreviews } from '../chat/prompt-image-preview-cache.ts';
 import { isImageMediaType } from '../chat/prompt-images.ts';
+import { parseSessionFilesManifest, stripSessionFilesManifest } from '../chat/session-files.ts';
 import { assistantMessageText, userMessageText } from '../chat/groupMessages.ts';
 import { normalizeAttachmentDownloadUrl, buildArtifactHrefResolver, extractPublishedArtifacts } from '../chat/published-artifacts.ts';
 import { ChatImageChip } from './ChatImageChip.tsx';
+import { SessionFileChip } from './SessionFileChip.tsx';
 import { MessageCopyButton } from './MessageCopyButton.tsx';
 
 type UserMessageBubbleProps = {
@@ -27,7 +29,9 @@ function imagePartLabel(part: UserFilePart, index: number): string {
 }
 
 export function UserMessageBubble({ message }: UserMessageBubbleProps) {
-  const text = userMessageText(message).trim();
+  const rawText = userMessageText(message);
+  const sessionFiles = parseSessionFilesManifest(rawText);
+  const text = stripSessionFilesManifest(rawText).trim();
   const images = userImageParts(message);
   const cachedPreviews = useMemo(
     () => getCachedPromptImagePreviews(message.submissionId),
@@ -55,6 +59,19 @@ export function UserMessageBubble({ message }: UserMessageBubbleProps) {
                 />
               );
             })}
+          </div>
+        ) : null}
+        {sessionFiles.length > 0 ? (
+          <div className="user-message-session-files">
+            {sessionFiles.map((file) => (
+              <SessionFileChip
+                key={file.fileId}
+                filename={file.filename}
+                sizeBytes={file.sizeBytes}
+                includedInContext={file.includedInContext}
+                variant="message"
+              />
+            ))}
           </div>
         ) : null}
       </div>

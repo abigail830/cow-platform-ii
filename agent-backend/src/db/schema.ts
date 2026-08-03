@@ -561,3 +561,25 @@ export const appPipelineJobs = pgTable(
   ],
 );
 
+/** Agent playground session file attachments (metadata only; bytes in local FS or Vercel Blob). */
+export const appSessionFiles = pgTable(
+  'app_session_files',
+  {
+    id: text('id').primaryKey(),
+    instanceId: text('instance_id').notNull(),
+    agentName: text('agent_name').notNull(),
+    filename: text('filename').notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    storageBackend: text('storage_backend').notNull(),
+    storageKey: text('storage_key').notNull(),
+    contentCacheKey: text('content_cache_key'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_session_files_instance').on(t.instanceId, t.createdAt),
+    index('idx_session_files_expires').on(t.expiresAt),
+  ],
+);
+

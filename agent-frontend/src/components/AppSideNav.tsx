@@ -10,7 +10,7 @@ import {
   PLATFORM_BASIC_PAGES,
   type NavPage,
 } from '../shared/admin-nav.ts';
-import { visibleAgentPages } from '../shared/agent-nav.ts';
+import { HOME_PATH, visibleAgentPages } from '../shared/agent-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { User } from 'lucide-react';
 import { NavPageIcon } from './icons/NavIcons.tsx';
@@ -99,7 +99,12 @@ export function AppSideNav({
 
   return (
     <aside className={`app-sidenav${collapsed ? ' collapsed' : ''}`}>
-      <div className="sidenav-header">
+      <button
+        type="button"
+        className="sidenav-header"
+        onClick={() => onNavigate(HOME_PATH)}
+        title="Home"
+      >
         <img className="sidenav-logo" src="/cow.png" alt="" width={28} height={28} />
         {!collapsed && (
           <div className="sidenav-brand">
@@ -107,7 +112,7 @@ export function AppSideNav({
             <span className="sidenav-brand-accent">II</span>
           </div>
         )}
-      </div>
+      </button>
 
       <nav className="sidenav-nav">
         <NavSection

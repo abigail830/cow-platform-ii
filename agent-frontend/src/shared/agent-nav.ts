@@ -12,6 +12,8 @@ import { hasAgentFeaturePermission, hasPermission } from './permissions.ts';
 
 export const AGENT_PLAYER_ROLE = 'agent-player';
 
+export const HOME_PATH = '/';
+
 export const AGENT_PLAYER_ALLOWED_PATHS = [AGENT_PLAYGROUND_PATH, SESSION_EXPLORER_PATH] as const;
 
 function roleKeys(user: AuthUser): string[] {
@@ -46,7 +48,18 @@ export function visibleAgentPages(user: AuthUser): NavPage[] {
   });
 }
 
+export function visibleNavPages(user: AuthUser): NavPage[] {
+  return [
+    ...visibleAgentPages(user),
+    ...KNOWLEDGE_MANAGEMENT_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
+    ...PLATFORM_BASIC_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
+    ...ADMIN_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
+  ];
+}
+
 export function canAccessAppPath(user: AuthUser, path: string): boolean {
+  if (path === HOME_PATH) return true;
+
   if (path === AGENT_PLAYGROUND_PATH || path.startsWith(`${AGENT_PLAYGROUND_PATH}/`)) {
     return hasAgentFeaturePermission(user, 'playground');
   }
@@ -73,17 +86,6 @@ export function canAccessAppPath(user: AuthUser, path: string): boolean {
 }
 
 /** First route the user may open after login or when denied the current path. */
-export function resolveAppHomePath(user: AuthUser): string {
-  const pages: readonly NavPage[] = [
-    ...visibleAgentPages(user),
-    ...KNOWLEDGE_MANAGEMENT_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
-    ...PLATFORM_BASIC_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
-    ...ADMIN_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
-  ];
-
-  for (const page of pages) {
-    if (canAccessAppPath(user, page.path)) return page.path;
-  }
-
-  return AGENT_PLAYGROUND_PATH;
+export function resolveAppHomePath(_user: AuthUser): string {
+  return HOME_PATH;
 }

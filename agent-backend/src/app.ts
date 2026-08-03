@@ -16,6 +16,7 @@ import hybridSearch from './routes/hybrid-search.ts';
 import hybridSearchMcp from './routes/mcp/hybrid-search.ts';
 import users from './routes/users.ts';
 import sessionExplorer from './routes/session-explorer.ts';
+import sessionFiles from './routes/session-files.ts';
 import internalApi from './routes/internal-api/index.ts';
 import { rememberOpenKmsApiKeyForInstance } from './auth/openkms-instance-env.ts';
 import { OPENKMS_API_KEY_HEADER } from './auth/openkms-headers.ts';
@@ -24,6 +25,7 @@ import { runWithAgentRequestContext } from './flue/agent-request-context.ts';
 import { agentInstanceStreamRegistry } from './flue/agent-instance-stream-registry.ts';
 import { isAgentLiveSseRequest, parseAgentInstancePath } from './flue/agent-instance-path.ts';
 import { recoverOrphanedPipelineWorkOnStartup, startPipelinePollScheduler } from './services/pipeline-poller.ts';
+import { cleanupExpiredSessionFiles } from './services/session-files-cleanup.ts';
 
 registerModelProviders();
 void recoverOrphanedPipelineWorkOnStartup()
@@ -31,6 +33,13 @@ void recoverOrphanedPipelineWorkOnStartup()
   .catch((error) => {
     console.error('[pipeline] startup recovery failed:', error);
     startPipelinePollScheduler();
+  });
+void cleanupExpiredSessionFiles()
+  .then((removed) => {
+    if (removed > 0) console.info(`[session-files] cleaned up ${removed} expired file(s)`);
+  })
+  .catch((error) => {
+    console.error('[session-files] startup cleanup failed:', error);
   });
 
 const app = new Hono();
@@ -57,6 +66,7 @@ app.get('/health', (c) => c.json({ ok: true, service: 'agent-backend' }));
 app.route('/api/auth', auth);
 app.route('/api/user/api-keys', userApiKeys);
 app.route('/api/agents', agents);
+app.route('/api/agents', sessionFiles);
 app.route('/api/conversations', conversations);
 app.route('/api/admin', admin);
 app.route('/api/console', consoleRoutes);

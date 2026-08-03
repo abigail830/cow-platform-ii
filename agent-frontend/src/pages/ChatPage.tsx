@@ -166,6 +166,7 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
                   onChange={setInput}
                   onSend={(payload) => void onSendNewChat(payload)}
                   busy={busy}
+                  attachmentsEnabled={false}
                 />
               </>
             )}

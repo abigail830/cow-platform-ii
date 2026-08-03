@@ -6,6 +6,7 @@ import { ChatPage } from './pages/ChatPage.tsx';
 import { AgentPlaygroundPage } from './pages/AgentPlaygroundPage.tsx';
 import { SessionExplorerPage } from './pages/SessionExplorerPage.tsx';
 import { ApiKeysSettingsPage } from './pages/ApiKeysSettingsPage.tsx';
+import { HomePage } from './pages/HomePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { HybridSearchPage } from './pages/HybridSearchPage.tsx';
 import { KnowledgeBaseDetailRouter } from './pages/KnowledgeBaseDetailRouter.tsx';
@@ -38,6 +39,7 @@ export default function App() {
             </RequireAuth>
           }
         >
+          <Route index element={<HomePage />} />
           <Route path="/settings/api-keys" element={<ApiKeysSettingsPage />} />
           <Route path="/agents/playground" element={<AgentPlaygroundPage />} />
           <Route path="/agents/session-explorer" element={<SessionExplorerPage />} />
@@ -56,7 +58,7 @@ export default function App() {
           <Route path="/admin/roles" element={<RolesPage />} />
           <Route path="/admin/permissions" element={<PermissionsPage />} />
         </Route>
-        <Route path="*" element={<Navigate to={getToken() ? '/agents/playground' : '/login'} replace />} />
+        <Route path="*" element={<Navigate to={getToken() ? '/' : '/login'} replace />} />
       </Routes>
     </FlueAuthProvider>
   );

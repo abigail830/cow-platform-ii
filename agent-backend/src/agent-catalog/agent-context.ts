@@ -23,6 +23,15 @@ export function augmentInstructionsWithAgentContext(
   context: AgentContextYaml | undefined,
   now = new Date(),
 ): string {
+  const withTemporal = appendTemporalContext(instructions, context, now);
+  return appendSessionFilesContext(withTemporal);
+}
+
+function appendTemporalContext(
+  instructions: string,
+  context: AgentContextYaml | undefined,
+  now: Date,
+): string {
   if (!context?.temporal) return instructions;
 
   const timezone = context.timezone?.trim() || 'UTC';
@@ -35,4 +44,17 @@ export function augmentInstructionsWithAgentContext(
 Current date and time (${timezone}): ${formatted}
 
 Use this throughout the session when judging whether retrieved passages may be outdated, superseded, or time-bound.`;
+}
+
+function appendSessionFilesContext(instructions: string): string {
+  return `${instructions}
+
+## Session document attachments
+
+Users may attach documents to this chat (shown in a \`SESSION_FILES\` block with fileId, filename, and size).
+
+- Use \`list_session_files\` and \`read_session_file\` to load content. Do not guess file contents.
+- If prior tool results in the conversation already contain the needed excerpts, reuse them; otherwise read again (including with \`offset\` when truncated).
+- Use \`search_session_files\` to locate keywords across multiple attachments.
+- Image attachments (if any) are separate from session documents and use the vision path when present in the message.`;
 }

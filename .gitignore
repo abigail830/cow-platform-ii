@@ -24,7 +24,6 @@ venv/
 dist/
 build/
 
-# Agent platform runtime (PID + logs)
+# Agent platform runtime (PID + logs + local session file attachments)
 .run/
-
 

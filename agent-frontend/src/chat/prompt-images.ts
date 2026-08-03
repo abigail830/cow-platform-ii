@@ -62,9 +62,13 @@ export function isImageMediaType(mediaType: string | undefined): boolean {
   return Boolean(mediaType?.startsWith('image/'));
 }
 
-/** Flue requires a non-empty message string even when sending images only. */
-export function normalizePromptMessage(text: string, imageCount: number): string {
+/** Flue requires a non-empty message string even when sending images or session files only. */
+export function normalizePromptMessage(
+  text: string,
+  imageCount: number,
+  hasSessionFiles = false,
+): string {
   const trimmed = text.trim();
   if (trimmed) return trimmed;
-  return imageCount > 0 ? ' ' : '';
+  return imageCount > 0 || hasSessionFiles ? ' ' : '';
 }

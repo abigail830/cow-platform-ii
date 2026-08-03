@@ -1,10 +1,24 @@
-import { ArrowUp, List, Loader2, Paperclip, Square, SquarePlus, X, type LucideProps } from 'lucide-react';
+import {
+  ArrowUp,
+  FileText,
+  List,
+  Loader2,
+  Paperclip,
+  Square,
+  SquarePlus,
+  X,
+  type LucideProps,
+} from 'lucide-react';
 import { ICON_SIZE_LG, iconProps } from './icon-props.ts';
 
 type IconProps = LucideProps;
 
 export function IconPaperclip(props: IconProps) {
   return <Paperclip {...iconProps({ size: ICON_SIZE_LG, ...props })} />;
+}
+
+export function IconFileText(props: IconProps) {
+  return <FileText {...iconProps({ size: ICON_SIZE_LG, ...props })} />;
 }
 
 export function IconSend(props: IconProps) {

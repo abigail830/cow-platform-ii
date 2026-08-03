@@ -4,14 +4,31 @@ import {
   type AgentPromptImage,
   type ChatSendPayload,
 } from '../chat/prompt-images.ts';
+import type { SessionFile } from '../chat/session-files.ts';
+import { SESSION_FILE_ACCEPT, composerReadySessionFiles, hasProcessingSessionFiles } from '../chat/session-files.ts';
 import { ChatImageChip } from './ChatImageChip.tsx';
-import { IconPaperclip, IconSend, IconStop, IconStopSpinner } from './icons/ChatIcons.tsx';
+import { SessionFileChip } from './SessionFileChip.tsx';
+import {
+  IconFileText,
+  IconPaperclip,
+  IconSend,
+  IconStop,
+  IconStopSpinner,
+} from './icons/ChatIcons.tsx';
 
 type PendingPromptImage = {
   id: string;
   image: AgentPromptImage;
   label: string;
   previewUrl: string;
+};
+
+type SessionFilesComposerProps = {
+  files: SessionFile[];
+  processing: boolean;
+  onUpload: (files: File[]) => Promise<void>;
+  onRemove: (fileId: string, localId?: string) => Promise<void>;
+  onToggleIncluded: (fileId: string) => void;
 };
 
 type ChatComposerProps = {
@@ -23,6 +40,9 @@ type ChatComposerProps = {
   busy?: boolean;
   canceling?: boolean;
   placeholder?: string;
+  /** When false, image/document attach buttons are disabled (e.g. new-chat landing before a session exists). */
+  attachmentsEnabled?: boolean;
+  sessionFiles?: SessionFilesComposerProps;
 };
 
 function createPendingImage(image: AgentPromptImage): PendingPromptImage {
@@ -43,15 +63,31 @@ export function ChatComposer({
   busy = false,
   canceling = false,
   placeholder = 'question',
+  attachmentsEnabled = true,
+  sessionFiles,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
   const [pendingImages, setPendingImages] = useState<PendingPromptImage[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
-  const canSend = !disabled && !busy && (value.trim().length > 0 || pendingImages.length > 0);
+  const hasSessionFiles = (sessionFiles?.files.length ?? 0) > 0;
+  const sessionFilesProcessing = sessionFiles?.processing ?? hasProcessingSessionFiles(sessionFiles?.files ?? []);
+  const hasReadySessionFiles = composerReadySessionFiles(sessionFiles?.files ?? []).length > 0;
+  const canSend =
+    !disabled &&
+    !busy &&
+    !sessionFilesProcessing &&
+    (value.trim().length > 0 || pendingImages.length > 0 || hasReadySessionFiles);
+
+  const attachDisabled = disabled || busy || !attachmentsEnabled;
+  const attachDisabledTitle = attachmentsEnabled
+    ? undefined
+    : '请先发送消息开始会话后再附加文件';
 
   async function addImageFiles(files: FileList | File[]) {
+    if (!attachmentsEnabled) return;
     setAttachmentError(null);
     const additions: PendingPromptImage[] = [];
     for (const file of files) {
@@ -95,6 +131,7 @@ export function ChatComposer({
   }
 
   async function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (!attachmentsEnabled) return;
     const items = event.clipboardData?.items;
     if (!items) return;
 
@@ -113,8 +150,8 @@ export function ChatComposer({
   return (
     <div className="chat-input-area">
       <div className="chat-column">
-        {pendingImages.length > 0 ? (
-          <div className="chat-pending-images" aria-label="Attached images">
+        {pendingImages.length > 0 || hasSessionFiles ? (
+          <div className="chat-pending-attachments" aria-label="Attached files">
             {pendingImages.map((pending) => (
               <ChatImageChip
                 key={pending.id}
@@ -122,6 +159,23 @@ export function ChatComposer({
                 previewUrl={pending.previewUrl}
                 variant="composer"
                 onRemove={() => removePendingImage(pending.id)}
+              />
+            ))}
+            {sessionFiles?.files.map((file) => (
+              <SessionFileChip
+                key={file.localId ?? file.fileId}
+                filename={file.filename}
+                sizeBytes={file.sizeBytes}
+                includedInContext={file.includedInContext}
+                status={file.status}
+                errorMessage={file.errorMessage}
+                variant="composer"
+                onToggleIncluded={
+                  file.status === 'ready'
+                    ? () => sessionFiles.onToggleIncluded(file.fileId)
+                    : undefined
+                }
+                onRemove={() => void sessionFiles.onRemove(file.fileId, file.localId)}
               />
             ))}
           </div>
@@ -137,12 +191,24 @@ export function ChatComposer({
           <button
             type="button"
             className="attach-btn"
-            title="Attach image"
+            title={attachDisabledTitle ?? 'Attach image'}
             aria-label="Attach image"
-            disabled={disabled || busy}
+            disabled={attachDisabled}
             onClick={() => fileInputRef.current?.click()}
           >
             <IconPaperclip />
+          </button>
+          <button
+            type="button"
+            className="attach-btn attach-btn-document"
+            title={attachDisabledTitle ?? 'Attach document'}
+            aria-label="Attach document"
+            disabled={attachDisabled || !sessionFiles || sessionFiles.processing}
+            onClick={() => {
+              if (sessionFiles) documentInputRef.current?.click();
+            }}
+          >
+            <IconFileText />
           </button>
           <input
             ref={fileInputRef}
@@ -157,6 +223,28 @@ export function ChatComposer({
               event.target.value = '';
             }}
           />
+          {sessionFiles ? (
+            <input
+              ref={documentInputRef}
+              className="chat-file-input"
+              type="file"
+              accept={SESSION_FILE_ACCEPT}
+              multiple
+              hidden
+              onChange={(event) => {
+                const files = event.target.files;
+                if (files?.length) {
+                  void sessionFiles.onUpload(Array.from(files)).catch((error) => {
+                    const message = error instanceof Error ? error.message : 'Failed to upload document.';
+                    setAttachmentError(message);
+                  });
+                }
+                event.target.value = '';
+              }}
+            />
+          ) : (
+            <input ref={documentInputRef} className="chat-file-input" type="file" hidden tabIndex={-1} />
+          )}
           <textarea
             value={value}
             onChange={(event) => onChange(event.target.value)}
