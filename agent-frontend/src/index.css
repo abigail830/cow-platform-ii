@@ -302,6 +302,19 @@ textarea {
   color: var(--brand-orange);
 }
 
+.sidenav-item:focus {
+  outline: none;
+}
+
+.sidenav-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--brand-orange);
+}
+
+.sidenav-item.active:focus-visible {
+  box-shadow: 0 0 0 1px var(--brand-orange);
+}
+
 .sidenav-item-icon {
   flex-shrink: 0;
   color: currentColor;
@@ -357,6 +370,15 @@ textarea {
   background: #f9fafb;
 }
 
+.sidenav-user:focus {
+  outline: none;
+}
+
+.sidenav-user:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--brand-orange);
+}
+
 .sidenav-avatar {
   display: grid;
   place-items: center;
@@ -408,6 +430,15 @@ textarea {
   color: #ff6611;
 }
 
+.sidenav-user-menu-item:focus {
+  outline: none;
+}
+
+.sidenav-user-menu-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--brand-orange);
+}
+
 .sidenav-toggle {
   display: grid;
   place-items: center;
@@ -424,6 +455,15 @@ textarea {
 .sidenav-toggle:hover {
   background: #f3f4f6;
   color: #6b7280;
+}
+
+.sidenav-toggle:focus {
+  outline: none;
+}
+
+.sidenav-toggle:focus-visible {
+  outline: 1px solid var(--brand-orange);
+  outline-offset: 2px;
 }
 
 .app-main {
@@ -1677,7 +1717,9 @@ textarea {
   font-family: inherit;
 }
 
-.form-field textarea:focus {
+.form-field textarea:focus,
+.form-field textarea:focus-visible {
+  outline: none;
   border-color: var(--brand-orange);
 }
 
@@ -1923,6 +1965,76 @@ textarea {
   color: #ffffff;
 }
 
+/* Toolbar / filter controls — brand orange focus, not browser default blue */
+.admin-search:focus-within {
+  border-color: var(--brand-orange);
+}
+
+.admin-search input:focus,
+.admin-search input:focus-visible {
+  outline: none;
+}
+
+.session-explorer-select:focus,
+.session-explorer-input:focus,
+.session-explorer-date-range input:focus,
+.hybrid-search-query-wrap:focus-within {
+  outline: none;
+  border-color: var(--brand-orange);
+}
+
+.session-explorer-select:focus-visible,
+.session-explorer-input:focus-visible,
+.session-explorer-date-range input:focus-visible {
+  outline: none;
+  border-color: var(--brand-orange);
+}
+
+.hybrid-search-query-input:focus,
+.hybrid-search-query-input:focus-visible {
+  outline: none;
+}
+
+.hybrid-search-kb-select-trigger:focus,
+.hybrid-search-kb-select-trigger:focus-visible {
+  outline: none;
+}
+
+.admin-filter:focus {
+  outline: none;
+}
+
+.admin-filter:focus-visible {
+  outline: none;
+  border-color: var(--brand-orange);
+  box-shadow: 0 0 0 1px var(--brand-orange);
+}
+
+.admin-filter.active:focus-visible {
+  box-shadow: 0 0 0 1px #ffffff, 0 0 0 2px var(--brand-orange);
+}
+
+.btn-primary:focus,
+.btn-secondary:focus,
+.btn-dark:focus,
+.session-explorer-reset-btn:focus,
+.session-explorer-search-btn:focus {
+  outline: none;
+}
+
+.btn-secondary:focus-visible,
+.btn-dark:focus-visible,
+.session-explorer-reset-btn:focus-visible {
+  outline: 1px solid var(--brand-orange);
+  outline-offset: 2px;
+}
+
+.btn-primary:focus-visible,
+.session-explorer-search-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px #ffffff, 0 0 0 2px var(--brand-orange);
+}
+
 .btn-primary {
   border: none;
   border-radius: 8px;
@@ -2119,7 +2231,7 @@ textarea {
 }
 
 .icon-btn:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 1px solid var(--brand-orange);
   outline-offset: 2px;
 }
 
@@ -2482,7 +2594,11 @@ textarea {
 }
 
 .form-field input:focus,
-.form-field select:focus {
+.form-field select:focus,
+.form-field input:focus-visible,
+.form-field select:focus-visible,
+.form-field textarea:focus-visible {
+  outline: none;
   border-color: var(--brand-orange);
 }
 
@@ -2582,6 +2698,16 @@ textarea {
 
 .storage-crumb:hover {
   text-decoration: underline;
+}
+
+.storage-crumb:focus {
+  outline: none;
+}
+
+.storage-crumb:focus-visible {
+  outline: 1px solid var(--brand-orange);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .storage-crumb-sep {
@@ -2861,6 +2987,16 @@ textarea {
   cursor: pointer;
   color: #0f172a;
   font-size: 0.8125rem;
+}
+
+.channel-tree-select:focus {
+  outline: none;
+}
+
+.channel-tree-select:focus-visible {
+  outline: 1px solid var(--brand-orange);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 .channel-tree-name {
@@ -3595,7 +3731,11 @@ textarea {
 
 .document-metadata-input:focus,
 .document-metadata-textarea:focus,
-.document-metadata-tag-input:focus {
+.document-metadata-tag-input:focus,
+.document-metadata-input:focus-visible,
+.document-metadata-textarea:focus-visible,
+.document-metadata-tag-input:focus-visible {
+  outline: none;
   border-color: var(--brand-orange);
   background: #ffffff;
 }
@@ -5438,8 +5578,7 @@ textarea {
 }
 
 .hybrid-search-settings-inline-input:focus-visible {
-  outline: 2px solid var(--brand-orange-muted);
-  outline-offset: 2px;
+  outline: none;
   border-color: var(--brand-orange);
 }
 
@@ -5468,8 +5607,7 @@ textarea {
 }
 
 .hybrid-search-settings-inline-select:focus-visible {
-  outline: 2px solid var(--brand-orange-muted);
-  outline-offset: 2px;
+  outline: none;
   border-color: var(--brand-orange);
 }
 
@@ -5478,7 +5616,7 @@ textarea {
 }
 
 .hybrid-search-settings-modal .field-tooltip-trigger:focus-visible {
-  outline: 2px solid var(--brand-orange-muted);
+  outline: 1px solid var(--brand-orange);
   outline-offset: 2px;
   border-radius: 4px;
   color: var(--brand-orange);
@@ -5493,12 +5631,12 @@ textarea {
 .hybrid-search-settings-modal .btn-secondary:focus-visible,
 .hybrid-search-settings-modal .btn-primary:focus-visible,
 .hybrid-search-settings-btn:focus-visible {
-  outline: 2px solid var(--brand-orange-muted);
+  outline: 1px solid var(--brand-orange);
   outline-offset: 2px;
 }
 
 .hybrid-search-settings-modal .brand-checkbox:focus-visible {
-  outline: 2px solid var(--brand-orange-muted);
+  outline: 1px solid var(--brand-orange);
   outline-offset: 2px;
 }
 
@@ -5523,8 +5661,7 @@ textarea {
 .hybrid-search-settings-modal .form-field input:focus-visible,
 .hybrid-search-settings-modal .form-field select:focus-visible,
 .hybrid-search-settings-modal .form-field textarea:focus-visible {
-  outline: 2px solid var(--brand-orange-muted);
-  outline-offset: 2px;
+  outline: none;
   border-color: var(--brand-orange);
 }
 
