@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AgentApiKeyStatusIndicator } from '../components/AgentApiKeyStatusIndicator.tsx';
 import { AgentListPanel } from '../components/AgentListPanel.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
@@ -30,11 +31,14 @@ export function AgentPlaygroundPage() {
 
   return (
     <main className="admin-page playground-page">
-      <header className="admin-header">
-        <AdminPageTitle main={PAGE.titleMain} accent={PAGE.titleAccent} />
-        <AdminPageDescription>
-          Select an agent and start a conversation. Each agent keeps its own session history.
-        </AdminPageDescription>
+      <header className="admin-header playground-page-header">
+        <div className="playground-page-header-main">
+          <AdminPageTitle main={PAGE.titleMain} accent={PAGE.titleAccent} />
+          <AdminPageDescription>
+            Select an agent and start a conversation. Each agent keeps its own session history.
+          </AdminPageDescription>
+        </div>
+        <AgentApiKeyStatusIndicator className="playground-page-api-key-status" />
       </header>
 
       <div
