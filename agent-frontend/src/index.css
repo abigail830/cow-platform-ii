@@ -7,10 +7,10 @@
   --brand-orange-hover: #e85c0f;
   --brand-orange-soft: #fff0e7;
   --brand-orange-muted: #ffe8d9;
-  --brand-green: #628141;
-  --brand-green-hover: #4f6834;
-  --brand-green-soft: rgb(98 129 65 / 0.12);
-  --brand-green-muted: rgb(98 129 65 / 0.28);
+  --brand-green: #17a26b;
+  --brand-green-hover: #148f5c;
+  --brand-green-soft: rgb(23 162 107 / 0.12);
+  --brand-green-muted: rgb(23 162 107 / 0.28);
   --app-page-bg: #f8fafb;
 }
 
@@ -3336,6 +3336,10 @@ textarea {
   vertical-align: middle;
 }
 
+.documents-main-panel .admin-table .documents-table-meta {
+  font-weight: 300;
+}
+
 .documents-list-meta {
   margin: 0.75rem 0 0;
   color: #64748b;
@@ -3750,7 +3754,7 @@ textarea {
 
 .document-name-link {
   color: #0f172a;
-  font-weight: 500;
+  font-weight: 400;
   text-decoration: none;
 }
 

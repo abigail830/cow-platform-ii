@@ -219,12 +219,14 @@ export function DocumentsListPage() {
                       {document.name}
                     </Link>
                   </td>
-                  <td>{document.file_type}</td>
-                  <td>{formatDocumentBytes(document.size_bytes)}</td>
+                  <td className="documents-table-meta">{document.file_type}</td>
+                  <td className="documents-table-meta">{formatDocumentBytes(document.size_bytes)}</td>
                   <td className="documents-status-col">
                     <DocumentPipelineStatus document={document} />
                   </td>
-                  <td>{new Date(document.created_at).toLocaleString()}</td>
+                  <td className="documents-table-meta">
+                    {new Date(document.created_at).toLocaleString()}
+                  </td>
                   <td>
                     <div className="row-actions">
                       <DocumentDownloadActions
