@@ -763,7 +763,71 @@ textarea {
 }
 
 .chat-input-area .chat-column {
-  gap: 0;
+  gap: 0.5rem;
+}
+
+.chat-pending-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chat-pending-image {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.chat-pending-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-pending-image-remove {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.chat-pending-image-remove:hover {
+  background: rgba(15, 23, 42, 0.88);
+}
+
+.chat-attachment-error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #dc2626;
+}
+
+.user-message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.user-message-image {
+  max-width: min(240px, 100%);
+  max-height: 240px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .input-bar {

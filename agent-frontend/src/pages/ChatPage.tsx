@@ -14,6 +14,7 @@ import {
   type AgentInfo,
   type Conversation,
 } from '../api/conversations.ts';
+import type { AgentPromptImage } from '../chat/prompt-images.ts';
 
 type ChatPageContentProps = {
   user: AuthUser;
@@ -30,6 +31,7 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
   const [busy, setBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pendingInitialMessage, setPendingInitialMessage] = useState<string | null>(null);
+  const [pendingInitialImages, setPendingInitialImages] = useState<AgentPromptImage[] | null>(null);
 
   const selectedAgentInfo = agents.find((agent) => agent.name === selectedAgent) ?? null;
 
@@ -44,6 +46,7 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
     void listConversations(selectedAgent).then(setConversations);
     setActiveId(null);
     setPendingInitialMessage(null);
+    setPendingInitialImages(null);
     setHistoryOpen(false);
   }, [selectedAgent]);
 
@@ -63,6 +66,7 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
     const conv = await createConversation(selectedAgent, 'New conversation');
     setConversations((prev) => [conv, ...prev]);
     setPendingInitialMessage(null);
+    setPendingInitialImages(null);
     setActiveId(conv.id);
     setHistoryOpen(false);
   }
@@ -79,18 +83,21 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
     }
   }
 
-  async function onSendNewChat() {
-    if (!input.trim() || !selectedAgent || busy) return;
-    const text = input.trim();
+  async function onSendNewChat(payload: { text: string; images: AgentPromptImage[] }) {
+    const text = payload.text.trim();
+    if ((!text && payload.images.length === 0) || !selectedAgent || busy) return;
+    const titleSource = text || 'Image';
     setInput('');
-    const conv = await createConversation(selectedAgent, text.slice(0, 48));
+    const conv = await createConversation(selectedAgent, titleSource.slice(0, 48));
     setConversations((prev) => [conv, ...prev]);
-    setPendingInitialMessage(text);
+    setPendingInitialMessage(text || ' ');
+    setPendingInitialImages(payload.images.length > 0 ? payload.images : null);
     setActiveId(conv.id);
   }
 
   function selectConversation(id: string) {
     setPendingInitialMessage(null);
+    setPendingInitialImages(null);
     setActiveId(id);
   }
 
@@ -134,8 +141,10 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
                 conversationId={activeId}
                 userId={user.id}
                 initialMessage={pendingInitialMessage}
+                initialImages={pendingInitialImages}
                 onInitialMessageSent={() => {
                   setPendingInitialMessage(null);
+                  setPendingInitialImages(null);
                   void refreshConversations();
                 }}
                 onTitleFromMessage={(title) => void onTitleFromMessage(title)}
@@ -155,7 +164,7 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
                 <ChatComposer
                   value={input}
                   onChange={setInput}
-                  onSend={() => void onSendNewChat()}
+                  onSend={(payload) => void onSendNewChat(payload)}
                   busy={busy}
                 />
               </>

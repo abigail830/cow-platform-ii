@@ -2,6 +2,7 @@ import { useFlueAgent, useFlueClient } from '@flue/react';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { isAgentBusy } from '../chat/agentStatus.ts';
 import { sendMessageWithAdmissionRetry } from '../chat/agent-send-retry.ts';
+import { normalizePromptMessage, type AgentPromptImage } from '../chat/prompt-images.ts';
 import { resolveFlueLiveMode } from '../chat/flue-live-mode.ts';
 import {
   filterRenderableParts,
@@ -29,6 +30,7 @@ type AgentChatPanelProps = {
   conversationId: string;
   userId: string;
   initialMessage?: string | null;
+  initialImages?: AgentPromptImage[] | null;
   onInitialMessageSent?: () => void;
   onTitleFromMessage?: (title: string) => void;
   input: string;
@@ -42,6 +44,7 @@ export function AgentChatPanel({
   conversationId,
   userId,
   initialMessage,
+  initialImages,
   onInitialMessageSent,
   onTitleFromMessage,
   input,
@@ -93,30 +96,41 @@ export function AgentChatPanel({
   }, [conversationId, agentInstanceId]);
 
   useEffect(() => {
-    const text = initialMessage?.trim();
-    if (!text || initialSentRef.current || !agent.historyReady) return;
+    const images = initialImages ?? [];
+    const message = normalizePromptMessage(initialMessage ?? '', images.length);
+    if (!message && images.length === 0) return;
+    if (initialSentRef.current || !agent.historyReady) return;
     initialSentRef.current = true;
-    void sendMessageWithAdmissionRetry((m) => agent.sendMessage(m), text)
+    const sendOptions = images.length > 0 ? { images } : undefined;
+    void sendMessageWithAdmissionRetry((m, opts) => agent.sendMessage(m, opts), message, sendOptions)
       .then(() => {
-        onTitleFromMessage?.(text.slice(0, 48));
+        const titleSource = initialMessage?.trim() || (images.length > 0 ? 'Image' : '');
+        if (titleSource) onTitleFromMessage?.(titleSource.slice(0, 48));
         onInitialMessageSent?.();
       })
       .catch((err) => console.error('[chat] initial send failed', err));
   }, [
     initialMessage,
+    initialImages,
     agent.historyReady,
     agent.sendMessage,
     onTitleFromMessage,
     onInitialMessageSent,
   ]);
 
-  async function onSend() {
-    const text = input.trim();
-    if (!text || busy || !agent.historyReady) return;
+  async function onSend(payload: { text: string; images: AgentPromptImage[] }) {
+    const message = normalizePromptMessage(payload.text, payload.images.length);
+    if (!message || busy || !agent.historyReady) return;
     onInputChange('');
+    const sendOptions = payload.images.length > 0 ? { images: payload.images } : undefined;
     try {
-      await sendMessageWithAdmissionRetry((m) => agent.sendMessage(m), text);
-      onTitleFromMessage?.(text.slice(0, 48));
+      await sendMessageWithAdmissionRetry(
+        (m, opts) => agent.sendMessage(m, opts),
+        message,
+        sendOptions,
+      );
+      const titleSource = payload.text.trim() || (payload.images.length > 0 ? 'Image' : '');
+      if (titleSource) onTitleFromMessage?.(titleSource.slice(0, 48));
     } catch (err) {
       console.error('[chat] send failed', err);
     }
@@ -198,7 +212,7 @@ export function AgentChatPanel({
       <ChatComposer
         value={input}
         onChange={onInputChange}
-        onSend={() => void onSend()}
+        onSend={(payload) => void onSend(payload)}
         onCancel={() => void onCancel()}
         disabled={!agent.historyReady}
         busy={busy}

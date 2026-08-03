@@ -1,16 +1,38 @@
-import { useRef, type KeyboardEvent } from 'react';
+import { X } from 'lucide-react';
+import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import {
+  buildPromptImagePreviewUrl,
+  fileToAgentPromptImage,
+  type AgentPromptImage,
+  type ChatSendPayload,
+} from '../chat/prompt-images.ts';
+import { iconProps } from './icons/icon-props.ts';
 import { IconPaperclip, IconSend, IconStop, IconStopSpinner } from './icons/ChatIcons.tsx';
+
+type PendingPromptImage = {
+  id: string;
+  image: AgentPromptImage;
+  previewUrl: string;
+};
 
 type ChatComposerProps = {
   value: string;
   onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (payload: ChatSendPayload) => void;
   onCancel?: () => void;
   disabled?: boolean;
   busy?: boolean;
   canceling?: boolean;
   placeholder?: string;
 };
+
+function createPendingImage(image: AgentPromptImage): PendingPromptImage {
+  return {
+    id: crypto.randomUUID(),
+    image,
+    previewUrl: buildPromptImagePreviewUrl(image),
+  };
+}
 
 export function ChatComposer({
   value,
@@ -24,34 +46,105 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
+  const [pendingImages, setPendingImages] = useState<PendingPromptImage[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  const canSend = !disabled && !busy && (value.trim().length > 0 || pendingImages.length > 0);
+
+  async function addImageFiles(files: FileList | File[]) {
+    setAttachmentError(null);
+    const additions: PendingPromptImage[] = [];
+    for (const file of files) {
+      try {
+        const image = await fileToAgentPromptImage(file);
+        additions.push(createPendingImage(image));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to add image.';
+        setAttachmentError(message);
+      }
+    }
+    if (additions.length > 0) {
+      setPendingImages((current) => [...current, ...additions]);
+    }
+  }
+
+  function removePendingImage(id: string) {
+    setPendingImages((current) => current.filter((item) => item.id !== id));
+  }
+
+  function submit() {
+    if (busy) {
+      onCancel?.();
+      return;
+    }
+    if (!canSend) return;
+    onSend({
+      text: value,
+      images: pendingImages.map((item) => item.image),
+    });
+    setPendingImages([]);
+    setAttachmentError(null);
+  }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== 'Enter' || event.shiftKey) return;
     if (event.nativeEvent.isComposing || isComposingRef.current || event.keyCode === 229) return;
     event.preventDefault();
     if (busy) return;
-    onSend();
+    submit();
+  }
+
+  async function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    const imageFiles: File[] = [];
+    for (const item of items) {
+      if (!item.type.startsWith('image/')) continue;
+      const file = item.getAsFile();
+      if (file) imageFiles.push(file);
+    }
+    if (imageFiles.length === 0) return;
+
+    event.preventDefault();
+    await addImageFiles(imageFiles);
   }
 
   return (
     <div className="chat-input-area">
       <div className="chat-column">
+        {pendingImages.length > 0 ? (
+          <div className="chat-pending-images" aria-label="Attached images">
+            {pendingImages.map((pending) => (
+              <div key={pending.id} className="chat-pending-image">
+                <img src={pending.previewUrl} alt={pending.image.filename ?? 'Attached image'} />
+                <button
+                  type="button"
+                  className="chat-pending-image-remove"
+                  onClick={() => removePendingImage(pending.id)}
+                  title="Remove image"
+                  aria-label="Remove image"
+                >
+                  <X {...iconProps({ size: 14 })} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {attachmentError ? <p className="chat-attachment-error">{attachmentError}</p> : null}
         <form
           className="input-bar"
           onSubmit={(event) => {
             event.preventDefault();
-            if (busy) {
-              onCancel?.();
-              return;
-            }
-            onSend();
+            submit();
           }}
         >
           <button
             type="button"
             className="attach-btn"
-            title="Attach file"
-            disabled={disabled}
+            title="Attach image"
+            aria-label="Attach image"
+            disabled={disabled || busy}
             onClick={() => fileInputRef.current?.click()}
           >
             <IconPaperclip />
@@ -60,10 +153,13 @@ export function ChatComposer({
             ref={fileInputRef}
             className="chat-file-input"
             type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
             multiple
             hidden
-            onChange={() => {
-              if (fileInputRef.current) fileInputRef.current.value = '';
+            onChange={(event) => {
+              const files = event.target.files;
+              if (files?.length) void addImageFiles(files);
+              event.target.value = '';
             }}
           />
           <textarea
@@ -79,6 +175,7 @@ export function ChatComposer({
               isComposingRef.current = false;
             }}
             onKeyDown={onKeyDown}
+            onPaste={(event) => void onPaste(event)}
           />
           {busy ? (
             <button
@@ -95,7 +192,7 @@ export function ChatComposer({
             <button
               type="submit"
               className="send-btn"
-              disabled={disabled || !value.trim()}
+              disabled={!canSend}
               title="Send"
               aria-label="Send"
             >

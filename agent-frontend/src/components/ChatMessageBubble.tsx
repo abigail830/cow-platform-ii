@@ -1,6 +1,7 @@
-import type { FlueConversationMessage } from '@flue/react';
+import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
 import { useMemo, type ReactNode } from 'react';
 import { ChatLinkResolveContext } from '../chat/chat-link-resolve-context.ts';
+import { isImageMediaType } from '../chat/prompt-images.ts';
 import { assistantMessageText, userMessageText } from '../chat/groupMessages.ts';
 import {
   buildArtifactHrefResolver,
@@ -12,15 +13,36 @@ type UserMessageBubbleProps = {
   message: FlueConversationMessage;
 };
 
+type UserFilePart = Extract<FlueConversationPart, { type: 'file' }>;
+
+function userImageParts(message: FlueConversationMessage): UserFilePart[] {
+  return message.parts.filter(
+    (part): part is UserFilePart => part.type === 'file' && isImageMediaType(part.mediaType),
+  );
+}
+
 export function UserMessageBubble({ message }: UserMessageBubbleProps) {
-  const text = userMessageText(message);
+  const text = userMessageText(message).trim();
+  const images = userImageParts(message);
 
   return (
     <div className="message-stack user">
       <div className="message user">
-        <p>{text}</p>
+        {text ? <p>{text}</p> : null}
+        {images.length > 0 ? (
+          <div className="user-message-images">
+            {images.map((part, index) => (
+              <img
+                key={`${part.url ?? part.filename ?? 'image'}-${index}`}
+                className="user-message-image"
+                src={part.url}
+                alt={part.filename ?? 'Uploaded image'}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
-      <MessageCopyButton text={text} />
+      {text ? <MessageCopyButton text={text} /> : null}
     </div>
   );
 }
