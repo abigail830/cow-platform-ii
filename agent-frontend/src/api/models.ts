@@ -37,6 +37,11 @@ export type ModelConfig = {
   updatedAt: string;
 };
 
+/** Full model config for admin copy — includes API key when present. */
+export type ModelConfigDetail = ModelConfig & {
+  apiKey: string | null;
+};
+
 export type ModelConfigInput = {
   name: string;
   modelId: string;
@@ -86,6 +91,11 @@ export async function listModelConfigs(params?: {
   const suffix = query.toString() ? `?${query.toString()}` : '';
   const data = await authFetch(`/api/admin/models${suffix}`);
   return data as ModelListResponse;
+}
+
+export async function getModelConfig(id: string): Promise<ModelConfigDetail> {
+  const data = await authFetch(`/api/admin/models/${id}`);
+  return data.model as ModelConfigDetail;
 }
 
 export async function createModelConfig(input: ModelConfigInput): Promise<ModelConfig> {

@@ -3,13 +3,15 @@ import { Navigate } from 'react-router-dom';
 import {
   createModelConfig,
   deleteModelConfig,
+  getModelConfig,
   listModelConfigs,
   MODEL_API_TYPE_LABELS,
   updateModelConfig,
   type ModelApiType,
   type ModelConfig,
+  type ModelConfigDetail,
 } from '../api/models.ts';
-import { Bot, Pencil, Search, Trash2 } from 'lucide-react';
+import { Bot, Copy, Pencil, Search, Trash2 } from 'lucide-react';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { ModelConfigForm } from '../components/ModelConfigForm.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
@@ -41,7 +43,15 @@ export function ModelsConfigPage() {
   const [error, setError] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ModelConfig | null>(null);
+  const [duplicateFrom, setDuplicateFrom] = useState<ModelConfigDetail | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditing(null);
+    setDuplicateFrom(null);
+  }
 
   const loadModels = useCallback(async () => {
     setLoading(true);
@@ -70,6 +80,21 @@ export function ModelsConfigPage() {
   useEffect(() => {
     void loadModels();
   }, [loadModels]);
+
+  async function handleCopy(model: ModelConfig) {
+    setCopyingId(model.id);
+    setError('');
+    try {
+      const detail = await getModelConfig(model.id);
+      setEditing(null);
+      setDuplicateFrom(detail);
+      setFormOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load model for copy');
+    } finally {
+      setCopyingId(null);
+    }
+  }
 
   async function handleDelete(model: ModelConfig) {
     if (!window.confirm(`Delete model "${model.name}"?`)) return;
@@ -132,6 +157,7 @@ export function ModelsConfigPage() {
             className="btn-primary"
             onClick={() => {
               setEditing(null);
+              setDuplicateFrom(null);
               setFormOpen(true);
             }}
             disabled={!canWrite}
@@ -211,8 +237,18 @@ export function ModelsConfigPage() {
                         <button
                           type="button"
                           className="icon-btn"
+                          title="Copy"
+                          disabled={!canWrite || copyingId === model.id}
+                          onClick={() => void handleCopy(model)}
+                        >
+                          <Copy {...iconProps()} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
                           title="Edit"
                           onClick={() => {
+                            setDuplicateFrom(null);
                             setEditing(model);
                             setFormOpen(true);
                           }}
@@ -247,18 +283,15 @@ export function ModelsConfigPage() {
       {formOpen && (
         <ModelConfigForm
           initial={editing}
-          onCancel={() => {
-            setFormOpen(false);
-            setEditing(null);
-          }}
+          duplicateFrom={duplicateFrom}
+          onCancel={closeForm}
           onSubmit={async (input) => {
             if (editing) {
               await updateModelConfig(editing.id, input);
             } else {
               await createModelConfig(input);
             }
-            setFormOpen(false);
-            setEditing(null);
+            closeForm();
             await loadModels();
           }}
         />

@@ -30,6 +30,14 @@ function toPublicModel(row: ModelRow) {
   };
 }
 
+/** Full model row for admin copy — includes API key (write permission required). */
+function toAdminDetailModel(row: ModelRow) {
+  return {
+    ...toPublicModel(row),
+    apiKey: row.apiKey,
+  };
+}
+
 function parseApiType(value: unknown): ModelApiType | null {
   if (typeof value !== 'string') return null;
   return MODEL_API_TYPES.includes(value as ModelApiType) ? (value as ModelApiType) : null;
@@ -98,6 +106,18 @@ models.get('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASI
     limit,
   });
 });
+
+models.get(
+  '/:id',
+  requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.MODELS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Not found' }, 404);
+    const [row] = await db.select().from(appModelConfigs).where(eq(appModelConfigs.id, id)).limit(1);
+    if (!row) return c.json({ error: 'Not found' }, 404);
+    return c.json({ model: toAdminDetailModel(row) });
+  },
+);
 
 models.post('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.MODELS, 'write'), async (c) => {
   const body = await c.req.json<{

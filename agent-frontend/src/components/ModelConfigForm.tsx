@@ -4,11 +4,14 @@ import {
   MODEL_API_TYPE_LABELS,
   type ModelApiType,
   type ModelConfig,
+  type ModelConfigDetail,
   type ModelConfigInput,
 } from '../api/models.ts';
 
 type ModelConfigFormProps = {
   initial?: ModelConfig | null;
+  /** Pre-filled from another model (create mode, includes API key). */
+  duplicateFrom?: ModelConfigDetail | null;
   onSubmit: (input: ModelConfigInput) => Promise<void>;
   onCancel: () => void;
 };
@@ -41,30 +44,64 @@ function placeholdersForApiType(apiType: ModelApiType) {
   };
 }
 
-export function ModelConfigForm({ initial, onSubmit, onCancel }: ModelConfigFormProps) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [modelId, setModelId] = useState(initial?.modelId ?? '');
-  const [provider, setProvider] = useState(initial?.provider ?? '');
-  const [apiType, setApiType] = useState<ModelApiType>(initial?.apiType ?? 'chat-completions');
-  const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? '');
-  const [apiKey, setApiKey] = useState('');
-  const [capabilities, setCapabilities] = useState<string[]>(initial?.capabilities ?? []);
+function copyDisplayName(name: string) {
+  const suffix = ' (copy)';
+  if (name.endsWith(suffix)) return name;
+  return `${name}${suffix}`;
+}
+
+export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: ModelConfigFormProps) {
+  const isCopy = Boolean(duplicateFrom);
+  const [name, setName] = useState(
+    initial?.name ?? (duplicateFrom ? copyDisplayName(duplicateFrom.name) : ''),
+  );
+  const [modelId, setModelId] = useState(initial?.modelId ?? duplicateFrom?.modelId ?? '');
+  const [provider, setProvider] = useState(initial?.provider ?? duplicateFrom?.provider ?? '');
+  const [apiType, setApiType] = useState<ModelApiType>(
+    initial?.apiType ?? duplicateFrom?.apiType ?? 'chat-completions',
+  );
+  const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? duplicateFrom?.baseUrl ?? '');
+  const [apiKey, setApiKey] = useState(duplicateFrom?.apiKey ?? '');
+  const [capabilities, setCapabilities] = useState<string[]>(
+    initial?.capabilities ?? duplicateFrom?.capabilities ?? [],
+  );
   const [capabilityInput, setCapabilityInput] = useState('');
   const [isDefault, setIsDefault] = useState(initial?.isDefault ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setName(initial?.name ?? '');
-    setModelId(initial?.modelId ?? '');
-    setProvider(initial?.provider ?? '');
-    setApiType(initial?.apiType ?? 'chat-completions');
-    setBaseUrl(initial?.baseUrl ?? '');
-    setApiKey('');
-    setCapabilities(initial?.capabilities ?? []);
-    setIsDefault(initial?.isDefault ?? false);
+    if (initial) {
+      setName(initial.name);
+      setModelId(initial.modelId);
+      setProvider(initial.provider);
+      setApiType(initial.apiType);
+      setBaseUrl(initial.baseUrl ?? '');
+      setApiKey('');
+      setCapabilities(initial.capabilities);
+      setIsDefault(initial.isDefault);
+    } else if (duplicateFrom) {
+      setName(copyDisplayName(duplicateFrom.name));
+      setModelId(duplicateFrom.modelId);
+      setProvider(duplicateFrom.provider);
+      setApiType(duplicateFrom.apiType);
+      setBaseUrl(duplicateFrom.baseUrl ?? '');
+      setApiKey(duplicateFrom.apiKey ?? '');
+      setCapabilities(duplicateFrom.capabilities);
+      setIsDefault(false);
+    } else {
+      setName('');
+      setModelId('');
+      setProvider('');
+      setApiType('chat-completions');
+      setBaseUrl('');
+      setApiKey('');
+      setCapabilities([]);
+      setIsDefault(false);
+    }
+    setCapabilityInput('');
     setError('');
-  }, [initial]);
+  }, [initial, duplicateFrom]);
 
   function addCapability(value: string) {
     const trimmed = value.trim();
@@ -109,7 +146,7 @@ export function ModelConfigForm({ initial, onSubmit, onCancel }: ModelConfigForm
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal-card model-config-form" onClick={(event) => event.stopPropagation()}>
-        <h2>{initial ? 'Edit model' : 'Add model'}</h2>
+        <h2>{initial ? 'Edit model' : isCopy ? 'Copy model' : 'Add model'}</h2>
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div className="form-grid">
             <label className="form-field">
@@ -161,12 +198,17 @@ export function ModelConfigForm({ initial, onSubmit, onCancel }: ModelConfigForm
               )}
             </label>
             <label className="form-field form-field-wide">
-              <span>API Key {initial?.hasApiKey ? '(leave blank to keep current)' : ''}</span>
+              <span>
+                API Key{' '}
+                {initial?.hasApiKey && !isCopy ? '(leave blank to keep current)' : ''}
+              </span>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder={initial?.hasApiKey ? '••••••••' : 'Optional'}
+                placeholder={
+                  initial?.hasApiKey && !isCopy ? '••••••••' : isCopy && duplicateFrom?.apiKey ? 'Copied from source' : 'Optional'
+                }
                 autoComplete="new-password"
               />
             </label>
