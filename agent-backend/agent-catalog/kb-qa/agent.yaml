@@ -5,7 +5,8 @@ icon: MessageCircleQuestion
 
 model:
   # configName: glm-4.7-flash
-  configName: deepSeek-V4-Flash
+  # configName: deepSeek-V4-Flash
+  configName: qwen3.7-flash
   profile: azure-openai
 
 prompt: ./prompt.md
