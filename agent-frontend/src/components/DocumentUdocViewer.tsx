@@ -4,6 +4,59 @@ import { Loader2 } from 'lucide-react';
 import { getDocumentDownloadUrl } from '../api/documents.ts';
 import { iconProps } from './icons/icon-props.ts';
 
+const PAGE_NAV_MAX_ATTEMPTS = 48;
+
+function scheduleViewerPageNavigation(
+  viewer: UDocViewer,
+  targetPage: number,
+  cancelled: () => boolean,
+): void {
+  if (targetPage <= 0) return;
+
+  let attempts = 0;
+
+  const tryNavigate = () => {
+    if (cancelled()) return;
+    viewer.goToPage(targetPage);
+    attempts += 1;
+    if (viewer.currentPage === targetPage || attempts >= PAGE_NAV_MAX_ATTEMPTS) return;
+    requestAnimationFrame(tryNavigate);
+  };
+
+  const start = () => {
+    if (cancelled()) return;
+    requestAnimationFrame(() => requestAnimationFrame(tryNavigate));
+  };
+
+  if (viewer.isLoaded) {
+    start();
+    return;
+  }
+
+  const unsub = viewer.on('document:load', () => {
+    unsub();
+    start();
+  });
+}
+
+async function applyViewerNavigation(
+  viewer: UDocViewer,
+  options: { page?: number | null; searchQuery?: string | null },
+  cancelled: () => boolean,
+): Promise<void> {
+  const page = options.page;
+  const searchQuery = options.searchQuery?.trim();
+
+  if (page != null && page > 0) {
+    scheduleViewerPageNavigation(viewer, page, cancelled);
+    return;
+  }
+
+  if (searchQuery) {
+    await viewer.search(searchQuery);
+  }
+}
+
 export function DocumentUdocViewer({
   documentId,
   page,
@@ -17,11 +70,16 @@ export function DocumentUdocViewer({
   const viewerRef = useRef<UDocViewer | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const navigationRef = useRef({ page, searchQuery });
+
+  navigationRef.current = { page, searchQuery };
 
   useEffect(() => {
     let disposed = false;
     let client: UDocClient | null = null;
     let viewer: UDocViewer | null = null;
+
+    const cancelled = () => disposed;
 
     async function mount() {
       const container = containerRef.current;
@@ -40,10 +98,8 @@ export function DocumentUdocViewer({
         await viewer.load(new Uint8Array(buffer));
         viewerRef.current = viewer;
 
-        if (!disposed && page != null && page > 0) {
-          viewer.goToPage(page);
-        } else if (!disposed && searchQuery?.trim()) {
-          await viewer.search(searchQuery.trim());
+        if (!disposed) {
+          await applyViewerNavigation(viewer, navigationRef.current, cancelled);
         }
       } catch (err) {
         if (!disposed) {
@@ -65,14 +121,9 @@ export function DocumentUdocViewer({
   }, [documentId]);
 
   useEffect(() => {
-    if (loading || !viewerRef.current || page == null || page <= 0) return;
-    viewerRef.current.goToPage(page);
-  }, [loading, page]);
-
-  useEffect(() => {
-    if (loading || !viewerRef.current || !searchQuery?.trim()) return;
-    void viewerRef.current.search(searchQuery.trim());
-  }, [loading, searchQuery]);
+    if (loading || !viewerRef.current) return;
+    void applyViewerNavigation(viewerRef.current, { page, searchQuery }, () => false);
+  }, [loading, page, searchQuery]);
 
   return (
     <div className="document-udoc-viewer">

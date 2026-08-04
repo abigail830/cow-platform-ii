@@ -92,6 +92,7 @@ hybridSearch.post(
       const result = await service.search(parsed.data);
       return c.json(result);
     } catch (error) {
+      console.error('[hybrid-search] search failed:', error);
       const message = error instanceof Error ? error.message : 'Search failed';
       const status = message.includes('not found')
         ? 404

@@ -1,3 +1,5 @@
+import { outboundFetch } from '../../shared/outbound-fetch.ts';
+
 export type RerankApiStyle = 'cohere_compatible' | 'openai_reranks' | 'dashscope_native';
 
 export function resolveRerankApiStyle(input: {
@@ -110,6 +112,7 @@ export async function callRerankApi(input: {
   instruct?: string | null;
   extraConfig?: Record<string, unknown>;
   timeoutMs?: number;
+  configName?: string;
 }): Promise<Array<{ index: number; score: number }>> {
   const style = resolveRerankApiStyle({
     modelId: input.modelName,
@@ -117,43 +120,41 @@ export async function callRerankApi(input: {
     extraConfig: input.extraConfig,
   });
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 30_000);
+  const url = rerankEndpoint(input.baseUrl, style);
+  const label = `Rerank API (${input.configName ?? input.modelName})`;
 
-  try {
-    const response = await fetch(rerankEndpoint(input.baseUrl, style), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${input.apiKey ?? 'no-key'}`,
-      },
-      body: JSON.stringify(
-        buildRerankBody({
-          modelName: input.modelName,
-          query: input.query,
-          documents: input.documents,
-          topN: input.topN,
-          instruct: input.instruct,
-          style,
-        }),
-      ),
-      signal: controller.signal,
-    });
+  const response = await outboundFetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${input.apiKey ?? 'no-key'}`,
+    },
+    body: JSON.stringify(
+      buildRerankBody({
+        modelName: input.modelName,
+        query: input.query,
+        documents: input.documents,
+        topN: input.topN,
+        instruct: input.instruct,
+        style,
+      }),
+    ),
+    timeoutMs: input.timeoutMs ?? 30_000,
+    retries: 2,
+    label,
+  });
 
-    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
-      error?: { message?: string };
-    };
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
+    error?: { message?: string };
+  };
 
-    if (!response.ok) {
-      const message =
-        (typeof payload.error === 'object' && payload.error?.message) ||
-        (typeof payload.error === 'string' ? payload.error : null) ||
-        `Rerank API failed (${response.status})`;
-      throw new Error(message);
-    }
-
-    return parseRerankResults(payload);
-  } finally {
-    clearTimeout(timeout);
+  if (!response.ok) {
+    const message =
+      (typeof payload.error === 'object' && payload.error?.message) ||
+      (typeof payload.error === 'string' ? payload.error : null) ||
+      `Rerank API failed (${response.status})`;
+    throw new Error(message);
   }
+
+  return parseRerankResults(payload);
 }

@@ -76,7 +76,6 @@ export type HybridSearchResponse = {
     embedding_groups: number;
     duration_ms: number;
     rerank_applied: boolean;
-    rerank_failed?: boolean;
   };
 };
 

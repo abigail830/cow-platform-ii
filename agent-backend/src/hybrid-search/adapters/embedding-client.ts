@@ -1,4 +1,5 @@
 import { embeddingSupportsDimensions } from '../../shared/embedding-provider.ts';
+import { outboundFetch } from '../../shared/outbound-fetch.ts';
 import type { EmbeddingClient, ModelConnection } from '../ports.ts';
 
 function embeddingsUrl(baseUrl: string): string {
@@ -35,13 +36,17 @@ export function createOpenAiCompatibleEmbeddingClient(): EmbeddingClient {
         body.dimensions = dimensions;
       }
 
-      const response = await fetch(embeddingsUrl(connection.baseUrl), {
+      const url = embeddingsUrl(connection.baseUrl);
+      const response = await outboundFetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${connection.apiKey ?? 'no-key'}`,
         },
         body: JSON.stringify(body),
+        timeoutMs: 60_000,
+        retries: 2,
+        label: `Embedding API (${connection.configName})`,
       });
 
       const payload = (await response.json().catch(() => ({}))) as {

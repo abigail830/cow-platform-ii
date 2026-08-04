@@ -166,7 +166,15 @@ export async function runHybridSearch(
   for (const group of groups) {
     const kbNames = kbNameById(group);
     const connection = await deps.modelResolver.resolveEmbeddingModel(group.embeddingModelConfigId);
-    const queryVector = await deps.embeddingClient.embedQuery(connection, query);
+    let queryVector: number[];
+    try {
+      queryVector = await deps.embeddingClient.embedQuery(connection, query);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Embedding failed for model "${connection.configName}" (${connection.baseUrl}): ${detail}`,
+      );
+    }
 
     const dense = await deps.recallStore.denseRecall({
       kbIds: group.knowledgeBaseIds,
@@ -203,16 +211,15 @@ export async function runHybridSearch(
 
   const merged = groupCandidates.flat().slice(0, RERANK_INPUT_CAP);
   let rerankApplied = false;
-  let rerankFailed = false;
   let results: HybridSearchResult[] = [];
 
   const shouldRerank = Boolean(settings.rerank_model_config_id) && merged.length > 0;
 
   if (shouldRerank && settings.rerank_model_config_id) {
+    const rerankConnection = await deps.modelResolver.resolveRerankModel(
+      settings.rerank_model_config_id,
+    );
     try {
-      const rerankConnection = await deps.modelResolver.resolveRerankModel(
-        settings.rerank_model_config_id,
-      );
       const rerankScores = await deps.rerankClient.rerank({
         connection: rerankConnection,
         query,
@@ -225,14 +232,14 @@ export async function runHybridSearch(
         toSearchResult(merged[index]!, score, 'rerank', score),
       );
     } catch (error) {
-      rerankFailed = true;
-      console.warn('[hybrid-search] rerank failed:', error);
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Rerank failed for model "${rerankConnection.configName}" (${rerankConnection.baseUrl}): ${detail}`,
+      );
     }
-  }
-
-  if (results.length === 0) {
-    const fallback = multiGroup ? fallbackInterleave(groupCandidates) : merged;
-    results = fallback.slice(0, topK).map((candidate) => {
+  } else {
+    const ranked = multiGroup ? fallbackInterleave(groupCandidates) : merged;
+    results = ranked.slice(0, topK).map((candidate) => {
       const mode =
         candidate.rrfScore != null
           ? 'hybrid'
@@ -253,7 +260,6 @@ export async function runHybridSearch(
       embedding_groups: groups.length,
       duration_ms: Date.now() - started,
       rerank_applied: rerankApplied,
-      ...(rerankFailed ? { rerank_failed: true } : {}),
     },
   };
 }

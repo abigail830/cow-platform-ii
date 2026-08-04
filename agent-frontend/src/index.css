@@ -4299,19 +4299,22 @@ textarea {
 
 .source-ref-link {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 0.25rem;
-  color: var(--brand-orange);
+  color: #64748b;
   font-size: 0.75rem;
+  text-align: left;
   text-decoration: none;
 }
 
 .source-ref-link:hover {
+  color: #475569;
   text-decoration: underline;
 }
 
-.source-ref-link-secondary {
-  color: #64748b;
+.source-ref-link span {
+  text-align: left;
 }
 
 .kb-source-doc-link {
@@ -5960,11 +5963,24 @@ textarea {
 }
 
 .hybrid-search-result-summary-line2 {
+  width: 100%;
   font-size: 0.6875rem;
   color: #64748b;
   line-height: 1.35;
   word-break: break-word;
   text-align: left;
+}
+
+.hybrid-search-result-summary-line2 .source-ref-links {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.hybrid-search-result-summary-line2 .source-ref-link {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .hybrid-search-result-recall-scores {

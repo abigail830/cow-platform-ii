@@ -358,7 +358,11 @@ export function HybridSearchPage() {
       });
       setResponse(result);
       closePreview();
-      await patchHybridSearchPreferences({ selected_knowledge_base_ids: selectedKbIds });
+      try {
+        await patchHybridSearchPreferences({ selected_knowledge_base_ids: selectedKbIds });
+      } catch (prefErr) {
+        console.warn('Failed to save hybrid search KB selection:', prefErr);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
@@ -470,7 +474,6 @@ export function HybridSearchPage() {
               <p className="admin-muted">
                 {response.meta.kbs_searched} knowledge bases · {response.meta.embedding_groups} embedding groups ·{' '}
                 {response.meta.duration_ms} ms
-                {response.meta.rerank_failed ? ' · rerank failed, showing fallback ranking' : ''}
               </p>
               {response.results.length === 0 ? (
                 <p className="admin-muted">No results.</p>

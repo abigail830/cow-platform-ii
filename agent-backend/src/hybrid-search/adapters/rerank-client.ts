@@ -17,6 +17,7 @@ export function createRerankClient(): RerankClient {
         baseUrl: connection.baseUrl,
         apiKey: connection.apiKey,
         modelName: connection.modelName,
+        configName: connection.configName,
         query,
         documents,
         topN,
