@@ -5498,19 +5498,77 @@ textarea {
   color: #64748b;
 }
 
-.kb-faq-question-cell {
-  max-width: 220px;
-  font-weight: 500;
-  line-height: 1.35;
+.kb-faq-qa-col {
+  min-width: 22rem;
 }
 
-.kb-faq-answer-cell {
-  max-width: 260px;
-  color: #64748b;
-  line-height: 1.35;
+.kb-faq-qa-cell {
+  max-width: 36rem;
+  min-width: 22rem;
+  vertical-align: top;
+}
+
+.kb-faq-qa-question,
+.kb-faq-qa-answer {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.35;
+}
+
+.kb-faq-qa-question {
+  font-weight: 400;
+}
+
+.kb-faq-qa-answer {
+  margin-top: 0.15rem;
+  font-weight: 300;
+  color: #64748b;
+}
+
+.kb-faq-source-cell {
+  max-width: 9.5rem;
+  min-width: 6.5rem;
+  vertical-align: top;
+  font-size: 0.75rem;
+  font-weight: 300;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.kb-faq-publication-col,
+.kb-faq-publication-cell {
+  text-align: center;
+}
+
+.kb-faq-publication-cell {
+  vertical-align: top;
+}
+
+.kb-faq-updated-col,
+.kb-faq-updated-cell {
+  font-size: 0.75rem;
+  font-weight: 300;
+  color: #64748b;
+  line-height: 1.35;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.kb-faq-cell-clamp {
+  display: -webkit-box;
+  overflow: hidden;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.35;
+}
+
+.kb-faq-source-cell .kb-faq-cell-clamp {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .app-transient-notice {

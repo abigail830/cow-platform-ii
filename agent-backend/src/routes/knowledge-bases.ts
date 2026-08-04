@@ -38,6 +38,8 @@ import {
   deleteKbItem,
   deleteKbItems,
   getKbImportJobPublic,
+  getActiveKbImportJobForKnowledgeBase,
+  getKbImportJobById,
   getKbItemById,
   getKnowledgeBaseById,
   getKnowledgeBasePublicById,
@@ -759,8 +761,9 @@ knowledgeBases.post(
         createdBy: user?.id,
       });
       await spawnKbImportWorker(job.id);
+      const fresh = await getKbImportJobById(job.id);
       return c.json(
-        { job: toKbImportJobPublic(job), document_count: job.documentIds.length },
+        { job: toKbImportJobPublic(fresh ?? job), document_count: job.documentIds.length },
         202,
       );
     } catch (error) {
@@ -797,12 +800,33 @@ knowledgeBases.post(
         createdBy: user?.id,
       });
       await spawnKbImportWorker(job.id);
-      return c.json({ job: toKbImportJobPublic(job), faq_count: job.faqIds.length }, 202);
+      const fresh = await getKbImportJobById(job.id);
+      return c.json({ job: toKbImportJobPublic(fresh ?? job), faq_count: job.faqIds.length }, 202);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start FAQ index';
       const status = message.includes('not found') ? 404 : 400;
       return c.json({ error: message }, status);
     }
+  },
+);
+
+knowledgeBases.get(
+  '/:id/import-jobs/active',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const jobKind = c.req.query('job_kind')?.trim() || undefined;
+    const job = await getActiveKbImportJobForKnowledgeBase(
+      id,
+      jobKind as 'faq_extract' | 'faq_index' | 'page_index_import' | 'rag_index' | undefined,
+    );
+    return c.json({ job: job ? toKbImportJobPublic(job) : null });
   },
 );
 

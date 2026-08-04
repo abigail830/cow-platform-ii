@@ -700,6 +700,26 @@ export async function getKbImportJobPublic(knowledgeBaseId: string, jobId: strin
   return toKbImportJobPublic(job);
 }
 
+/** Latest pending/running import job for a knowledge base (for UI polling resume). */
+export async function getActiveKbImportJobForKnowledgeBase(
+  knowledgeBaseId: string,
+  jobKind?: KbImportJobKind,
+): Promise<KbImportJobRow | null> {
+  const rows = await db
+    .select()
+    .from(appKbImportJobs)
+    .where(
+      and(
+        eq(appKbImportJobs.knowledgeBaseId, knowledgeBaseId),
+        inArray(appKbImportJobs.status, ['pending', 'running']),
+        ...(jobKind ? [eq(appKbImportJobs.jobKind, jobKind)] : []),
+      ),
+    )
+    .orderBy(desc(appKbImportJobs.createdAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateKbImportJob(
   id: string,
   input: {

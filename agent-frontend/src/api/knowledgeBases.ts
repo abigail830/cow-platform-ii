@@ -289,6 +289,15 @@ export async function getKbImportJob(knowledgeBaseId: string, jobId: string): Pr
   return data as KbImportJob;
 }
 
+export async function getActiveKbImportJob(
+  knowledgeBaseId: string,
+  jobKind?: string,
+): Promise<KbImportJob | null> {
+  const params = jobKind ? `?job_kind=${encodeURIComponent(jobKind)}` : '';
+  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/import-jobs/active${params}`);
+  return (data.job as KbImportJob | null) ?? null;
+}
+
 export async function listIndexedDocuments(
   knowledgeBaseId: string,
   options?: { offset?: number; limit?: number },

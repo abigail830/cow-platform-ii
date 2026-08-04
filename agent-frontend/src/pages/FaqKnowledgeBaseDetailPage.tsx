@@ -14,6 +14,7 @@ import {
   batchDraftKbFaqs,
   batchPublishKbFaqs,
   deleteKbFaqs,
+  getActiveKbImportJob,
   getKnowledgeBase,
   listKbFaqs,
   startKbFaqExtract,
@@ -47,12 +48,6 @@ type DeleteConfirmState =
   | { mode: 'bulk'; faqIds: string[] }
   | null;
 
-function truncateText(text: string, maxLen = 120): string {
-  const trimmed = text.trim();
-  if (trimmed.length <= maxLen) return trimmed;
-  return `${trimmed.slice(0, maxLen).trim()}…`;
-}
-
 function indexStatusClass(status: KbFaq['index_status']): string {
   if (status === 'indexed') return 'kb-status-completed';
   if (status === 'failed') return 'kb-status-failed';
@@ -62,6 +57,17 @@ function indexStatusClass(status: KbFaq['index_status']): string {
 
 function publicationStatusClass(status: KbFaq['publication_status']): string {
   return status === 'published' ? 'kb-status-completed' : 'kb-status-pending';
+}
+
+function buildFaqExtractNotice(job: KbImportJob, faqsAdded: number): string {
+  if (job.failed_count > 0) {
+    const summary = `FAQ extract finished: ${job.completed_count} document(s) succeeded, ${job.failed_count} failed.`;
+    return job.error_message ? `${summary} ${job.error_message}` : summary;
+  }
+  if (faqsAdded > 0) {
+    return `FAQ extract completed. Added ${faqsAdded} draft FAQ${faqsAdded === 1 ? '' : 's'}.`;
+  }
+  return 'FAQ extract completed, but no new draft FAQs were added for the selected documents.';
 }
 
 function FaqIndexStatusCell({ faq, jobActive }: { faq: KbFaq; jobActive: boolean }) {
@@ -127,9 +133,12 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   const [publishingFaqId, setPublishingFaqId] = useState<string | null>(null);
   const [indexing, setIndexing] = useState(false);
   const [extractBusy, setExtractBusy] = useState(false);
-  const { notice: transientNotice, showNotice, clearNotice } = useTransientNotice(4500);
+  const { notice: transientNotice, showNotice, clearNotice } = useTransientNotice(6000);
   const [embeddingModels, setEmbeddingModels] = useState<ModelConfig[]>([]);
   const selectedFaqIdRef = useRef<string | null>(null);
+  const totalRef = useRef(0);
+  const faqTotalBeforeExtractRef = useRef<number | null>(null);
+  const handledTerminalJobRef = useRef<string | null>(null);
 
   const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('kb-faq-detail-split', 52, {
     minPct: 28,
@@ -176,10 +185,15 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
     selectedFaqIdRef.current = selectedFaqId;
   }, [selectedFaqId]);
 
-  const load = useCallback(async (options?: { silent?: boolean }) => {
-    if (!knowledgeBaseId) return;
+  useEffect(() => {
+    totalRef.current = total;
+  }, [total]);
+
+  const load = useCallback(async (options?: { silent?: boolean }): Promise<number | undefined> => {
+    if (!knowledgeBaseId) return undefined;
     if (!options?.silent) setLoading(true);
     setError('');
+    let faqTotal: number | undefined;
     try {
       const [kbRow, faqResult] = await Promise.all([
         getKnowledgeBase(knowledgeBaseId),
@@ -188,6 +202,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
       setKb(kbRow);
       setFaqs(faqResult.items);
       setTotal(faqResult.total);
+      faqTotal = faqResult.total;
       const currentSelected = selectedFaqIdRef.current;
       if (currentSelected && !faqResult.items.some((faq) => faq.id === currentSelected)) {
         setSelectedFaqId(null);
@@ -209,6 +224,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
     } finally {
       if (!options?.silent) setLoading(false);
     }
+    return faqTotal;
   }, [knowledgeBaseId]);
 
   useEffect(() => {
@@ -226,40 +242,66 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
       });
   }, [canWrite]);
 
+  useEffect(() => {
+    if (!canWrite || !knowledgeBaseId) return;
+    let cancelled = false;
+    void getActiveKbImportJob(knowledgeBaseId)
+      .then((job) => {
+        if (cancelled || !job) return;
+        setActiveJob((current) => current ?? job);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [canWrite, knowledgeBaseId]);
+
+  const handleFaqExtractJobTerminal = useCallback(
+    async (job: KbImportJob) => {
+      if (handledTerminalJobRef.current === job.id) return;
+      handledTerminalJobRef.current = job.id;
+
+      if (job.job_kind === 'faq_index') {
+        await load({ silent: true });
+        if (job.status === 'failed') {
+          clearNotice();
+          setError(job.error_message ? `FAQ index failed: ${job.error_message}` : 'FAQ index failed.');
+        }
+        return;
+      }
+
+      if (job.job_kind !== 'faq_extract') return;
+
+      const before = faqTotalBeforeExtractRef.current ?? totalRef.current;
+      const after = await load({ silent: true });
+      faqTotalBeforeExtractRef.current = null;
+
+      if (job.status === 'failed') {
+        clearNotice();
+        setError(job.error_message ? `FAQ extract failed: ${job.error_message}` : 'FAQ extract failed.');
+        return;
+      }
+
+      setError('');
+      if (job.failed_count > 0 && job.completed_count === 0) {
+        setError(job.error_message || 'FAQ extract failed for all selected documents.');
+        return;
+      }
+
+      const added = after !== undefined ? Math.max(0, after - before) : 0;
+      showNotice(buildFaqExtractNotice(job, added));
+    },
+    [clearNotice, load, showNotice],
+  );
+
   useKbImportJobPolling({
     knowledgeBaseId,
     activeJob,
     setActiveJob,
     listInProgress: listIndexInProgress,
     onRefresh: () => load({ silent: true }),
+    onJobTerminal: handleFaqExtractJobTerminal,
   });
-
-  useEffect(() => {
-    if (!activeJob) return;
-    if (activeJob.status === 'failed' && activeJob.error_message) {
-      clearNotice();
-      const label =
-        activeJob.job_kind === 'faq_extract'
-          ? 'FAQ extract failed'
-          : activeJob.job_kind === 'faq_index'
-            ? 'FAQ index failed'
-            : 'Background job failed';
-      setError(`${label}: ${activeJob.error_message}`);
-    } else if (activeJob.status === 'completed' && activeJob.job_kind === 'faq_extract') {
-      setError('');
-      if (activeJob.failed_count > 0 && activeJob.completed_count === 0) {
-        setError(
-          activeJob.error_message || 'FAQ extract failed for all selected documents.',
-        );
-      } else if (activeJob.failed_count > 0) {
-        showNotice(
-          `FAQ extract finished: ${activeJob.completed_count} document(s) succeeded, ${activeJob.failed_count} failed.`,
-        );
-      } else {
-        showNotice('FAQ extract completed. New draft FAQs were added to the list.');
-      }
-    }
-  }, [activeJob?.id, activeJob?.status, activeJob?.error_message, activeJob?.job_kind, clearNotice, showNotice]);
 
   function toggleFaqSelection(faqId: string, checked: boolean) {
     setSelectedFaqIds((prev) => {
@@ -299,6 +341,8 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
     setExtractBusy(true);
     setError('');
     clearNotice();
+    faqTotalBeforeExtractRef.current = totalRef.current;
+    handledTerminalJobRef.current = null;
     try {
       const result = await startKbFaqExtract(knowledgeBaseId, input);
       setActiveJob(result.job);
@@ -613,12 +657,11 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                             />
                           </th>
                         )}
-                        <th>Question</th>
-                        <th>Answer</th>
+                        <th className="kb-faq-qa-col">Question</th>
                         <th>Source</th>
-                        <th>Publication</th>
+                        <th className="kb-faq-publication-col">Publication</th>
                         <th className="kb-item-status-col">Index status</th>
-                        <th>Updated</th>
+                        <th className="kb-faq-updated-col">Updated</th>
                         <th className="kb-item-actions-col">Actions</th>
                         <th className="kb-item-detail-hint-col" aria-hidden />
                       </tr>
@@ -627,7 +670,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                       {loading ? (
                         <tr>
                           <td
-                            colSpan={canManage ? 9 : 8}
+                            colSpan={canManage ? 8 : 7}
                             className="admin-table-empty session-explorer-table-loading"
                           >
                             <ListLoadingState label="Loading FAQs…" />
@@ -635,7 +678,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                         </tr>
                       ) : faqs.length === 0 ? (
                         <tr>
-                          <td colSpan={canManage ? 9 : 8} className="admin-table-empty">
+                          <td colSpan={canManage ? 8 : 7} className="admin-table-empty">
                             &nbsp;
                           </td>
                         </tr>
@@ -663,16 +706,28 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                                   />
                                 </td>
                               )}
-                              <td className="kb-faq-question-cell">{faq.question}</td>
-                              <td className="kb-faq-answer-cell" title={faq.answer}>
-                                {truncateText(faq.answer)}
+                              <td
+                                className="kb-faq-qa-cell"
+                                title={`${faq.question}\n${faq.answer}`}
+                              >
+                                <div className="kb-faq-qa-question">{faq.question}</div>
+                                <div className="kb-faq-qa-answer">{faq.answer}</div>
                               </td>
-                              <td>
-                                {faq.source_type === 'extracted' && faq.source_document_name
-                                  ? faq.source_document_name
-                                  : 'Manual'}
+                              <td
+                                className="kb-faq-source-cell"
+                                title={
+                                  faq.source_type === 'extracted' && faq.source_document_name
+                                    ? faq.source_document_name
+                                    : undefined
+                                }
+                              >
+                                <span className="kb-faq-cell-clamp">
+                                  {faq.source_type === 'extracted' && faq.source_document_name
+                                    ? faq.source_document_name
+                                    : 'Manual'}
+                                </span>
                               </td>
-                              <td>
+                              <td className="kb-faq-publication-cell">
                                 <span
                                   className={`kb-status-badge ${publicationStatusClass(faq.publication_status)}`}
                                 >
@@ -682,7 +737,9 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                               <td className="kb-item-status-col">
                                 <FaqIndexStatusCell faq={faq} jobActive={jobActive} />
                               </td>
-                              <td>{new Date(faq.updated_at).toLocaleString()}</td>
+                              <td className="kb-faq-updated-cell">
+                                {new Date(faq.updated_at).toLocaleString()}
+                              </td>
                               <td className="kb-item-actions-col" onClick={stopRowAction}>
                                 <div className="row-actions">
                                   {canManage && (
