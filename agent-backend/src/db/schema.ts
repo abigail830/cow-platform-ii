@@ -245,6 +245,7 @@ export const appDocumentChannels = pgTable(
     metadataExtractionModelId: uuid('metadata_extraction_model_id').references(() => appModelConfigs.id, {
       onDelete: 'set null',
     }),
+    metadataExtractionAgentDefId: uuid('metadata_extraction_agent_def_id'),
     pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
     autoStartPipeline: boolean('auto_start_pipeline').notNull().default(false),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
@@ -318,20 +319,14 @@ export type KbFaqIndexStatus = (typeof KB_FAQ_INDEX_STATUSES)[number];
 
 export type KbFaqSettings = {
   auto_index_on_publish?: boolean;
-  extraction_model_config_id?: string | null;
-  extraction_prompt?: string;
-  polish_model_config_id?: string | null;
-  polish_prompt?: string;
+  extraction_agent_def_id?: string | null;
+  polish_agent_def_id?: string | null;
 };
 
 export const DEFAULT_KB_FAQ_SETTINGS: KbFaqSettings = {
   auto_index_on_publish: false,
-  extraction_model_config_id: null,
-  extraction_prompt:
-    'Extract FAQ pairs from the document markdown below. Return a JSON array of objects with "question" and "answer" fields. Only include substantive Q&A from the content.\n\nDocument: {document_name}\n\n{markdown}',
-  polish_model_config_id: null,
-  polish_prompt:
-    'Polish the following FAQ answer for clarity and professionalism. Keep the same language as the input. Return only the polished answer text.\n\nQuestion: {question}\n\nAnswer: {answer}',
+  extraction_agent_def_id: null,
+  polish_agent_def_id: null,
 };
 
 export const appKnowledgeBases = pgTable(
@@ -581,5 +576,100 @@ export const appSessionFiles = pgTable(
     index('idx_session_files_instance').on(t.instanceId, t.createdAt),
     index('idx_session_files_expires').on(t.expiresAt),
   ],
+);
+
+export const BUILTIN_WORKFLOW_KEYS = [
+  'session_image_extract',
+  'metadata_extract',
+  'faq_extract',
+  'faq_polish',
+] as const;
+export type BuiltinWorkflowKey = (typeof BUILTIN_WORKFLOW_KEYS)[number];
+
+export const BUILTIN_OUTPUT_MODES = ['text', 'json', 'structured'] as const;
+export type BuiltinOutputMode = (typeof BUILTIN_OUTPUT_MODES)[number];
+
+export const SYNC_AGENT_TRIGGER_TYPES = ['api', 'upload', 'pipeline_job', 'kb_job', 'test'] as const;
+export type SyncAgentTriggerType = (typeof SYNC_AGENT_TRIGGER_TYPES)[number];
+
+export const appBuiltinAgentDefs = pgTable(
+  'app_builtin_agent_defs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: text('slug').notNull().unique(),
+    name: text('name').notNull(),
+    description: text('description'),
+    workflowKey: text('workflow_key').notNull(),
+    apiType: text('api_type').notNull(),
+    modelConfigId: uuid('model_config_id')
+      .notNull()
+      .references(() => appModelConfigs.id, { onDelete: 'restrict' }),
+    systemPrompt: text('system_prompt').notNull().default(''),
+    userPromptTemplate: text('user_prompt_template').notNull().default(''),
+    outputMode: text('output_mode').notNull().default('text'),
+    outputSchema: jsonb('output_schema').$type<Record<string, unknown>>(),
+    temperature: text('temperature'),
+    maxTokens: integer('max_tokens'),
+    isSystem: boolean('is_system').notNull().default(false),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_builtin_agent_defs_workflow').on(t.workflowKey, t.updatedAt),
+    index('idx_builtin_agent_defs_model').on(t.modelConfigId),
+  ],
+);
+
+export const appWorkflowBindings = pgTable(
+  'app_workflow_bindings',
+  {
+    workflowKey: text('workflow_key').primaryKey(),
+    builtinAgentDefId: uuid('builtin_agent_def_id')
+      .notNull()
+      .references(() => appBuiltinAgentDefs.id, { onDelete: 'restrict' }),
+    enabled: boolean('enabled').notNull().default(true),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const appSyncAgentRuns = pgTable(
+  'app_sync_agent_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowKey: text('workflow_key').notNull(),
+    builtinAgentDefId: uuid('builtin_agent_def_id').references(() => appBuiltinAgentDefs.id, {
+      onDelete: 'set null',
+    }),
+    agentDefVersion: integer('agent_def_version'),
+    triggerType: text('trigger_type').notNull(),
+    triggeredBy: uuid('triggered_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    resourceType: text('resource_type'),
+    resourceId: text('resource_id'),
+    status: text('status').notNull(),
+    latencyMs: integer('latency_ms'),
+    errorMessage: text('error_message'),
+    inputSummary: text('input_summary'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_sync_agent_runs_workflow').on(t.workflowKey, t.createdAt),
+    index('idx_sync_agent_runs_triggered_by').on(t.triggeredBy, t.createdAt),
+  ],
+);
+
+export const appSyncAgentMessages = pgTable(
+  'app_sync_agent_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => appSyncAgentRuns.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    content: text('content').notNull(),
+    tokenUsage: jsonb('token_usage').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_sync_agent_messages_run').on(t.runId)],
 );
 

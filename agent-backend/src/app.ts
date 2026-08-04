@@ -17,6 +17,7 @@ import hybridSearchMcp from './routes/mcp/hybrid-search.ts';
 import users from './routes/users.ts';
 import sessionExplorer from './routes/session-explorer.ts';
 import sessionFiles from './routes/session-files.ts';
+import builtinAgentOptions from './routes/builtin-agents.ts';
 import internalApi from './routes/internal-api/index.ts';
 import { rememberOpenKmsApiKeyForInstance } from './auth/openkms-instance-env.ts';
 import { OPENKMS_API_KEY_HEADER } from './auth/openkms-headers.ts';
@@ -77,6 +78,7 @@ app.route('/api/hybrid-search', hybridSearch);
 app.route('/api/mcp/hybrid-search', hybridSearchMcp);
 app.route('/api/users', users);
 app.route('/api/session-explorer', sessionExplorer);
+app.route('/api/builtin-agents', builtinAgentOptions);
 app.route('/internal-api', internalApi);
 
 const flueRoutes = new Hono();

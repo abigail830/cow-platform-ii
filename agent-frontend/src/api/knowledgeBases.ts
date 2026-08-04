@@ -13,6 +13,9 @@ export type KnowledgeBaseCapabilities = {
 
 export type KbFaqSettings = {
   auto_index_on_publish?: boolean;
+  extraction_agent_def_id?: string | null;
+  polish_agent_def_id?: string | null;
+  /** Populated server-side for CLI compatibility. */
   extraction_model_config_id?: string | null;
   extraction_prompt?: string;
   polish_model_config_id?: string | null;
@@ -426,6 +429,10 @@ export async function polishKbFaqAnswer(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
+    signal:
+      typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal
+        ? AbortSignal.timeout(190_000)
+        : undefined,
   });
   return data as { answer: string };
 }

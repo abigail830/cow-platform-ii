@@ -12,6 +12,8 @@ import { HybridSearchPage } from './pages/HybridSearchPage.tsx';
 import { KnowledgeBaseDetailRouter } from './pages/KnowledgeBaseDetailRouter.tsx';
 import { KnowledgeBasesListPage } from './pages/KnowledgeBasesListPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
+import { BuiltinAgentsPage } from './pages/BuiltinAgentsPage.tsx';
+import { BuiltinAgentEditPage } from './pages/BuiltinAgentEditPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
 import { DocumentsLayout } from './pages/DocumentsLayout.tsx';
 import { DocumentDetailPage } from './pages/DocumentDetailPage.tsx';
@@ -45,6 +47,9 @@ export default function App() {
           <Route path="/agents/session-explorer" element={<SessionExplorerPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/admin/models" element={<ModelsConfigPage />} />
+          <Route path="/admin/builtin-agents" element={<BuiltinAgentsPage />} />
+          <Route path="/admin/builtin-agents/new" element={<BuiltinAgentEditPage />} />
+          <Route path="/admin/builtin-agents/:id" element={<BuiltinAgentEditPage />} />
           <Route path="/admin/pipelines" element={<PipelinesConfigPage />} />
           <Route path="/admin/storage" element={<ObjectStoragePage />} />
           <Route path="/knowledge/hybrid-search" element={<HybridSearchPage />} />

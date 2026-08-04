@@ -2,6 +2,7 @@ import './load-env.ts';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { syncRbac } from '../src/db/sync-rbac.ts';
+import { seedBuiltinAgents } from '../src/builtin-agents/seed-builtin-agents.ts';
 import { getPool, closePool } from '../src/db/pool.ts';
 import { validateMigrations } from './validate-migrations.ts';
 import { reencryptLegacyModelApiKeys } from './reencrypt-legacy-model-api-keys.ts';
@@ -16,6 +17,7 @@ async function main() {
     console.log(`Sealed ${sealedKeys} legacy plaintext model API key(s).`);
   }
   await syncRbac();
+  await seedBuiltinAgents();
 }
 
 main()

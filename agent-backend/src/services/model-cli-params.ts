@@ -10,6 +10,8 @@ export type ModelCliParams = {
   model_name: string;
   api_key: string | null;
   max_concurrency: number | null;
+  provider: string;
+  extra_config: Record<string, unknown>;
 };
 
 function readMaxConcurrency(extraConfig: Record<string, unknown>): number | null {
@@ -32,6 +34,8 @@ function toCliParams(row: typeof appModelConfigs.$inferSelect): ModelCliParams {
     model_name: row.modelId.trim(),
     api_key: decryptModelConfigApiKey(row.apiKey)?.trim() || null,
     max_concurrency: readMaxConcurrency(extraConfig),
+    provider: row.provider,
+    extra_config: extraConfig,
   };
 }
 

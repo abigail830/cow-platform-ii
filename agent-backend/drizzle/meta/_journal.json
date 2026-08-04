@@ -225,6 +225,13 @@
       "when": 1785188000000,
       "tag": "0031_app_session_files",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1785189000000,
+      "tag": "0032_builtin_agents",
+      "breakpoints": true
     }
   ]
 }

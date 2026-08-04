@@ -17,6 +17,9 @@ function formatFetchCause(error: unknown): string | undefined {
 
 export function formatOutboundFetchError(error: unknown, label: string, url: string): string {
   if (!(error instanceof Error)) return `${label} failed for ${url}`;
+  if (error.name === 'AbortError') {
+    return `${label} timed out for ${url}`;
+  }
   const cause = formatFetchCause(error);
   if (error.message === 'fetch failed') {
     return cause

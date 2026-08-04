@@ -200,10 +200,8 @@ knowledgeBases.patch(
       metadata_keys?: string[];
       faq_settings?: {
         auto_index_on_publish?: boolean;
-        extraction_model_config_id?: string | null;
-        extraction_prompt?: string;
-        polish_model_config_id?: string | null;
-        polish_prompt?: string;
+        extraction_agent_def_id?: string | null;
+        polish_agent_def_id?: string | null;
       };
     }>().catch(() => ({}));
 
@@ -722,7 +720,14 @@ knowledgeBases.post(
       return c.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to polish answer';
-      const status = message.includes('not found') ? 404 : 400;
+      const status = message.includes('not found')
+        ? 404
+        : message.includes('Chat completion') ||
+            message.includes('VLM') ||
+            message.includes('unreachable') ||
+            message.includes('abort')
+          ? 502
+          : 400;
       return c.json({ error: message }, status);
     }
   },

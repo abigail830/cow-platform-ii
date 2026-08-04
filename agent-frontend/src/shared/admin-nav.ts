@@ -2,6 +2,7 @@ export type NavPageIcon =
   | 'models'
   | 'pipelines'
   | 'storage'
+  | 'builtin-agents'
   | 'documents'
   | 'knowledge'
   | 'users'
@@ -38,6 +39,14 @@ export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
     titleAccent: 'Configuration',
     permissionKey: 'platform-basic:pipelines',
     icon: 'pipelines',
+  },
+  {
+    path: '/admin/builtin-agents',
+    navLabel: 'Builtin Agents',
+    titleMain: 'Builtin',
+    titleAccent: 'Agents',
+    permissionKey: 'platform-basic:builtin-agents',
+    icon: 'builtin-agents',
   },
   {
     path: '/admin/storage',

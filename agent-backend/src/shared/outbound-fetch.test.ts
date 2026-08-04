@@ -11,5 +11,11 @@ describe('formatOutboundFetchError', () => {
       formatOutboundFetchError(error, 'Embedding API', 'https://example.test/v1/embeddings'),
       /ENOTFOUND example\.test/,
     );
+  it('formats abort timeout errors', () => {
+    const error = new DOMException('This operation was aborted', 'AbortError');
+    assert.match(
+      formatOutboundFetchError(error, 'Chat completion', 'https://example.test/v1/chat/completions'),
+      /timed out/,
+    );
   });
 });

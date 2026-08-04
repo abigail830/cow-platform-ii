@@ -1,41 +1,39 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import {
   updateKnowledgeBase,
   type KbFaqSettings,
   type KnowledgeBase,
 } from '../api/knowledgeBases.ts';
+import {
+  BUILTIN_AGENT_PLATFORM_DEFAULT,
+  listBuiltinAgentOptions,
+  type BuiltinAgentOption,
+} from '../api/builtinAgents.ts';
 import type { ModelConfig } from '../api/models.ts';
-
-const DEFAULT_EXTRACTION_PROMPT =
-  'Extract FAQ question-and-answer pairs from the document markdown below. The source may be a proposal, report, or manual — infer useful Q&A a reader might ask (scope, pricing, timeline, deliverables, requirements). Return a JSON array of objects with "question" and "answer" fields. Include at least 3 pairs when the document has enough substance.\n\nDocument: {document_name}\n\n{markdown}';
-
-const DEFAULT_POLISH_PROMPT =
-  'Polish the following FAQ answer for clarity and professionalism. Keep the same language as the input. Return only the polished answer text.\n\nQuestion: {question}\n\nAnswer: {answer}';
 
 type SettingsTab = 'indexing' | 'ai';
 
 type KbFaqSettingsModalProps = {
   kb: KnowledgeBase;
   embeddingModels: ModelConfig[];
-  chatModels: ModelConfig[];
   onCancel: () => void;
   onSaved: (kb: KnowledgeBase) => void;
 };
 
-function resolveModelId(
+function resolveAgentId(
   configuredId: string | null | undefined,
-  models: ModelConfig[],
+  options: BuiltinAgentOption[],
 ): string {
-  if (configuredId && models.some((model) => model.id === configuredId)) {
+  if (configuredId && options.some((agent) => agent.id === configuredId)) {
     return configuredId;
   }
-  return models.find((model) => model.isDefault)?.id ?? '';
+  return BUILTIN_AGENT_PLATFORM_DEFAULT;
 }
 
 export function KbFaqSettingsModal({
   kb,
   embeddingModels,
-  chatModels,
   onCancel,
   onSaved,
 }: KbFaqSettingsModalProps) {
@@ -47,32 +45,49 @@ export function KbFaqSettingsModal({
   const [autoIndexOnPublish, setAutoIndexOnPublish] = useState(
     settings.auto_index_on_publish ?? false,
   );
-  const [extractionModelId, setExtractionModelId] = useState(
-    settings.extraction_model_config_id ?? '',
-  );
-  const [extractionPrompt, setExtractionPrompt] = useState(
-    settings.extraction_prompt ?? DEFAULT_EXTRACTION_PROMPT,
-  );
-  const [polishModelId, setPolishModelId] = useState(settings.polish_model_config_id ?? '');
-  const [polishPrompt, setPolishPrompt] = useState(settings.polish_prompt ?? DEFAULT_POLISH_PROMPT);
+  const [extractionAgentId, setExtractionAgentId] = useState(BUILTIN_AGENT_PLATFORM_DEFAULT);
+  const [polishAgentId, setPolishAgentId] = useState(BUILTIN_AGENT_PLATFORM_DEFAULT);
+  const [extractOptions, setExtractOptions] = useState<BuiltinAgentOption[]>([]);
+  const [polishOptions, setPolishOptions] = useState<BuiltinAgentOption[]>([]);
+  const [optionsError, setOptionsError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      listBuiltinAgentOptions('faq_extract'),
+      listBuiltinAgentOptions('faq_polish'),
+    ])
+      .then(([extract, polish]) => {
+        if (cancelled) return;
+        setExtractOptions(extract);
+        setPolishOptions(polish);
+        const nextSettings = kb.faq_settings ?? {};
+        setExtractionAgentId(resolveAgentId(nextSettings.extraction_agent_def_id, extract));
+        setPolishAgentId(resolveAgentId(nextSettings.polish_agent_def_id, polish));
+        setOptionsError('');
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setOptionsError(err instanceof Error ? err.message : 'Failed to load agent options');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kb]);
+
+  useEffect(() => {
     const nextSettings = kb.faq_settings ?? {};
-    setEmbeddingModelId(resolveModelId(kb.embedding_model_config_id, embeddingModels));
+    setEmbeddingModelId(kb.embedding_model_config_id ?? '');
     setEmbeddingDimensions(kb.embedding_dimensions ?? 1024);
     setMetadataKeysText((kb.metadata_keys ?? []).join(', '));
     setAutoIndexOnPublish(nextSettings.auto_index_on_publish ?? false);
-    setExtractionModelId(resolveModelId(nextSettings.extraction_model_config_id, chatModels));
-    setExtractionPrompt(nextSettings.extraction_prompt ?? DEFAULT_EXTRACTION_PROMPT);
-    setPolishModelId(resolveModelId(nextSettings.polish_model_config_id, chatModels));
-    setPolishPrompt(nextSettings.polish_prompt ?? DEFAULT_POLISH_PROMPT);
     setError('');
-  }, [kb, embeddingModels, chatModels]);
+  }, [kb]);
 
   const defaultEmbeddingModel = embeddingModels.find((model) => model.isDefault) ?? null;
-  const defaultChatModel = chatModels.find((model) => model.isDefault) ?? null;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -85,10 +100,10 @@ export function KbFaqSettingsModal({
         .filter(Boolean);
       const faqSettings: KbFaqSettings = {
         auto_index_on_publish: autoIndexOnPublish,
-        extraction_model_config_id: extractionModelId || null,
-        extraction_prompt: extractionPrompt,
-        polish_model_config_id: polishModelId || null,
-        polish_prompt: polishPrompt,
+        extraction_agent_def_id:
+          extractionAgentId === BUILTIN_AGENT_PLATFORM_DEFAULT ? null : extractionAgentId,
+        polish_agent_def_id:
+          polishAgentId === BUILTIN_AGENT_PLATFORM_DEFAULT ? null : polishAgentId,
       };
       const updated = await updateKnowledgeBase(kb.id, {
         embedding_model_config_id: embeddingModelId || null,
@@ -114,6 +129,7 @@ export function KbFaqSettingsModal({
       >
         <h2 id="kb-faq-settings-title">FAQ settings</h2>
         {error && <p className="admin-error" role="alert">{error}</p>}
+        {optionsError && <p className="admin-error" role="alert">{optionsError}</p>}
 
         <div className="modal-tabs" role="tablist" aria-label="FAQ settings">
           <button
@@ -196,64 +212,42 @@ export function KbFaqSettingsModal({
           ) : (
             <>
               <label className="form-field form-field-wide">
-                <span>Extraction model</span>
+                <span>FAQ extraction agent</span>
                 <select
-                  value={extractionModelId}
-                  onChange={(e) => setExtractionModelId(e.target.value)}
-                  required
+                  value={extractionAgentId}
+                  onChange={(e) => setExtractionAgentId(e.target.value)}
                 >
-                  <option value="">Select a model…</option>
-                  {chatModels.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name} ({model.modelId}){model.isDefault ? ' (default)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <span className="admin-form-hint kb-rag-form-hint">
-                  {defaultChatModel
-                    ? `Default: ${defaultChatModel.name}. Used when extracting FAQs from documents.`
-                    : 'Configure chat models under Admin → Models.'}
-                </span>
-              </label>
-              <label className="form-field form-field-wide">
-                <span>Extraction prompt</span>
-                <textarea
-                  value={extractionPrompt}
-                  onChange={(e) => setExtractionPrompt(e.target.value)}
-                  rows={6}
-                  required
-                />
-                <span className="admin-form-hint">
-                  Placeholders: {'{document_name}'}, {'{markdown}'}
-                </span>
-              </label>
-              <label className="form-field form-field-wide">
-                <span>Polish model</span>
-                <select
-                  value={polishModelId}
-                  onChange={(e) => setPolishModelId(e.target.value)}
-                  required
-                >
-                  <option value="">Select a model…</option>
-                  {chatModels.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name} ({model.modelId}){model.isDefault ? ' (default)' : ''}
+                  <option value={BUILTIN_AGENT_PLATFORM_DEFAULT}>Platform default</option>
+                  {extractOptions.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                      {agent.model_name ? ` (${agent.model_name})` : ''}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="form-field form-field-wide">
-                <span>Polish prompt</span>
-                <textarea
-                  value={polishPrompt}
-                  onChange={(e) => setPolishPrompt(e.target.value)}
-                  rows={5}
-                  required
-                />
-                <span className="admin-form-hint">
-                  Placeholders: {'{question}'}, {'{answer}'}
-                </span>
+                <span>FAQ polish agent</span>
+                <select
+                  value={polishAgentId}
+                  onChange={(e) => setPolishAgentId(e.target.value)}
+                >
+                  <option value={BUILTIN_AGENT_PLATFORM_DEFAULT}>Platform default</option>
+                  {polishOptions.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                      {agent.model_name ? ` (${agent.model_name})` : ''}
+                    </option>
+                  ))}
+                </select>
               </label>
+              <p className="admin-form-hint form-field-wide">
+                Edit prompts and models in{' '}
+                <Link to="/admin/builtin-agents" target="_blank" rel="noreferrer">
+                  Platform → Builtin agents
+                </Link>
+                .
+              </p>
             </>
           )}
 

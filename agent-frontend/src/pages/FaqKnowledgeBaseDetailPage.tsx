@@ -129,7 +129,6 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   const [extractBusy, setExtractBusy] = useState(false);
   const { notice: transientNotice, showNotice, clearNotice } = useTransientNotice(4500);
   const [embeddingModels, setEmbeddingModels] = useState<ModelConfig[]>([]);
-  const [chatModels, setChatModels] = useState<ModelConfig[]>([]);
   const selectedFaqIdRef = useRef<string | null>(null);
 
   const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('kb-faq-detail-split', 52, {
@@ -218,17 +217,12 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
 
   useEffect(() => {
     if (!canWrite) return;
-    void Promise.all([
-      listModelConfigs({ apiType: 'embeddings', limit: 100 }),
-      listModelConfigs({ apiType: 'chat-completions', limit: 100 }),
-    ])
-      .then(([embeddings, chat]) => {
+    void listModelConfigs({ apiType: 'embeddings', limit: 100 })
+      .then((embeddings) => {
         setEmbeddingModels(embeddings.models);
-        setChatModels(chat.models);
       })
       .catch(() => {
         setEmbeddingModels([]);
-        setChatModels([]);
       });
   }, [canWrite]);
 
@@ -308,9 +302,9 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   function openExtractModal() {
     setError('');
     clearNotice();
-    const extractionModelId = kb?.faq_settings?.extraction_model_config_id;
-    if (!extractionModelId) {
-      setError('Configure an extraction model in Settings (AI tab) before extracting from documents.');
+    const extractionConfigured = Boolean(kb?.faq_settings?.extraction_model_config_id);
+    if (!extractionConfigured) {
+      setError('Configure an FAQ extraction agent in Settings (AI tab) before extracting from documents.');
       return;
     }
     setExtractOpen(true);
@@ -552,7 +546,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                       disabled={!kb.is_configured || jobActive || extractBusy}
                       title={
                         !kb.faq_settings?.extraction_model_config_id
-                          ? 'Configure an extraction model in Settings (AI tab)'
+                          ? 'Configure an FAQ extraction agent in Settings (AI tab)'
                           : !kb.is_configured
                             ? 'Configure embedding settings first'
                             : undefined
@@ -813,7 +807,6 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
         <KbFaqSettingsModal
           kb={kb}
           embeddingModels={embeddingModels}
-          chatModels={chatModels}
           onCancel={() => setSettingsOpen(false)}
           onSaved={(updated) => {
             setKb(updated);

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Check, Loader2, Sparkles, X } from 'lucide-react';
 import {
   createKbFaq,
   polishKbFaqAnswer,
@@ -24,6 +24,7 @@ export function KbFaqAddEditModal({
   const isEdit = Boolean(faq);
   const [question, setQuestion] = useState(faq?.question ?? '');
   const [answer, setAnswer] = useState(faq?.answer ?? '');
+  const [polishedDraft, setPolishedDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [polishing, setPolishing] = useState(false);
   const [error, setError] = useState('');
@@ -31,6 +32,7 @@ export function KbFaqAddEditModal({
   useEffect(() => {
     setQuestion(faq?.question ?? '');
     setAnswer(faq?.answer ?? '');
+    setPolishedDraft(null);
     setError('');
   }, [faq]);
 
@@ -47,12 +49,26 @@ export function KbFaqAddEditModal({
         question: question.trim(),
         answer: answer.trim(),
       });
-      setAnswer(result.answer);
+      setPolishedDraft(result.answer);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to polish answer');
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        setError('Polish timed out. Check the model configuration in FAQ settings or Builtin Agents.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to polish answer');
+      }
     } finally {
       setPolishing(false);
     }
+  }
+
+  function handleAcceptPolish() {
+    if (!polishedDraft) return;
+    setAnswer(polishedDraft);
+    setPolishedDraft(null);
+  }
+
+  function handleDiscardPolish() {
+    setPolishedDraft(null);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -128,6 +144,35 @@ export function KbFaqAddEditModal({
               Uses the polish model configured in FAQ settings.
             </span>
           </div>
+
+          {polishedDraft ? (
+            <section className="form-field form-field-wide kb-faq-polish-suggestion" aria-label="Polished suggestion">
+              <div className="kb-faq-polish-suggestion-header">
+                <span className="kb-faq-polish-suggestion-title">Polished suggestion</span>
+                <span className="admin-muted">Review before applying to Answer</span>
+              </div>
+              <div className="kb-faq-polish-suggestion-output">{polishedDraft}</div>
+              <div className="kb-faq-polish-suggestion-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleAcceptPolish}
+                >
+                  <Check {...iconProps({ size: 16 })} aria-hidden />
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleDiscardPolish}
+                >
+                  <X {...iconProps({ size: 16 })} aria-hidden />
+                  Discard
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           <div className="modal-actions form-field-wide">
             <button type="button" className="btn-secondary" onClick={onCancel}>
               Cancel

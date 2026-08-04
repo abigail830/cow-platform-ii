@@ -6,6 +6,7 @@ export const PLATFORM_BASIC_RESOURCES = {
   MODELS: 'models',
   STORAGE: 'storage',
   PIPELINES: 'pipelines',
+  BUILTIN_AGENTS: 'builtin-agents',
 } as const;
 
 export type PlatformBasicResource = (typeof PLATFORM_BASIC_RESOURCES)[keyof typeof PLATFORM_BASIC_RESOURCES];
@@ -67,6 +68,18 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
     description: 'Document processing pipeline templates for openkms-cli.',
     routePatterns: ['/admin/pipelines'],
     apiPatterns: ['/api/admin/pipelines', '/api/admin/pipelines/*'],
+  },
+  {
+    resource: PLATFORM_BASIC_RESOURCES.BUILTIN_AGENTS,
+    label: 'Builtin agents',
+    description: 'Sync workflow agents for extraction, polish, and image ingest.',
+    routePatterns: ['/admin/builtin-agents'],
+    apiPatterns: [
+      '/api/admin/builtin-agents',
+      '/api/admin/builtin-agents/*',
+      '/api/builtin-agents',
+      '/api/builtin-agents/*',
+    ],
   },
 ];
 

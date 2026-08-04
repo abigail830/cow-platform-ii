@@ -27,6 +27,7 @@ import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { getModelConfigById } from '../shared/model-config-store.ts';
 import { countIndexedDocuments, countKbChunks } from './kb-chunks.ts';
 import { upsertKbChunkDocumentIndexing } from './kb-chunk-documents.ts';
+import { enrichFaqSettingsForApi } from '../builtin-agents/enrich-faq-settings.ts';
 
 async function ragKbCounts(knowledgeBaseId: string): Promise<{ indexedDocuments: number; chunks: number }> {
   try {
@@ -104,6 +105,7 @@ function toKnowledgeBasePublic(
     pipelineName?: string | null;
     embeddingModelName?: string | null;
     chunkCount?: number;
+    faqSettings?: KbFaqSettings | Awaited<ReturnType<typeof enrichFaqSettingsForApi>>;
   },
 ) {
   const itemCount = options?.itemCount;
@@ -119,7 +121,10 @@ function toKnowledgeBasePublic(
     embedding_dimensions: row.embeddingDimensions,
     chunk_config: row.chunkConfig,
     metadata_keys: row.metadataKeys,
-    faq_settings: row.type === 'faq' ? row.faqSettings : undefined,
+    faq_settings:
+      row.type === 'faq'
+        ? (options?.faqSettings ?? (row.faqSettings as KbFaqSettings))
+        : undefined,
     is_configured: isKbConfigured(row),
     chunk_count: options?.chunkCount,
     created_by: row.createdBy,
@@ -253,6 +258,10 @@ async function enrichKbPublic(row: KnowledgeBaseRow) {
     pipelineName,
     embeddingModelName,
     chunkCount,
+    faqSettings:
+      row.type === 'faq'
+        ? await enrichFaqSettingsForApi(row.id, row.faqSettings as KbFaqSettings)
+        : undefined,
   });
 }
 

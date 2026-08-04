@@ -19,6 +19,7 @@ import { iconProps } from './icon-props.ts';
 const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   models: Boxes,
   pipelines: GitBranch,
+  'builtin-agents': Bot,
   storage: Database,
   documents: FileText,
   knowledge: Library,

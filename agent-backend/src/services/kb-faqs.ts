@@ -10,8 +10,9 @@ import {
 } from '../db/index.ts';
 import { getDocumentById } from './documents.ts';
 import { decodeEmbeddingBase64 } from '../shared/kb-chunk-embedding.ts';
-import { polishFaqAnswerWithModel } from './kb-faq-llm.ts';
 import { spawnKbImportWorker } from './kb-import-runner.ts';
+import { resolveKbFaqWorkflowAgent } from '../builtin-agents/resolve-workflow-agent.ts';
+import { runSyncAgent } from '../builtin-agents/sync-agent-runner.ts';
 import {
   createKbImportJob,
   expandDocumentIdsForImport,
@@ -407,17 +408,20 @@ export async function polishKbFaqAnswer(
   if (!question || !answer) throw new Error('Question and answer are required');
 
   const settings = (kb.faqSettings ?? {}) as KbFaqSettings;
-  const modelId = settings.polish_model_config_id;
-  if (!modelId) throw new Error('Configure a polish model in FAQ settings');
 
-  const polished = await polishFaqAnswerWithModel({
-    modelConfigId: modelId,
-    promptTemplate: settings.polish_prompt ?? '',
-    question,
-    answer,
+  const result = await runSyncAgent({
+    workflowKey: 'faq_polish',
+    variables: { question, answer },
+    override: { agentDefId: settings.polish_agent_def_id ?? null },
+    context: {
+      triggerType: 'api',
+      resourceType: 'knowledge_base',
+      resourceId: knowledgeBaseId,
+      inputSummary: question.slice(0, 200),
+    },
   });
 
-  return { answer: polished };
+  return { answer: String(result.parsed) };
 }
 
 export async function startKbFaqExtractJob(input: {
@@ -431,9 +435,12 @@ export async function startKbFaqExtractJob(input: {
   if (kb.type !== 'faq') throw new Error('Extract is only for FAQ knowledge bases');
 
   const settings = (kb.faqSettings ?? {}) as KbFaqSettings;
-  if (!settings.extraction_model_config_id) {
-    throw new Error('Configure an extraction model in FAQ settings');
+  try {
+    await resolveKbFaqWorkflowAgent(input.knowledgeBaseId, 'faq_extract');
+  } catch {
+    throw new Error('Configure an FAQ extraction agent in settings');
   }
+  void settings;
 
   const pipeline = await getPipelineConfigByPipelineName(FAQ_KB_EXTRACT_PIPELINE_NAME);
   if (!pipeline || !pipeline.isEnabled) {

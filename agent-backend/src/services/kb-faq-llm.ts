@@ -1,4 +1,5 @@
 import { resolveModelCliParams } from './model-cli-params.ts';
+import { callModelChatCompletion } from './model-chat-completions.ts';
 
 function applyTemplate(template: string, vars: Record<string, string>): string {
   let out = template;
@@ -18,39 +19,22 @@ export async function chatCompletionText(input: {
     expectedApiType: 'chat-completions',
   });
 
-  const baseUrl = params.base_url.replace(/\/$/, '');
-  const url = `${baseUrl}/chat/completions`;
-
   const messages: Array<{ role: string; content: string }> = [];
   if (input.systemPrompt?.trim()) {
     messages.push({ role: 'system', content: input.systemPrompt.trim() });
   }
   messages.push({ role: 'user', content: input.userPrompt });
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${params.api_key}`,
-    },
-    body: JSON.stringify({
-      model: params.model_name,
-      messages,
-      temperature: 0.2,
-    }),
+  return callModelChatCompletion({
+    baseUrl: params.base_url,
+    modelName: params.model_name,
+    apiKey: params.api_key,
+    configName: params.config_name,
+    provider: params.provider,
+    messages,
+    temperature: 0.2,
+    extraConfig: params.extra_config,
   });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Chat completion failed (${response.status}): ${text.slice(0, 300)}`);
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) throw new Error('Empty response from chat model');
-  return content;
 }
 
 export async function polishFaqAnswerWithModel(input: {
