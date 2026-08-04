@@ -1,4 +1,4 @@
-import { extensionFromFilename } from '../storage/session-files/constants.ts';
+import { extensionFromFilename, isSessionFileImage } from '../storage/session-files/constants.ts';
 
 export type ExtractResult = {
   text: string;
@@ -63,6 +63,10 @@ export async function extractSessionFileText(params: {
     }
   }
 
-  // Phase 3 extension point: image/* → default VLM describe/OCR
+  if (isSessionFileImage(params.filename)) {
+    const { extractSessionImageWithVision } = await import('./session-file-vision-extract.ts');
+    return extractSessionImageWithVision(params);
+  }
+
   throw new Error(`Unsupported session file extension: ${ext || '(none)'}`);
 }

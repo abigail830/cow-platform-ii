@@ -4,17 +4,15 @@ import {
   type AgentPromptImage,
   type ChatSendPayload,
 } from '../chat/prompt-images.ts';
-import type { SessionFile } from '../chat/session-files.ts';
-import { SESSION_FILE_ACCEPT, composerReadySessionFiles, hasProcessingSessionFiles } from '../chat/session-files.ts';
+import {
+  SESSION_FILE_ACCEPT,
+  composerReadySessionFiles,
+  hasProcessingSessionFiles,
+  type SessionFile,
+} from '../chat/session-files.ts';
 import { ChatImageChip } from './ChatImageChip.tsx';
 import { SessionFileChip } from './SessionFileChip.tsx';
-import {
-  IconFileText,
-  IconPaperclip,
-  IconSend,
-  IconStop,
-  IconStopSpinner,
-} from './icons/ChatIcons.tsx';
+import { IconPaperclip, IconSend, IconStop, IconStopSpinner } from './icons/ChatIcons.tsx';
 
 type PendingPromptImage = {
   id: string;
@@ -40,7 +38,7 @@ type ChatComposerProps = {
   busy?: boolean;
   canceling?: boolean;
   placeholder?: string;
-  /** When false, image/document attach buttons are disabled (e.g. new-chat landing before a session exists). */
+  /** When false, attach buttons are disabled (e.g. new-chat landing before a session exists). */
   attachmentsEnabled?: boolean;
   sessionFiles?: SessionFilesComposerProps;
 };
@@ -66,14 +64,14 @@ export function ChatComposer({
   attachmentsEnabled = true,
   sessionFiles,
 }: ChatComposerProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const documentInputRef = useRef<HTMLInputElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
   const [pendingImages, setPendingImages] = useState<PendingPromptImage[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   const hasSessionFiles = (sessionFiles?.files.length ?? 0) > 0;
-  const sessionFilesProcessing = sessionFiles?.processing ?? hasProcessingSessionFiles(sessionFiles?.files ?? []);
+  const sessionFilesProcessing =
+    sessionFiles?.processing ?? hasProcessingSessionFiles(sessionFiles?.files ?? []);
   const hasReadySessionFiles = composerReadySessionFiles(sessionFiles?.files ?? []).length > 0;
   const canSend =
     !disabled &&
@@ -81,12 +79,14 @@ export function ChatComposer({
     !sessionFilesProcessing &&
     (value.trim().length > 0 || pendingImages.length > 0 || hasReadySessionFiles);
 
-  const attachDisabled = disabled || busy || !attachmentsEnabled;
-  const attachDisabledTitle = attachmentsEnabled
-    ? undefined
-    : '请先发送消息开始会话后再附加文件';
+  const attachDisabled = disabled || busy || !attachmentsEnabled || !sessionFiles || sessionFilesProcessing;
+  const attachDisabledTitle = !attachmentsEnabled
+    ? '请先发送消息开始会话后再附加文件'
+    : sessionFilesProcessing
+      ? 'Wait for attachments to finish processing'
+      : undefined;
 
-  async function addImageFiles(files: FileList | File[]) {
+  async function addPastedImageFiles(files: FileList | File[]) {
     if (!attachmentsEnabled) return;
     setAttachmentError(null);
     const additions: PendingPromptImage[] = [];
@@ -144,7 +144,7 @@ export function ChatComposer({
     if (imageFiles.length === 0) return;
 
     event.preventDefault();
-    await addImageFiles(imageFiles);
+    await addPastedImageFiles(imageFiles);
   }
 
   return (
@@ -191,60 +191,31 @@ export function ChatComposer({
           <button
             type="button"
             className="attach-btn"
-            title={attachDisabledTitle ?? 'Attach image'}
-            aria-label="Attach image"
+            title={attachDisabledTitle ?? 'Attach files'}
+            aria-label="Attach files"
             disabled={attachDisabled}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => attachInputRef.current?.click()}
           >
             <IconPaperclip />
           </button>
-          <button
-            type="button"
-            className="attach-btn attach-btn-document"
-            title={attachDisabledTitle ?? 'Attach document'}
-            aria-label="Attach document"
-            disabled={attachDisabled || !sessionFiles || sessionFiles.processing}
-            onClick={() => {
-              if (sessionFiles) documentInputRef.current?.click();
-            }}
-          >
-            <IconFileText />
-          </button>
           <input
-            ref={fileInputRef}
+            ref={attachInputRef}
             className="chat-file-input"
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept={SESSION_FILE_ACCEPT}
             multiple
             hidden
             onChange={(event) => {
               const files = event.target.files;
-              if (files?.length) void addImageFiles(files);
+              if (files?.length && sessionFiles) {
+                void sessionFiles.onUpload(Array.from(files)).catch((error) => {
+                  const message = error instanceof Error ? error.message : 'Failed to upload file.';
+                  setAttachmentError(message);
+                });
+              }
               event.target.value = '';
             }}
           />
-          {sessionFiles ? (
-            <input
-              ref={documentInputRef}
-              className="chat-file-input"
-              type="file"
-              accept={SESSION_FILE_ACCEPT}
-              multiple
-              hidden
-              onChange={(event) => {
-                const files = event.target.files;
-                if (files?.length) {
-                  void sessionFiles.onUpload(Array.from(files)).catch((error) => {
-                    const message = error instanceof Error ? error.message : 'Failed to upload document.';
-                    setAttachmentError(message);
-                  });
-                }
-                event.target.value = '';
-              }}
-            />
-          ) : (
-            <input ref={documentInputRef} className="chat-file-input" type="file" hidden tabIndex={-1} />
-          )}
           <textarea
             value={value}
             onChange={(event) => onChange(event.target.value)}

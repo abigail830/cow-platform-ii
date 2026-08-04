@@ -3,6 +3,8 @@ export const SESSION_FILE_MAX_PER_INSTANCE = 10;
 export const SESSION_FILE_READ_MAX_CHARS = 2_000_000;
 export const SESSION_FILE_DEFAULT_TTL_DAYS = 30;
 
+export const SESSION_FILE_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
+
 export const SESSION_FILE_EXTENSIONS = new Set([
   'md',
   'markdown',
@@ -13,7 +15,12 @@ export const SESSION_FILE_EXTENSIONS = new Set([
   'xls',
   'pptx',
   'pdf',
+  ...SESSION_FILE_IMAGE_EXTENSIONS,
 ]);
+
+export function isSessionFileImage(filename: string): boolean {
+  return SESSION_FILE_IMAGE_EXTENSIONS.has(extensionFromFilename(filename));
+}
 
 export function extensionFromFilename(filename: string): string {
   const idx = filename.lastIndexOf('.');
@@ -46,6 +53,15 @@ export function mimeTypeForSessionFile(filename: string): string {
       return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
     case 'pdf':
       return 'application/pdf';
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
     default:
       return 'application/octet-stream';
   }

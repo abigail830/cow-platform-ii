@@ -26,5 +26,7 @@ describe('agent-context', () => {
     const result = augmentInstructionsWithAgentContext('Base prompt.', undefined, fixed);
     assert.match(result, /## Session document attachments/);
     assert.match(result, /list_session_files/);
+    assert.match(result, /paperclip/);
+    assert.match(result, /vision path/);
   });
 });

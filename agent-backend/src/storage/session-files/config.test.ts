@@ -18,7 +18,8 @@ test('resolveSessionFilesBackend honors explicit local', () => {
   else process.env.SESSION_FILES_BACKEND = previous;
 });
 
-test('isAllowedSessionFile accepts document extensions only', () => {
+test('isAllowedSessionFile accepts documents and images', () => {
   assert.equal(isAllowedSessionFile('a.pdf'), true);
-  assert.equal(isAllowedSessionFile('a.png'), false);
+  assert.equal(isAllowedSessionFile('a.png'), true);
+  assert.equal(isAllowedSessionFile('a.exe'), false);
 });

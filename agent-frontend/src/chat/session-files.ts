@@ -25,7 +25,7 @@ export function composerReadySessionFiles(files: SessionFile[]): SessionFile[] {
 }
 
 export const SESSION_FILE_ACCEPT =
-  '.md,.markdown,.txt,.csv,.docx,.xlsx,.xls,.pptx,.pdf,application/pdf,text/plain,text/markdown,text/csv';
+  '.md,.markdown,.txt,.csv,.docx,.xlsx,.xls,.pptx,.pdf,.png,.jpg,.jpeg,.webp,.gif,application/pdf,text/plain,text/markdown,text/csv,image/png,image/jpeg,image/webp,image/gif';
 
 const SESSION_FILES_MARKER = 'SESSION_FILES';
 

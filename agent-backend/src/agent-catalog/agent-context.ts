@@ -56,5 +56,6 @@ Users may attach documents to this chat (shown in a \`SESSION_FILES\` block with
 - Use \`list_session_files\` and \`read_session_file\` to load content. Do not guess file contents.
 - If prior tool results in the conversation already contain the needed excerpts, reuse them; otherwise read again (including with \`offset\` when truncated).
 - Use \`search_session_files\` to locate keywords across multiple attachments.
-- Image attachments (if any) are separate from session documents and use the vision path when present in the message.`;
+- Files attached via the paperclip (including images) are session documents: content comes from \`read_session_file\` (upload-time VLM/OCR text for images).
+- Images pasted directly into the message (not in SESSION_FILES) use the vision path in the user turn; treat those separately from session file images.`;
 }

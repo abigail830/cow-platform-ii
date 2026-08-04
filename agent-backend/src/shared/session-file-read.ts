@@ -1,5 +1,9 @@
 import { getSessionFile } from '../storage/session-files/repository.ts';
 import { SESSION_FILE_READ_MAX_CHARS } from '../storage/session-files/constants.ts';
+import {
+  ensureSessionFileContentCached,
+  readSessionFileCachedText,
+} from '../storage/session-files/session-file-service.ts';
 
 export type SessionFileReadResult = {
   fileId: string;
@@ -13,10 +17,6 @@ export type SessionFileReadResult = {
   warnings?: string[];
   text: string;
 };
-import {
-  ensureSessionFileContentCached,
-  readSessionFileCachedText,
-} from '../storage/session-files/session-file-service.ts';
 
 export async function readSessionFileText(options: {
   instanceId: string;
@@ -35,6 +35,10 @@ export async function readSessionFileText(options: {
 
   await ensureSessionFileContentCached(options.instanceId, options.fileId);
   const fullText = (await readSessionFileCachedText(options.instanceId, options.fileId)) ?? '';
+  const warnings: string[] = [];
+  if (record.mimeType.startsWith('image/')) {
+    warnings.push('image_vision_extracted');
+  }
 
   return sliceReadResult({
     fileId: record.id,
@@ -43,6 +47,7 @@ export async function readSessionFileText(options: {
     fullText,
     offset,
     limit,
+    warnings,
   });
 }
 
