@@ -150,7 +150,8 @@ function normalizeBuiltModules(
   return { agents, workflows, channelHandlers };
 }
 
-async function createDefaultEnvFactory(request: Request) {
+/** Must stay sync: Flue expects `createDefaultEnv` itself to be a function, not a Promise. */
+function createDefaultEnvFactory(request: Request) {
   const openkmsEnv = buildOpenKmsSandboxEnv(request);
   return async function createDefaultEnv() {
     const fs = new InMemoryFs();
