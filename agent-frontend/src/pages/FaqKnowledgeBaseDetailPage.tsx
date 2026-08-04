@@ -299,7 +299,9 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
     activeJob,
     setActiveJob,
     listInProgress: listIndexInProgress,
-    onRefresh: () => load({ silent: true }),
+    onRefresh: async () => {
+      await load({ silent: true });
+    },
     onJobTerminal: handleFaqExtractJobTerminal,
   });
 
