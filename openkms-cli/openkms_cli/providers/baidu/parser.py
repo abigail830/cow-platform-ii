@@ -487,12 +487,9 @@ def _download_bytes(url: str, *, session: requests.Session | None = None, timeou
 
 
 def _rewrite_markdown_image_urls(markdown: str, url_to_rel: dict[str, str]) -> str:
-    if not url_to_rel:
-        return markdown
-    out = markdown
-    for url, rel in sorted(url_to_rel.items(), key=lambda kv: len(kv[0]), reverse=True):
-        out = out.replace(url, rel)
-    return out
+    from openkms_cli.parse.markdown_images import rewrite_markdown_image_urls
+
+    return rewrite_markdown_image_urls(markdown, url_to_rel)
 
 
 def _layout_content(
@@ -570,7 +567,7 @@ def _save_block_image(
     *,
     session: requests.Session | None = None,
 ) -> tuple[str, str] | None:
-    """Download image bytes; return (markdown rel name, storage path under markdown_out/)."""
+    """Download image bytes; return (markdown rel path, storage path under markdown_out/)."""
     try:
         img_bytes = _download_bytes(data_url, session=session)
     except Exception:
@@ -579,7 +576,8 @@ def _save_block_image(
     md_dir = out_dir / "markdown_out"
     md_dir.mkdir(parents=True, exist_ok=True)
     (md_dir / name).write_bytes(img_bytes)
-    return name, f"{file_hash}/markdown_out/{name}"
+    rel = f"markdown_out/{name}"
+    return rel, f"{file_hash}/{rel}"
 
 
 def _flatten_baidu_layouts(baidu_json: dict[str, Any]) -> list[dict[str, Any]]:

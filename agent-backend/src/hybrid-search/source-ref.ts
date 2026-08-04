@@ -23,7 +23,14 @@ export type SourceRef = {
   original_url: string;
   /** Primary citation link: original preview for udoc types, parsed markdown otherwise. */
   preview_url: string;
+  /** Ready-to-paste markdown citation for agent answers. */
+  citation_markdown: string;
 };
+
+export function buildCitationMarkdown(documentName: string, previewUrl: string): string {
+  const escaped = documentName.replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+  return `[${escaped}](${previewUrl})`;
+}
 
 const UDOC_FILE_TYPES = new Set([
   'PDF',
@@ -122,5 +129,9 @@ export function buildSourceRef(input: {
     parsed_url: parsedUrl,
     original_url: originalUrl,
     preview_url: supportsUdocViewer(input.fileType) ? originalUrl : parsedUrl,
+    citation_markdown: buildCitationMarkdown(
+      documentName,
+      supportsUdocViewer(input.fileType) ? originalUrl : parsedUrl,
+    ),
   };
 }

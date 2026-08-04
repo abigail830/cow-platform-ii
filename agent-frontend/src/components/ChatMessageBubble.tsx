@@ -5,7 +5,8 @@ import { getCachedPromptImagePreviews } from '../chat/prompt-image-preview-cache
 import { isImageMediaType } from '../chat/prompt-images.ts';
 import { parseSessionFilesManifest, stripSessionFilesManifest } from '../chat/session-files.ts';
 import { assistantMessageText, userMessageText } from '../chat/groupMessages.ts';
-import { normalizeAttachmentDownloadUrl, buildArtifactHrefResolver, extractPublishedArtifacts } from '../chat/published-artifacts.ts';
+import { extractPublishedArtifacts, buildArtifactHrefResolver, normalizeAttachmentDownloadUrl } from '../chat/published-artifacts.ts';
+import { buildKbCitationHrefResolver, extractKbCitations } from '../chat/kb-citations.ts';
 import { ChatImageChip } from './ChatImageChip.tsx';
 import { SessionFileChip } from './SessionFileChip.tsx';
 import { MessageCopyButton } from './MessageCopyButton.tsx';
@@ -92,10 +93,11 @@ export function AssistantMessageBubble({
   showCopy = true,
 }: AssistantMessageBubbleProps) {
   const text = assistantMessageText(messages);
-  const resolveLinkHref = useMemo(
-    () => buildArtifactHrefResolver(extractPublishedArtifacts(messages)),
-    [messages],
-  );
+  const resolveLinkHref = useMemo(() => {
+    const artifactResolver = buildArtifactHrefResolver(extractPublishedArtifacts(messages));
+    const kbResolver = buildKbCitationHrefResolver(extractKbCitations(messages));
+    return (href: string, label?: string) => kbResolver(artifactResolver(href, label), label);
+  }, [messages]);
 
   return (
     <ChatLinkResolveContext.Provider value={resolveLinkHref}>

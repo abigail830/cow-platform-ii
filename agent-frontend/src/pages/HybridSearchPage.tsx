@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import { ChevronDown, CircleHelp, Loader2, Search, Settings2 } from 'lucide-react';
+import { CircleHelp, Loader2, Search, Settings2 } from 'lucide-react';
 import {
   getHybridSearchPreferences,
   groupKnowledgeBasesByEmbedding,
@@ -16,7 +16,6 @@ import { listModelConfigs } from '../api/models.ts';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { HybridSearchKbMultiSelect } from '../components/HybridSearchKbMultiSelect.tsx';
 import { HybridSearchSourcePreview } from '../components/HybridSearchSourcePreview.tsx';
-import { Markdown } from '../chat/Markdown.tsx';
 import { SourceRefLinks } from '../components/SourceRefLinks.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -178,21 +177,13 @@ function ResultCard({
   activePreviewKey?: string | null;
   isPreviewTarget?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const debug = item.retrieval_debug;
 
   return (
     <article
-      className={`hybrid-search-result-card${expanded ? ' is-expanded' : ''}${
-        isPreviewTarget ? ' is-preview-target' : ''
-      }`}
+      className={`hybrid-search-result-card${isPreviewTarget ? ' is-preview-target' : ''}`}
     >
-      <button
-        type="button"
-        className="hybrid-search-result-summary"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((current) => !current)}
-      >
+      <div className="hybrid-search-result-summary">
         <div className="hybrid-search-result-summary-left">
           <div className="hybrid-search-result-summary-line1">
             <span
@@ -203,7 +194,7 @@ function ResultCard({
             <span className="hybrid-search-result-kb">{item.knowledge_base_name}</span>
           </div>
           {item.source ? (
-            <div className="hybrid-search-result-summary-line2" onClick={(event) => event.stopPropagation()}>
+            <div className="hybrid-search-result-summary-line2">
               <SourceRefLinks
                 source={item.source}
                 onPreview={
@@ -223,19 +214,8 @@ function ResultCard({
           <strong className="hybrid-search-result-score" title="Final score">
             {formatScore(item.score)}
           </strong>
-          <ChevronDown
-            {...iconProps({ className: 'hybrid-search-result-chevron' })}
-            aria-hidden
-          />
         </div>
-      </button>
-      {expanded ? (
-        <div className="hybrid-search-result-body">
-          <div className="kb-item-markdown hybrid-search-result-markdown">
-            <Markdown content={item.content} />
-          </div>
-        </div>
-      ) : null}
+      </div>
     </article>
   );
 }

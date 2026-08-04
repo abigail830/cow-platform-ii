@@ -474,9 +474,22 @@ def _finalize_aliyun(
     else:
         markdown = (markdown_override or "").strip() or layouts_to_markdown(layouts)
 
+    file_hash = ctx["document"]["file_hash"]
+    hash_dir = out_base / file_hash
+    hash_dir.mkdir(parents=True, exist_ok=True)
+
+    from openkms_cli.parse.markdown_images import materialize_remote_markdown_images
+
+    # DocMind embeds short-lived OSS image URLs; persist them into the document bundle.
+    markdown = materialize_remote_markdown_images(
+        markdown,
+        file_hash=file_hash,
+        out_dir=hash_dir,
+    )
+
     result = build_result_from_layouts(
         layouts,
-        file_hash=ctx["document"]["file_hash"],
+        file_hash=file_hash,
         status_data=status_data,
         markdown_override=markdown,
     )
@@ -485,8 +498,6 @@ def _finalize_aliyun(
         raise AliyunDocmindError(
             f"Aliyun parse produced no markdown (layouts={len(layouts)}, task_id={task_id})"
         )
-    hash_dir = out_base / result["file_hash"]
-    hash_dir.mkdir(parents=True, exist_ok=True)
     (hash_dir / "result.json").write_text(
         json.dumps(result, indent=2, ensure_ascii=False),
         encoding="utf-8",

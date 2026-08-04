@@ -53,6 +53,7 @@ export type SourceRef = {
   parsed_url: string;
   original_url: string;
   preview_url?: string;
+  citation_markdown?: string;
 };
 
 export type HybridSearchResult = {

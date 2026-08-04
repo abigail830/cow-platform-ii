@@ -1809,6 +1809,12 @@ textarea {
   color: #e85c0f;
 }
 
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+}
+
 .artifact-download-link {
   display: inline-flex;
   align-items: center;
@@ -5940,11 +5946,7 @@ textarea {
   border: none;
   background: transparent;
   text-align: left;
-  cursor: pointer;
-}
-
-.hybrid-search-result-summary:hover {
-  background: #f8fafc;
+  cursor: default;
 }
 
 .hybrid-search-result-summary-left {

@@ -4,7 +4,21 @@ import { Loader2 } from 'lucide-react';
 import { getDocumentDownloadUrl } from '../api/documents.ts';
 import { iconProps } from './icons/icon-props.ts';
 
-const PAGE_NAV_MAX_MS = 5_000;
+const PAGE_NAV_GUARD_MS = 8_000;
+const PAGE_NAV_RETRY_MS = 120;
+
+function navigateToViewerPage(viewer: UDocViewer, targetPage: number): void {
+  if (targetPage <= 0) return;
+
+  try {
+    viewer.goToDestination({
+      pageIndex: targetPage - 1,
+      display: { type: 'fit' },
+    });
+  } catch {
+    viewer.goToPage(targetPage);
+  }
+}
 
 function bindViewerPageNavigation(
   viewer: UDocViewer,
@@ -14,52 +28,49 @@ function bindViewerPageNavigation(
   if (targetPage <= 0) return () => {};
 
   let disposed = false;
-  let rafId = 0;
-  let timeoutId = 0;
-  const startedAt = performance.now();
+  let retryTimer = 0;
+  const guardUntil = performance.now() + PAGE_NAV_GUARD_MS;
 
   const navigate = () => {
     if (disposed || cancelled()) return;
-    viewer.goToPage(targetPage);
+    navigateToViewerPage(viewer, targetPage);
   };
 
-  const syncUntilReached = () => {
+  const scheduleNavigate = (delayMs = PAGE_NAV_RETRY_MS) => {
     if (disposed || cancelled()) return;
-    if (viewer.currentPage === targetPage) return;
-    if (performance.now() - startedAt > PAGE_NAV_MAX_MS) return;
-
-    navigate();
-    rafId = requestAnimationFrame(syncUntilReached);
-  };
-
-  const start = () => {
-    if (disposed || cancelled()) return;
-    cancelAnimationFrame(rafId);
-    window.clearTimeout(timeoutId);
-    navigate();
-    rafId = requestAnimationFrame(syncUntilReached);
+    if (performance.now() > guardUntil) return;
+    window.clearTimeout(retryTimer);
+    retryTimer = window.setTimeout(navigate, delayMs);
   };
 
   const unsubViewport = viewer.on('viewport:change', () => {
     if (disposed || cancelled()) return;
     if (viewer.currentPage !== targetPage) {
-      start();
+      scheduleNavigate();
+    }
+  });
+
+  const unsubPageChange = viewer.on('page:change', ({ page }) => {
+    if (disposed || cancelled()) return;
+    if (page !== targetPage) {
+      // Udoc restores scroll position on resize and can reset page to 1 — re-apply after its layout pass.
+      scheduleNavigate();
     }
   });
 
   const unsubLoad = viewer.isLoaded
     ? null
     : viewer.on('document:load', () => {
-        start();
+        scheduleNavigate(0);
       });
 
-  timeoutId = window.setTimeout(start, 0);
+  scheduleNavigate(0);
 
   return () => {
     disposed = true;
-    cancelAnimationFrame(rafId);
-    window.clearTimeout(timeoutId);
+    window.clearTimeout(retryTimer);
     unsubViewport();
+    unsubPageChange();
     unsubLoad?.();
   };
 }
@@ -74,20 +85,22 @@ export function DocumentUdocViewer({
   searchQuery?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const viewerRef = useRef<UDocViewer | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [viewerInstance, setViewerInstance] = useState<UDocViewer | null>(null);
 
   useEffect(() => {
     let disposed = false;
     let client: UDocClient | null = null;
     let viewer: UDocViewer | null = null;
 
+    setViewerInstance(null);
+    setLoading(true);
+    setError('');
+
     async function mount() {
       const container = containerRef.current;
       if (!container) return;
-      setLoading(true);
-      setError('');
 
       try {
         const { url } = await getDocumentDownloadUrl(documentId);
@@ -99,7 +112,7 @@ export function DocumentUdocViewer({
         viewer = await client.createViewer({ container });
         await viewer.load(new Uint8Array(buffer));
         if (!disposed) {
-          viewerRef.current = viewer;
+          setViewerInstance(viewer);
         }
       } catch (err) {
         if (!disposed) {
@@ -116,13 +129,12 @@ export function DocumentUdocViewer({
       disposed = true;
       viewer?.destroy();
       client?.destroy();
-      viewerRef.current = null;
+      setViewerInstance(null);
     };
   }, [documentId]);
 
   useEffect(() => {
-    const viewer = viewerRef.current;
-    if (loading || !viewer) return;
+    if (loading || !viewerInstance) return;
 
     const cancelled = () => false;
     const targetPage = page ?? 0;
@@ -131,22 +143,22 @@ export function DocumentUdocViewer({
     let observer: ResizeObserver | null = null;
 
     if (targetPage > 0) {
-      cleanupNavigation = bindViewerPageNavigation(viewer, targetPage, cancelled);
+      cleanupNavigation = bindViewerPageNavigation(viewerInstance, targetPage, cancelled);
 
       const container = containerRef.current;
       if (container) {
         observer = new ResizeObserver(() => {
           window.clearTimeout(resizeTimer);
           resizeTimer = window.setTimeout(() => {
-            if (viewer.currentPage !== targetPage) {
-              viewer.goToPage(targetPage);
+            if (viewerInstance.currentPage !== targetPage) {
+              navigateToViewerPage(viewerInstance, targetPage);
             }
-          }, 80);
+          }, PAGE_NAV_RETRY_MS);
         });
         observer.observe(container);
       }
     } else if (searchQuery?.trim()) {
-      void viewer.search(searchQuery.trim());
+      void viewerInstance.search(searchQuery.trim());
     }
 
     return () => {
@@ -154,7 +166,7 @@ export function DocumentUdocViewer({
       observer?.disconnect();
       window.clearTimeout(resizeTimer);
     };
-  }, [loading, page, searchQuery]);
+  }, [loading, viewerInstance, page, searchQuery]);
 
   return (
     <div className="document-udoc-viewer">

@@ -81,7 +81,7 @@ export function normalizeAttachmentDownloadUrl(url: string): string {
   return trimmed;
 }
 
-export function buildArtifactHrefResolver(artifacts: PublishedArtifact[]): (href: string) => string {
+export function buildArtifactHrefResolver(artifacts: PublishedArtifact[]): (href: string, label?: string) => string {
   const byFilename = new Map<string, string>();
   for (const artifact of artifacts) {
     const normalized = normalizeAttachmentDownloadUrl(artifact.downloadUrl);
@@ -89,7 +89,7 @@ export function buildArtifactHrefResolver(artifacts: PublishedArtifact[]): (href
     byFilename.set(artifact.filename.toLowerCase(), normalized);
   }
 
-  return (href: string) => {
+  return (href: string, _label?: string) => {
     const trimmed = href.trim();
     if (!trimmed) return href;
 

@@ -29,12 +29,19 @@ function extractText(node: ReactNode): string {
 
 function buildMarkdownComponents(
   headingIds: boolean,
-  resolveLinkHref?: (href: string) => string,
+  resolveLinkHref?: (href: string, label?: string) => string,
 ): Components {
   const link = ({ href, children, ...props }: { href?: string; children?: ReactNode }) => {
-    const resolvedHref = href && resolveLinkHref ? resolveLinkHref(href) : href;
+    const label = extractText(children).trim();
+    const resolvedHref = href && resolveLinkHref ? resolveLinkHref(href, label || undefined) : href;
+    const internal = resolvedHref?.startsWith('/') ?? false;
     return (
-      <a href={resolvedHref} target="_blank" rel="noopener noreferrer" {...props}>
+      <a
+        href={resolvedHref}
+        target={internal ? undefined : '_blank'}
+        rel={internal ? undefined : 'noopener noreferrer'}
+        {...props}
+      >
         {children}
       </a>
     );

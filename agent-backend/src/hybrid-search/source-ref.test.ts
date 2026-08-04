@@ -37,6 +37,10 @@ describe('buildSourceRef', () => {
     assert.match(ref!.original_url, /view=original/);
     assert.doesNotMatch(ref!.original_url, /highlight=1/);
     assert.equal(ref!.preview_url, ref!.original_url);
+    assert.equal(
+      ref!.citation_markdown,
+      '[Policy.docx](/knowledge/documents/doc-1?view=original&node=n-42&line=120&page=3&heading=Section+A)',
+    );
   });
 
   it('uses parsed url as preview for non-udoc types', () => {

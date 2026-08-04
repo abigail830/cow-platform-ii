@@ -20,6 +20,7 @@ export type SourceRef = {
   parsed_url: string;
   original_url: string;
   preview_url?: string;
+  citation_markdown?: string;
 };
 
 const UDOC_FILE_TYPES = new Set([
