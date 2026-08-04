@@ -36,6 +36,23 @@ describe('buildSourceRef', () => {
     assert.match(ref!.parsed_url, /highlight=1/);
     assert.match(ref!.original_url, /view=original/);
     assert.doesNotMatch(ref!.original_url, /highlight=1/);
+    assert.equal(ref!.preview_url, ref!.original_url);
+  });
+
+  it('uses parsed url as preview for non-udoc types', () => {
+    const ref = buildSourceRef({
+      chunkId: 'chunk-1',
+      knowledgeBaseId: 'kb-1',
+      sourceType: 'chunk',
+      documentId: 'doc-1',
+      documentName: 'Notes.md',
+      fileType: 'md',
+      chunkIndex: 0,
+      chunkMetadata: { page_num: 1 },
+    });
+
+    assert.ok(ref);
+    assert.equal(ref!.preview_url, ref!.parsed_url);
   });
 
   it('returns null without document id', () => {

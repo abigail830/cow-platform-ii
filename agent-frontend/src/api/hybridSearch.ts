@@ -52,6 +52,7 @@ export type SourceRef = {
   locator: SourceLocator | null;
   parsed_url: string;
   original_url: string;
+  preview_url: string;
 };
 
 export type HybridSearchResult = {

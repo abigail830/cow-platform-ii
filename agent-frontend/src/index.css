@@ -4249,6 +4249,10 @@ textarea {
   min-height: 28rem;
 }
 
+.document-detail-split--original-preview .document-detail-content {
+  flex: 1 1 100%;
+}
+
 .document-citation-highlight {
   background: var(--brand-orange-soft);
   outline: 2px solid var(--brand-orange-muted);
@@ -4947,6 +4951,10 @@ textarea {
   white-space: nowrap;
 }
 
+.kb-detail-meta-col {
+  font-weight: 300;
+}
+
 .kb-status-badge {
   display: inline-block;
   width: auto;
@@ -5123,11 +5131,12 @@ textarea {
 
 .kb-detail-table .kb-item-actions-col {
   width: 7rem;
-  padding-right: 1.5rem;
+  padding-right: 0.75rem;
+  text-align: left;
 }
 
 .kb-detail-table .kb-item-actions-col .row-actions {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .kb-detail-table .kb-item-detail-hint-col {

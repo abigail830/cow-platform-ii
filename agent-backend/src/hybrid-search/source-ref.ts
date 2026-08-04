@@ -21,6 +21,8 @@ export type SourceRef = {
   locator: SourceLocator | null;
   parsed_url: string;
   original_url: string;
+  /** Primary citation link: original preview for udoc types, parsed markdown otherwise. */
+  preview_url: string;
 };
 
 const UDOC_FILE_TYPES = new Set([
@@ -105,6 +107,8 @@ export function buildSourceRef(input: {
 
   const locator = readLocator(input.chunkMetadata);
   const documentName = input.documentName?.trim() || 'Document';
+  const parsedUrl = buildDocumentUrl(input.documentId, 'parsed', locator, true);
+  const originalUrl = buildDocumentUrl(input.documentId, 'original', locator, false);
 
   return {
     document_id: input.documentId,
@@ -115,7 +119,8 @@ export function buildSourceRef(input: {
     chunk_index: input.chunkIndex ?? null,
     source_type: input.sourceType,
     locator,
-    parsed_url: buildDocumentUrl(input.documentId, 'parsed', locator, true),
-    original_url: buildDocumentUrl(input.documentId, 'original', locator, false),
+    parsed_url: parsedUrl,
+    original_url: originalUrl,
+    preview_url: supportsUdocViewer(input.fileType) ? originalUrl : parsedUrl,
   };
 }

@@ -14,7 +14,7 @@ import {
   type KnowledgeBase,
 } from '../api/knowledgeBases.ts';
 import { listModelConfigs, type ModelConfig } from '../api/models.ts';
-import { IconRun } from '../components/AdminActionIcons.tsx';
+import { IconDelete, IconRun } from '../components/AdminActionIcons.tsx';
 import { KbImportModal } from '../components/KbImportModal.tsx';
 import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
 import { KbItemDeleteConfirmModal } from '../components/KbItemDeleteConfirmModal.tsx';
@@ -70,6 +70,19 @@ const RERUN_DOCUMENT_TITLE =
 const REINDEX_ALL_TITLE =
   'Reindex every indexed document: delete all existing chunks and embeddings, then rebuild from source markdown.';
 
+type DeleteConfirmState =
+  | { mode: 'single'; documentId: string; documentName: string }
+  | { mode: 'bulk'; documentIds: string[] }
+  | null;
+
+function isReindexableStatus(status: KbIndexedDocument['status']): boolean {
+  return status === 'indexed' || status === 'failed';
+}
+
+function isRemovableStatus(status: KbIndexedDocument['status']): boolean {
+  return status === 'indexed' || status === 'indexing' || status === 'failed';
+}
+
 function ListLoadingState({ label }: { label: string }) {
   return (
     <p className="session-explorer-loading" role="status" aria-live="polite">
@@ -96,12 +109,12 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeJob, setActiveJob] = useState<KbImportJob | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    documentId: string;
-    documentName: string;
-  } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(() => new Set());
   const [rerunningDocId, setRerunningDocId] = useState<string | null>(null);
+  const [batchReindexing, setBatchReindexing] = useState(false);
   const [reindexingAll, setReindexingAll] = useState(false);
   const [embeddingModels, setEmbeddingModels] = useState<ModelConfig[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
@@ -122,6 +135,16 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   );
 
   const canImport = Boolean(canWrite && kb?.capabilities.import);
+  const selectionCount = selectedDocumentIds.size;
+  const allPageSelected = docs.length > 0 && docs.every((doc) => selectedDocumentIds.has(doc.document_id));
+  const selectedReindexableCount = useMemo(
+    () => docs.filter((doc) => selectedDocumentIds.has(doc.document_id) && isReindexableStatus(doc.status)).length,
+    [docs, selectedDocumentIds],
+  );
+  const selectedRemovableCount = useMemo(
+    () => docs.filter((doc) => selectedDocumentIds.has(doc.document_id) && isRemovableStatus(doc.status)).length,
+    [docs, selectedDocumentIds],
+  );
 
   useEffect(() => {
     selectedDocumentIdRef.current = selectedDocumentId;
@@ -144,6 +167,13 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
         setSelectedDocumentId(null);
         setDetailChunks(null);
       }
+      setSelectedDocumentIds((prev) => {
+        const next = new Set<string>();
+        for (const id of prev) {
+          if (docResult.items.some((doc) => doc.document_id === id)) next.add(id);
+        }
+        return next;
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load knowledge base';
       if (message.toLowerCase().includes('forbidden') || message.includes('403')) {
@@ -200,6 +230,49 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
       cancelled = true;
     };
   }, [selectedDocumentId, knowledgeBaseId]);
+
+  function toggleDocumentSelection(documentId: string, checked: boolean) {
+    setSelectedDocumentIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(documentId);
+      else next.delete(documentId);
+      return next;
+    });
+  }
+
+  function toggleSelectAllPage(checked: boolean) {
+    if (!checked) {
+      setSelectedDocumentIds(new Set());
+      return;
+    }
+    setSelectedDocumentIds(new Set(docs.map((doc) => doc.document_id)));
+  }
+
+  function reindexableIdsFromSelection(): string[] {
+    return docs
+      .filter((doc) => selectedDocumentIds.has(doc.document_id) && isReindexableStatus(doc.status))
+      .map((doc) => doc.document_id);
+  }
+
+  function removableIdsFromSelection(): string[] {
+    return docs
+      .filter((doc) => selectedDocumentIds.has(doc.document_id) && isRemovableStatus(doc.status))
+      .map((doc) => doc.document_id);
+  }
+
+  async function handleReindexSelected() {
+    const documentIds = reindexableIdsFromSelection();
+    if (documentIds.length === 0) return;
+    setBatchReindexing(true);
+    try {
+      await rerunDocumentIds(documentIds);
+      setSelectedDocumentIds(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reindex selected documents');
+    } finally {
+      setBatchReindexing(false);
+    }
+  }
 
   function stopRowAction(event: { stopPropagation: () => void }) {
     event.stopPropagation();
@@ -265,18 +338,57 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
         setSelectedDocumentId(null);
         setDetailChunks(null);
       }
-      setDeleteConfirm(null);
+      setSelectedDocumentIds((prev) => {
+        const next = new Set(prev);
+        next.delete(documentId);
+        return next;
+      });
       await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove indexed chunks');
+      throw err;
     } finally {
       setDeletingDocId(null);
     }
   }
 
+  async function handleDeleteSelected() {
+    if (!knowledgeBaseId) return;
+    const documentIds = removableIdsFromSelection();
+    if (documentIds.length === 0) return;
+
+    setBulkDeleting(true);
+    setError('');
+    try {
+      for (const documentId of documentIds) {
+        await deleteDocumentChunks(knowledgeBaseId, documentId);
+      }
+      if (selectedDocumentId && documentIds.includes(selectedDocumentId)) {
+        setSelectedDocumentId(null);
+        setDetailChunks(null);
+      }
+      setSelectedDocumentIds(new Set());
+      setDeleteConfirm(null);
+      await load({ silent: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove selected documents');
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   async function handleDeleteConfirm() {
     if (!deleteConfirm) return;
-    await handleDeleteChunks(deleteConfirm.documentId);
+    if (deleteConfirm.mode === 'single') {
+      try {
+        await handleDeleteChunks(deleteConfirm.documentId);
+        setDeleteConfirm(null);
+      } catch {
+        // error already set
+      }
+      return;
+    }
+    await handleDeleteSelected();
   }
 
   if (forbidden) {
@@ -304,11 +416,64 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
             </div>
           </header>
 
+          {error && <p className="admin-error" role="alert">{error}</p>}
+
           <section className="kb-items-section">
             <div className="kb-items-header">
               <h2 className="kb-section-title">Indexed documents ({total})</h2>
               {canImport && (
                 <div className="kb-items-toolbar">
+                  {docs.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={
+                          selectedReindexableCount === 0 ||
+                          !kb.is_configured ||
+                          importJobActive ||
+                          batchReindexing ||
+                          reindexingAll
+                        }
+                        title={
+                          !kb.is_configured
+                            ? 'Configure embedding model in Settings first'
+                            : selectionCount > 0 && selectedReindexableCount === 0
+                              ? 'Only indexed or failed documents can be reindexed'
+                              : RERUN_DOCUMENT_TITLE
+                        }
+                        onClick={() => void handleReindexSelected()}
+                      >
+                        {batchReindexing ? (
+                          <Loader2 {...iconProps({ size: 16, className: 'icon-btn-spin' })} aria-hidden />
+                        ) : (
+                          <IconRun {...iconProps({ size: 16 })} aria-hidden />
+                        )}
+                        Reindex selected
+                        {selectedReindexableCount > 0 ? ` (${selectedReindexableCount})` : ''}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={
+                          selectedRemovableCount === 0 ||
+                          importJobActive ||
+                          bulkDeleting ||
+                          deletingDocId != null
+                        }
+                        onClick={() =>
+                          setDeleteConfirm({
+                            mode: 'bulk',
+                            documentIds: removableIdsFromSelection(),
+                          })
+                        }
+                      >
+                        <IconDelete {...iconProps({ size: 16 })} aria-hidden />
+                        Remove selected
+                        {selectedRemovableCount > 0 ? ` (${selectedRemovableCount})` : ''}
+                      </button>
+                    </>
+                  )}
                   {total > 0 && (
                     <button
                       type="button"
@@ -365,11 +530,22 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                   <table className="admin-table kb-detail-table">
                     <thead>
                       <tr>
+                        {canImport && (
+                          <th className="kb-item-select-col">
+                            <input
+                              type="checkbox"
+                              className="brand-checkbox"
+                              checked={allPageSelected}
+                              aria-label="Select all documents on this page"
+                              onChange={(event) => toggleSelectAllPage(event.target.checked)}
+                            />
+                          </th>
+                        )}
                         <th>Document</th>
-                        <th>Channel</th>
+                        <th className="kb-detail-meta-col">Channel</th>
                         <th className="kb-item-status-col">Status</th>
-                        <th>Chunks</th>
-                        <th>Indexed at</th>
+                        <th className="kb-detail-meta-col">Chunks</th>
+                        <th className="kb-detail-meta-col">Indexed at</th>
                         <th className="kb-item-actions-col">Actions</th>
                         <th className="kb-item-detail-hint-col" aria-hidden />
                       </tr>
@@ -377,19 +553,20 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                     <tbody>
                       {loading ? (
                         <tr>
-                          <td colSpan={7} className="admin-table-empty session-explorer-table-loading">
+                          <td colSpan={canImport ? 8 : 7} className="admin-table-empty session-explorer-table-loading">
                             <ListLoadingState label="Loading indexed documents…" />
                           </td>
                         </tr>
                       ) : docs.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="admin-table-empty">
+                          <td colSpan={canImport ? 8 : 7} className="admin-table-empty">
                             &nbsp;
                           </td>
                         </tr>
                       ) : (
                         docs.map((doc) => {
                           const selected = selectedDocumentId === doc.document_id;
+                          const rowChecked = selectedDocumentIds.has(doc.document_id);
                           const canOpenDetail = doc.status === 'indexed';
 
                           return (
@@ -408,13 +585,28 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                                   : undefined
                               }
                             >
+                              {canImport && (
+                                <td className="kb-item-select-col" onClick={stopRowAction}>
+                                  <input
+                                    type="checkbox"
+                                    className="brand-checkbox"
+                                    checked={rowChecked}
+                                    aria-label={`Select ${doc.document_name}`}
+                                    onChange={(event) =>
+                                      toggleDocumentSelection(doc.document_id, event.target.checked)
+                                    }
+                                  />
+                                </td>
+                              )}
                               <td>{doc.document_name}</td>
-                              <td className="kb-path-cell">{doc.channel_path}</td>
+                              <td className="kb-path-cell kb-detail-meta-col">{doc.channel_path}</td>
                               <td className="kb-item-status-col">
                                 <RagDocumentStatusCell doc={doc} jobActive={importJobActive} />
                               </td>
-                              <td>{doc.chunk_count ?? '—'}</td>
-                              <td>{doc.indexed_at ? new Date(doc.indexed_at).toLocaleString() : '—'}</td>
+                              <td className="kb-detail-meta-col">{doc.chunk_count ?? '—'}</td>
+                              <td className="kb-detail-meta-col">
+                                {doc.indexed_at ? new Date(doc.indexed_at).toLocaleString() : '—'}
+                              </td>
                               <td className="kb-item-actions-col" onClick={stopRowAction}>
                                 <div className="row-actions">
                                   {canWrite &&
@@ -431,6 +623,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                                           disabled={
                                             importJobActive ||
                                             reindexingAll ||
+                                            batchReindexing ||
                                             rerunningDocId === doc.document_id
                                           }
                                           onClick={() => void handleRerunDocument(doc.document_id)}
@@ -452,11 +645,13 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                                           aria-label={`Remove chunks for ${doc.document_name}`}
                                           disabled={
                                             deletingDocId === doc.document_id ||
+                                            bulkDeleting ||
                                             importJobActive ||
                                             doc.status === 'indexing'
                                           }
                                           onClick={() =>
                                             setDeleteConfirm({
+                                              mode: 'single',
                                               documentId: doc.document_id,
                                               documentName: doc.document_name,
                                             })
@@ -543,11 +738,22 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
       {deleteConfirm && (
         <KbItemDeleteConfirmModal
           variant="rag-chunks"
-          mode="single"
-          documentName={deleteConfirm.documentName}
-          deleting={deletingDocId === deleteConfirm.documentId}
+          mode={deleteConfirm.mode}
+          documentName={
+            deleteConfirm.mode === 'single' ? deleteConfirm.documentName : undefined
+          }
+          count={deleteConfirm.mode === 'bulk' ? deleteConfirm.documentIds.length : undefined}
+          deleting={
+            deleteConfirm.mode === 'single'
+              ? deletingDocId === deleteConfirm.documentId
+              : bulkDeleting
+          }
           onCancel={() => {
-            if (deletingDocId !== deleteConfirm.documentId) setDeleteConfirm(null);
+            if (deleteConfirm.mode === 'single') {
+              if (deletingDocId !== deleteConfirm.documentId) setDeleteConfirm(null);
+              return;
+            }
+            if (!bulkDeleting) setDeleteConfirm(null);
           }}
           onConfirm={handleDeleteConfirm}
         />

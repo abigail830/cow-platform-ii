@@ -19,6 +19,7 @@ export type SourceRef = {
   locator: SourceLocator | null;
   parsed_url: string;
   original_url: string;
+  preview_url?: string;
 };
 
 const UDOC_FILE_TYPES = new Set([
@@ -41,6 +42,11 @@ const UDOC_FILE_TYPES = new Set([
 export function supportsUdocViewer(fileType: string | null | undefined): boolean {
   if (!fileType) return false;
   return UDOC_FILE_TYPES.has(fileType.toUpperCase());
+}
+
+export function resolveSourcePreviewUrl(source: SourceRef): string {
+  if (source.preview_url) return source.preview_url;
+  return supportsUdocViewer(source.file_type) ? source.original_url : source.parsed_url;
 }
 
 export function formatSourceLabel(source: SourceRef): string {

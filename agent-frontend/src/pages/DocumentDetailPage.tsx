@@ -55,8 +55,9 @@ export function DocumentDetailPage() {
     setError('');
     setContent(null);
 
+    let doc: DocumentRecord;
     try {
-      const doc = await getDocument(documentId);
+      doc = await getDocument(documentId);
       setDocument(doc);
       setSelectedChannelId(doc.channel_id);
     } catch (err) {
@@ -68,16 +69,22 @@ export function DocumentDetailPage() {
       setLoadingDoc(false);
     }
 
+    const preferOriginalPreview =
+      supportsUdocViewer(doc.file_type) &&
+      parseDocumentDeepLink(searchParams.toString()).view === 'original';
+
     try {
       const docContent = await fetchDocumentContent(documentId, { timeoutMs: 60_000 });
       setContent(docContent);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load document content');
+      if (!preferOriginalPreview) {
+        setError(err instanceof Error ? err.message : 'Failed to load document content');
+      }
       setContent(null);
     } finally {
       setLoadingContent(false);
     }
-  }, [documentId, setSelectedChannelId]);
+  }, [documentId, searchParams, setSelectedChannelId]);
 
   useEffect(() => {
     void loadDetail();
@@ -104,6 +111,9 @@ export function DocumentDetailPage() {
   const sheetCount = mindmap?.sheets?.length ?? 0;
   const showSheetFilter = isMindmapOutline && sheetCount > 1;
   const showOriginalTab = supportsUdocViewer(document?.file_type);
+  const originalPreviewMode = contentTab === 'original' && showOriginalTab;
+  const layoutReady = Boolean(content) || (originalPreviewMode && Boolean(document));
+  const detailMetadata = content?.metadata ?? document?.metadata ?? {};
 
   const scrollToNode = useCallback((node: PageIndexNode, highlight = false) => {
     setActiveNodeId(node.node_id);
@@ -178,11 +188,11 @@ export function DocumentDetailPage() {
           <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
           Loading document…
         </p>
-      ) : content ? (
+      ) : layoutReady ? (
         <div className="document-detail-layout">
           <DocumentMetadataBar
             documentId={documentId!}
-            metadata={content.metadata}
+            metadata={detailMetadata}
             onMetadataChange={(metadata) => {
               setContent((prev) => (prev ? { ...prev, metadata } : prev));
               setDocument((prev) => (prev ? { ...prev, metadata } : prev));
@@ -199,37 +209,47 @@ export function DocumentDetailPage() {
 
           <div
             ref={containerRef}
-            className="document-detail-split"
-            style={{ ['--document-detail-left-pct' as string]: `${leftPct}%` }}
+            className={`document-detail-split${originalPreviewMode ? ' document-detail-split--original-preview' : ''}`}
+            style={
+              originalPreviewMode
+                ? undefined
+                : { ['--document-detail-left-pct' as string]: `${leftPct}%` }
+            }
           >
-            <aside className="document-detail-pageindex" aria-label="Page index">
-              <h3 className="document-detail-panel-heading">
-                {isMindmapOutline ? 'Mind map outline' : 'Page index'}
-              </h3>
-              <PageIndexTreePanel
-                tree={pageIndex}
-                activeNodeId={activeNodeId}
-                onSelectNode={handleSelectNode}
-                sheetFilterIndex={showSheetFilter ? activeSheetIndex : null}
-                emptyHint={
-                  isMindmap
-                    ? 'Run the pipeline to build a topic tree from the XMind file.'
-                    : undefined
-                }
-              />
-            </aside>
+            {!originalPreviewMode ? (
+              <>
+                <aside className="document-detail-pageindex" aria-label="Page index">
+                  <h3 className="document-detail-panel-heading">
+                    {isMindmapOutline ? 'Mind map outline' : 'Page index'}
+                  </h3>
+                  <PageIndexTreePanel
+                    tree={pageIndex}
+                    activeNodeId={activeNodeId}
+                    onSelectNode={handleSelectNode}
+                    sheetFilterIndex={showSheetFilter ? activeSheetIndex : null}
+                    emptyHint={
+                      isMindmap
+                        ? 'Run the pipeline to build a topic tree from the XMind file.'
+                        : undefined
+                    }
+                  />
+                </aside>
 
-            <div
-              className="document-detail-split-handle"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize panels"
-              onMouseDown={onHandleMouseDown}
-            />
+                <div
+                  className="document-detail-split-handle"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize panels"
+                  onMouseDown={onHandleMouseDown}
+                />
+              </>
+            ) : null}
 
             <section className="document-detail-content" aria-label="Document content">
               <div className="document-detail-content-header">
-                <h3 className="document-detail-panel-heading">Document content</h3>
+                <h3 className="document-detail-panel-heading">
+                  {originalPreviewMode ? 'Original document' : 'Document content'}
+                </h3>
                 {showOriginalTab ? (
                   <div className="document-detail-view-tabs" role="tablist" aria-label="Document view">
                     <button
@@ -286,7 +306,7 @@ export function DocumentDetailPage() {
             </section>
           </div>
         </div>
-      ) : loadingContent ? (
+      ) : loadingContent && !originalPreviewMode ? (
         <p className="document-detail-loading" role="status" aria-live="polite">
           <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
           Loading parsed content…
