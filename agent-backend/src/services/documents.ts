@@ -21,6 +21,7 @@ export type ChannelNode = {
   pipeline_id: string | null;
   auto_start_pipeline: boolean;
   metadata_extraction_model_id: string | null;
+  metadata_extraction_agent_def_id: string | null;
   created_at: string;
   updated_at: string;
   children: ChannelNode[];
@@ -45,6 +46,7 @@ function toChannelPublic(row: ChannelRow) {
     pipeline_id: row.pipelineId,
     auto_start_pipeline: row.autoStartPipeline,
     metadata_extraction_model_id: row.metadataExtractionModelId,
+    metadata_extraction_agent_def_id: row.metadataExtractionAgentDefId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -121,6 +123,7 @@ export async function createChannel(input: {
       pipelineId: parent?.pipelineId ?? null,
       autoStartPipeline: parent?.pipelineId ? parent.autoStartPipeline : false,
       metadataExtractionModelId: parent?.metadataExtractionModelId ?? null,
+      metadataExtractionAgentDefId: parent?.metadataExtractionAgentDefId ?? null,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -135,6 +138,7 @@ export async function updateChannel(
     description?: string | null;
     parentId?: string | null;
     metadataExtractionModelId?: string | null;
+    metadataExtractionAgentDefId?: string | null;
     pipelineId?: string | null;
     autoStartPipeline?: boolean;
   },
@@ -178,6 +182,20 @@ export async function updateChannel(
     }
   }
 
+  if (input.metadataExtractionAgentDefId !== undefined && input.metadataExtractionAgentDefId !== null) {
+    const agentId = input.metadataExtractionAgentDefId.trim();
+    if (!agentId) {
+      input.metadataExtractionAgentDefId = null;
+    } else {
+      const { resolveWorkflowAgent } = await import('../builtin-agents/resolve-workflow-agent.ts');
+      const agent = await resolveWorkflowAgent({
+        workflowKey: 'metadata_extract',
+        override: { agentDefId: agentId },
+      });
+      input.metadataExtractionAgentDefId = agent.id;
+    }
+  }
+
   if (input.pipelineId !== undefined && input.pipelineId === null) {
     input.autoStartPipeline = false;
   }
@@ -190,6 +208,12 @@ export async function updateChannel(
       ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
       ...(input.metadataExtractionModelId !== undefined
         ? { metadataExtractionModelId: input.metadataExtractionModelId }
+        : {}),
+      ...(input.metadataExtractionAgentDefId !== undefined
+        ? {
+            metadataExtractionAgentDefId: input.metadataExtractionAgentDefId,
+            metadataExtractionModelId: null,
+          }
         : {}),
       ...(input.pipelineId !== undefined ? { pipelineId: input.pipelineId } : {}),
       ...(input.autoStartPipeline !== undefined ? { autoStartPipeline: input.autoStartPipeline } : {}),

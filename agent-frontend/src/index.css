@@ -6737,8 +6737,8 @@ textarea {
   margin-left: 0.5rem;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
-  background: #f1f5f9;
-  color: #475569;
+  background: color-mix(in srgb, var(--brand-orange) 12%, transparent);
+  color: var(--brand-orange);
   font-size: 0.6875rem;
   font-weight: 600;
   vertical-align: middle;

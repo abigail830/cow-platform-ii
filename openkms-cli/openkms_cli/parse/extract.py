@@ -1,5 +1,6 @@
 """Metadata extraction using pydantic-ai (sync for CLI)."""
 import asyncio
+import re
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -78,10 +79,24 @@ def _schema_to_json_schema(schema: list[dict[str, Any]] | dict[str, Any] | None)
     return _array_schema_to_json_schema(DEFAULT_SCHEMA)
 
 
+def _openai_client_base_url(base_url: str) -> str:
+    base = base_url.rstrip("/")
+    if base.endswith("/chat/completions"):
+        return base[: -len("/chat/completions")]
+    if re.search(r"/v\d+$", base, re.I):
+        return base
+    if base.endswith("/v1"):
+        return base
+    return f"{base}/v1"
+
+
 def extract_metadata_sync(
     markdown: str,
     model_config: dict[str, Any],
     schema: list[dict[str, Any]] | dict[str, Any] | None = None,
+    *,
+    system_prompt: str = "",
+    user_prompt: str | None = None,
 ) -> dict[str, Any]:
     """
     Extract metadata from document markdown using an LLM via pydantic-ai (sync).
@@ -100,10 +115,7 @@ def extract_metadata_sync(
 
     json_schema = _schema_to_json_schema(schema)
 
-    base_url = (model_config.get("base_url") or "").rstrip("/")
-    if not base_url.endswith("/v1"):
-        base_url = f"{base_url}/v1"
-
+    base_url = _openai_client_base_url(model_config.get("base_url") or "")
     api_key = model_config.get("api_key") or "dummy"
     model_name = model_config.get("model_name") or "gpt-4"
 
@@ -124,14 +136,21 @@ def extract_metadata_sync(
         description="Extracted document metadata",
     )
 
+    resolved_system = (system_prompt or "").strip() or (
+        "Extract metadata from the document content. Use null for unknown values."
+    )
+
     agent = Agent(
         openai_model,
         output_type=PromptedOutput(structured),
-        system_prompt="Extract metadata from the document content. Use null for unknown values.",
+        system_prompt=resolved_system,
     )
 
     truncated = markdown[:TRUNCATE_CHARS]
-    prompt = f"Document:\n---\n{truncated}\n---\n\nExtract metadata from the above document."
+    if user_prompt and user_prompt.strip():
+        prompt = user_prompt.replace("{markdown}", truncated)
+    else:
+        prompt = f"Document:\n---\n{truncated}\n---\n\nExtract metadata from the above document."
 
     async def _run() -> dict[str, Any]:
         result = await agent.run(prompt)

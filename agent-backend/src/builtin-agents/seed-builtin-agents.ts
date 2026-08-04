@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import {
   appBuiltinAgentDefs,
+  appDocumentChannels,
   appKnowledgeBases,
   appModelConfigs,
   appWorkflowBindings,
@@ -33,6 +34,26 @@ async function pickDefaultModel(apiType: 'chat-completions' | 'vlm'): Promise<st
     .where(eq(appModelConfigs.apiType, apiType))
     .limit(1);
   return anyModel?.id ?? null;
+}
+
+async function ensureWorkflowBindings(seededByWorkflow: Map<BuiltinWorkflowKey, string>): Promise<void> {
+  for (const [workflowKey, agentId] of seededByWorkflow) {
+    await db
+      .insert(appWorkflowBindings)
+      .values({
+        workflowKey,
+        builtinAgentDefId: agentId,
+        enabled: true,
+      })
+      .onConflictDoUpdate({
+        target: appWorkflowBindings.workflowKey,
+        set: {
+          builtinAgentDefId: agentId,
+          enabled: true,
+          updatedAt: new Date(),
+        },
+      });
+  }
 }
 
 export async function seedBuiltinAgents(): Promise<void> {
@@ -70,15 +91,7 @@ export async function seedBuiltinAgents(): Promise<void> {
       seededByWorkflow.set(row.workflowKey as BuiltinWorkflowKey, row.id);
     }
 
-    for (const [workflowKey, agentId] of seededByWorkflow) {
-      await db.insert(appWorkflowBindings).values({
-        workflowKey,
-        builtinAgentDefId: agentId,
-        enabled: true,
-      });
-    }
-
-    console.log(`[builtin-agents] Seeded ${seededByWorkflow.size} system agents and workflow bindings.`);
+    console.log(`[builtin-agents] Seeded ${seededByWorkflow.size} system agents.`);
   } else {
     const rows = await db
       .select({ id: appBuiltinAgentDefs.id, workflowKey: appBuiltinAgentDefs.workflowKey })
@@ -88,7 +101,9 @@ export async function seedBuiltinAgents(): Promise<void> {
     }
   }
 
+  await ensureWorkflowBindings(seededByWorkflow);
   await migrateLegacyFaqSettings(seededByWorkflow);
+  await migrateLegacyChannelMetadata(seededByWorkflow);
 }
 
 async function migrateLegacyFaqSettings(
@@ -134,7 +149,7 @@ async function migrateLegacyFaqSettings(
           .returning({ id: appBuiltinAgentDefs.id });
         next.extraction_agent_def_id = created.id;
       } else if (defaultExtractId) {
-        next.extraction_agent_def_id = null;
+        next.extraction_agent_def_id = defaultExtractId;
       }
       changed = true;
     }
@@ -165,7 +180,7 @@ async function migrateLegacyFaqSettings(
           .returning({ id: appBuiltinAgentDefs.id });
         next.polish_agent_def_id = created.id;
       } else if (defaultPolishId) {
-        next.polish_agent_def_id = null;
+        next.polish_agent_def_id = defaultPolishId;
       }
       changed = true;
     }
@@ -176,5 +191,69 @@ async function migrateLegacyFaqSettings(
         .set({ faqSettings: next, updatedAt: new Date() })
         .where(eq(appKnowledgeBases.id, kb.id));
     }
+  }
+}
+
+async function migrateLegacyChannelMetadata(
+  defaults: Map<BuiltinWorkflowKey, string>,
+): Promise<void> {
+  const defaultMetadataId = defaults.get('metadata_extract');
+  if (!defaultMetadataId) return;
+
+  const [defaultAgent] = await db
+    .select({
+      id: appBuiltinAgentDefs.id,
+      modelConfigId: appBuiltinAgentDefs.modelConfigId,
+    })
+    .from(appBuiltinAgentDefs)
+    .where(eq(appBuiltinAgentDefs.id, defaultMetadataId))
+    .limit(1);
+  if (!defaultAgent) return;
+
+  const metadataSeed = BUILTIN_AGENT_SEEDS.find((s) => s.workflowKey === 'metadata_extract');
+
+  const channels = await db
+    .select({
+      id: appDocumentChannels.id,
+      name: appDocumentChannels.name,
+      metadataExtractionModelId: appDocumentChannels.metadataExtractionModelId,
+      metadataExtractionAgentDefId: appDocumentChannels.metadataExtractionAgentDefId,
+    })
+    .from(appDocumentChannels);
+
+  for (const channel of channels) {
+    if (channel.metadataExtractionAgentDefId) continue;
+    if (!channel.metadataExtractionModelId) continue;
+
+    let agentDefId = defaultMetadataId;
+    if (channel.metadataExtractionModelId !== defaultAgent.modelConfigId) {
+      const [created] = await db
+        .insert(appBuiltinAgentDefs)
+        .values({
+          slug: `migrated-${channel.id.slice(0, 8)}-metadata-extract`,
+          name: `Migrated — ${channel.name} — metadata extract`,
+          description: 'Migrated from legacy channel metadata_extraction_model_id',
+          workflowKey: 'metadata_extract',
+          apiType: 'chat-completions',
+          modelConfigId: channel.metadataExtractionModelId,
+          systemPrompt: metadataSeed?.systemPrompt ?? '',
+          userPromptTemplate: metadataSeed?.userPromptTemplate ?? '',
+          outputMode: metadataSeed?.outputMode ?? 'structured',
+          outputSchema: metadataSeed?.outputSchema ?? null,
+          temperature: metadataSeed?.temperature ?? '0.2',
+          isSystem: false,
+          version: 1,
+        })
+        .returning({ id: appBuiltinAgentDefs.id });
+      agentDefId = created.id;
+    }
+
+    await db
+      .update(appDocumentChannels)
+      .set({
+        metadataExtractionAgentDefId: agentDefId,
+        updatedAt: new Date(),
+      })
+      .where(eq(appDocumentChannels.id, channel.id));
   }
 }

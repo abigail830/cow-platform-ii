@@ -180,10 +180,12 @@ def run_pipeline_metadata_extraction(
     prefix: str,
     extract_metadata: bool,
     document_id: str | None,
-    extraction_schema: str | None,
-    extraction_model_name: str | None,
-    extraction_model_base_url: str | None,
-    extraction_api_key: str | None,
+    metadata_extraction_config: dict | None = None,
+    extraction_schema: str | None = None,
+    extraction_model_id: str | None = None,
+    extraction_model_name: str | None = None,
+    extraction_model_base_url: str | None = None,
+    extraction_api_key: str | None = None,
     api_url: str,
     skip_upload: bool,
     bucket: str,
@@ -215,10 +217,25 @@ def run_pipeline_metadata_extraction(
         )
 
     progress.update(task, description="Extracting metadata...")
+    schema_source = None
+    system_prompt = ""
+    user_prompt_template = ""
+    model_id = extraction_model_id
+    if metadata_extraction_config:
+        schema_source = metadata_extraction_config.get("output_schema")
+        system_prompt = metadata_extraction_config.get("system_prompt") or ""
+        user_prompt_template = metadata_extraction_config.get("user_prompt_template") or ""
+        model_id = metadata_extraction_config.get("model_config_id") or model_id
+
     try:
-        schema_data = json.loads(extraction_schema or "[]")
+        if schema_source is not None:
+            schema_data = schema_source if isinstance(schema_source, (dict, list)) else json.loads(
+                extraction_schema or "[]"
+            )
+        else:
+            schema_data = json.loads(extraction_schema or "[]")
     except json.JSONDecodeError as e:
-        console.print(f"[red]Invalid --extraction-schema JSON: {e}[/red]")
+        console.print(f"[red]Invalid extraction schema JSON: {e}[/red]")
         raise typer.Exit(1)
 
     try:
@@ -233,6 +250,23 @@ def run_pipeline_metadata_extraction(
             "base_url": extraction_model_base_url,
             "api_key": extraction_api_key or cfg.extraction_model_api_key or None,
             "model_name": extraction_model_name or "gpt-4",
+        }
+    elif model_id:
+        cfg = get_cli_settings()
+        data = fetch_cli_model_params(
+            cfg,
+            model_id=model_id,
+            api_type="chat-completions",
+        )
+        if not data:
+            console.print(
+                f"[red]Failed to fetch extraction model via cli-params (model_id={model_id})[/red]"
+            )
+            raise typer.Exit(1)
+        model_config = {
+            "base_url": data.get("base_url"),
+            "api_key": data.get("api_key"),
+            "model_name": data.get("model_name"),
         }
     elif extraction_model_name:
         cfg = get_cli_settings()
@@ -254,14 +288,26 @@ def run_pipeline_metadata_extraction(
         }
     else:
         console.print(
-            "[red]--extract-metadata requires --extraction-model-base-url or "
-            "--extraction-model-name[/red]"
+            "[red]Metadata extraction requires model_config_id in job snapshot "
+            "or legacy --extraction-model-* flags[/red]"
         )
         raise typer.Exit(1)
 
+    markdown = result.get("markdown") or ""
+    if user_prompt_template.strip():
+        prompt = user_prompt_template.replace("{markdown}", markdown)
+    else:
+        prompt = None
+
     extracted: dict | None = None
     try:
-        extracted = extract_metadata_sync(result["markdown"], model_config, schema_data)
+        extracted = extract_metadata_sync(
+            markdown,
+            model_config,
+            schema_data,
+            system_prompt=system_prompt,
+            user_prompt=prompt,
+        )
     except ValueError as e:
         console.print(f"[yellow]Metadata extraction failed: {e}[/yellow]")
         console.print(

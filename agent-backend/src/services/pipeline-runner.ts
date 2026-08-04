@@ -3,7 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { eq } from 'drizzle-orm';
 import { appDocuments, db } from '../db/index.ts';
-import { fetchModelCliParams, formatExtractionCliArgs, formatVlmCliArgs } from '../shared/model-cli-client.ts';
+import { fetchModelCliParams, formatExtractionCliArgs, formatVlmCliArgs, redactCliCommandSecrets } from '../shared/model-cli-client.ts';
+import { resolveChannelMetadataExtractionConfig } from '../builtin-agents/resolve-channel-metadata.ts';
+import { workerLlmConfigFromJobSnapshot, type WorkerLlmConfig } from '../builtin-agents/worker-llm-config.ts';
 import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../shared/pipeline-config-store.ts';
 import {
   defaultAsyncWorkerTemplate,
@@ -113,7 +115,7 @@ function spawnPipelineCliLocal(args: string[], apiUrl?: string): void {
   const cliBin = shellQuote(resolveCliBin());
   const resolvedApiUrl = resolveApiUrl(apiUrl);
   const command = `${cliBin} ${args.map(shellQuote).join(' ')}`;
-  console.info(`[pipeline] spawn ${command}`);
+  console.info(`[pipeline] spawn ${redactCliCommandSecrets(command)}`);
 
   if (jobId) activePipelineJobs.add(jobId);
 
@@ -203,6 +205,21 @@ export async function updateDocumentStatus(
     .where(eq(appDocuments.id, documentId));
 }
 
+async function buildMetadataExtractionForJob(channelId: string): Promise<{
+  extractionArgs: string | null;
+  metadataExtractionConfig: WorkerLlmConfig | null;
+}> {
+  const config = await resolveChannelMetadataExtractionConfig(channelId);
+  if (!config) {
+    return { extractionArgs: null, metadataExtractionConfig: null };
+  }
+  workerLlmConfigFromJobSnapshot(config);
+  return {
+    extractionArgs: formatExtractionCliArgs(),
+    metadataExtractionConfig: config,
+  };
+}
+
 async function executeLegacyPipelineRun(documentId: string): Promise<void> {
   if (resolvePipelineWorkerMode() === 'github_actions') {
     throw new Error(
@@ -227,14 +244,8 @@ async function executeLegacyPipelineRun(documentId: string): Promise<void> {
   const s3Prefix = s3PrefixFromKey(doc.s3Key);
   const apiUrl = resolveApiUrl();
 
-  let extractionArgs = '';
-  if (channel.metadataExtractionModelId) {
-    const extraction = await fetchModelCliParams(apiUrl, {
-      modelId: channel.metadataExtractionModelId,
-      apiType: 'chat-completions',
-    });
-    extractionArgs = formatExtractionCliArgs(extraction);
-  }
+  const { extractionArgs, metadataExtractionConfig: _metadataConfig } =
+    await buildMetadataExtractionForJob(doc.channelId);
 
   let vlmArgs = '';
   if (
@@ -265,7 +276,7 @@ async function executeLegacyPipelineRun(documentId: string): Promise<void> {
     ? rendered.replace(/^openkms-cli\b/, cliBin)
     : `${cliBin} ${rendered}`;
 
-  console.info(`[pipeline] document=${documentId} command=${command}`);
+  console.info(`[pipeline] document=${documentId} command=${redactCliCommandSecrets(command)}`);
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, {
@@ -309,20 +320,14 @@ async function startAsyncPipelineJob(documentId: string): Promise<{ jobId: strin
 
   const apiUrl = resolveApiUrl();
 
-  let extractionArgs = '';
-  if (channel.metadataExtractionModelId) {
-    const extraction = await fetchModelCliParams(apiUrl, {
-      modelId: channel.metadataExtractionModelId,
-      apiType: 'chat-completions',
-    });
-    extractionArgs = formatExtractionCliArgs(extraction);
-  }
+  const { extractionArgs, metadataExtractionConfig } = await buildMetadataExtractionForJob(channel.id);
 
   const job = await createPipelineJob({
     documentId: doc.id,
     pipelineName: pipeline.pipelineName,
     provider,
     extractionArgs: extractionArgs || null,
+    metadataExtractionConfig,
     vlmArgs: null,
   });
 

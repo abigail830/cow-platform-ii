@@ -3,6 +3,11 @@ import {
   fetchChannelProcessingOptions,
   type ChannelProcessingOptions,
 } from '../api/documentChannels.ts';
+import {
+  BUILTIN_AGENT_PLATFORM_DEFAULT,
+  listBuiltinAgentOptions,
+  type BuiltinAgentOption,
+} from '../api/builtinAgents.ts';
 import { ResourceAccessPanel, type ResourceAccessPanelHandle } from './ResourceAccessPanel.tsx';
 
 type ChannelSettingsModalProps = {
@@ -11,18 +16,28 @@ type ChannelSettingsModalProps = {
   initialDescription: string;
   initialPipelineId: string | null;
   initialAutoStartPipeline: boolean;
-  initialMetadataExtractionModelId: string | null;
+  initialMetadataExtractionAgentDefId: string | null;
   onCancel: () => void;
   onSubmit: (input: {
     name: string;
     description: string;
     pipelineId: string | null;
     autoStartPipeline: boolean;
-    metadataExtractionModelId: string | null;
+    metadataExtractionAgentDefId: string | null;
   }) => Promise<void>;
 };
 
 type SettingsTab = 'general' | 'pipeline' | 'sharing';
+
+function resolveAgentId(
+  configuredId: string | null | undefined,
+  options: BuiltinAgentOption[],
+): string {
+  if (configuredId && options.some((agent) => agent.id === configuredId)) {
+    return configuredId;
+  }
+  return BUILTIN_AGENT_PLATFORM_DEFAULT;
+}
 
 export function ChannelSettingsModal({
   channelId,
@@ -30,7 +45,7 @@ export function ChannelSettingsModal({
   initialDescription,
   initialPipelineId,
   initialAutoStartPipeline,
-  initialMetadataExtractionModelId,
+  initialMetadataExtractionAgentDefId,
   onCancel,
   onSubmit,
 }: ChannelSettingsModalProps) {
@@ -39,7 +54,8 @@ export function ChannelSettingsModal({
   const [description, setDescription] = useState(initialDescription);
   const [pipelineId, setPipelineId] = useState(initialPipelineId ?? '');
   const [autoStartPipeline, setAutoStartPipeline] = useState(initialAutoStartPipeline);
-  const [extractionModelId, setExtractionModelId] = useState(initialMetadataExtractionModelId ?? '');
+  const [metadataAgentId, setMetadataAgentId] = useState(BUILTIN_AGENT_PLATFORM_DEFAULT);
+  const [metadataAgentOptions, setMetadataAgentOptions] = useState<BuiltinAgentOption[]>([]);
   const [options, setOptions] = useState<ChannelProcessingOptions | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [optionsError, setOptionsError] = useState('');
@@ -53,14 +69,12 @@ export function ChannelSettingsModal({
     setDescription(initialDescription);
     setPipelineId(initialPipelineId ?? '');
     setAutoStartPipeline(initialAutoStartPipeline);
-    setExtractionModelId(initialMetadataExtractionModelId ?? '');
     setError('');
     setTab('general');
     setSharingCanManage(false);
   }, [
     initialAutoStartPipeline,
     initialDescription,
-    initialMetadataExtractionModelId,
     initialName,
     initialPipelineId,
   ]);
@@ -69,26 +83,13 @@ export function ChannelSettingsModal({
     let cancelled = false;
     setOptionsLoading(true);
     setOptionsError('');
-    void fetchChannelProcessingOptions()
-      .then((data) => {
+    void Promise.all([fetchChannelProcessingOptions(), listBuiltinAgentOptions('metadata_extract')])
+      .then(([data, agents]) => {
         if (cancelled) return;
         setOptions(data);
-        const validIds = new Set(data.extractionModels.map((model) => model.id));
-
-        if (initialMetadataExtractionModelId && validIds.has(initialMetadataExtractionModelId)) {
-          setExtractionModelId(initialMetadataExtractionModelId);
-          return;
-        }
-
-        if (!initialMetadataExtractionModelId) {
-          const defaultModel = data.extractionModels.find((model) => model.isDefault);
-          if (defaultModel) {
-            setExtractionModelId(defaultModel.id);
-            return;
-          }
-        }
-
-        setExtractionModelId('');
+        setMetadataAgentOptions(agents);
+        setMetadataAgentId(resolveAgentId(initialMetadataExtractionAgentDefId, agents));
+        setOptionsError('');
       })
       .catch((err) => {
         if (!cancelled) {
@@ -101,17 +102,17 @@ export function ChannelSettingsModal({
     return () => {
       cancelled = true;
     };
-  }, [initialMetadataExtractionModelId]);
+  }, [initialMetadataExtractionAgentDefId]);
 
   const selectedPipelineLabel =
     pipelineId && options
       ? (options.pipelines.find((pipeline) => pipeline.id === pipelineId)?.name ?? null)
       : null;
 
-  const selectedExtractionLabel =
-    extractionModelId && options
-      ? (options.extractionModels.find((model) => model.id === extractionModelId)?.name ?? null)
-      : null;
+  const selectedMetadataAgentLabel =
+    metadataAgentId === BUILTIN_AGENT_PLATFORM_DEFAULT
+      ? 'Platform default'
+      : metadataAgentOptions.find((agent) => agent.id === metadataAgentId)?.name ?? null;
 
   async function handleFormSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -129,7 +130,12 @@ export function ChannelSettingsModal({
         description: description.trim(),
         pipelineId: pipelineId || null,
         autoStartPipeline: pipelineId ? autoStartPipeline : false,
-        metadataExtractionModelId: extractionModelId || null,
+        metadataExtractionAgentDefId:
+          metadataAgentId === ''
+            ? null
+            : metadataAgentId === BUILTIN_AGENT_PLATFORM_DEFAULT
+              ? options?.platformDefaultMetadataExtractAgentId ?? null
+              : metadataAgentId,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save channel settings');
@@ -224,10 +230,6 @@ export function ChannelSettingsModal({
                       <span className="admin-form-hint">
                         When set, documents in this channel can run the configured parse pipeline.
                         {selectedPipelineLabel ? ` Selected: ${selectedPipelineLabel}.` : ' No pipeline selected.'}
-                        {pipelineId &&
-                        options?.pipelines.find((p) => p.id === pipelineId)?.pipelineName === 'baidu-doc-parse'
-                          ? ' Baidu uses async run-async (submit → poll → finalize in CLI). No VLM on pipeline config.'
-                          : ''}
                       </span>
                     </label>
                     {pipelineId && (
@@ -241,32 +243,28 @@ export function ChannelSettingsModal({
                           />
                           Auto-start pipeline after upload
                         </span>
-                        <span className="admin-form-hint">
-                          When enabled, each new upload to this channel starts the selected pipeline immediately
-                          after the file is stored in object storage.
-                        </span>
                       </label>
                     )}
                     <label className="form-field form-field-wide">
-                      <span>Metadata extraction model (optional)</span>
+                      <span>Metadata extraction agent (optional)</span>
                       <select
-                        value={extractionModelId}
-                        onChange={(event) => setExtractionModelId(event.target.value)}
+                        value={metadataAgentId}
+                        onChange={(event) => setMetadataAgentId(event.target.value)}
                       >
                         <option value="">— None —</option>
-                        {options?.extractionModels.map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {model.name}
-                            {model.isDefault ? ' (default)' : ''}
+                        <option value={BUILTIN_AGENT_PLATFORM_DEFAULT}>Platform default</option>
+                        {metadataAgentOptions.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                            {agent.model_name ? ` (${agent.model_name})` : ''}
                           </option>
                         ))}
                       </select>
                       <span className="admin-form-hint">
-                        Chat-completions models from Model configuration for metadata extraction. Independent of the
-                        pipeline step.
-                        {selectedExtractionLabel
-                          ? ` Selected: ${selectedExtractionLabel}.`
-                          : ' No extraction model selected.'}
+                        Builtin agent for structured metadata extraction after parse.
+                        {selectedMetadataAgentLabel
+                          ? ` Selected: ${selectedMetadataAgentLabel}.`
+                          : ' Metadata extraction disabled.'}
                       </span>
                     </label>
                   </>

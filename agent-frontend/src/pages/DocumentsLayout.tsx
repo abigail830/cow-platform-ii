@@ -77,7 +77,7 @@ export function DocumentsLayout() {
     description: string;
     pipelineId: string | null;
     autoStartPipeline: boolean;
-    metadataExtractionModelId: string | null;
+    metadataExtractionAgentDefId: string | null;
   }) {
     if (!channelModal || channelModal.mode !== 'settings') return;
     await updateDocumentChannel(channelModal.channel.id, {
@@ -85,7 +85,7 @@ export function DocumentsLayout() {
       description: input.description || null,
       pipelineId: input.pipelineId,
       autoStartPipeline: input.autoStartPipeline,
-      metadataExtractionModelId: input.metadataExtractionModelId,
+      metadataExtractionAgentDefId: input.metadataExtractionAgentDefId,
     });
     setChannelModal(null);
     await loadChannels();
@@ -112,8 +112,8 @@ export function DocumentsLayout() {
         if (createParentChannel.auto_start_pipeline && createParentChannel.pipeline_id) {
           parts.push('auto-start on upload');
         }
-        if (createParentChannel.metadata_extraction_model_id) {
-          parts.push('metadata extraction model');
+        if (createParentChannel.metadata_extraction_agent_def_id) {
+          parts.push('metadata extraction agent');
         }
         if (parts.length === 0) return undefined;
         return `On create, this sub-channel will copy ${parts.join(', ')} from "${createParentChannel.name}". You can change these later in channel settings.`;
@@ -189,7 +189,7 @@ export function DocumentsLayout() {
           initialDescription={channelModal.channel.description ?? ''}
           initialPipelineId={channelModal.channel.pipeline_id}
           initialAutoStartPipeline={channelModal.channel.auto_start_pipeline}
-          initialMetadataExtractionModelId={channelModal.channel.metadata_extraction_model_id}
+          initialMetadataExtractionAgentDefId={channelModal.channel.metadata_extraction_agent_def_id}
           onCancel={() => setChannelModal(null)}
           onSubmit={handleUpdateChannel}
         />

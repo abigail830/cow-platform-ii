@@ -17,6 +17,8 @@ export type KbFaqSettings = {
   polish_agent_def_id?: string | null;
   /** Populated server-side for CLI compatibility. */
   extraction_model_config_id?: string | null;
+  extraction_configuration_error?: string | null;
+  configuration_error?: string | null;
   extraction_prompt?: string;
   polish_model_config_id?: string | null;
   polish_prompt?: string;

@@ -24,12 +24,15 @@ export function formatVlmCliArgs(params: ModelCliParamsResponse): string {
   return args;
 }
 
-export function formatExtractionCliArgs(params: ModelCliParamsResponse): string {
-  let args = ` --extract-metadata --extraction-schema ${shellQuote('[]')}`;
-  if (params.base_url) args += ` --extraction-model-base-url ${shellQuote(params.base_url)}`;
-  if (params.model_name) args += ` --extraction-model-name ${shellQuote(params.model_name)}`;
-  if (params.api_key) args += ` --extraction-api-key ${shellQuote(params.api_key)}`;
-  return args;
+export function formatExtractionCliArgs(): string {
+  return ' --extract-metadata';
+}
+
+/** Redact secrets from CLI command strings before logging. */
+export function redactCliCommandSecrets(command: string): string {
+  return command
+    .replace(/(--(?:extraction-api-key|vlm-api-key)\s+)(?:'[^']*'|\S+)/gi, '$1[REDACTED]')
+    .replace(/(--(?:extraction-api-key|vlm-api-key)=)([^\s'"]+)/gi, '$1[REDACTED]');
 }
 
 /** Fetch CLI model params via internal API (no direct DB access). */

@@ -312,9 +312,14 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   function openExtractModal() {
     setError('');
     clearNotice();
-    const extractionConfigured = Boolean(kb?.faq_settings?.extraction_model_config_id);
+    const extractionConfigured = Boolean(
+      kb?.faq_settings?.extraction_model_config_id && !kb?.faq_settings?.extraction_configuration_error,
+    );
     if (!extractionConfigured) {
-      setError('Configure an FAQ extraction agent in Settings (AI tab) before extracting from documents.');
+      setError(
+        kb?.faq_settings?.extraction_configuration_error ??
+          'Configure an FAQ extraction agent in Settings (AI tab) before extracting from documents.',
+      );
       return;
     }
     setExtractOpen(true);
@@ -553,13 +558,14 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                     <button
                       type="button"
                       className="btn-primary"
-                      disabled={!kb.is_configured || jobActive || extractBusy}
+                      disabled={!kb.is_configured || jobActive || extractBusy || !kb.faq_settings?.extraction_model_config_id}
                       title={
-                        !kb.faq_settings?.extraction_model_config_id
-                          ? 'Configure an FAQ extraction agent in Settings (AI tab)'
-                          : !kb.is_configured
-                            ? 'Configure embedding settings first'
-                            : undefined
+                        kb.faq_settings?.extraction_configuration_error ??
+                          (!kb.faq_settings?.extraction_model_config_id
+                            ? 'Configure an FAQ extraction agent in Settings (AI tab)'
+                            : !kb.is_configured
+                              ? 'Configure embedding settings first'
+                              : undefined)
                       }
                       onClick={openExtractModal}
                     >

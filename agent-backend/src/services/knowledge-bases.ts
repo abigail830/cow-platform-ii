@@ -28,6 +28,7 @@ import { getModelConfigById } from '../shared/model-config-store.ts';
 import { countIndexedDocuments, countKbChunks } from './kb-chunks.ts';
 import { upsertKbChunkDocumentIndexing } from './kb-chunk-documents.ts';
 import { enrichFaqSettingsForApi } from '../builtin-agents/enrich-faq-settings.ts';
+import type { WorkerLlmConfig } from '../builtin-agents/worker-llm-config.ts';
 
 async function ragKbCounts(knowledgeBaseId: string): Promise<{ indexedDocuments: number; chunks: number }> {
   try {
@@ -663,6 +664,7 @@ export async function createKbImportJob(input: {
   faqIds?: string[];
   jobKind?: KbImportJobKind | null;
   pipelineId?: string | null;
+  workerLlmConfig?: WorkerLlmConfig | null;
   createdBy?: string | null;
 }): Promise<KbImportJobRow> {
   const faqIds = input.faqIds ?? [];
@@ -680,6 +682,7 @@ export async function createKbImportJob(input: {
       documentIds,
       faqIds,
       totalCount,
+      workerLlmConfig: input.workerLlmConfig ?? null,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -854,6 +857,7 @@ export type KbImportJobWorkerContext = {
   total_count: number;
   completed_count: number;
   failed_count: number;
+  worker_llm_config: WorkerLlmConfig | null;
   api_url: string;
 };
 
@@ -875,6 +879,7 @@ export async function buildKbImportJobWorkerContext(jobId: string): Promise<KbIm
     total_count: job.totalCount,
     completed_count: job.completedCount,
     failed_count: job.failedCount,
+    worker_llm_config: job.workerLlmConfig ?? null,
     api_url: apiUrl,
   };
 }

@@ -11,6 +11,7 @@ import {
   FAQ_KB_INDEX_PIPELINE_NAME,
   RAG_KB_PIPELINE_NAME,
 } from '../shared/pipeline-catalog.ts';
+import { workerLlmConfigFromJobSnapshot } from '../builtin-agents/worker-llm-config.ts';
 import { buildWorkerCliArgsFromTemplate } from '../shared/pipeline-command-template.ts';
 import {
   resolveKbImportPipelineForJob,
@@ -121,6 +122,14 @@ async function dispatchKbImportGithub(jobId: string): Promise<void> {
   );
 }
 
+async function assertKbImportJobReady(jobId: string): Promise<void> {
+  const job = await getKbImportJobById(jobId);
+  if (!job) throw new Error('KB import job not found');
+  if (job.jobKind === 'faq_extract') {
+    workerLlmConfigFromJobSnapshot(job.workerLlmConfig);
+  }
+}
+
 /**
  * Run KB import/index worker using the job's linked pipeline template.
  */
@@ -128,6 +137,14 @@ export async function spawnKbImportWorker(jobId: string, apiUrl?: string): Promi
   if (activeKbImportJobs.has(jobId)) {
     console.info(`[kb-import] skip dispatch (worker already active): job ${jobId}`);
     return;
+  }
+
+  try {
+    await assertKbImportJobReady(jobId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Job is not ready to run';
+    await updateKbImportJob(jobId, { status: 'failed', errorMessage: message });
+    throw error;
   }
 
   await updateKbImportJob(jobId, { status: 'running' });

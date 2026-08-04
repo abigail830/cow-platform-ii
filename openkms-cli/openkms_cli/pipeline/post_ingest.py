@@ -275,13 +275,19 @@ def finalize_job_artifacts(
 
 
 def run_metadata_extraction_from_ctx(ctx: dict[str, Any], api: str, job_id: str) -> None:
+    meta_config = ctx.get("metadata_extraction_config")
     extraction_args = (ctx.get("extraction_args") or "").strip()
-    if not extraction_args:
+    if not meta_config and not extraction_args:
         patch_job(api, job_id, stage="done")
         return
 
+    if not meta_config:
+        raise RuntimeError(
+            "This job has no metadata extraction config snapshot. "
+            "Re-run the pipeline after configuring a metadata extraction agent in Channel Settings."
+        )
+
     cfg = get_cli_settings()
-    args = shlex.split(extraction_args)
     document_id = ctx["document"]["id"]
     prefix = ctx["s3_prefix"]
 
@@ -302,14 +308,6 @@ def run_metadata_extraction_from_ctx(ctx: dict[str, Any], api: str, job_id: str)
     if result.get("markdown"):
         (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
 
-    def _flag_value(flag: str) -> str | None:
-        if flag not in args:
-            return None
-        idx = args.index(flag)
-        if idx + 1 >= len(args):
-            return None
-        return args[idx + 1]
-
     auth_headers, basic_auth, has_auth = resolve_api_request_auth(required=True)
     if not has_auth:
         raise RuntimeError("API authentication required for metadata extraction")
@@ -320,12 +318,9 @@ def run_metadata_extraction_from_ctx(ctx: dict[str, Any], api: str, job_id: str)
             result=result,
             hash_dir=hash_dir,
             prefix=prefix,
-            extract_metadata="--extract-metadata" in args,
+            extract_metadata=True,
             document_id=document_id,
-            extraction_schema=_flag_value("--extraction-schema"),
-            extraction_model_name=_flag_value("--extraction-model-name"),
-            extraction_model_base_url=_flag_value("--extraction-model-base-url"),
-            extraction_api_key=_flag_value("--extraction-api-key"),
+            metadata_extraction_config=meta_config,
             api_url=api,
             skip_upload=False,
             bucket=cfg.aws_bucket_name,

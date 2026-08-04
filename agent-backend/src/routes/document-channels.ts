@@ -1,7 +1,10 @@
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
+import { appBuiltinAgentDefs, appModelConfigs, db } from '../db/index.ts';
+import { resolveWorkflowAgent } from '../builtin-agents/resolve-workflow-agent.ts';
 import { buildChannelTreeForUser } from '../auth/resource-access.ts';
 import { denyUnlessChannelAccess } from '../auth/require-resource-access.ts';
 import { routeParam } from '../http/route-param.ts';
@@ -39,6 +42,26 @@ channels.get(
       .map((model) => ({ id: model.id, name: model.name, isDefault: model.isDefault }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
+    const extractionAgents = await db
+      .select({
+        id: appBuiltinAgentDefs.id,
+        name: appBuiltinAgentDefs.name,
+        slug: appBuiltinAgentDefs.slug,
+        modelName: appModelConfigs.name,
+      })
+      .from(appBuiltinAgentDefs)
+      .leftJoin(appModelConfigs, eq(appBuiltinAgentDefs.modelConfigId, appModelConfigs.id))
+      .where(eq(appBuiltinAgentDefs.workflowKey, 'metadata_extract'))
+      .orderBy(asc(appBuiltinAgentDefs.name));
+
+    let platformDefaultMetadataExtractAgentId: string | null = null;
+    try {
+      const platform = await resolveWorkflowAgent({ workflowKey: 'metadata_extract' });
+      platformDefaultMetadataExtractAgentId = platform.id;
+    } catch {
+      platformDefaultMetadataExtractAgentId = null;
+    }
+
     return c.json({
       pipelines: pipelines.map((pipeline) => ({
         id: pipeline.id,
@@ -46,6 +69,13 @@ channels.get(
         pipelineName: pipeline.pipelineName,
       })),
       extractionModels,
+      metadataExtractAgents: extractionAgents.map((row) => ({
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        model_name: row.modelName,
+      })),
+      platformDefaultMetadataExtractAgentId,
     });
   },
 );
@@ -110,6 +140,7 @@ channels.get(
       parent_id: row.parentId,
       sort_order: row.sortOrder,
       metadata_extraction_model_id: row.metadataExtractionModelId,
+      metadata_extraction_agent_def_id: row.metadataExtractionAgentDefId,
       pipeline_id: row.pipelineId,
       auto_start_pipeline: row.autoStartPipeline,
       created_by: row.createdBy,
@@ -161,6 +192,7 @@ channels.put(
       description?: string | null;
       parent_id?: string | null;
       metadata_extraction_model_id?: string | null;
+      metadata_extraction_agent_def_id?: string | null;
       pipeline_id?: string | null;
       auto_start_pipeline?: boolean;
     }>();
@@ -170,6 +202,11 @@ channels.put(
         body.metadata_extraction_model_id === undefined
           ? undefined
           : body.metadata_extraction_model_id?.trim() || null;
+
+      const metadataExtractionAgentDefId =
+        body.metadata_extraction_agent_def_id === undefined
+          ? undefined
+          : body.metadata_extraction_agent_def_id?.trim() || null;
 
       const pipelineId =
         body.pipeline_id === undefined ? undefined : body.pipeline_id?.trim() || null;
@@ -182,6 +219,7 @@ channels.put(
         description: body.description,
         parentId: body.parent_id,
         metadataExtractionModelId,
+        metadataExtractionAgentDefId,
         pipelineId,
         autoStartPipeline,
       });

@@ -6,6 +6,7 @@ import {
   type PipelineJobStage,
   type PipelineProvider,
 } from '../db/index.ts';
+import type { WorkerLlmConfig } from '../builtin-agents/worker-llm-config.ts';
 
 export type { PipelineJobStage };
 import { getChannelById } from './documents.ts';
@@ -37,6 +38,7 @@ export type PipelineJobContext = {
   stage: PipelineJobStage;
   external_job_id: string | null;
   extraction_args: string | null;
+  metadata_extraction_config: WorkerLlmConfig | null;
   vlm_args: string | null;
   error_message: string | null;
   document: {
@@ -57,6 +59,7 @@ export async function createPipelineJob(input: {
   pipelineName: string;
   provider: PipelineProvider;
   extractionArgs?: string | null;
+  metadataExtractionConfig?: WorkerLlmConfig | null;
   vlmArgs?: string | null;
 }): Promise<typeof appPipelineJobs.$inferSelect> {
   const [row] = await db
@@ -67,6 +70,7 @@ export async function createPipelineJob(input: {
       provider: input.provider,
       stage: 'submitted',
       extractionArgs: input.extractionArgs ?? null,
+      metadataExtractionConfig: input.metadataExtractionConfig ?? null,
       vlmArgs: input.vlmArgs ?? null,
     })
     .returning();
@@ -174,6 +178,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     stage: job.stage as PipelineJobStage,
     external_job_id: job.externalJobId,
     extraction_args: job.extractionArgs,
+    metadata_extraction_config: job.metadataExtractionConfig ?? null,
     vlm_args: job.vlmArgs,
     error_message: job.errorMessage,
     document: {

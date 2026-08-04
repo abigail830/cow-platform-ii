@@ -12,6 +12,14 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
+export type WorkerLlmConfigSnapshot = {
+  model_config_id: string;
+  system_prompt: string;
+  user_prompt_template: string;
+  output_schema?: Record<string, unknown> | null;
+  agent_def_id?: string | null;
+};
+
 /** pgvector column — driver uses `[f1,f2,...]` string form. */
 export const pgVector = customType<{ data: number[]; driverData: string }>({
   dataType() {
@@ -374,6 +382,7 @@ export const appKbImportJobs = pgTable(
     completedCount: integer('completed_count').notNull().default(0),
     failedCount: integer('failed_count').notNull().default(0),
     errorMessage: text('error_message'),
+    workerLlmConfig: jsonb('worker_llm_config').$type<WorkerLlmConfigSnapshot | null>(),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -545,6 +554,7 @@ export const appPipelineJobs = pgTable(
     stage: text('stage').notNull().default('submitted'),
     externalJobId: text('external_job_id'),
     extractionArgs: text('extraction_args'),
+    metadataExtractionConfig: jsonb('metadata_extraction_config').$type<WorkerLlmConfigSnapshot | null>(),
     vlmArgs: text('vlm_args'),
     errorMessage: text('error_message'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

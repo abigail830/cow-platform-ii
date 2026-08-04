@@ -12,6 +12,8 @@ import { getDocumentById } from './documents.ts';
 import { decodeEmbeddingBase64 } from '../shared/kb-chunk-embedding.ts';
 import { spawnKbImportWorker } from './kb-import-runner.ts';
 import { resolveKbFaqWorkflowAgent } from '../builtin-agents/resolve-workflow-agent.ts';
+import { resolveKbFaqExtractWorkerConfig } from '../builtin-agents/enrich-faq-settings.ts';
+import { FAQ_EXTRACT_NOT_CONFIGURED } from '../builtin-agents/worker-llm-config.ts';
 import { runSyncAgent } from '../builtin-agents/sync-agent-runner.ts';
 import {
   createKbImportJob,
@@ -434,13 +436,13 @@ export async function startKbFaqExtractJob(input: {
   if (!kb) throw new Error('Knowledge base not found');
   if (kb.type !== 'faq') throw new Error('Extract is only for FAQ knowledge bases');
 
-  const settings = (kb.faqSettings ?? {}) as KbFaqSettings;
+  let workerLlmConfig;
   try {
-    await resolveKbFaqWorkflowAgent(input.knowledgeBaseId, 'faq_extract');
-  } catch {
-    throw new Error('Configure an FAQ extraction agent in settings');
+    workerLlmConfig = await resolveKbFaqExtractWorkerConfig(input.knowledgeBaseId);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`${FAQ_EXTRACT_NOT_CONFIGURED} (${detail})`);
   }
-  void settings;
 
   const pipeline = await getPipelineConfigByPipelineName(FAQ_KB_EXTRACT_PIPELINE_NAME);
   if (!pipeline || !pipeline.isEnabled) {
@@ -459,6 +461,7 @@ export async function startKbFaqExtractJob(input: {
     faqIds: [],
     jobKind: 'faq_extract',
     pipelineId: pipeline.id,
+    workerLlmConfig,
     createdBy: input.createdBy,
   });
 }

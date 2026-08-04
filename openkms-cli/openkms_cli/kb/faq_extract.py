@@ -227,20 +227,24 @@ def run_faq_extract(job_id: str, api_url: Optional[str] = None) -> None:
     completed = int(job.get("completed_count") or 0)
     failed = int(job.get("failed_count") or 0)
     failure_notes: list[str] = []
+    worker_llm_config = job.get("worker_llm_config")
 
     if not document_ids:
         _patch_job(base, job_id, auth_headers, basic, {"status": "completed"})
         return
 
+    if not worker_llm_config or not (worker_llm_config.get("model_config_id") or "").strip():
+        raise RuntimeError(
+            "This job has no extraction config snapshot. "
+            "Create a new extract job after configuring an FAQ extraction agent in KB Settings → AI tab."
+        )
+
     try:
         kb_config = _load_kb_config(base, kb_id, auth_headers, basic)
-        faq_settings = kb_config.get("faq_settings") or {}
         metadata_keys = kb_config.get("metadata_keys") or []
-        extraction_model_id = faq_settings.get("extraction_model_config_id")
-        extraction_prompt = faq_settings.get("extraction_prompt") or ""
-        extraction_system_prompt = faq_settings.get("extraction_system_prompt") or ""
-        if not extraction_model_id:
-            raise RuntimeError("FAQ extraction model is not configured")
+        extraction_model_id = worker_llm_config["model_config_id"]
+        extraction_prompt = worker_llm_config.get("user_prompt_template") or ""
+        extraction_system_prompt = worker_llm_config.get("system_prompt") or ""
 
         s3_client = get_s3_client(
             cfg.aws_endpoint_url or None,
