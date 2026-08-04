@@ -1,7 +1,7 @@
 import type { PageIndexNode, PageIndexTree } from '../components/PageIndexTree.tsx';
 import { slugifyHeading } from '../components/PageIndexTree.tsx';
 
-export type DocumentViewMode = 'parsed' | 'original';
+export type DocumentViewMode = 'parsed' | 'pageindex' | 'original';
 
 export type DocumentDeepLink = {
   view: DocumentViewMode;
@@ -38,7 +38,13 @@ export function buildDocumentSourceUrl(
 
 export function parseDocumentDeepLink(search: string): DocumentDeepLink {
   const params = new URLSearchParams(search);
-  const view = params.get('view') === 'original' ? 'original' : 'parsed';
+  const viewParam = params.get('view');
+  const view: DocumentViewMode =
+    viewParam === 'original'
+      ? 'original'
+      : viewParam === 'pageindex'
+        ? 'pageindex'
+        : 'parsed';
   const nodeId = params.get('node')?.trim() || null;
   const heading = params.get('heading')?.trim() || null;
   const lineRaw = params.get('line');
@@ -64,6 +70,10 @@ function walkNodes(nodes: PageIndexNode[] | undefined, visit: (node: PageIndexNo
     visit(node);
     walkNodes(node.nodes, visit);
   }
+}
+
+export function rightPanelTabFromView(view: DocumentViewMode): 'pageindex' | 'parsed' {
+  return view === 'parsed' ? 'parsed' : 'pageindex';
 }
 
 export function findPageIndexNode(

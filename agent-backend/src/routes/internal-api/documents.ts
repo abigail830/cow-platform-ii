@@ -8,7 +8,13 @@ import {
   getDocumentById,
   updateDocumentMetadata,
 } from '../../services/documents.ts';
-import { buildDocumentImportContext } from '../../services/knowledge-bases.ts';
+import {
+  buildDocumentImportContext,
+} from '../../services/knowledge-bases.ts';
+import {
+  channelHasMetadataExtraction,
+  metadataNeedsExtraction,
+} from '../../services/document-metadata-extraction.ts';
 import { uploadDocumentObject, StorageNotConfiguredError } from '../../storage/document-files.ts';
 import { isStorageEnabled } from '../../storage/s3-config.ts';
 
@@ -20,20 +26,6 @@ function storagePrefixFromS3Key(s3Key: string): string {
   const normalized = s3Key.replace(/\\/g, '/');
   const idx = normalized.lastIndexOf('/');
   return idx >= 0 ? normalized.slice(0, idx) : normalized;
-}
-
-function metadataNeedsExtraction(
-  metadata: Record<string, unknown> | null | undefined,
-  hasExtractionModel: boolean,
-): boolean {
-  if (!hasExtractionModel) return false;
-  const values = Object.values(metadata ?? {});
-  if (values.length === 0) return true;
-  return values.every((value) => {
-    if (value === null || value === undefined || value === '') return true;
-    if (Array.isArray(value) && value.length === 0) return true;
-    return false;
-  });
 }
 
 documents.get('/:id/import-context', async (c) => {
@@ -78,7 +70,7 @@ documents.get('/:id/metadata-needs-extraction', async (c) => {
   return c.json({
     needs_extraction: metadataNeedsExtraction(
       doc.metadata as Record<string, unknown>,
-      Boolean(channel.metadataExtractionModelId),
+      channelHasMetadataExtraction(channel),
     ),
   });
 });

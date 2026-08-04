@@ -209,7 +209,10 @@ def run_pipeline_metadata_extraction(
         api_url, document_id, auth_headers, basic_auth
     )
     if needs_extraction is False:
-        console.print("[dim]Skipped metadata extraction: document metadata already has values[/dim]")
+        console.print(
+            "[dim]Skipped metadata extraction: channel has no extraction configured "
+            "or document metadata is already populated[/dim]"
+        )
         return auth_headers, basic_auth
     if needs_extraction is None:
         console.print(

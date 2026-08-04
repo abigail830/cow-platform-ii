@@ -3473,9 +3473,9 @@ textarea {
 }
 
 .pipeline-step-dot.active {
-  background: #3b82f6;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+  background: #abefc6;
+  border-color: #6ee7a8;
+  box-shadow: 0 0 0 2px rgba(171, 239, 198, 0.45);
 }
 
 .pipeline-step-dot.failed {
@@ -3743,7 +3743,7 @@ textarea {
     flex-direction: column;
   }
 
-  .document-detail-pageindex,
+  .document-detail-original,
   .document-detail-content {
     flex: 1 1 auto !important;
     width: 100% !important;
@@ -4177,7 +4177,7 @@ textarea {
   overflow: hidden;
 }
 
-.document-detail-pageindex,
+.document-detail-original,
 .document-detail-content {
   display: flex;
   flex-direction: column;
@@ -4185,9 +4185,26 @@ textarea {
   min-height: 0;
 }
 
-.document-detail-pageindex {
-  flex: 0 0 var(--document-detail-left-pct, 32%);
+.document-detail-original {
+  flex: 0 0 var(--document-detail-left-pct, 50%);
   border-right: none;
+}
+
+.document-detail-pageindex-body,
+.document-detail-panel-loading {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.document-detail-panel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 1rem;
+  color: #64748b;
 }
 
 .document-detail-content {
@@ -4282,12 +4299,19 @@ textarea {
   color: #64748b;
 }
 
-.document-detail-content > .document-viewer-loading {
+.document-detail-content > .document-viewer-loading,
+.document-detail-original > .document-viewer-loading {
   min-height: 28rem;
 }
 
-.document-detail-split--original-preview .document-detail-content {
-  flex: 1 1 100%;
+.document-detail-original > .document-detail-panel-empty {
+  flex: 1;
+  min-height: 12rem;
+}
+
+.document-detail-original > .document-udoc-viewer {
+  flex: 1;
+  min-height: 0;
 }
 
 .document-citation-highlight {
@@ -4343,6 +4367,7 @@ textarea {
 }
 
 .page-index-panel,
+.document-detail-pageindex-body,
 .document-detail-content-scroll {
   flex: 1;
   min-height: 0;
@@ -4544,7 +4569,7 @@ textarea {
   line-height: 0;
 }
 
-.document-detail-pageindex > .document-detail-panel-empty {
+.document-detail-pageindex-body > .document-detail-panel-empty {
   flex: 1;
   justify-content: center;
   align-items: center;

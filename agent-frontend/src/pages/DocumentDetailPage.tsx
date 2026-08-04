@@ -18,8 +18,8 @@ import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import {
   findPageIndexNode,
   parseDocumentDeepLink,
+  rightPanelTabFromView,
   scrollToDocumentTarget,
-  type DocumentViewMode,
 } from '../shared/document-deep-link.ts';
 import { supportsUdocViewer } from '../shared/source-ref.ts';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
@@ -28,7 +28,7 @@ const DocumentUdocViewer = lazy(() =>
   import('../components/DocumentUdocViewer.tsx').then((mod) => ({ default: mod.DocumentUdocViewer })),
 );
 
-type ContentTab = DocumentViewMode;
+type RightPanelTab = 'pageindex' | 'parsed';
 
 export function DocumentDetailPage() {
   const { documentId } = useParams<{ documentId: string }>();
@@ -44,9 +44,11 @@ export function DocumentDetailPage() {
   const [error, setError] = useState('');
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [activeSheetIndex, setActiveSheetIndex] = useState<number | null>(null);
-  const [contentTab, setContentTab] = useState<ContentTab>(deepLink.view);
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>(() =>
+    rightPanelTabFromView(deepLink.view),
+  );
 
-  const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('document-detail-split', 32);
+  const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('document-detail-split', 50);
 
   const loadDetail = useCallback(async () => {
     if (!documentId) return;
@@ -69,22 +71,16 @@ export function DocumentDetailPage() {
       setLoadingDoc(false);
     }
 
-    const preferOriginalPreview =
-      supportsUdocViewer(doc.file_type) &&
-      parseDocumentDeepLink(searchParams.toString()).view === 'original';
-
     try {
       const docContent = await fetchDocumentContent(documentId, { timeoutMs: 60_000 });
       setContent(docContent);
     } catch (err) {
-      if (!preferOriginalPreview) {
-        setError(err instanceof Error ? err.message : 'Failed to load document content');
-      }
+      setError(err instanceof Error ? err.message : 'Failed to load document content');
       setContent(null);
     } finally {
       setLoadingContent(false);
     }
-  }, [documentId, searchParams, setSelectedChannelId]);
+  }, [documentId, setSelectedChannelId]);
 
   useEffect(() => {
     void loadDetail();
@@ -101,7 +97,7 @@ export function DocumentDetailPage() {
   }, [documentId, document?.status]);
 
   useEffect(() => {
-    setContentTab(deepLink.view);
+    setRightPanelTab(rightPanelTabFromView(deepLink.view));
   }, [deepLink.view]);
 
   const pageIndex = (content?.page_index as PageIndexTree | null) ?? null;
@@ -110,13 +106,18 @@ export function DocumentDetailPage() {
   const isMindmapOutline = pageIndex?.strategy === 'xmind-outline';
   const sheetCount = mindmap?.sheets?.length ?? 0;
   const showSheetFilter = isMindmapOutline && sheetCount > 1;
-  const showOriginalTab = supportsUdocViewer(document?.file_type);
-  const originalPreviewMode = contentTab === 'original' && showOriginalTab;
-  const layoutReady = Boolean(content) || (originalPreviewMode && Boolean(document));
+  const showOriginalPreview = supportsUdocViewer(document?.file_type);
   const detailMetadata = content?.metadata ?? document?.metadata ?? {};
+  const rightPanelHeading =
+    rightPanelTab === 'pageindex'
+      ? isMindmapOutline
+        ? 'Mind map outline'
+        : 'Page index'
+      : 'Parsed content';
 
   const scrollToNode = useCallback((node: PageIndexNode, highlight = false) => {
     setActiveNodeId(node.node_id);
+    setRightPanelTab('parsed');
     scrollToDocumentTarget(contentRef.current, {
       nodeId: node.node_id,
       line: node.line_num ?? null,
@@ -126,7 +127,7 @@ export function DocumentDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (loadingContent || contentTab !== 'parsed' || !pageIndex) return;
+    if (loadingContent || rightPanelTab !== 'parsed' || !pageIndex) return;
 
     const node = findPageIndexNode(pageIndex, deepLink);
     if (node) {
@@ -145,9 +146,12 @@ export function DocumentDetailPage() {
         }),
       );
     }
-  }, [loadingContent, contentTab, pageIndex, deepLink, scrollToNode]);
+  }, [loadingContent, rightPanelTab, pageIndex, deepLink, scrollToNode]);
 
   function handleSelectNode(node: PageIndexNode) {
+    const params = new URLSearchParams(searchParams);
+    params.set('view', 'parsed');
+    setSearchParams(params, { replace: true });
     scrollToNode(node, false);
   }
 
@@ -157,8 +161,8 @@ export function DocumentDetailPage() {
     if (sheetNode) handleSelectNode(sheetNode);
   }
 
-  function switchContentTab(next: ContentTab) {
-    setContentTab(next);
+  function switchRightPanelTab(next: RightPanelTab) {
+    setRightPanelTab(next);
     const params = new URLSearchParams(searchParams);
     params.set('view', next);
     setSearchParams(params, { replace: true });
@@ -188,7 +192,7 @@ export function DocumentDetailPage() {
           <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
           Loading document…
         </p>
-      ) : layoutReady ? (
+      ) : document ? (
         <div className="document-detail-layout">
           <DocumentMetadataBar
             documentId={documentId!}
@@ -209,72 +213,12 @@ export function DocumentDetailPage() {
 
           <div
             ref={containerRef}
-            className={`document-detail-split${originalPreviewMode ? ' document-detail-split--original-preview' : ''}`}
-            style={
-              originalPreviewMode
-                ? undefined
-                : { ['--document-detail-left-pct' as string]: `${leftPct}%` }
-            }
+            className="document-detail-split"
+            style={{ ['--document-detail-left-pct' as string]: `${leftPct}%` }}
           >
-            {!originalPreviewMode ? (
-              <>
-                <aside className="document-detail-pageindex" aria-label="Page index">
-                  <h3 className="document-detail-panel-heading">
-                    {isMindmapOutline ? 'Mind map outline' : 'Page index'}
-                  </h3>
-                  <PageIndexTreePanel
-                    tree={pageIndex}
-                    activeNodeId={activeNodeId}
-                    onSelectNode={handleSelectNode}
-                    sheetFilterIndex={showSheetFilter ? activeSheetIndex : null}
-                    emptyHint={
-                      isMindmap
-                        ? 'Run the pipeline to build a topic tree from the XMind file.'
-                        : undefined
-                    }
-                  />
-                </aside>
-
-                <div
-                  className="document-detail-split-handle"
-                  role="separator"
-                  aria-orientation="vertical"
-                  aria-label="Resize panels"
-                  onMouseDown={onHandleMouseDown}
-                />
-              </>
-            ) : null}
-
-            <section className="document-detail-content" aria-label="Document content">
-              <div className="document-detail-content-header">
-                <h3 className="document-detail-panel-heading">
-                  {originalPreviewMode ? 'Original document' : 'Document content'}
-                </h3>
-                {showOriginalTab ? (
-                  <div className="document-detail-view-tabs" role="tablist" aria-label="Document view">
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={contentTab === 'parsed'}
-                      className={`document-detail-view-tab${contentTab === 'parsed' ? ' active' : ''}`}
-                      onClick={() => switchContentTab('parsed')}
-                    >
-                      Parsed
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={contentTab === 'original'}
-                      className={`document-detail-view-tab${contentTab === 'original' ? ' active' : ''}`}
-                      onClick={() => switchContentTab('original')}
-                    >
-                      Original
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              {contentTab === 'original' && showOriginalTab && documentId ? (
+            <aside className="document-detail-original" aria-label="Original document">
+              <h3 className="document-detail-panel-heading">Original</h3>
+              {showOriginalPreview && documentId ? (
                 <Suspense
                   fallback={
                     <div className="document-viewer-loading" role="status">
@@ -289,6 +233,65 @@ export function DocumentDetailPage() {
                     searchQuery={deepLink.highlight ? deepLink.heading : null}
                   />
                 </Suspense>
+              ) : (
+                <div className="document-detail-panel-empty">
+                  <p>Original preview is not available for this file type.</p>
+                </div>
+              )}
+            </aside>
+
+            <div
+              className="document-detail-split-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize panels"
+              onMouseDown={onHandleMouseDown}
+            />
+
+            <section className="document-detail-content" aria-label="Parsed document views">
+              <div className="document-detail-content-header">
+                <h3 className="document-detail-panel-heading">{rightPanelHeading}</h3>
+                <div className="document-detail-view-tabs" role="tablist" aria-label="Parsed document views">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={rightPanelTab === 'pageindex'}
+                    className={`document-detail-view-tab${rightPanelTab === 'pageindex' ? ' active' : ''}`}
+                    onClick={() => switchRightPanelTab('pageindex')}
+                  >
+                    Page index
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={rightPanelTab === 'parsed'}
+                    className={`document-detail-view-tab${rightPanelTab === 'parsed' ? ' active' : ''}`}
+                    onClick={() => switchRightPanelTab('parsed')}
+                  >
+                    Parsed
+                  </button>
+                </div>
+              </div>
+
+              {loadingContent ? (
+                <p className="document-detail-loading document-detail-panel-loading" role="status" aria-live="polite">
+                  <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
+                  Loading parsed content…
+                </p>
+              ) : rightPanelTab === 'pageindex' ? (
+                <div className="document-detail-pageindex-body">
+                  <PageIndexTreePanel
+                    tree={pageIndex}
+                    activeNodeId={activeNodeId}
+                    onSelectNode={handleSelectNode}
+                    sheetFilterIndex={showSheetFilter ? activeSheetIndex : null}
+                    emptyHint={
+                      isMindmap
+                        ? 'Run the pipeline to build a topic tree from the XMind file.'
+                        : 'Run the pipeline to build a page index from the parsed document.'
+                    }
+                  />
+                </div>
               ) : (
                 <div ref={contentRef} className="document-detail-content-scroll">
                   {content?.has_markdown && content.markdown ? (
@@ -305,16 +308,6 @@ export function DocumentDetailPage() {
               )}
             </section>
           </div>
-        </div>
-      ) : loadingContent && !originalPreviewMode ? (
-        <p className="document-detail-loading" role="status" aria-live="polite">
-          <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
-          Loading parsed content…
-        </p>
-      ) : document ? (
-        <div className="document-detail-panel-empty">
-          <p>Could not load parsed content.</p>
-          <p className="document-detail-panel-hint">Check object storage connectivity or re-run the pipeline.</p>
         </div>
       ) : null}
     </div>
