@@ -148,11 +148,12 @@ export function KbFaqSettingsModal({
             className={`modal-tab${tab === 'ai' ? ' active' : ''}`}
             onClick={() => setTab('ai')}
           >
-            AI assistance
+            Builtin agents
           </button>
         </div>
 
-        <form className="form-grid" onSubmit={(e) => void handleSubmit(e)}>
+        <form className="form-grid kb-faq-settings-form" onSubmit={(e) => void handleSubmit(e)}>
+          <div className="kb-faq-settings-tab-body">
           {tab === 'indexing' ? (
             <>
               <label className="form-field form-field-wide">
@@ -241,9 +242,14 @@ export function KbFaqSettingsModal({
                   ))}
                 </select>
               </label>
-              <p className="admin-form-hint form-field-wide">
+              <p className="admin-form-hint kb-faq-settings-hint form-field-wide">
                 Edit prompts and models in{' '}
-                <Link to="/admin/builtin-agents" target="_blank" rel="noreferrer">
+                <Link
+                  to="/admin/builtin-agents"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="kb-faq-settings-hint-link"
+                >
                   Platform → Builtin agents
                 </Link>
                 .
@@ -251,7 +257,9 @@ export function KbFaqSettingsModal({
             </>
           )}
 
-          <div className="modal-actions form-field-wide">
+          </div>
+
+          <div className="modal-actions form-field-wide kb-faq-settings-actions">
             <button type="button" className="btn-secondary" onClick={onCancel}>
               Cancel
             </button>

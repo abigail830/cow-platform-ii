@@ -44,6 +44,24 @@ export type BuiltinAgentUsageStats = {
   trend: Array<{ date: string; count: number }>;
 };
 
+export type BuiltinAgentRunMessage = {
+  role: string;
+  content: string;
+};
+
+export type BuiltinAgentRunListItem = {
+  id: string;
+  created_at: string;
+  workflow_key: string;
+  agent_name: string | null;
+  trigger_type: string;
+  status: string;
+  latency_ms: number | null;
+  error_message: string | null;
+  input_summary: string | null;
+  messages: BuiltinAgentRunMessage[];
+};
+
 export type BuiltinAgentOption = {
   id: string;
   name: string;
@@ -104,6 +122,19 @@ export async function getBuiltinAgentStats(
   const response = await authFetch(`/api/admin/builtin-agents/${id}/stats${query}`);
   const data = (await response.json()) as { stats: BuiltinAgentUsageStats };
   return data.stats;
+}
+
+export async function listBuiltinAgentRuns(params?: {
+  agentId?: string;
+  days?: number;
+}): Promise<BuiltinAgentRunListItem[]> {
+  const query = new URLSearchParams();
+  if (params?.days) query.set('days', String(params.days));
+  if (params?.agentId) query.set('agent_id', params.agentId);
+  const suffix = query.size > 0 ? `?${query}` : '';
+  const response = await authFetch(`/api/admin/builtin-agents/runs${suffix}`);
+  const data = (await response.json()) as { runs: BuiltinAgentRunListItem[] };
+  return data.runs;
 }
 
 export async function getBuiltinAgent(id: string): Promise<BuiltinAgent> {

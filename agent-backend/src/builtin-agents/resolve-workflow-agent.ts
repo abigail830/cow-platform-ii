@@ -123,9 +123,11 @@ export async function resolveChannelMetadataAgent(channelId: string): Promise<Re
 export function toLegacyFaqExtractionFields(agent: ResolvedBuiltinAgent): {
   extraction_model_config_id: string;
   extraction_prompt: string;
+  extraction_system_prompt: string;
 } {
   return {
     extraction_model_config_id: agent.modelConfigId,
     extraction_prompt: agent.userPromptTemplate,
+    extraction_system_prompt: agent.systemPrompt,
   };
 }

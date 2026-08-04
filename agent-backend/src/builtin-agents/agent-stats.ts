@@ -1,5 +1,10 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
-import { appBuiltinAgentDefs, appSyncAgentRuns, db } from '../db/index.ts';
+import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import {
+  appBuiltinAgentDefs,
+  appSyncAgentMessages,
+  appSyncAgentRuns,
+  db,
+} from '../db/index.ts';
 
 export type BuiltinAgentUsageStats = {
   total_runs: number;
@@ -7,10 +12,32 @@ export type BuiltinAgentUsageStats = {
   trend: Array<{ date: string; count: number }>;
 };
 
+export type BuiltinAgentRunMessage = {
+  role: string;
+  content: string;
+};
+
+export type BuiltinAgentRunListItem = {
+  id: string;
+  created_at: string;
+  workflow_key: string;
+  agent_name: string | null;
+  trigger_type: string;
+  status: string;
+  latency_ms: number | null;
+  error_message: string | null;
+  input_summary: string | null;
+  messages: BuiltinAgentRunMessage[];
+};
+
+export function parseBuiltinAgentStatsDays(value: string | undefined): number {
+  const parsed = Number(value ?? 7);
+  if (!Number.isFinite(parsed) || parsed <= 7) return 7;
+  return 30;
+}
+
 function parseDays(value: string | undefined): number {
-  const parsed = Number(value ?? 30);
-  if (!Number.isFinite(parsed)) return 30;
-  return Math.min(90, Math.max(7, Math.floor(parsed)));
+  return parseBuiltinAgentStatsDays(value);
 }
 
 function utcDateKey(date: Date): string {
@@ -89,4 +116,78 @@ async function queryUsageStats(
     days,
     trend,
   };
+}
+
+function sinceDateForDays(days: number): Date {
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - (days - 1));
+  since.setUTCHours(0, 0, 0, 0);
+  return since;
+}
+
+export async function listBuiltinAgentRuns(input: {
+  agentId?: string;
+  daysInput?: string;
+  limit?: number;
+}): Promise<BuiltinAgentRunListItem[]> {
+  const days = parseDays(input.daysInput);
+  const since = sinceDateForDays(days);
+  const limit = Math.min(100, Math.max(1, input.limit ?? 50));
+
+  const conditions = [gte(appSyncAgentRuns.createdAt, since)];
+  if (input.agentId?.trim()) {
+    conditions.push(eq(appSyncAgentRuns.builtinAgentDefId, input.agentId.trim()));
+  }
+
+  const runRows = await db
+    .select({
+      id: appSyncAgentRuns.id,
+      createdAt: appSyncAgentRuns.createdAt,
+      workflowKey: appSyncAgentRuns.workflowKey,
+      agentName: appBuiltinAgentDefs.name,
+      triggerType: appSyncAgentRuns.triggerType,
+      status: appSyncAgentRuns.status,
+      latencyMs: appSyncAgentRuns.latencyMs,
+      errorMessage: appSyncAgentRuns.errorMessage,
+      inputSummary: appSyncAgentRuns.inputSummary,
+    })
+    .from(appSyncAgentRuns)
+    .leftJoin(appBuiltinAgentDefs, eq(appSyncAgentRuns.builtinAgentDefId, appBuiltinAgentDefs.id))
+    .where(and(...conditions))
+    .orderBy(desc(appSyncAgentRuns.createdAt))
+    .limit(limit);
+
+  if (runRows.length === 0) return [];
+
+  const runIds = runRows.map((row) => row.id);
+  const messageRows = await db
+    .select({
+      runId: appSyncAgentMessages.runId,
+      role: appSyncAgentMessages.role,
+      content: appSyncAgentMessages.content,
+      createdAt: appSyncAgentMessages.createdAt,
+    })
+    .from(appSyncAgentMessages)
+    .where(inArray(appSyncAgentMessages.runId, runIds))
+    .orderBy(asc(appSyncAgentMessages.createdAt));
+
+  const messagesByRun = new Map<string, BuiltinAgentRunMessage[]>();
+  for (const message of messageRows) {
+    const list = messagesByRun.get(message.runId) ?? [];
+    list.push({ role: message.role, content: message.content });
+    messagesByRun.set(message.runId, list);
+  }
+
+  return runRows.map((row) => ({
+    id: row.id,
+    created_at: row.createdAt.toISOString(),
+    workflow_key: row.workflowKey,
+    agent_name: row.agentName ?? null,
+    trigger_type: row.triggerType,
+    status: row.status,
+    latency_ms: row.latencyMs,
+    error_message: row.errorMessage,
+    input_summary: row.inputSummary,
+    messages: messagesByRun.get(row.id) ?? [],
+  }));
 }

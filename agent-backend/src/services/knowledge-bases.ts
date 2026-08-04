@@ -810,6 +810,10 @@ export async function startKbRagIndexImport(input: {
 export async function getKbWorkerConfig(knowledgeBaseId: string) {
   const kb = await getKnowledgeBaseById(knowledgeBaseId);
   if (!kb) throw new Error('Knowledge base not found');
+  const faqSettings =
+    kb.type === 'faq'
+      ? await enrichFaqSettingsForApi(knowledgeBaseId, kb.faqSettings as KbFaqSettings)
+      : undefined;
   return {
     id: kb.id,
     type: kb.type,
@@ -817,7 +821,7 @@ export async function getKbWorkerConfig(knowledgeBaseId: string) {
     embedding_dimensions: kb.embeddingDimensions,
     chunk_config: kb.chunkConfig,
     metadata_keys: kb.metadataKeys,
-    faq_settings: kb.type === 'faq' ? kb.faqSettings : undefined,
+    faq_settings: faqSettings,
   };
 }
 

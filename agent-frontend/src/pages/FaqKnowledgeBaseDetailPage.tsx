@@ -247,7 +247,17 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
       setError(`${label}: ${activeJob.error_message}`);
     } else if (activeJob.status === 'completed' && activeJob.job_kind === 'faq_extract') {
       setError('');
-      showNotice('FAQ extract completed. New draft FAQs were added to the list.');
+      if (activeJob.failed_count > 0 && activeJob.completed_count === 0) {
+        setError(
+          activeJob.error_message || 'FAQ extract failed for all selected documents.',
+        );
+      } else if (activeJob.failed_count > 0) {
+        showNotice(
+          `FAQ extract finished: ${activeJob.completed_count} document(s) succeeded, ${activeJob.failed_count} failed.`,
+        );
+      } else {
+        showNotice('FAQ extract completed. New draft FAQs were added to the list.');
+      }
     }
   }, [activeJob?.id, activeJob?.status, activeJob?.error_message, activeJob?.job_kind, clearNotice, showNotice]);
 

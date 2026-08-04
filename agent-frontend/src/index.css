@@ -5048,6 +5048,48 @@ textarea {
   margin: 0;
 }
 
+.kb-faq-settings-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 28rem;
+}
+
+.kb-faq-settings-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.kb-faq-settings-tab-body {
+  flex: 1;
+  min-height: 17.5rem;
+}
+
+.kb-faq-settings-actions {
+  margin-top: auto;
+  padding-top: 0.25rem;
+}
+
+.kb-faq-settings-hint {
+  margin-top: 1rem;
+  margin-bottom: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.kb-faq-settings-hint-link {
+  color: var(--brand-orange);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.kb-faq-settings-hint-link:hover {
+  color: var(--brand-orange-hover);
+  text-decoration: underline;
+}
+
 .kb-items-section {
   flex: 1;
   min-height: 0;
@@ -6980,7 +7022,14 @@ textarea {
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 0.75rem;
   background: var(--surface-elevated, #fff);
-  max-width: 22rem;
+  flex: 0 0 min(18rem, 32%);
+  min-width: 0;
+}
+
+.builtin-agent-dashboard-summary-row {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
 }
 
 .builtin-agent-dashboard-stat-icon {
@@ -6990,8 +7039,8 @@ textarea {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 0.625rem;
-  background: color-mix(in srgb, var(--accent, #2563eb) 12%, transparent);
-  color: var(--accent, #2563eb);
+  background: color-mix(in srgb, var(--brand-orange) 12%, transparent);
+  color: var(--brand-orange);
 }
 
 .builtin-agent-dashboard-stat-label {
@@ -7017,6 +7066,8 @@ textarea {
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 0.75rem;
   background: var(--surface-elevated, #fff);
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .builtin-agent-dashboard-trend-header {
@@ -7068,7 +7119,7 @@ textarea {
   width: 100%;
   min-height: 2px;
   border-radius: 0.25rem 0.25rem 0 0;
-  background: var(--accent, #2563eb);
+  background: var(--brand-orange);
   transition: height 0.2s ease;
 }
 
@@ -7080,7 +7131,231 @@ textarea {
   min-height: 0.6875rem;
 }
 
-@media (max-width: 720px) {
+.builtin-agent-dashboard-runs {
+  padding: 1.25rem;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 0.75rem;
+  background: var(--surface-elevated, #fff);
+}
+
+.builtin-agent-dashboard-runs-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.builtin-agent-dashboard-runs-header h4 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.builtin-agent-run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.builtin-agent-runs-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: auto;
+}
+
+.builtin-agent-runs-table th,
+.builtin-agent-runs-table td {
+  vertical-align: middle;
+}
+
+.builtin-agent-runs-table tbody tr.builtin-agent-runs-row {
+  cursor: pointer;
+}
+
+.builtin-agent-runs-table tbody tr.builtin-agent-runs-row:hover {
+  background: #f8fafc;
+}
+
+.builtin-agent-runs-table tbody tr.builtin-agent-runs-row.expanded {
+  background: #fff7ed;
+}
+
+.builtin-agent-runs-time {
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: #334155;
+}
+
+.builtin-agent-runs-agent {
+  min-width: 8rem;
+  max-width: 12rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.builtin-agent-runs-preview {
+  max-width: 14rem;
+  font-size: 0.75rem;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builtin-agent-runs-preview--error {
+  color: #b91c1c;
+}
+
+.builtin-agent-runs-latency {
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.builtin-agent-runs-detail-col {
+  width: 2.5rem;
+  padding-left: 1rem;
+  padding-right: 0.5rem;
+  border-left: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.builtin-agent-runs-detail-btn {
+  pointer-events: auto;
+}
+
+.builtin-agent-runs-chevron {
+  transition: transform 0.15s ease;
+}
+
+.builtin-agent-runs-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.builtin-agent-runs-detail-row > td {
+  padding: 0;
+  background: #fff7ed;
+  border-top: none;
+}
+
+.builtin-agent-runs-detail-panel {
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px solid #fed7aa;
+}
+
+.builtin-agent-runs-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.builtin-agent-runs-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.builtin-agent-run-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: #ffffff;
+}
+
+.builtin-agent-run-row-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.builtin-agent-run-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.builtin-agent-run-row-time {
+  font-weight: 600;
+  color: #334155;
+}
+
+.builtin-agent-run-row-agent {
+  color: #334155;
+}
+
+.builtin-agent-run-row-workflow {
+  color: #64748b;
+}
+
+.builtin-agent-run-row-status {
+  margin-left: 0;
+}
+
+.builtin-agent-run-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.builtin-agent-run-row-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.builtin-agent-run-field-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.builtin-agent-run-field-text {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+
+.builtin-agent-run-field-text--error {
+  color: #b91c1c;
+}
+
+@media (max-width: 900px) {
+  .builtin-agent-dashboard-summary-row {
+    flex-direction: column;
+  }
+
+  .builtin-agent-dashboard-stat {
+    flex-basis: auto;
+  }
+
+  .builtin-agent-run-row-body {
+    grid-template-columns: 1fr;
+  }
+
+  .builtin-agent-runs-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
   .builtin-agent-dashboard-controls {
     flex-direction: column;
     align-items: stretch;

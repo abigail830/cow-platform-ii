@@ -8,6 +8,7 @@ export type EnrichedKbFaqSettings = KbFaqSettings & {
   /** Legacy fields populated from resolved agents for CLI compatibility. */
   extraction_model_config_id?: string | null;
   extraction_prompt?: string;
+  extraction_system_prompt?: string;
   polish_model_config_id?: string | null;
   polish_prompt?: string;
 };
@@ -27,9 +28,11 @@ export async function enrichFaqSettingsForApi(
     const extractLegacy = toLegacyFaqExtractionFields(extractAgent);
     base.extraction_model_config_id = extractLegacy.extraction_model_config_id;
     base.extraction_prompt = extractLegacy.extraction_prompt;
+    base.extraction_system_prompt = extractLegacy.extraction_system_prompt;
   } catch {
     base.extraction_model_config_id = null;
     base.extraction_prompt = '';
+    base.extraction_system_prompt = '';
   }
 
   try {

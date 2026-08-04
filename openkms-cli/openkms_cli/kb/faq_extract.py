@@ -98,12 +98,25 @@ def _build_extract_job_error_message(
     return summary
 
 
+def _chat_completions_url(base_url: str) -> str:
+    base = base_url.rstrip("/")
+    if base.endswith("/chat/completions"):
+        return base
+    if base.endswith("/v1"):
+        return f"{base}/chat/completions"
+    if re.search(r"/v\d+$", base, re.I):
+        return f"{base}/chat/completions"
+    return f"{base}/v1/chat/completions"
+
+
 def _chat_extract(
     base: str,
     model_id: str,
     prompt: str,
     headers: dict,
     basic,
+    *,
+    system_prompt: str = "",
 ) -> list[dict[str, str]]:
     params_resp = requests.get(
         f"{base}/internal-api/models/cli-params",
@@ -116,18 +129,17 @@ def _chat_extract(
         raise RuntimeError(f"cli-params {params_resp.status_code}")
 
     params = params_resp.json()
-    url = f"{params['base_url'].rstrip('/')}/chat/completions"
-    messages: list[dict[str, str]] = [
-        {
-            "role": "system",
-            "content": (
-                "Extract FAQ pairs from the document. "
-                "Respond with a JSON array of objects using keys question and answer. "
-                "If the document is not already FAQ-formatted, infer useful Q&A from its content."
-            ),
-        },
-        {"role": "user", "content": prompt},
-    ]
+    url = _chat_completions_url(params["base_url"])
+    default_system = (
+        "Extract FAQ pairs from the document. "
+        "Respond with a JSON array of objects using keys question and answer. "
+        "If the document is not already FAQ-formatted, infer useful Q&A from its content."
+    )
+    messages: list[dict[str, str]] = []
+    resolved_system = (system_prompt or "").strip() or default_system
+    if resolved_system:
+        messages.append({"role": "system", "content": resolved_system})
+    messages.append({"role": "user", "content": prompt})
 
     last_raw = ""
     for attempt in range(2):
@@ -226,6 +238,7 @@ def run_faq_extract(job_id: str, api_url: Optional[str] = None) -> None:
         metadata_keys = kb_config.get("metadata_keys") or []
         extraction_model_id = faq_settings.get("extraction_model_config_id")
         extraction_prompt = faq_settings.get("extraction_prompt") or ""
+        extraction_system_prompt = faq_settings.get("extraction_system_prompt") or ""
         if not extraction_model_id:
             raise RuntimeError("FAQ extraction model is not configured")
 
@@ -267,7 +280,14 @@ def run_faq_extract(job_id: str, api_url: Optional[str] = None) -> None:
                         "document_name": ctx.get("name") or document_id,
                         "markdown": markdown[:120000],
                     })
-                    pairs = _chat_extract(base, extraction_model_id, prompt, auth_headers, basic)
+                    pairs = _chat_extract(
+                        base,
+                        extraction_model_id,
+                        prompt,
+                        auth_headers,
+                        basic,
+                        system_prompt=extraction_system_prompt,
+                    )
                     if not pairs:
                         raise RuntimeError("No FAQ pairs extracted")
 

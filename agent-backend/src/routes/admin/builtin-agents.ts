@@ -13,7 +13,7 @@ import { getUser, requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
 import { WORKFLOW_VARIABLES } from '../../builtin-agents/defaults.ts';
-import { getAllBuiltinAgentsUsageStats, getBuiltinAgentUsageStats } from '../../builtin-agents/agent-stats.ts';
+import { getAllBuiltinAgentsUsageStats, getBuiltinAgentUsageStats, listBuiltinAgentRuns } from '../../builtin-agents/agent-stats.ts';
 import { normalizeSyncAgentDraft } from '../../builtin-agents/normalize-sync-agent-draft.ts';
 import { runSyncAgent, type SyncAgentDraftDef } from '../../builtin-agents/sync-agent-runner.ts';
 import { resolveModelCliParams } from '../../services/model-cli-params.ts';
@@ -128,6 +128,19 @@ builtinAgents.get(
   async (c) => {
     const stats = await getAllBuiltinAgentsUsageStats(c.req.query('days'));
     return c.json({ stats });
+  },
+);
+
+builtinAgents.get(
+  '/runs',
+  requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.BUILTIN_AGENTS, 'read'),
+  async (c) => {
+    const agentId = c.req.query('agent_id')?.trim() || undefined;
+    const runs = await listBuiltinAgentRuns({
+      agentId,
+      daysInput: c.req.query('days'),
+    });
+    return c.json({ runs });
   },
 );
 
