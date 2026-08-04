@@ -16,6 +16,7 @@ import { listModelConfigs } from '../api/models.ts';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { HybridSearchKbMultiSelect } from '../components/HybridSearchKbMultiSelect.tsx';
 import { Markdown } from '../chat/Markdown.tsx';
+import { SourceRefLinks } from '../components/SourceRefLinks.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
@@ -161,12 +162,6 @@ function RecallScores({ debug }: { debug?: HybridSearchResult['retrieval_debug']
 function ResultCard({ item }: { item: HybridSearchResult }) {
   const [expanded, setExpanded] = useState(false);
   const debug = item.retrieval_debug;
-  const sourceLine = [
-    item.source_name,
-    item.chunk_index != null ? `chunk #${item.chunk_index}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
 
   return (
     <article className={`hybrid-search-result-card${expanded ? ' is-expanded' : ''}`}>
@@ -185,8 +180,10 @@ function ResultCard({ item }: { item: HybridSearchResult }) {
             </span>
             <span className="hybrid-search-result-kb">{item.knowledge_base_name}</span>
           </div>
-          {sourceLine ? (
-            <div className="hybrid-search-result-summary-line2">{sourceLine}</div>
+          {item.source ? (
+            <div className="hybrid-search-result-summary-line2" onClick={(event) => event.stopPropagation()}>
+              <SourceRefLinks source={item.source} />
+            </div>
           ) : null}
         </div>
         <RecallScores debug={debug} />

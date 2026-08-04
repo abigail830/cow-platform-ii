@@ -8,6 +8,7 @@ import {
 } from '../constants.ts';
 import { groupKbsByEmbeddingModel, kbNameById } from './embedding-groups.ts';
 import { reciprocalRankFusion } from './rrf.ts';
+import { buildSourceRef } from '../source-ref.ts';
 import type { HybridSearchDeps } from '../ports.ts';
 import type {
   HybridSearchRequest,
@@ -107,9 +108,16 @@ function toSearchResult(
     source_type: candidate.sourceType,
     content: candidate.content,
     score,
-    source_name: candidate.sourceName,
-    document_id: candidate.documentId,
-    chunk_index: candidate.chunkIndex,
+    source: buildSourceRef({
+      chunkId: candidate.id,
+      knowledgeBaseId: candidate.knowledgeBaseId,
+      sourceType: candidate.sourceType,
+      documentId: candidate.documentId,
+      documentName: candidate.sourceName,
+      fileType: candidate.fileType,
+      chunkIndex: candidate.chunkIndex,
+      chunkMetadata: candidate.chunkMetadata,
+    }),
     retrieval_mode: mode,
     retrieval_debug: {
       embedding_group_id: candidate.embeddingGroupId,

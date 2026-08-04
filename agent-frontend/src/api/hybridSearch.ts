@@ -31,6 +31,29 @@ export type HybridRetrievalDebug = {
   pipeline_stages: string[];
 };
 
+export type SourceLocator = {
+  page_num?: number;
+  line_num?: number;
+  node_id?: string;
+  heading?: string;
+  char_start?: number;
+  char_end?: number;
+  sheet_index?: number;
+};
+
+export type SourceRef = {
+  document_id: string;
+  document_name: string;
+  file_type: string | null;
+  knowledge_base_id: string;
+  chunk_id: string;
+  chunk_index: number | null;
+  source_type: 'chunk' | 'faq';
+  locator: SourceLocator | null;
+  parsed_url: string;
+  original_url: string;
+};
+
 export type HybridSearchResult = {
   id: string;
   knowledge_base_id: string;
@@ -38,9 +61,7 @@ export type HybridSearchResult = {
   source_type: 'chunk' | 'faq';
   content: string;
   score: number;
-  source_name?: string;
-  document_id?: string;
-  chunk_index?: number;
+  source: SourceRef | null;
   retrieval_mode: 'hybrid' | 'dense' | 'lexical' | 'rerank';
   retrieval_debug?: HybridRetrievalDebug;
 };

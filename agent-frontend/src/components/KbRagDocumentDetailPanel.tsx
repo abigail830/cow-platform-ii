@@ -1,7 +1,9 @@
+import { Link } from 'react-router-dom';
 import { useMemo, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { ExternalLink, Loader2, X } from 'lucide-react';
 import type { KbDocumentChunks } from '../api/knowledgeBases.ts';
 import { Markdown } from '../chat/Markdown.tsx';
+import { buildDocumentSourceUrl } from '../shared/document-deep-link.ts';
 import { iconProps } from './icons/icon-props.ts';
 
 type DetailTab = 'chunks' | 'metadata';
@@ -45,7 +47,11 @@ export function KbRagDocumentDetailPanel({ detail, loading, onClose }: KbRagDocu
           <h2>{detail?.document_name ?? 'Indexed document'}</h2>
           {detail && (
             <p className="kb-item-detail-subtitle">
-              {detail.channel_path || '—'} · {detail.chunk_count} chunks · {detail.document_id}
+              {detail.channel_path || '—'} · {detail.chunk_count} chunks
+              <Link to={`/knowledge/documents/${detail.document_id}`} className="btn-link kb-source-doc-link">
+                <ExternalLink {...iconProps({ size: 14 })} aria-hidden />
+                View source document
+              </Link>
             </p>
           )}
         </div>
@@ -105,6 +111,25 @@ export function KbRagDocumentDetailPanel({ detail, loading, onClose }: KbRagDocu
                   </button>
                   {expanded ? (
                     <div className="kb-chunk-card-body">
+                      {detail.document_id ? (
+                        <Link
+                          to={buildDocumentSourceUrl(
+                            detail.document_id,
+                            'parsed',
+                            chunk.chunk_metadata as {
+                              node_id?: string;
+                              line_num?: number;
+                              page_num?: number;
+                              sheet_index?: number;
+                              heading?: string;
+                            } | null,
+                          )}
+                          className="btn-link kb-chunk-source-link"
+                        >
+                          <ExternalLink {...iconProps({ size: 14 })} aria-hidden />
+                          Open in document
+                        </Link>
+                      ) : null}
                       {chunk.chunk_metadata ? (
                         <pre className="kb-chunk-metadata">{JSON.stringify(chunk.chunk_metadata, null, 2)}</pre>
                       ) : null}

@@ -1,6 +1,7 @@
 """RAG knowledge base indexing: S3 markdown → chunk → embed → backend chunks API."""
 
 import hashlib
+import json
 import uuid
 from typing import Any, Optional
 
@@ -13,6 +14,7 @@ from openkms_cli.core.auth import try_api_request_auth
 from openkms_cli.core.settings import get_cli_settings
 from openkms_cli.kb.chunking import chunk_document, propagate_metadata
 from openkms_cli.kb.embeddings import generate_embeddings
+from openkms_cli.kb.locator import resolve_chunk_locator
 from openkms_cli.kb.pageindex_import import _read_s3_text
 from openkms_cli.pipeline.storage import get_s3_client
 
@@ -248,6 +250,11 @@ def run_rag_index(job_id: str, api_url: Optional[str] = None) -> None:
                     if not markdown or not markdown.strip():
                         raise RuntimeError("markdown.md missing or empty")
 
+                    page_index_raw = _read_s3_text(s3_client, bucket, f"{prefix}/page_index.json")
+                    page_index = None
+                    if page_index_raw and page_index_raw.strip():
+                        page_index = json.loads(page_index_raw)
+
                     doc_meta = propagate_metadata(ctx.get("metadata"), metadata_keys)
                     content_hash = hashlib.sha256(markdown.encode("utf-8")).hexdigest()
 
@@ -260,13 +267,17 @@ def run_rag_index(job_id: str, api_url: Optional[str] = None) -> None:
                     embeddings = generate_embeddings(texts, embed_cfg, dimensions=dimensions)
 
                     for rc, emb in zip(raw_chunks, embeddings):
+                        chunk_metadata = dict(rc.get("metadata") or {})
+                        locator = resolve_chunk_locator(markdown, chunk_metadata, page_index)
+                        if locator:
+                            chunk_metadata.update(locator)
                         batch_items.append({
                             "id": str(uuid.uuid4()),
                             "document_id": document_id,
                             "content": rc["content"],
                             "chunk_index": rc["chunk_index"],
                             "embedding": emb,
-                            "chunk_metadata": rc.get("metadata"),
+                            "chunk_metadata": chunk_metadata or None,
                             "doc_metadata": doc_meta,
                             "content_hash": content_hash,
                         })

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import {
   fetchDocumentContent,
@@ -10,14 +11,29 @@ import {
 import { DocumentMetadataBar } from '../components/DocumentMetadataBar.tsx';
 import { MindmapMetadataPanel, parseMindmapParsingResult } from '../components/MindmapMetadataPanel.tsx';
 import { formatDocumentStatusLabel } from '../components/DocumentPipelineStatus.tsx';
-import { PageIndexTreePanel, slugifyHeading, type PageIndexNode, type PageIndexTree } from '../components/PageIndexTree.tsx';
+import { PageIndexTreePanel, type PageIndexNode, type PageIndexTree } from '../components/PageIndexTree.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { Markdown } from '../chat/Markdown.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
+import {
+  findPageIndexNode,
+  parseDocumentDeepLink,
+  scrollToDocumentTarget,
+  type DocumentViewMode,
+} from '../shared/document-deep-link.ts';
+import { supportsUdocViewer } from '../shared/source-ref.ts';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
+
+const DocumentUdocViewer = lazy(() =>
+  import('../components/DocumentUdocViewer.tsx').then((mod) => ({ default: mod.DocumentUdocViewer })),
+);
+
+type ContentTab = DocumentViewMode;
 
 export function DocumentDetailPage() {
   const { documentId } = useParams<{ documentId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLink = useMemo(() => parseDocumentDeepLink(searchParams.toString()), [searchParams]);
   const { setSelectedChannelId } = useDocumentsOutletContext();
   const contentRef = useRef<HTMLDivElement | null>(null);
 
@@ -28,6 +44,7 @@ export function DocumentDetailPage() {
   const [error, setError] = useState('');
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [activeSheetIndex, setActiveSheetIndex] = useState<number | null>(null);
+  const [contentTab, setContentTab] = useState<ContentTab>(deepLink.view);
 
   const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('document-detail-split', 32);
 
@@ -76,19 +93,9 @@ export function DocumentDetailPage() {
     return () => window.clearInterval(intervalId);
   }, [documentId, document?.status]);
 
-  function handleSelectNode(node: PageIndexNode) {
-    setActiveNodeId(node.node_id);
-    const slug = slugifyHeading(node.title);
-    const target =
-      (node.node_id
-        ? contentRef.current?.querySelector(`#${CSS.escape(node.node_id)}`)
-        : null) ??
-      contentRef.current?.querySelector(`#${CSS.escape(slug)}`) ??
-      (typeof node.line_num === 'number'
-        ? contentRef.current?.querySelector(`[data-line="${node.line_num}"]`)
-        : null);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  useEffect(() => {
+    setContentTab(deepLink.view);
+  }, [deepLink.view]);
 
   const pageIndex = (content?.page_index as PageIndexTree | null) ?? null;
   const mindmap = parseMindmapParsingResult(content?.parsing_result);
@@ -96,13 +103,55 @@ export function DocumentDetailPage() {
   const isMindmapOutline = pageIndex?.strategy === 'xmind-outline';
   const sheetCount = mindmap?.sheets?.length ?? 0;
   const showSheetFilter = isMindmapOutline && sheetCount > 1;
+  const showOriginalTab = supportsUdocViewer(document?.file_type);
+
+  const scrollToNode = useCallback((node: PageIndexNode, highlight = false) => {
+    setActiveNodeId(node.node_id);
+    scrollToDocumentTarget(contentRef.current, {
+      nodeId: node.node_id,
+      line: node.line_num ?? null,
+      heading: node.title,
+      highlight,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (loadingContent || contentTab !== 'parsed' || !pageIndex) return;
+
+    const node = findPageIndexNode(pageIndex, deepLink);
+    if (node) {
+      if (typeof node.sheet_index === 'number') setActiveSheetIndex(node.sheet_index);
+      window.requestAnimationFrame(() => scrollToNode(node, deepLink.highlight));
+      return;
+    }
+
+    if (deepLink.line != null || deepLink.nodeId || deepLink.heading) {
+      window.requestAnimationFrame(() =>
+        scrollToDocumentTarget(contentRef.current, {
+          nodeId: deepLink.nodeId,
+          line: deepLink.line,
+          heading: deepLink.heading,
+          highlight: deepLink.highlight,
+        }),
+      );
+    }
+  }, [loadingContent, contentTab, pageIndex, deepLink, scrollToNode]);
+
+  function handleSelectNode(node: PageIndexNode) {
+    scrollToNode(node, false);
+  }
 
   function handleSelectSheet(sheetIndex: number) {
     setActiveSheetIndex(sheetIndex);
     const sheetNode = pageIndex?.structure?.find((node) => node.sheet_index === sheetIndex);
-    if (sheetNode) {
-      handleSelectNode(sheetNode);
-    }
+    if (sheetNode) handleSelectNode(sheetNode);
+  }
+
+  function switchContentTab(next: ContentTab) {
+    setContentTab(next);
+    const params = new URLSearchParams(searchParams);
+    params.set('view', next);
+    setSearchParams(params, { replace: true });
   }
 
   return (
@@ -179,19 +228,61 @@ export function DocumentDetailPage() {
             />
 
             <section className="document-detail-content" aria-label="Document content">
-              <h3 className="document-detail-panel-heading">Document text</h3>
-              <div ref={contentRef} className="document-detail-content-scroll">
-                {content.has_markdown && content.markdown ? (
-                  <Markdown content={content.markdown} headingIds />
-                ) : (
-                  <div className="document-detail-panel-empty">
-                    <p>No parsed content yet.</p>
-                    <p className="document-detail-panel-hint">
-                      Run the pipeline on this document to generate markdown.
-                    </p>
+              <div className="document-detail-content-header">
+                <h3 className="document-detail-panel-heading">Document content</h3>
+                {showOriginalTab ? (
+                  <div className="document-detail-view-tabs" role="tablist" aria-label="Document view">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={contentTab === 'parsed'}
+                      className={`document-detail-view-tab${contentTab === 'parsed' ? ' active' : ''}`}
+                      onClick={() => switchContentTab('parsed')}
+                    >
+                      Parsed
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={contentTab === 'original'}
+                      className={`document-detail-view-tab${contentTab === 'original' ? ' active' : ''}`}
+                      onClick={() => switchContentTab('original')}
+                    >
+                      Original
+                    </button>
                   </div>
-                )}
+                ) : null}
               </div>
+
+              {contentTab === 'original' && showOriginalTab && documentId ? (
+                <Suspense
+                  fallback={
+                    <p className="document-detail-loading" role="status">
+                      <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
+                      Preparing viewer…
+                    </p>
+                  }
+                >
+                  <DocumentUdocViewer
+                    documentId={documentId}
+                    page={deepLink.page}
+                    searchQuery={deepLink.highlight ? deepLink.heading : null}
+                  />
+                </Suspense>
+              ) : (
+                <div ref={contentRef} className="document-detail-content-scroll">
+                  {content.has_markdown && content.markdown ? (
+                    <Markdown content={content.markdown} headingIds />
+                  ) : (
+                    <div className="document-detail-panel-empty">
+                      <p>No parsed content yet.</p>
+                      <p className="document-detail-panel-hint">
+                        Run the pipeline on this document to generate markdown.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           </div>
         </div>

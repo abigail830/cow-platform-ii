@@ -162,10 +162,16 @@ export async function deleteDocument(id: string): Promise<void> {
 }
 
 export async function downloadDocument(id: string): Promise<void> {
-  const data = await authFetch(`/api/documents/${id}/download`);
-  const url = data.url as string;
-  const filename = (data.filename as string) || 'download';
+  const { url, filename } = await getDocumentDownloadUrl(id);
   triggerBrowserDownload(url, filename);
+}
+
+export async function getDocumentDownloadUrl(id: string): Promise<{ url: string; filename: string }> {
+  const data = await authFetch(`/api/documents/${id}/download`);
+  return {
+    url: data.url as string,
+    filename: (data.filename as string) || 'download',
+  };
 }
 
 function isBrowserBundleFailure(error: unknown): boolean {

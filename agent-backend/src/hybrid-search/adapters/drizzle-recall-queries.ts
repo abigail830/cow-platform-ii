@@ -15,7 +15,9 @@ type RecallRow = {
   content: string;
   source_name: string | null;
   document_id: string | null;
+  file_type: string | null;
   chunk_index: number | null;
+  chunk_metadata: Record<string, unknown> | null;
   score: number;
 };
 
@@ -33,7 +35,9 @@ function toRecallCandidate(
     content: row.content,
     sourceName: row.source_name ?? undefined,
     documentId: row.document_id ?? undefined,
+    fileType: row.file_type ?? undefined,
     chunkIndex: row.chunk_index ?? undefined,
+    chunkMetadata: row.chunk_metadata,
     embeddingGroupId,
   };
 }
@@ -61,12 +65,15 @@ export async function queryDenseChunks(
             c.content,
             cd.document_name AS source_name,
             c.document_id,
+            d.file_type,
             c.chunk_index,
+            c.chunk_metadata,
             (1 - (c.embedding <=> $1::vector))::float8 AS score
      FROM app_kb_chunks c
      LEFT JOIN app_kb_chunk_documents cd
        ON cd.knowledge_base_id = c.knowledge_base_id
       AND cd.document_id = c.document_id
+     LEFT JOIN app_documents d ON d.id = c.document_id
      WHERE c.knowledge_base_id = ANY($2::uuid[])
      ORDER BY c.embedding <=> $1::vector
      LIMIT $3`,
@@ -100,9 +107,12 @@ export async function queryDenseFaqs(
             ('Q: ' || f.question || E'\nA: ' || f.answer) AS content,
             COALESCE(f.source_document_name, 'FAQ') AS source_name,
             f.source_document_id AS document_id,
+            d.file_type,
             NULL::int AS chunk_index,
+            NULL::jsonb AS chunk_metadata,
             (1 - (f.embedding <=> $1::vector))::float8 AS score
      FROM app_kb_faqs f
+     LEFT JOIN app_documents d ON d.id = f.source_document_id
      WHERE f.knowledge_base_id = ANY($2::uuid[])
        AND f.publication_status = 'published'
        AND f.index_status = 'indexed'
@@ -139,12 +149,15 @@ export async function queryLexicalChunks(
             c.content,
             cd.document_name AS source_name,
             c.document_id,
+            d.file_type,
             c.chunk_index,
+            c.chunk_metadata,
             ts_rank_cd(c.search_vector, plainto_tsquery('simple', $1))::float8 AS score
      FROM app_kb_chunks c
      LEFT JOIN app_kb_chunk_documents cd
        ON cd.knowledge_base_id = c.knowledge_base_id
       AND cd.document_id = c.document_id
+     LEFT JOIN app_documents d ON d.id = c.document_id
      WHERE c.knowledge_base_id = ANY($2::uuid[])
        AND c.search_vector @@ plainto_tsquery('simple', $1)
      ORDER BY score DESC
@@ -179,9 +192,12 @@ export async function queryLexicalFaqs(
             ('Q: ' || f.question || E'\nA: ' || f.answer) AS content,
             COALESCE(f.source_document_name, 'FAQ') AS source_name,
             f.source_document_id AS document_id,
+            d.file_type,
             NULL::int AS chunk_index,
+            NULL::jsonb AS chunk_metadata,
             ts_rank_cd(f.search_vector, plainto_tsquery('simple', $1))::float8 AS score
      FROM app_kb_faqs f
+     LEFT JOIN app_documents d ON d.id = f.source_document_id
      WHERE f.knowledge_base_id = ANY($2::uuid[])
        AND f.publication_status = 'published'
        AND f.index_status = 'indexed'

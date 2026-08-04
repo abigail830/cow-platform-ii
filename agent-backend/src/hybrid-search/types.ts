@@ -31,6 +31,8 @@ export type HybridRetrievalDebug = {
   pipeline_stages: string[];
 };
 
+import type { SourceRef } from './source-ref.ts';
+
 export type HybridSearchResult = {
   id: string;
   knowledge_base_id: string;
@@ -38,9 +40,7 @@ export type HybridSearchResult = {
   source_type: HybridSourceType;
   content: string;
   score: number;
-  source_name?: string;
-  document_id?: string;
-  chunk_index?: number;
+  source: SourceRef | null;
   retrieval_mode: HybridRetrievalMode;
   retrieval_debug?: HybridRetrievalDebug;
 };
@@ -93,7 +93,9 @@ export type RecallCandidate = {
   content: string;
   sourceName?: string;
   documentId?: string;
+  fileType?: string;
   chunkIndex?: number;
+  chunkMetadata?: Record<string, unknown> | null;
   embeddingGroupId: string;
   denseScore?: number;
   denseRank?: number;
