@@ -21,12 +21,7 @@ import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
-import {
-  defaultSourcePreviewView,
-  sourcePreviewKey,
-  type SourcePreviewSelection,
-  type SourcePreviewView,
-} from '../shared/source-ref.ts';
+import { sourcePreviewKey, type SourcePreviewSelection } from '../shared/source-ref.ts';
 
 const PAGE = getNavPage('/knowledge/hybrid-search')!;
 
@@ -173,7 +168,7 @@ function ResultCard({
   isPreviewTarget,
 }: {
   item: HybridSearchResult;
-  onPreview?: (source: NonNullable<HybridSearchResult['source']>, view: SourcePreviewView) => void;
+  onPreview?: (source: NonNullable<HybridSearchResult['source']>) => void;
   activePreviewKey?: string | null;
   isPreviewTarget?: boolean;
 }) {
@@ -199,8 +194,8 @@ function ResultCard({
                 source={item.source}
                 onPreview={
                   onPreview
-                    ? (source, view) => {
-                        onPreview(source, view);
+                    ? (source) => {
+                        onPreview(source);
                       }
                     : undefined
                 }
@@ -245,24 +240,15 @@ export function HybridSearchPage() {
     minPct: 28,
     maxPct: 72,
   });
-  const activePreviewKey = previewSelection
-    ? sourcePreviewKey(previewSelection.source, previewSelection.view)
-    : null;
+  const activePreviewKey = previewSelection ? sourcePreviewKey(previewSelection.source) : null;
 
   const openPreview = useCallback(
-    (resultKey: string, source: NonNullable<HybridSearchResult['source']>, view?: SourcePreviewView) => {
+    (resultKey: string, source: NonNullable<HybridSearchResult['source']>) => {
       setPreviewResultKey(resultKey);
-      setPreviewSelection({
-        source,
-        view: view ?? defaultSourcePreviewView(source),
-      });
+      setPreviewSelection({ source });
     },
     [],
   );
-
-  const handlePreviewViewChange = useCallback((view: SourcePreviewView) => {
-    setPreviewSelection((current) => (current ? { ...current, view } : current));
-  }, []);
 
   const closePreview = useCallback(() => {
     setPreviewSelection(null);
@@ -466,9 +452,7 @@ export function HybridSearchPage() {
                         key={resultKey}
                         item={item}
                         onPreview={
-                          item.source
-                            ? (source, view) => openPreview(resultKey, source, view)
-                            : undefined
+                          item.source ? (source) => openPreview(resultKey, source) : undefined
                         }
                         activePreviewKey={activePreviewKey}
                         isPreviewTarget={previewResultKey === resultKey}
@@ -492,11 +476,7 @@ export function HybridSearchPage() {
               aria-label="Resize panels"
               onMouseDown={onHandleMouseDown}
             />
-            <HybridSearchSourcePreview
-              selection={previewSelection}
-              onClose={closePreview}
-              onViewChange={handlePreviewViewChange}
-            />
+            <HybridSearchSourcePreview source={previewSelection.source} onClose={closePreview} />
           </>
         ) : null}
       </div>

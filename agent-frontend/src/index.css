@@ -5679,6 +5679,64 @@ textarea {
   color: #64748b;
 }
 
+.source-original-preview-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.source-preview-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.source-preview-panel-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #0f172a;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.source-preview-panel-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.source-preview-panel-body .document-udoc-viewer {
+  flex: 1;
+  min-height: 0;
+}
+
+.source-preview-panel-body .document-udoc-viewer-canvas {
+  min-height: 0;
+}
+
+.source-preview-panel-loading {
+  flex: 1;
+  min-height: 12rem;
+}
+
+.source-preview-drawer {
+  width: min(52rem, 92vw);
+}
+
+.source-preview-drawer-backdrop {
+  z-index: 70;
+}
+
 .hybrid-search-result-card.is-preview-target {
   border-color: var(--brand-orange-muted);
   box-shadow: 0 0 0 1px var(--brand-orange-soft);

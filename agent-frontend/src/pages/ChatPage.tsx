@@ -15,6 +15,7 @@ import {
   type Conversation,
 } from '../api/conversations.ts';
 import type { AgentPromptImage } from '../chat/prompt-images.ts';
+import { SourcePreviewHostProvider } from '../chat/source-preview-host.tsx';
 
 type ChatPageContentProps = {
   user: AuthUser;
@@ -102,8 +103,9 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
   }
 
   return (
-    <div className="chat-shell">
-      <main className="chat-main">
+    <SourcePreviewHostProvider>
+      <div className="chat-shell">
+        <main className="chat-main">
         <header className="chat-header">
           <div className="chat-header-title">
             {selectedAgent && <AgentMenuIcon className="chat-header-icon" />}
@@ -182,7 +184,8 @@ function ChatPageContent({ user, agents, selectedAgent, onSelectAgent }: ChatPag
           onClose={() => setHistoryOpen(false)}
         />
       )}
-    </div>
+      </div>
+    </SourcePreviewHostProvider>
   );
 }
 

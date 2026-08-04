@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useChatLinkResolve } from './chat-link-resolve-context.ts';
+import { useSourcePreviewHost } from './source-preview-host.tsx';
+import { isExternalHttpUrl, parseSourcePreviewHref } from '../shared/source-preview-href.ts';
 import { slugifyHeading } from '../components/PageIndexTree.tsx';
 
 type MarkdownProps = {
@@ -30,10 +32,39 @@ function extractText(node: ReactNode): string {
 function buildMarkdownComponents(
   headingIds: boolean,
   resolveLinkHref?: (href: string, label?: string) => string,
+  openSourcePreview?: (target: { documentId: string; page: number | null; title?: string }) => void,
 ): Components {
   const link = ({ href, children, ...props }: { href?: string; children?: ReactNode }) => {
     const label = extractText(children).trim();
     const resolvedHref = href && resolveLinkHref ? resolveLinkHref(href, label || undefined) : href;
+
+    if (resolvedHref && isExternalHttpUrl(resolvedHref)) {
+      return (
+        <a href={resolvedHref} target="_blank" rel="noopener noreferrer" {...props}>
+          {children}
+        </a>
+      );
+    }
+
+    const previewTarget = resolvedHref ? parseSourcePreviewHref(resolvedHref) : null;
+    if (previewTarget && openSourcePreview) {
+      return (
+        <a
+          href={resolvedHref}
+          onClick={(event) => {
+            event.preventDefault();
+            openSourcePreview({
+              ...previewTarget,
+              title: label || undefined,
+            });
+          }}
+          {...props}
+        >
+          {children}
+        </a>
+      );
+    }
+
     const internal = resolvedHref?.startsWith('/') ?? false;
     return (
       <a
@@ -119,12 +150,15 @@ function buildMarkdownComponents(
 export function Markdown({ children, content, headingIds = false }: MarkdownProps) {
   const source = content ?? children ?? '';
   const resolveLinkHref = useChatLinkResolve();
+  const previewHost = useSourcePreviewHost();
+  const openSourcePreview = previewHost?.open;
+
   return (
     <div className="markdown-body">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={headingIds ? [rehypeRaw] : []}
-        components={buildMarkdownComponents(headingIds, resolveLinkHref)}
+        components={buildMarkdownComponents(headingIds, resolveLinkHref, openSourcePreview)}
       >
         {source}
       </ReactMarkdown>
