@@ -20,5 +20,5 @@ test('agent catalog root exists', () => {
 test('kb-qa prompt loads from markdown file', () => {
   const spec = loadAgentSpec(`${agentCatalogRoot()}/kb-qa`);
   assert.match(spec.instructions, /knowledge|search|answer/i);
-  assert.equal(spec.model.configName, 'qwen3.7-flash');
+  assert.equal(spec.model.configName, 'deepSeek-V4-Flash');
 });
