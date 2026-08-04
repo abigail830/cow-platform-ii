@@ -28,6 +28,7 @@ export async function searchSessionFiles(options: {
     if (text === null) {
       const { bytes } = await readSessionFileBytes(options.instanceId, record.id);
       const extracted = await extractSessionFileText({
+        fileId: record.id,
         filename: record.filename,
         mimeType: record.mimeType,
         bytes,

@@ -40,3 +40,15 @@ test('extractSessionFileText parses minimal xlsx workbook', async () => {
   assert.match(result.text, /Q1/);
   assert.match(result.text, /20/);
 });
+
+test('extractSessionFileText requires fileId for images', async () => {
+  await assert.rejects(
+    () =>
+      extractSessionFileText({
+        filename: 'chart.png',
+        mimeType: 'image/png',
+        bytes: Buffer.from('not-a-real-png'),
+      }),
+    /fileId is required/,
+  );
+});

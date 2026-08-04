@@ -6,6 +6,7 @@ export type ExtractResult = {
 };
 
 export async function extractSessionFileText(params: {
+  fileId?: string;
   filename: string;
   mimeType: string;
   bytes: Buffer;
@@ -64,8 +65,16 @@ export async function extractSessionFileText(params: {
   }
 
   if (isSessionFileImage(params.filename)) {
-    const { extractSessionImageWithVision } = await import('./session-file-vision-extract.ts');
-    return extractSessionImageWithVision(params);
+    if (!params.fileId?.trim()) {
+      throw new Error('fileId is required for session image extraction');
+    }
+    const { extractSessionImageText } = await import('./session-file-image-extract.ts');
+    return extractSessionImageText({
+      fileId: params.fileId.trim(),
+      filename: params.filename,
+      mimeType: params.mimeType,
+      bytes: params.bytes,
+    });
   }
 
   throw new Error(`Unsupported session file extension: ${ext || '(none)'}`);

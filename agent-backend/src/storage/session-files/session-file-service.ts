@@ -169,6 +169,7 @@ export async function ensureSessionFileContentCached(
 
   const { bytes } = await readSessionFileBytes(instanceId, fileId);
   const extracted = await extractSessionFileText({
+    fileId,
     filename: record.filename,
     mimeType: record.mimeType,
     bytes,
