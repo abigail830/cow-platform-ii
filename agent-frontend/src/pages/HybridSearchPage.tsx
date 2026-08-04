@@ -15,11 +15,19 @@ import {
 import { listModelConfigs } from '../api/models.ts';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { HybridSearchKbMultiSelect } from '../components/HybridSearchKbMultiSelect.tsx';
+import { HybridSearchSourcePreview } from '../components/HybridSearchSourcePreview.tsx';
 import { Markdown } from '../chat/Markdown.tsx';
 import { SourceRefLinks } from '../components/SourceRefLinks.tsx';
+import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
+import {
+  defaultSourcePreviewView,
+  sourcePreviewKey,
+  type SourcePreviewSelection,
+  type SourcePreviewView,
+} from '../shared/source-ref.ts';
 
 const PAGE = getNavPage('/knowledge/hybrid-search')!;
 
@@ -159,12 +167,26 @@ function RecallScores({ debug }: { debug?: HybridSearchResult['retrieval_debug']
   );
 }
 
-function ResultCard({ item }: { item: HybridSearchResult }) {
+function ResultCard({
+  item,
+  onPreview,
+  activePreviewKey,
+  isPreviewTarget,
+}: {
+  item: HybridSearchResult;
+  onPreview?: (source: NonNullable<HybridSearchResult['source']>, view: SourcePreviewView) => void;
+  activePreviewKey?: string | null;
+  isPreviewTarget?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const debug = item.retrieval_debug;
 
   return (
-    <article className={`hybrid-search-result-card${expanded ? ' is-expanded' : ''}`}>
+    <article
+      className={`hybrid-search-result-card${expanded ? ' is-expanded' : ''}${
+        isPreviewTarget ? ' is-preview-target' : ''
+      }`}
+    >
       <button
         type="button"
         className="hybrid-search-result-summary"
@@ -182,7 +204,17 @@ function ResultCard({ item }: { item: HybridSearchResult }) {
           </div>
           {item.source ? (
             <div className="hybrid-search-result-summary-line2" onClick={(event) => event.stopPropagation()}>
-              <SourceRefLinks source={item.source} />
+              <SourceRefLinks
+                source={item.source}
+                onPreview={
+                  onPreview
+                    ? (source, view) => {
+                        onPreview(source, view);
+                      }
+                    : undefined
+                }
+                activePreviewKey={activePreviewKey}
+              />
             </div>
           ) : null}
         </div>
@@ -225,6 +257,37 @@ export function HybridSearchPage() {
   const [searching, setSearching] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [error, setError] = useState('');
+  const [previewSelection, setPreviewSelection] = useState<SourcePreviewSelection | null>(null);
+  const [previewResultKey, setPreviewResultKey] = useState<string | null>(null);
+
+  const previewOpen = previewSelection != null;
+  const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('hybrid-search-split', 48, {
+    minPct: 28,
+    maxPct: 72,
+  });
+  const activePreviewKey = previewSelection
+    ? sourcePreviewKey(previewSelection.source, previewSelection.view)
+    : null;
+
+  const openPreview = useCallback(
+    (resultKey: string, source: NonNullable<HybridSearchResult['source']>, view?: SourcePreviewView) => {
+      setPreviewResultKey(resultKey);
+      setPreviewSelection({
+        source,
+        view: view ?? defaultSourcePreviewView(source),
+      });
+    },
+    [],
+  );
+
+  const handlePreviewViewChange = useCallback((view: SourcePreviewView) => {
+    setPreviewSelection((current) => (current ? { ...current, view } : current));
+  }, []);
+
+  const closePreview = useCallback(() => {
+    setPreviewSelection(null);
+    setPreviewResultKey(null);
+  }, []);
 
   const groupedKbs = useMemo(() => groupKnowledgeBasesByEmbedding(knowledgeBases), [knowledgeBases]);
   const selectedGroups = useMemo(() => {
@@ -294,6 +357,7 @@ export function HybridSearchPage() {
         },
       });
       setResponse(result);
+      closePreview();
       await patchHybridSearchPreferences({ selected_knowledge_base_ids: selectedKbIds });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
@@ -387,36 +451,72 @@ export function HybridSearchPage() {
         </p>
       ) : null}
 
-      <section className="hybrid-search-results-section">
-        <h2 className="hybrid-search-section-title hybrid-search-section-title-row">
-          <span>Results{response ? ` (${response.results.length})` : ''}</span>
-          <ResultScoresHelpTooltip />
-        </h2>
-        {searching ? (
-          <p className="admin-muted" role="status">
-            Searching…
-          </p>
-        ) : response ? (
-          <>
-            <p className="admin-muted">
-              {response.meta.kbs_searched} knowledge bases · {response.meta.embedding_groups} embedding groups ·{' '}
-              {response.meta.duration_ms} ms
-              {response.meta.rerank_failed ? ' · rerank failed, showing fallback ranking' : ''}
+      <div
+        ref={containerRef}
+        className={`hybrid-search-workspace${previewOpen ? ' has-preview' : ''}`}
+        style={previewOpen ? { ['--hybrid-search-left-pct' as string]: `${leftPct}%` } : undefined}
+      >
+        <section className="hybrid-search-results-section">
+          <h2 className="hybrid-search-section-title hybrid-search-section-title-row">
+            <span>Results{response ? ` (${response.results.length})` : ''}</span>
+            <ResultScoresHelpTooltip />
+          </h2>
+          {searching ? (
+            <p className="admin-muted" role="status">
+              Searching…
             </p>
-            {response.results.length === 0 ? (
-              <p className="admin-muted">No results.</p>
-            ) : (
-              <div className="hybrid-search-results">
-                {response.results.map((item) => (
-                  <ResultCard key={`${item.knowledge_base_id}:${item.source_type}:${item.id}`} item={item} />
-                ))}
-              </div>
-            )}
+          ) : response ? (
+            <>
+              <p className="admin-muted">
+                {response.meta.kbs_searched} knowledge bases · {response.meta.embedding_groups} embedding groups ·{' '}
+                {response.meta.duration_ms} ms
+                {response.meta.rerank_failed ? ' · rerank failed, showing fallback ranking' : ''}
+              </p>
+              {response.results.length === 0 ? (
+                <p className="admin-muted">No results.</p>
+              ) : (
+                <div className="hybrid-search-results">
+                  {response.results.map((item) => {
+                    const resultKey = `${item.knowledge_base_id}:${item.source_type}:${item.id}`;
+                    return (
+                      <ResultCard
+                        key={resultKey}
+                        item={item}
+                        onPreview={
+                          item.source
+                            ? (source, view) => openPreview(resultKey, source, view)
+                            : undefined
+                        }
+                        activePreviewKey={activePreviewKey}
+                        isPreviewTarget={previewResultKey === resultKey}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="admin-muted">Run a search to see ranked chunks and FAQs.</p>
+          )}
+        </section>
+
+        {previewOpen && previewSelection ? (
+          <>
+            <div
+              className="hybrid-search-split-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize panels"
+              onMouseDown={onHandleMouseDown}
+            />
+            <HybridSearchSourcePreview
+              selection={previewSelection}
+              onClose={closePreview}
+              onViewChange={handlePreviewViewChange}
+            />
           </>
-        ) : (
-          <p className="admin-muted">Run a search to see ranked chunks and FAQs.</p>
-        )}
-      </section>
+        ) : null}
+      </div>
 
       {settingsOpen && settingsDraft ? (
         <div className="modal-backdrop" role="presentation" onClick={closeSettings}>

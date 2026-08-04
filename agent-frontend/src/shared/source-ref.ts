@@ -56,3 +56,18 @@ export function formatSourceLabel(source: SourceRef): string {
   if (locator?.page_num != null) parts.push(`p.${locator.page_num}`);
   return parts.join(' · ');
 }
+
+export type SourcePreviewView = 'original' | 'parsed';
+
+export type SourcePreviewSelection = {
+  source: SourceRef;
+  view: SourcePreviewView;
+};
+
+export function defaultSourcePreviewView(source: SourceRef): SourcePreviewView {
+  return supportsUdocViewer(source.file_type) ? 'original' : 'parsed';
+}
+
+export function sourcePreviewKey(source: SourceRef, view: SourcePreviewView): string {
+  return `${source.document_id}:${view}`;
+}

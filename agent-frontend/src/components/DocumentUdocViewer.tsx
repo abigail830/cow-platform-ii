@@ -76,14 +76,14 @@ export function DocumentUdocViewer({
 
   return (
     <div className="document-udoc-viewer">
+      <div ref={containerRef} className="document-udoc-viewer-canvas" aria-hidden={loading} />
       {loading ? (
-        <p className="document-detail-loading" role="status">
+        <div className="document-udoc-viewer-loading document-viewer-loading" role="status">
           <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
-          Loading original file…
-        </p>
+          <span>Loading original file…</span>
+        </div>
       ) : null}
-      {error ? <p className="error inline">{error}</p> : null}
-      <div ref={containerRef} className="document-udoc-viewer-canvas" />
+      {error ? <p className="error inline document-udoc-viewer-error">{error}</p> : null}
     </div>
   );
 }

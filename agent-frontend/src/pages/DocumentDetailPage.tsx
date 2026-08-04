@@ -277,10 +277,10 @@ export function DocumentDetailPage() {
               {contentTab === 'original' && showOriginalTab && documentId ? (
                 <Suspense
                   fallback={
-                    <p className="document-detail-loading" role="status">
+                    <div className="document-viewer-loading" role="status">
                       <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
-                      Preparing viewer…
-                    </p>
+                      <span>Preparing viewer…</span>
+                    </div>
                   }
                 >
                   <DocumentUdocViewer
@@ -291,7 +291,7 @@ export function DocumentDetailPage() {
                 </Suspense>
               ) : (
                 <div ref={contentRef} className="document-detail-content-scroll">
-                  {content.has_markdown && content.markdown ? (
+                  {content?.has_markdown && content.markdown ? (
                     <Markdown content={content.markdown} headingIds />
                   ) : (
                     <div className="document-detail-panel-empty">
