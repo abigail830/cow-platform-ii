@@ -4,57 +4,64 @@ import { Loader2 } from 'lucide-react';
 import { getDocumentDownloadUrl } from '../api/documents.ts';
 import { iconProps } from './icons/icon-props.ts';
 
-const PAGE_NAV_MAX_ATTEMPTS = 48;
+const PAGE_NAV_MAX_MS = 5_000;
 
-function scheduleViewerPageNavigation(
+function bindViewerPageNavigation(
   viewer: UDocViewer,
   targetPage: number,
   cancelled: () => boolean,
-): void {
-  if (targetPage <= 0) return;
+): () => void {
+  if (targetPage <= 0) return () => {};
 
-  let attempts = 0;
+  let disposed = false;
+  let rafId = 0;
+  let timeoutId = 0;
+  const startedAt = performance.now();
 
-  const tryNavigate = () => {
-    if (cancelled()) return;
+  const navigate = () => {
+    if (disposed || cancelled()) return;
     viewer.goToPage(targetPage);
-    attempts += 1;
-    if (viewer.currentPage === targetPage || attempts >= PAGE_NAV_MAX_ATTEMPTS) return;
-    requestAnimationFrame(tryNavigate);
+  };
+
+  const syncUntilReached = () => {
+    if (disposed || cancelled()) return;
+    if (viewer.currentPage === targetPage) return;
+    if (performance.now() - startedAt > PAGE_NAV_MAX_MS) return;
+
+    navigate();
+    rafId = requestAnimationFrame(syncUntilReached);
   };
 
   const start = () => {
-    if (cancelled()) return;
-    requestAnimationFrame(() => requestAnimationFrame(tryNavigate));
+    if (disposed || cancelled()) return;
+    cancelAnimationFrame(rafId);
+    window.clearTimeout(timeoutId);
+    navigate();
+    rafId = requestAnimationFrame(syncUntilReached);
   };
 
-  if (viewer.isLoaded) {
-    start();
-    return;
-  }
-
-  const unsub = viewer.on('document:load', () => {
-    unsub();
-    start();
+  const unsubViewport = viewer.on('viewport:change', () => {
+    if (disposed || cancelled()) return;
+    if (viewer.currentPage !== targetPage) {
+      start();
+    }
   });
-}
 
-async function applyViewerNavigation(
-  viewer: UDocViewer,
-  options: { page?: number | null; searchQuery?: string | null },
-  cancelled: () => boolean,
-): Promise<void> {
-  const page = options.page;
-  const searchQuery = options.searchQuery?.trim();
+  const unsubLoad = viewer.isLoaded
+    ? null
+    : viewer.on('document:load', () => {
+        start();
+      });
 
-  if (page != null && page > 0) {
-    scheduleViewerPageNavigation(viewer, page, cancelled);
-    return;
-  }
+  timeoutId = window.setTimeout(start, 0);
 
-  if (searchQuery) {
-    await viewer.search(searchQuery);
-  }
+  return () => {
+    disposed = true;
+    cancelAnimationFrame(rafId);
+    window.clearTimeout(timeoutId);
+    unsubViewport();
+    unsubLoad?.();
+  };
 }
 
 export function DocumentUdocViewer({
@@ -70,16 +77,11 @@ export function DocumentUdocViewer({
   const viewerRef = useRef<UDocViewer | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const navigationRef = useRef({ page, searchQuery });
-
-  navigationRef.current = { page, searchQuery };
 
   useEffect(() => {
     let disposed = false;
     let client: UDocClient | null = null;
     let viewer: UDocViewer | null = null;
-
-    const cancelled = () => disposed;
 
     async function mount() {
       const container = containerRef.current;
@@ -96,10 +98,8 @@ export function DocumentUdocViewer({
         client = await UDocClient.create();
         viewer = await client.createViewer({ container });
         await viewer.load(new Uint8Array(buffer));
-        viewerRef.current = viewer;
-
         if (!disposed) {
-          await applyViewerNavigation(viewer, navigationRef.current, cancelled);
+          viewerRef.current = viewer;
         }
       } catch (err) {
         if (!disposed) {
@@ -121,8 +121,39 @@ export function DocumentUdocViewer({
   }, [documentId]);
 
   useEffect(() => {
-    if (loading || !viewerRef.current) return;
-    void applyViewerNavigation(viewerRef.current, { page, searchQuery }, () => false);
+    const viewer = viewerRef.current;
+    if (loading || !viewer) return;
+
+    const cancelled = () => false;
+    const targetPage = page ?? 0;
+    let cleanupNavigation = () => {};
+    let resizeTimer = 0;
+    let observer: ResizeObserver | null = null;
+
+    if (targetPage > 0) {
+      cleanupNavigation = bindViewerPageNavigation(viewer, targetPage, cancelled);
+
+      const container = containerRef.current;
+      if (container) {
+        observer = new ResizeObserver(() => {
+          window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(() => {
+            if (viewer.currentPage !== targetPage) {
+              viewer.goToPage(targetPage);
+            }
+          }, 80);
+        });
+        observer.observe(container);
+      }
+    } else if (searchQuery?.trim()) {
+      void viewer.search(searchQuery.trim());
+    }
+
+    return () => {
+      cleanupNavigation();
+      observer?.disconnect();
+      window.clearTimeout(resizeTimer);
+    };
   }, [loading, page, searchQuery]);
 
   return (
