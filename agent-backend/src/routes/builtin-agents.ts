@@ -1,5 +1,6 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { resolveWorkflowAgent } from '../builtin-agents/resolve-workflow-agent.ts';
 import { appBuiltinAgentDefs, appModelConfigs, BUILTIN_WORKFLOW_KEYS, db, type BuiltinWorkflowKey } from '../db/index.ts';
 import {
   hasResourcePermission,
@@ -50,6 +51,14 @@ builtinAgentOptions.get('/options', async (c) => {
     .where(eq(appBuiltinAgentDefs.workflowKey, workflow))
     .orderBy(asc(appBuiltinAgentDefs.name));
 
+  let platformDefaultAgentId: string | null = null;
+  try {
+    const platform = await resolveWorkflowAgent({ workflowKey: workflow });
+    platformDefaultAgentId = platform.id;
+  } catch {
+    platformDefaultAgentId = null;
+  }
+
   return c.json({
     agents: rows.map((row) => ({
       id: row.id,
@@ -58,6 +67,7 @@ builtinAgentOptions.get('/options', async (c) => {
       workflow_key: row.workflowKey,
       model_name: row.modelName,
     })),
+    platform_default_agent_id: platformDefaultAgentId,
   });
 });
 

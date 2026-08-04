@@ -6,9 +6,8 @@ import {
   type KnowledgeBase,
 } from '../api/knowledgeBases.ts';
 import {
-  BUILTIN_AGENT_PLATFORM_DEFAULT,
-  listBuiltinAgentOptions,
-  type BuiltinAgentOption,
+  fetchBuiltinAgentOptions,
+  resolveBuiltinAgentSelectValue,
 } from '../api/builtinAgents.ts';
 import type { ModelConfig } from '../api/models.ts';
 
@@ -20,16 +19,6 @@ type KbFaqSettingsModalProps = {
   onCancel: () => void;
   onSaved: (kb: KnowledgeBase) => void;
 };
-
-function resolveAgentId(
-  configuredId: string | null | undefined,
-  options: BuiltinAgentOption[],
-): string {
-  if (configuredId && options.some((agent) => agent.id === configuredId)) {
-    return configuredId;
-  }
-  return BUILTIN_AGENT_PLATFORM_DEFAULT;
-}
 
 export function KbFaqSettingsModal({
   kb,
@@ -45,27 +34,40 @@ export function KbFaqSettingsModal({
   const [autoIndexOnPublish, setAutoIndexOnPublish] = useState(
     settings.auto_index_on_publish ?? false,
   );
-  const [extractionAgentId, setExtractionAgentId] = useState(BUILTIN_AGENT_PLATFORM_DEFAULT);
-  const [polishAgentId, setPolishAgentId] = useState(BUILTIN_AGENT_PLATFORM_DEFAULT);
-  const [extractOptions, setExtractOptions] = useState<BuiltinAgentOption[]>([]);
-  const [polishOptions, setPolishOptions] = useState<BuiltinAgentOption[]>([]);
+  const [extractionAgentId, setExtractionAgentId] = useState('');
+  const [polishAgentId, setPolishAgentId] = useState('');
+  const [extractOptions, setExtractOptions] = useState<
+    Awaited<ReturnType<typeof fetchBuiltinAgentOptions>>['agents']
+  >([]);
+  const [polishOptions, setPolishOptions] = useState<
+    Awaited<ReturnType<typeof fetchBuiltinAgentOptions>>['agents']
+  >([]);
   const [optionsError, setOptionsError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([
-      listBuiltinAgentOptions('faq_extract'),
-      listBuiltinAgentOptions('faq_polish'),
-    ])
+    void Promise.all([fetchBuiltinAgentOptions('faq_extract'), fetchBuiltinAgentOptions('faq_polish')])
       .then(([extract, polish]) => {
         if (cancelled) return;
-        setExtractOptions(extract);
-        setPolishOptions(polish);
+        setExtractOptions(extract.agents);
+        setPolishOptions(polish.agents);
         const nextSettings = kb.faq_settings ?? {};
-        setExtractionAgentId(resolveAgentId(nextSettings.extraction_agent_def_id, extract));
-        setPolishAgentId(resolveAgentId(nextSettings.polish_agent_def_id, polish));
+        setExtractionAgentId(
+          resolveBuiltinAgentSelectValue(
+            nextSettings.extraction_agent_def_id,
+            extract.agents,
+            extract.platform_default_agent_id,
+          ),
+        );
+        setPolishAgentId(
+          resolveBuiltinAgentSelectValue(
+            nextSettings.polish_agent_def_id,
+            polish.agents,
+            polish.platform_default_agent_id,
+          ),
+        );
         setOptionsError('');
       })
       .catch((err) => {
@@ -100,10 +102,8 @@ export function KbFaqSettingsModal({
         .filter(Boolean);
       const faqSettings: KbFaqSettings = {
         auto_index_on_publish: autoIndexOnPublish,
-        extraction_agent_def_id:
-          extractionAgentId === BUILTIN_AGENT_PLATFORM_DEFAULT ? null : extractionAgentId,
-        polish_agent_def_id:
-          polishAgentId === BUILTIN_AGENT_PLATFORM_DEFAULT ? null : polishAgentId,
+        extraction_agent_def_id: extractionAgentId || null,
+        polish_agent_def_id: polishAgentId || null,
       };
       const updated = await updateKnowledgeBase(kb.id, {
         embedding_model_config_id: embeddingModelId || null,
@@ -212,36 +212,46 @@ export function KbFaqSettingsModal({
             </>
           ) : (
             <>
-              <label className="form-field form-field-wide">
+              <div className="kb-faq-settings-agent-fields form-field-wide">
+              <label className="form-field">
                 <span>FAQ extraction agent</span>
                 <select
                   value={extractionAgentId}
                   onChange={(e) => setExtractionAgentId(e.target.value)}
+                  required
                 >
-                  <option value={BUILTIN_AGENT_PLATFORM_DEFAULT}>Platform default</option>
-                  {extractOptions.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name}
-                      {agent.model_name ? ` (${agent.model_name})` : ''}
-                    </option>
-                  ))}
+                  {extractOptions.length === 0 ? (
+                    <option value="">No agents available</option>
+                  ) : (
+                    extractOptions.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                        {agent.model_name ? ` (${agent.model_name})` : ''}
+                      </option>
+                    ))
+                  )}
                 </select>
               </label>
-              <label className="form-field form-field-wide">
+              <label className="form-field">
                 <span>FAQ polish agent</span>
                 <select
                   value={polishAgentId}
                   onChange={(e) => setPolishAgentId(e.target.value)}
+                  required
                 >
-                  <option value={BUILTIN_AGENT_PLATFORM_DEFAULT}>Platform default</option>
-                  {polishOptions.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name}
-                      {agent.model_name ? ` (${agent.model_name})` : ''}
-                    </option>
-                  ))}
+                  {polishOptions.length === 0 ? (
+                    <option value="">No agents available</option>
+                  ) : (
+                    polishOptions.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                        {agent.model_name ? ` (${agent.model_name})` : ''}
+                      </option>
+                    ))
+                  )}
                 </select>
               </label>
+              </div>
               <p className="admin-form-hint kb-faq-settings-hint form-field-wide">
                 Edit prompts and models in{' '}
                 <Link

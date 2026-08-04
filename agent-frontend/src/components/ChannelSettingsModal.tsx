@@ -4,8 +4,7 @@ import {
   type ChannelProcessingOptions,
 } from '../api/documentChannels.ts';
 import {
-  BUILTIN_AGENT_PLATFORM_DEFAULT,
-  listBuiltinAgentOptions,
+  fetchBuiltinAgentOptions,
   type BuiltinAgentOption,
 } from '../api/builtinAgents.ts';
 import { ResourceAccessPanel, type ResourceAccessPanelHandle } from './ResourceAccessPanel.tsx';
@@ -29,14 +28,15 @@ type ChannelSettingsModalProps = {
 
 type SettingsTab = 'general' | 'pipeline' | 'sharing';
 
-function resolveAgentId(
+function resolveMetadataAgentSelectValue(
   configuredId: string | null | undefined,
   options: BuiltinAgentOption[],
 ): string {
-  if (configuredId && options.some((agent) => agent.id === configuredId)) {
+  if (!configuredId) return '';
+  if (options.some((agent) => agent.id === configuredId)) {
     return configuredId;
   }
-  return BUILTIN_AGENT_PLATFORM_DEFAULT;
+  return '';
 }
 
 export function ChannelSettingsModal({
@@ -54,7 +54,7 @@ export function ChannelSettingsModal({
   const [description, setDescription] = useState(initialDescription);
   const [pipelineId, setPipelineId] = useState(initialPipelineId ?? '');
   const [autoStartPipeline, setAutoStartPipeline] = useState(initialAutoStartPipeline);
-  const [metadataAgentId, setMetadataAgentId] = useState(BUILTIN_AGENT_PLATFORM_DEFAULT);
+  const [metadataAgentId, setMetadataAgentId] = useState('');
   const [metadataAgentOptions, setMetadataAgentOptions] = useState<BuiltinAgentOption[]>([]);
   const [options, setOptions] = useState<ChannelProcessingOptions | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
@@ -83,12 +83,14 @@ export function ChannelSettingsModal({
     let cancelled = false;
     setOptionsLoading(true);
     setOptionsError('');
-    void Promise.all([fetchChannelProcessingOptions(), listBuiltinAgentOptions('metadata_extract')])
-      .then(([data, agents]) => {
+    void Promise.all([fetchChannelProcessingOptions(), fetchBuiltinAgentOptions('metadata_extract')])
+      .then(([data, agentOptions]) => {
         if (cancelled) return;
         setOptions(data);
-        setMetadataAgentOptions(agents);
-        setMetadataAgentId(resolveAgentId(initialMetadataExtractionAgentDefId, agents));
+        setMetadataAgentOptions(agentOptions.agents);
+        setMetadataAgentId(
+          resolveMetadataAgentSelectValue(initialMetadataExtractionAgentDefId, agentOptions.agents),
+        );
         setOptionsError('');
       })
       .catch((err) => {
@@ -110,9 +112,7 @@ export function ChannelSettingsModal({
       : null;
 
   const selectedMetadataAgentLabel =
-    metadataAgentId === BUILTIN_AGENT_PLATFORM_DEFAULT
-      ? 'Platform default'
-      : metadataAgentOptions.find((agent) => agent.id === metadataAgentId)?.name ?? null;
+    metadataAgentOptions.find((agent) => agent.id === metadataAgentId)?.name ?? null;
 
   async function handleFormSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -130,12 +130,7 @@ export function ChannelSettingsModal({
         description: description.trim(),
         pipelineId: pipelineId || null,
         autoStartPipeline: pipelineId ? autoStartPipeline : false,
-        metadataExtractionAgentDefId:
-          metadataAgentId === ''
-            ? null
-            : metadataAgentId === BUILTIN_AGENT_PLATFORM_DEFAULT
-              ? options?.platformDefaultMetadataExtractAgentId ?? null
-              : metadataAgentId,
+        metadataExtractionAgentDefId: metadataAgentId || null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save channel settings');
@@ -252,7 +247,6 @@ export function ChannelSettingsModal({
                         onChange={(event) => setMetadataAgentId(event.target.value)}
                       >
                         <option value="">— None —</option>
-                        <option value={BUILTIN_AGENT_PLATFORM_DEFAULT}>Platform default</option>
                         {metadataAgentOptions.map((agent) => (
                           <option key={agent.id} value={agent.id}>
                             {agent.name}

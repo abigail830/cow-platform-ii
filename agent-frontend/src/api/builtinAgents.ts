@@ -70,7 +70,25 @@ export type BuiltinAgentOption = {
   model_name: string | null;
 };
 
-const PLATFORM_DEFAULT = '';
+export type BuiltinAgentOptionsResponse = {
+  agents: BuiltinAgentOption[];
+  platform_default_agent_id: string | null;
+};
+
+/** Pick a select value from stored config, falling back to the workflow platform default. */
+export function resolveBuiltinAgentSelectValue(
+  configuredId: string | null | undefined,
+  agents: BuiltinAgentOption[],
+  platformDefaultId: string | null | undefined,
+): string {
+  if (configuredId && agents.some((agent) => agent.id === configuredId)) {
+    return configuredId;
+  }
+  if (platformDefaultId && agents.some((agent) => agent.id === platformDefaultId)) {
+    return platformDefaultId;
+  }
+  return agents[0]?.id ?? '';
+}
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
@@ -99,12 +117,11 @@ export async function listBuiltinAgents(params?: {
   return data.agents;
 }
 
-export async function listBuiltinAgentOptions(
+export async function fetchBuiltinAgentOptions(
   workflow: BuiltinWorkflowKey,
-): Promise<BuiltinAgentOption[]> {
+): Promise<BuiltinAgentOptionsResponse> {
   const response = await authFetch(`/api/builtin-agents/options?workflow=${workflow}`);
-  const data = (await response.json()) as { agents: BuiltinAgentOption[] };
-  return data.agents;
+  return (await response.json()) as BuiltinAgentOptionsResponse;
 }
 
 export async function getBuiltinAgentsStats(days?: number): Promise<BuiltinAgentUsageStats> {
@@ -244,4 +261,3 @@ export async function testBuiltinAgent(
   };
 }
 
-export { PLATFORM_DEFAULT as BUILTIN_AGENT_PLATFORM_DEFAULT };
