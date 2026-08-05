@@ -106,6 +106,8 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   const [error, setError] = useState('');
   const [forbidden, setForbidden] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importedDocumentIds, setImportedDocumentIds] = useState<string[]>([]);
+  const [importSourcesLoading, setImportSourcesLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeJob, setActiveJob] = useState<KbImportJob | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
@@ -271,6 +273,21 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
 
   async function trackActiveJob(job: KbImportJob) {
     setActiveJob(job);
+  }
+
+  async function openImportModal() {
+    if (!knowledgeBaseId) return;
+    setImportSourcesLoading(true);
+    setError('');
+    try {
+      const ids = await listAllIndexedDocumentIds(knowledgeBaseId);
+      setImportedDocumentIds(ids);
+      setImportOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load indexed documents');
+    } finally {
+      setImportSourcesLoading(false);
+    }
   }
 
   async function handleImport(input: { channelIds: string[]; documentIds: string[] }) {
@@ -496,12 +513,12 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={!kb.is_configured || importJobActive}
+                    disabled={!kb.is_configured || importJobActive || importSourcesLoading}
                     title={!kb.is_configured ? 'Configure Admin → Pipelines → kb-rag-index Config YAML first' : undefined}
-                    onClick={() => setImportOpen(true)}
+                    onClick={() => void openImportModal()}
                   >
                     <Plus {...iconProps({ size: 16 })} aria-hidden />
-                    Import &amp; index
+                    {importSourcesLoading ? 'Loading…' : 'Import & index'}
                   </button>
                 </div>
               )}
@@ -709,6 +726,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
 
       {importOpen && (
         <KbImportModal
+          importedDocumentIds={importedDocumentIds}
           onCancel={() => setImportOpen(false)}
           onConfirm={handleImport}
         />

@@ -258,6 +258,23 @@ export async function listKbItems(
   return data as { items: KbItem[]; total: number };
 }
 
+/** Paginate PageIndex items until all source document ids are collected. */
+export async function listAllKbItemDocumentIds(knowledgeBaseId: string): Promise<string[]> {
+  const pageSize = 100;
+  const ids: string[] = [];
+  let offset = 0;
+  let total = 0;
+
+  do {
+    const page = await listKbItems(knowledgeBaseId, { offset, limit: pageSize });
+    total = page.total;
+    ids.push(...page.items.map((item) => item.document_id));
+    offset += pageSize;
+  } while (offset < total);
+
+  return ids;
+}
+
 export async function getKbItem(knowledgeBaseId: string, itemId: string): Promise<KbItem> {
   const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items/${itemId}`);
   return data as KbItem;

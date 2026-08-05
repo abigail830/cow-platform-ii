@@ -6,6 +6,7 @@ import {
   deleteKbItems,
   getKbItem,
   getKnowledgeBase,
+  listAllKbItemDocumentIds,
   listKbItems,
   startKbImport,
   type KbImportJob,
@@ -80,6 +81,8 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
   const [error, setError] = useState('');
   const [forbidden, setForbidden] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importedDocumentIds, setImportedDocumentIds] = useState<string[]>([]);
+  const [importSourcesLoading, setImportSourcesLoading] = useState(false);
   const [activeJob, setActiveJob] = useState<KbImportJob | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [detailItem, setDetailItem] = useState<KbItem | null>(null);
@@ -238,6 +241,21 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
     }
   }
 
+  async function openImportModal() {
+    if (!knowledgeBaseId) return;
+    setImportSourcesLoading(true);
+    setError('');
+    try {
+      const ids = await listAllKbItemDocumentIds(knowledgeBaseId);
+      setImportedDocumentIds(ids);
+      setImportOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load imported documents');
+    } finally {
+      setImportSourcesLoading(false);
+    }
+  }
+
   async function handleImport(input: { channelIds: string[]; documentIds: string[] }) {
     if (!knowledgeBaseId) return;
     const result = await startKbImport(knowledgeBaseId, {
@@ -342,9 +360,14 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
                       </button>
                     </>
                   )}
-                  <button type="button" className="btn-primary" onClick={() => setImportOpen(true)}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={importSourcesLoading}
+                    onClick={() => void openImportModal()}
+                  >
                     <Plus {...iconProps({ size: 16 })} aria-hidden />
-                    Import knowledge
+                    {importSourcesLoading ? 'Loading…' : 'Import knowledge'}
                   </button>
                 </div>
               )}
@@ -515,7 +538,11 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
       )}
 
       {importOpen && (
-        <KbImportModal onCancel={() => setImportOpen(false)} onConfirm={handleImport} />
+        <KbImportModal
+          importedDocumentIds={importedDocumentIds}
+          onCancel={() => setImportOpen(false)}
+          onConfirm={handleImport}
+        />
       )}
 
       {deleteConfirm && (
