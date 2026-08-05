@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 export type AgentRequestContext = {
   instanceId?: string;
+  userId?: string;
   authorization?: string;
   openkmsApiKey?: string;
 };

@@ -10,9 +10,9 @@ model:
 prompt: ./prompt.md
 
 skills:
-  - ./skills/html-slides
-  - ./skills/pptx
-  - ./skills/docx
+  - /agent-assets/skills/html-slides
+  - /agent-assets/skills/pptx
+  - /agent-assets/skills/docx
 
 mcp: []
 

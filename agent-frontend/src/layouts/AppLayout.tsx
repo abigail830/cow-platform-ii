@@ -8,6 +8,7 @@ import { canAccessAppPath, resolveAppHomePath } from '../shared/agent-nav.ts';
 export type AppOutletContext = {
   user: AuthUser;
   agents: AgentInfo[];
+  refreshAgents: () => Promise<void>;
 };
 
 const AppOutletContextInternal = createContext<AppOutletContext | null>(null);
@@ -26,6 +27,11 @@ export function AppLayout() {
   const [booting, setBooting] = useState(true);
   const [navCollapsed, setNavCollapsed] = useState(false);
 
+  async function refreshAgents() {
+    const agentList = await listAgents();
+    setAgents(agentList);
+  }
+
   useEffect(() => {
     if (!getToken()) {
       navigate('/login', { replace: true });
@@ -37,8 +43,7 @@ export function AppLayout() {
         setUser(me);
         const token = getToken();
         if (token) setSession(token, me);
-        const agentList = await listAgents();
-        setAgents(agentList);
+        await refreshAgents();
       } catch {
         clearSession();
         navigate('/login', { replace: true });
@@ -67,6 +72,7 @@ export function AppLayout() {
   const outletContext: AppOutletContext = {
     user,
     agents,
+    refreshAgents,
   };
 
   return (

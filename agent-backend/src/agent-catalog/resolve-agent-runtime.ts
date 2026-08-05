@@ -2,6 +2,7 @@ import { resolveAgentModel } from '../shared/resolve-agent-model.ts';
 import { resolveAgentThinkingLevel } from '../shared/resolve-agent-thinking-level.ts';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { createSessionFileTools } from '../shared/session-file-tools.ts';
+import { getAgentRequestContext } from '../flue/agent-request-context.ts';
 import { augmentInstructionsWithAgentContext } from './agent-context.ts';
 import { connectAgentMcpTools } from './load-mcp.ts';
 import { resolveAgentCwd, resolveSandboxFactory } from './load-sandbox.ts';
@@ -46,11 +47,13 @@ async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAg
 }
 
 export function resolveCatalogAgentRuntime(spec: LoadedAgentSpec): Promise<CatalogAgentRuntimeConfig> {
-  const cached = runtimeByAgentId.get(spec.id);
+  const userId = spec.source === 'studio' ? (getAgentRequestContext()?.userId ?? 'anon') : 'shared';
+  const cacheKey = `${spec.id}::${userId}`;
+  const cached = runtimeByAgentId.get(cacheKey);
   if (cached) return cached;
 
   const pending = buildAgentRuntimeConfig(spec);
-  runtimeByAgentId.set(spec.id, pending);
+  runtimeByAgentId.set(cacheKey, pending);
   return pending;
 }
 

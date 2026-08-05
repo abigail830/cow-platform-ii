@@ -239,6 +239,13 @@
       "when": 1785190000000,
       "tag": "0033_worker_llm_job_config",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1785191000000,
+      "tag": "0034_studio_agents",
+      "breakpoints": true
     }
   ]
 }

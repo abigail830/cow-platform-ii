@@ -216,7 +216,7 @@ export const appUserRoles = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.roleId] })],
 );
 
-export const RESOURCE_TYPES = ['document_channel', 'knowledge_base'] as const;
+export const RESOURCE_TYPES = ['document_channel', 'knowledge_base', 'studio_agent'] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
 
 export const GRANTEE_TYPES = ['user', 'others'] as const;
@@ -681,5 +681,75 @@ export const appSyncAgentMessages = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index('idx_sync_agent_messages_run').on(t.runId)],
+);
+
+export const STUDIO_AGENT_ORIGINS = ['user', 'platform'] as const;
+export type StudioAgentOrigin = (typeof STUDIO_AGENT_ORIGINS)[number];
+
+export const appStudioAgents = pgTable(
+  'app_studio_agents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: text('slug').notNull().unique(),
+    displayName: text('display_name').notNull(),
+    description: text('description').notNull().default(''),
+    icon: text('icon'),
+    origin: text('origin').notNull().default('user'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => appUsers.id, { onDelete: 'cascade' }),
+    instructions: text('instructions').notNull().default(''),
+    modelConfigId: uuid('model_config_id')
+      .notNull()
+      .references(() => appModelConfigs.id, { onDelete: 'restrict' }),
+    thinkingLevel: text('thinking_level'),
+    skillIds: jsonb('skill_ids').$type<string[]>().notNull().default([]),
+    platformMcpIds: jsonb('platform_mcp_ids').$type<string[]>().notNull().default([]),
+    privateMcpIds: jsonb('private_mcp_ids').$type<string[]>().notNull().default([]),
+    sandbox: jsonb('sandbox').$type<Record<string, unknown>>().notNull().default({ provider: 'none' }),
+    a2a: jsonb('a2a').$type<Record<string, unknown> | null>(),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_studio_agents_created_by').on(t.createdBy),
+    index('idx_studio_agents_updated').on(t.updatedAt),
+  ],
+);
+
+export const appUserMcpServers = pgTable(
+  'app_user_mcp_servers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => appUsers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    title: text('title'),
+    config: jsonb('config').$type<Record<string, unknown>>().notNull(),
+    secrets: text('secrets'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_user_mcp_servers_created_by').on(t.createdBy),
+    uniqueIndex('uq_user_mcp_servers_owner_name').on(t.createdBy, t.name),
+  ],
+);
+
+export const appUserMcpCredentials = pgTable(
+  'app_user_mcp_credentials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => appUsers.id, { onDelete: 'cascade' }),
+    platformMcpId: text('platform_mcp_id').notNull(),
+    secrets: text('secrets').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('uq_user_mcp_credentials_user_platform').on(t.userId, t.platformMcpId)],
 );
 

@@ -18,9 +18,11 @@ import users from './routes/users.ts';
 import sessionExplorer from './routes/session-explorer.ts';
 import sessionFiles from './routes/session-files.ts';
 import builtinAgentOptions from './routes/builtin-agents.ts';
+import studio from './routes/studio.ts';
 import internalApi from './routes/internal-api/index.ts';
 import { rememberOpenKmsApiKeyForInstance } from './auth/openkms-instance-env.ts';
 import { OPENKMS_API_KEY_HEADER } from './auth/openkms-headers.ts';
+import { bearerToken, verifyToken } from './auth/jwt.ts';
 import { ensureFlueReady } from './flue-vercel-init.ts';
 import { runWithAgentRequestContext } from './flue/agent-request-context.ts';
 import { agentInstanceStreamRegistry } from './flue/agent-instance-stream-registry.ts';
@@ -78,6 +80,7 @@ app.route('/api/hybrid-search', hybridSearch);
 app.route('/api/mcp/hybrid-search', hybridSearchMcp);
 app.route('/api/users', users);
 app.route('/api/session-explorer', sessionExplorer);
+app.route('/api/studio', studio);
 app.route('/api/builtin-agents', builtinAgentOptions);
 app.route('/internal-api', internalApi);
 
@@ -108,13 +111,22 @@ flueRoutes.use('*', async (c, next) => {
   return runWithAgentRequestContext(
     {
       instanceId: parsed?.instanceId,
+      userId: (() => {
+        const token = bearerToken(c);
+        if (!token) return undefined;
+        try {
+          return verifyToken(token).id;
+        } catch {
+          return undefined;
+        }
+      })(),
       authorization: c.req.header('authorization'),
       openkmsApiKey: c.req.header(OPENKMS_API_KEY_HEADER),
     },
     run,
   );
 });
-if (process.env.VERCEL) {
+if (process.env.VERCEL || process.env.OKF_EMBEDDED_FLUE === '1') {
   flueRoutes.use('*', async (c, next) => {
     try {
       await ensureFlueReady();

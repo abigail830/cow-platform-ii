@@ -12,7 +12,7 @@ model:
 prompt: ./prompt.md
 
 skills:
-  - ./skills/kb-qa
+  - /agent-assets/skills/kb-qa
 
 #-------------------------------------------------
 # {

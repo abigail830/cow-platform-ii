@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "zhipu-web-search": {
+      "url": "https://open.bigmodel.cn/api/mcp/web_search/sse",
+      "transport": "sse",
+      "headers": {
+        "Authorization": "Bearer ${USER_API_KEY}"
+      }
+    }
+  }
+}

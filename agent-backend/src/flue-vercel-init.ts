@@ -175,7 +175,14 @@ let initPromise: Promise<void> | undefined;
 /** Start Flue init in the background (Vercel cold start). Safe to call multiple times. */
 export function startFlueRuntimeInit(): void {
   if (!initPromise) {
-    initPromise = runFlueRuntimeInit();
+    initPromise = runFlueRuntimeInit()
+      .then(() => {
+        initialized = true;
+      })
+      .catch((error) => {
+        initPromise = undefined;
+        throw error;
+      });
   }
 }
 
@@ -190,9 +197,18 @@ export async function initFlueRuntime(): Promise<void> {
   await initPromise!;
 }
 
+/** Re-read registry (FS + studio) and rebuild Flue agents/channels. Used after Studio Save. */
+export async function reloadFlueRuntimeFromRegistry(): Promise<void> {
+  initialized = false;
+  initPromise = undefined;
+  await ensureFlueReady();
+}
+
 async function runFlueRuntimeInit(): Promise<void> {
   if (initialized) return;
 
+  const { bootAgentCatalogAsync } = await import('./agent-catalog/boot.ts');
+  await bootAgentCatalogAsync();
   const catalogModules = getCatalogFlueAgentModules();
   const channelModules = getCatalogA2aChannelModules();
   const { agents, workflows, channelHandlers } = normalizeBuiltModules(

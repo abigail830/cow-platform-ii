@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "hybrid-search": {
+      "url": "${OPENKMS_API_URL}/api/mcp/hybrid-search",
+      "transport": "streamable-http",
+      "headers": {
+        "Authorization": "Bearer ${USER_API_KEY}"
+      }
+    }
+  }
+}

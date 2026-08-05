@@ -105,4 +105,13 @@ export type SandboxYaml = z.infer<typeof sandboxSchema>;
 export type LoadedAgentSpec = AgentYaml & {
   agentDir: string;
   instructions: string;
+  /** Platform file agent vs user/platform studio DB agent. */
+  source?: 'fs' | 'studio';
+  studioMeta?: {
+    id: string;
+    createdBy: string;
+    platformMcpIds: string[];
+    privateMcpIds: string[];
+    origin: string;
+  };
 };

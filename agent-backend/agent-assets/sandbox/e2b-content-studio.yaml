@@ -1,0 +1,8 @@
+id: e2b-content-studio
+title: Content Studio E2B
+description: >-
+  E2B sandbox on Node 22 with LibreOffice, Pandoc, Poppler, Python
+  (markitdown/Pillow), and npm pptxgenjs/docx for document generation.
+provider: e2b
+templateId: okf-content-studio:1.2
+cwd: /home/user/content-studio

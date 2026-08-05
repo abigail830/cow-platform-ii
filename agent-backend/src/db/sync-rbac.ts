@@ -23,7 +23,7 @@ const ADMIN_ROLE = {
 const AGENT_PLAYER_ROLE = {
   key: 'agent-player',
   label: 'Agent player',
-  description: 'Access to Agent playground and Session explorer only.',
+  description: 'Access to Asset market, Agent playground, and Session explorer.',
   isSystem: true,
 };
 
@@ -36,7 +36,12 @@ const KNOWLEDGE_MANAGER_ROLE = {
 
 /** Permission keys granted to each system role (admin gets the full catalog separately). */
 const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
-  'agent-player': ['agent:playground', 'agent:session-explorer'],
+  'agent-player': [
+    'agent:asset-market:read',
+    'agent:asset-market:write',
+    'agent:playground',
+    'agent:session-explorer',
+  ],
   'knowledge-manager': [
     'knowledge-management:documents:read',
     'knowledge-management:documents:write',

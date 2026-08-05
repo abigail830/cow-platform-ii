@@ -3,6 +3,7 @@ import {
   appDocumentChannels,
   appKnowledgeBases,
   appResourceGrants,
+  appStudioAgents,
   appUsers,
   db,
   type ResourceType,
@@ -78,6 +79,15 @@ async function loadOwnerId(resourceType: ResourceType, resourceId: string): Prom
       .select({ createdBy: appDocumentChannels.createdBy })
       .from(appDocumentChannels)
       .where(eq(appDocumentChannels.id, resourceId))
+      .limit(1);
+    return row?.createdBy ?? null;
+  }
+
+  if (resourceType === 'studio_agent') {
+    const [row] = await db
+      .select({ createdBy: appStudioAgents.createdBy })
+      .from(appStudioAgents)
+      .where(eq(appStudioAgents.id, resourceId))
       .limit(1);
     return row?.createdBy ?? null;
   }
@@ -198,6 +208,25 @@ export async function userHasKnowledgeBaseAccess(
   return satisfiesResourcePermission(flags, required);
 }
 
+export async function resolveStudioAgentPermission(
+  userId: string,
+  studioAgentId: string,
+): Promise<ResourcePermissionFlags> {
+  if (await isPlatformAdmin(userId)) return FULL_RESOURCE_ACCESS;
+  const ownerId = await loadOwnerId('studio_agent', studioAgentId);
+  const grantsByResource = await loadGrantsForResources('studio_agent', [studioAgentId]);
+  return permissionAtLevel(userId, ownerId, grantsByResource.get(studioAgentId) ?? []);
+}
+
+export async function userHasStudioAgentAccess(
+  userId: string,
+  studioAgentId: string,
+  level: ResourcePermissionLevel,
+): Promise<boolean> {
+  const flags = await resolveStudioAgentPermission(userId, studioAgentId);
+  return satisfiesResourcePermission(flags, level);
+}
+
 export async function listAccessibleChannelIds(userId: string): Promise<Set<string>> {
   if (await isPlatformAdmin(userId)) {
     const rows = await loadAllChannelRows();
@@ -308,6 +337,14 @@ export async function getResourceAccessSettings(
       .limit(1);
     if (!exists) return null;
   }
+  if (ownerId === null && resourceType === 'studio_agent') {
+    const [exists] = await db
+      .select({ id: appStudioAgents.id })
+      .from(appStudioAgents)
+      .where(eq(appStudioAgents.id, resourceId))
+      .limit(1);
+    if (!exists) return null;
+  }
 
   const grants = (await loadGrantsForResources(resourceType, [resourceId])).get(resourceId) ?? [];
   const othersGrant = grants.find((grant) => grant.granteeType === 'others');
@@ -344,7 +381,9 @@ export async function getResourceAccessSettings(
   const myAccess =
     resourceType === 'document_channel'
       ? await resolveChannelPermission(viewerUserId, resourceId)
-      : await resolveKnowledgeBasePermission(viewerUserId, resourceId);
+      : resourceType === 'studio_agent'
+        ? await resolveStudioAgentPermission(viewerUserId, resourceId)
+        : await resolveKnowledgeBasePermission(viewerUserId, resourceId);
 
   return {
     owner: ownerId ? ((await loadUserSummary(ownerId)) ?? null) : null,
@@ -363,7 +402,9 @@ export async function replaceResourceAccessSettings(
   const canManage =
     resourceType === 'document_channel'
       ? await userHasChannelAccess(actorUserId, resourceId, 'manage')
-      : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
+      : resourceType === 'studio_agent'
+        ? await userHasStudioAgentAccess(actorUserId, resourceId, 'manage')
+        : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
   if (!canManage) throw new Error('Forbidden');
 
   const others = normalizeResourcePermissionFlags(input.others);
@@ -419,7 +460,9 @@ export async function transferResourceOwner(
   const canManage =
     resourceType === 'document_channel'
       ? await userHasChannelAccess(actorUserId, resourceId, 'manage')
-      : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
+      : resourceType === 'studio_agent'
+        ? await userHasStudioAgentAccess(actorUserId, resourceId, 'manage')
+        : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
   if (!canManage) throw new Error('Forbidden');
 
   const [newOwner] = await db.select({ id: appUsers.id }).from(appUsers).where(eq(appUsers.id, newOwnerUserId)).limit(1);
@@ -432,6 +475,13 @@ export async function transferResourceOwner(
       .where(eq(appDocumentChannels.id, resourceId))
       .returning({ id: appDocumentChannels.id });
     if (!updated) throw new Error('Channel not found');
+  } else if (resourceType === 'studio_agent') {
+    const [updated] = await db
+      .update(appStudioAgents)
+      .set({ createdBy: newOwnerUserId, updatedAt: new Date() })
+      .where(eq(appStudioAgents.id, resourceId))
+      .returning({ id: appStudioAgents.id });
+    if (!updated) throw new Error('Studio agent not found');
   } else {
     const [updated] = await db
       .update(appKnowledgeBases)

@@ -10,7 +10,8 @@ export type NavPageIcon =
   | 'permissions'
   | 'playground'
   | 'session-explorer'
-  | 'hybrid-search';
+  | 'hybrid-search'
+  | 'asset-market';
 
 export type NavPage = {
   path: string;
@@ -64,8 +65,17 @@ export const AGENTS_CATEGORY = 'Agents';
 
 export const AGENT_PLAYGROUND_PATH = '/agents/playground';
 export const SESSION_EXPLORER_PATH = '/agents/session-explorer';
+export const ASSET_MARKET_PATH = '/agents/asset-market';
 
 export const AGENT_PAGES: readonly NavPage[] = [
+  {
+    path: ASSET_MARKET_PATH,
+    navLabel: 'Asset Market',
+    titleMain: 'Asset',
+    titleAccent: 'Market',
+    permissionKey: 'agent:asset-market',
+    icon: 'asset-market',
+  },
   {
     path: AGENT_PLAYGROUND_PATH,
     navLabel: 'Agent Playground',

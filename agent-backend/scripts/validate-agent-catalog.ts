@@ -123,7 +123,7 @@ async function main() {
 
   const dirs = discoverAgentDirectories(catalogRoot);
   if (dirs.length === 0) {
-    console.error('No agents discovered in agent-catalog/');
+    console.error('No agents discovered in agent-assets/agents/');
     process.exit(1);
   }
 

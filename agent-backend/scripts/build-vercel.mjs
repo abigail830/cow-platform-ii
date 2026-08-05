@@ -76,10 +76,10 @@ if (patched === bundle) {
 }
 writeFileSync(outfile, patched);
 
-const catalogSrc = path.join(root, 'agent-catalog');
-const catalogDest = path.join(funcDir, 'agent-catalog');
+const catalogSrc = path.join(root, 'agent-assets');
+const catalogDest = path.join(funcDir, 'agent-assets');
 cpSync(catalogSrc, catalogDest, { recursive: true });
-console.log('Vendored agent-catalog into serverless bundle.');
+console.log('Vendored agent-assets into serverless bundle.');
 
 const { size } = statSync(outfile);
 if (size < 100_000) {

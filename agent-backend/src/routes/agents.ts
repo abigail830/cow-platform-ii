@@ -26,6 +26,7 @@ agents.get(
           displayName: meta?.displayName ?? name,
           description: meta?.description,
           icon: meta?.icon,
+          source: meta?.source === 'studio' ? 'studio' : 'platform',
           ...(a2a ? { a2a } : {}),
         };
       }),

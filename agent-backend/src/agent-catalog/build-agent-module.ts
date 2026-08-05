@@ -13,31 +13,44 @@ export function primeCatalogSpecs(specs: LoadedAgentSpec[]): void {
   }
 }
 
+export function rememberAgentSpec(spec: LoadedAgentSpec): void {
+  specById.set(spec.id, spec);
+}
+
+export function forgetAgentSpec(agentId: string): void {
+  specById.delete(agentId);
+}
+
 function ensureCatalogSpecsPrimed(): void {
   if (specById.size > 0) return;
   primeCatalogSpecs(loadAllAgentSpecs());
 }
 
-function getSpec(agentId: string): LoadedAgentSpec {
+export function getAgentSpec(agentId: string): LoadedAgentSpec {
   ensureCatalogSpecsPrimed();
   const spec = specById.get(agentId);
   if (!spec) {
-    throw new Error(`Unknown catalog agent "${agentId}". Run npm run catalog:sync.`);
+    throw new Error(`Unknown agent "${agentId}"`);
   }
   return spec;
 }
 
-export function buildCatalogAgentModule(agentId: string) {
-  const spec = getSpec(agentId);
-
-  const definition = defineAgent(async () => resolveCatalogAgentRuntime(spec));
+export function buildAgentModuleFromSpec(spec: LoadedAgentSpec) {
+  rememberAgentSpec(spec);
+  // Capture by id so Save/upsert that calls rememberAgentSpec is visible on next initialize.
+  const agentId = spec.id;
+  const definition = defineAgent(async () => resolveCatalogAgentRuntime(getAgentSpec(agentId)));
 
   return {
     definition,
-    route: agentAccessRoute(spec.id),
-    attachments: agentAttachmentsRoute(spec.id),
+    route: agentAccessRoute(agentId),
+    attachments: agentAttachmentsRoute(agentId),
     description: spec.description,
   };
+}
+
+export function buildCatalogAgentModule(agentId: string) {
+  return buildAgentModuleFromSpec(getAgentSpec(agentId));
 }
 
 export function buildCatalogAgentExports(agentId: string) {

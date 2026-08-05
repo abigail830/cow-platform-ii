@@ -54,11 +54,11 @@ export function defineContentStudioTemplate(options?: { fileContextPath?: string
         { user: 'user' },
       )
       .copy(
-        'agent-catalog/content-studio/skills/docx/scripts',
+        'agent-assets/skills/docx/scripts',
         '/home/user/content-studio/skills/docx/scripts',
       )
       .copy(
-        'agent-catalog/content-studio/skills/pptx/scripts',
+        'agent-assets/skills/pptx/scripts',
         '/home/user/content-studio/skills/pptx/scripts',
       )
       .setWorkdir('/home/user')

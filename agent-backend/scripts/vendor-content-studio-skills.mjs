@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = resolve(fileURLToPath(import.meta.url), '..');
 const backendRoot = resolve(scriptDir, '..');
-const skillsDest = join(backendRoot, 'agent-catalog/content-studio/skills');
+const skillsDest = join(backendRoot, 'agent-assets/skills');
 const tmp = join(backendRoot, '.tmp-skills-vendor');
 
 rmSync(tmp, { recursive: true, force: true });

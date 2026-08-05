@@ -15,6 +15,7 @@ export type AgentPublicMeta = {
   displayName: string;
   description: string;
   icon?: string;
+  source?: 'fs' | 'studio';
 };
 
 export class AgentRegistry {
@@ -25,11 +26,33 @@ export class AgentRegistry {
   ) {}
 
   loadFromDisk(): void {
-    this.entries.clear();
+    for (const id of [...this.entries.keys()]) {
+      if (this.entries.get(id)?.spec.source !== 'studio') {
+        this.entries.delete(id);
+      }
+    }
     for (const spec of loadAllAgentSpecs()) {
       const built = this.buildModule(spec);
       this.entries.set(spec.id, { spec, ...built });
     }
+  }
+
+  upsert(spec: LoadedAgentSpec): void {
+    const existing = this.entries.get(spec.id);
+    if (existing && existing.spec.source === 'fs' && spec.source === 'studio') {
+      throw new Error(`Cannot overwrite platform agent "${spec.id}" with a studio agent`);
+    }
+    const built = this.buildModule(spec);
+    this.entries.set(spec.id, { spec, ...built });
+  }
+
+  remove(id: string): boolean {
+    const existing = this.entries.get(id);
+    if (!existing) return false;
+    if (existing.spec.source === 'fs') {
+      throw new Error(`Cannot remove platform agent "${id}" from registry`);
+    }
+    return this.entries.delete(id);
   }
 
   get(id: string): AgentCatalogEntry | undefined {
@@ -52,6 +75,7 @@ export class AgentRegistry {
         displayName: spec.displayName,
         description: spec.description,
         icon: spec.icon,
+        source: spec.source ?? 'fs',
       };
     });
   }

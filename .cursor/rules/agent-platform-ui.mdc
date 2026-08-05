@@ -1,5 +1,5 @@
 ---
-description: Agent Platform frontend UI — English copy, orange theme, sidenav spacing
+description: Agent Platform frontend UI — English copy, orange theme, admin layout patterns, RBAC
 globs: agent-frontend/**/*
 alwaysApply: false
 ---
@@ -26,6 +26,8 @@ Do not introduce teal/green as the primary accent in new admin or chat UI.
 ## Left sidenav spacing
 
 - **Nav order**: Agents → **Knowledge Management** → **Platform basic** → **Administration** (users, roles, permissions).
+- Under **Agents**, keep **Asset Market** first, then Playground, then Session Explorer (unless product asks otherwise).
+- **Page titles / nav metadata**: resolve with `getNavPage(PATH_CONSTANT)` — never `AGENT_PAGES[i]` or other nav-array indexes. Nav order is product-driven and can change; index lookups silently show the wrong title.
 - **Between categories**: use `.sidenav-menu + .sidenav-category { margin-top: 1.25rem; }`
 - **Category label → items**: keep tight (`margin-bottom: ~0.3rem` on `.sidenav-category`)
 - **Between sub-menu items**: compact — `.sidenav-menu { gap: 0 }`, `.sidenav-item { padding: 0.375rem 0.625rem }`, `line-height: 1.3`
@@ -36,11 +38,21 @@ When adding new nav sections, follow the existing pattern: category label + `ul.
 
 Use `var(--app-page-bg)` for chat layout, header, body, and admin pages — not the older warm gray `#f3f4f2`.
 
-## Admin pages
+## Admin pages — structure before styling
 
-- Reuse `.btn-primary`, `.admin-filter.active`, `.btn-link` for orange styling.
-- Keep admin UI **compact**: base `0.8125rem`, table headers `0.75rem`, tighter padding on rows/toolbar.
-- Table/action patterns live in `ModelsConfigPage.tsx` — match its English copy style.
+Copy/theme alone do not make an admin page correct. Before writing markup:
+
+1. **Pick a reference page** that already does the same job (list → `ModelsConfigPage` / `BuiltinAgentsPage`; page tabs → `BuiltinAgentsPage`; modal form → `ModelConfigForm`).
+2. **Reuse existing class names** from that reference and from `index.css`. Do **not** invent classes (`admin-list`, `admin-section`, `muted`, `form-actions`, bare `empty` for admin empty states, etc.) unless you also add the CSS in the same change.
+3. **Verify** each new class exists in `index.css` (or is clearly scoped under an existing block). If the class is used elsewhere but undefined as a base rule, add the base rule — do not assume “other pages use it so it must work”.
+4. **Match control semantics**:
+   - Page-level tabs → `.admin-page-tabs` / `.admin-page-tab` (not `.admin-filter`, which is for toolbars/filters).
+   - Data lists → `.admin-table-wrap` + `.admin-table` + `.admin-table-empty` (not raw `<ul>`).
+   - Row actions → `.row-actions` + `.icon-btn` (+ Lucide icons).
+   - Primary/secondary actions → `.btn-primary` / `.btn-secondary` (`.btn-link` is for text links, not Save).
+   - Create/edit forms → `.modal-backdrop` + `.modal-card` + `.form-grid` / `.form-field` + `.modal-actions`.
+   - Status / empty / errors in admin → `.admin-muted` / `.admin-table-empty` / `.admin-error` (not chat `.empty`, which centers content for a different layout).
+5. Keep admin UI **compact**: base `0.8125rem`, table headers `0.75rem`, tighter padding on rows/toolbar.
 
 ## Icons
 
@@ -49,8 +61,9 @@ Use `var(--app-page-bg)` for chat layout, header, body, and admin pages — not 
 
 ## RBAC (users / roles / permissions)
 
-- **Permission**: registry entry with `key`, route/API patterns, category; role grants use `read` or `write`.
+- **Permission**: registry entry with `key`, route/API patterns, category; role grants use `read` or `write` (or a flat feature key where the catalog defines one).
 - **Role**: predefined bundle of permission grants (`app_role_permissions`).
 - **User**: assigned one or more roles (`app_user_roles`); `/api/auth/me` returns `permissions[]`.
-- Gate nav and APIs with granular permission keys (`platform-basic:models:read`, `admin:users:write`, etc.). Resource shorthand `platform-basic:models` or `admin:users` + level checks read or write keys.
-- System `admin` role has write on all catalog permissions; extend catalog in `rbac-catalog.ts` + `seed:rbac`.
+- Gate nav and APIs with the **resource that owns the surface** — do not bolt a new page onto an unrelated feature key (e.g. Asset Market uses `agent:asset-market` read/write, not `agent:playground`).
+- New surfaces: add catalog entries in `rbac-catalog.ts`, grant system roles in `sync-rbac.ts`, wire `permissionKey` / `requireResourcePermission`, then run `db:migrate` (RBAC sync).
+- System `admin` role receives the full catalog; extend catalog in `rbac-catalog.ts` + sync.

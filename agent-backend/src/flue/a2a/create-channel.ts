@@ -16,6 +16,8 @@ import {
 } from '@a2a-js/sdk/server';
 import type { LoadedAgentSpec } from '../../agent-catalog/schema.ts';
 import { loadAllAgentSpecs } from '../../agent-catalog/discover.ts';
+import { bootAgentCatalog } from '../../agent-catalog/boot.ts';
+import { getAgentRegistry } from '../../agent-catalog/registry.ts';
 import { buildAgentCardForSpec } from './build-agent-card.ts';
 import { isA2aEnabledForSpec } from './config.ts';
 import { requireA2aAuth } from './auth.ts';
@@ -240,19 +242,27 @@ export function buildA2aChannelForSpec(spec: LoadedAgentSpec): A2aChannelExport 
 }
 
 export function buildCatalogA2aChannel(agentId: string): A2aChannelExport {
-  const spec = loadAllAgentSpecs().find((entry) => entry.id === agentId);
+  bootAgentCatalog();
+  const spec =
+    getAgentRegistry().get(agentId)?.spec ?? loadAllAgentSpecs().find((entry) => entry.id === agentId);
   if (!spec) {
-    throw new Error(`Unknown catalog agent "${agentId}". Run npm run catalog:sync.`);
+    throw new Error(`Unknown catalog agent "${agentId}".`);
   }
   if (!isA2aEnabledForSpec(spec)) {
-    throw new Error(`Agent "${agentId}" does not have A2A enabled in agent.yaml.`);
+    throw new Error(`Agent "${agentId}" does not have A2A enabled.`);
   }
   return buildA2aChannelForSpec(spec);
 }
 
 export function getCatalogA2aChannelModules(): Record<string, A2aChannelExport> {
   const modules: Record<string, A2aChannelExport> = {};
-  for (const spec of loadAllAgentSpecs()) {
+  bootAgentCatalog();
+  const ids = getAgentRegistry().listIds();
+  const specs =
+    ids.length > 0
+      ? ids.map((id) => getAgentRegistry().get(id)!.spec)
+      : loadAllAgentSpecs();
+  for (const spec of specs) {
     if (!isA2aEnabledForSpec(spec)) continue;
     modules[`${spec.id}-a2a`] = buildA2aChannelForSpec(spec);
   }

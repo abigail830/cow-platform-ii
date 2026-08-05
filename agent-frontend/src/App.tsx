@@ -4,6 +4,7 @@ import { getToken } from './api/auth.ts';
 import { AppLayout } from './layouts/AppLayout.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
 import { AgentPlaygroundPage } from './pages/AgentPlaygroundPage.tsx';
+import { AssetMarketPage } from './pages/AssetMarketPage.tsx';
 import { SessionExplorerPage } from './pages/SessionExplorerPage.tsx';
 import { ApiKeysSettingsPage } from './pages/ApiKeysSettingsPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
@@ -44,6 +45,7 @@ export default function App() {
           <Route index element={<HomePage />} />
           <Route path="/settings/api-keys" element={<ApiKeysSettingsPage />} />
           <Route path="/agents/playground" element={<AgentPlaygroundPage />} />
+          <Route path="/agents/asset-market" element={<AssetMarketPage />} />
           <Route path="/agents/session-explorer" element={<SessionExplorerPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/admin/models" element={<ModelsConfigPage />} />

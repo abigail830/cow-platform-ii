@@ -1,0 +1,35 @@
+---
+description: Platform MCP assets follow Cursor/Claude mcpServers connection shape
+globs: agent-backend/agent-assets/mcp/**/*,agent-backend/src/agent-assets/parse-mcp-servers.ts,agent-backend/src/agent-catalog/load-mcp.ts
+alwaysApply: false
+---
+
+# Platform MCP assets — industry alignment
+
+## Config file (what we store under `agent-assets/mcp/*.json`)
+
+Match Cursor / Claude Code / Claude Desktop: **connection only**.
+
+```json
+{
+  "mcpServers": {
+    "server-key": {
+      "url": "https://…",
+      "transport": "sse",
+      "headers": { "Authorization": "Bearer ${USER_API_KEY}" }
+    }
+  }
+}
+```
+
+- Server **name** = object key under `mcpServers` (not a separate `name` / `id` field).
+- Do **not** put `title`, `description`, or `allowTools` in this JSON.
+- Catalog title/description live in `agent-assets/manifest.yaml`.
+- Tool allowlists (if needed) live on the **agent** (`agent.yaml` → `mcp[].allowTools` or future studio agent policy), not on the MCP asset.
+- Stdio `command`/`args`/`env` is the other industry shape; Flue currently supports **remote URL** MCP only.
+
+## UI
+
+- Show connection JSON as the industry-shaped `{ "mcpServers": … }` blob.
+- Show **tool chips from runtime discovery** after connect (like Cursor Tools & MCPs), not from static config.
+- If credentials are missing, say so — do not invent a tool list in the JSON file.

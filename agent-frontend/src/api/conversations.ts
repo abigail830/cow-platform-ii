@@ -22,6 +22,7 @@ export type AgentInfo = {
   displayName: string;
   description?: string;
   icon?: string;
+  source?: 'platform' | 'studio';
   a2a?: AgentA2aInfo;
 };
 

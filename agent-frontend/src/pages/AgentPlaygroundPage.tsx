@@ -3,10 +3,11 @@ import { AgentApiKeyStatusIndicator } from '../components/AgentApiKeyStatusIndic
 import { AgentListPanel } from '../components/AgentListPanel.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
-import { AGENT_PAGES } from '../shared/admin-nav.ts';
+import { warmAgent } from '../api/studio.ts';
+import { AGENT_PLAYGROUND_PATH, getNavPage } from '../shared/admin-nav.ts';
 import { ChatPageContent } from './ChatPage.tsx';
 
-const PAGE = AGENT_PAGES[0]!;
+const PAGE = getNavPage(AGENT_PLAYGROUND_PATH)!;
 
 export function AgentPlaygroundPage() {
   const { user, agents } = useAppOutletContext();
@@ -28,6 +29,16 @@ export function AgentPlaygroundPage() {
       setSelectedAgent(agents[0]?.name ?? null);
     }
   }, [agents, selectedAgent]);
+
+  useEffect(() => {
+    if (!selectedAgent) return;
+    const handle = window.setTimeout(() => {
+      void warmAgent(selectedAgent).catch(() => {
+        /* soft-fail: warm must not block UI */
+      });
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [selectedAgent]);
 
   return (
     <main className="admin-page playground-page">

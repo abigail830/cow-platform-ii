@@ -1,0 +1,26 @@
+---
+description: Fix bugs via root-cause analysis; only generalize proven principles into Cursor rules
+alwaysApply: true
+---
+
+# Fix from root cause — then generalize into rules
+
+When fixing a bug, UI defect, or recurring mistake:
+
+1. **Find the root cause** — why the failure class happens (wrong abstraction, invented API/CSS, missing gate, mismatched pattern), not only the surface symptom.
+2. **Fix the instance** using the correct existing pattern or abstraction.
+3. **Only then write or update a Cursor rule** — and only with **generalized principles/practices** that apply beyond this one case.
+
+## Do not
+
+- Hardcode a one-line “never use X here” / “next time say Y” fix aimed at a single page or ticket.
+- Dump every local workaround into `.cursor/rules/`.
+- Treat copy/theme preferences as a substitute for structural correctness (layout tokens, permissions, reference implementations).
+
+## Do
+
+- State the failure class in the rule (e.g. “do not invent CSS class names; match a reference admin page”).
+- Prefer “always check X against Y” over “for Asset Market, use class Z”.
+- If the lesson is not yet generalizable, fix the code and skip the rule until a real pattern emerges.
+
+This meta-rule itself is the standard: **root cause → principle → rule**, never **symptom → one-off line in rules**.

@@ -31,6 +31,7 @@ export type KnowledgeManagementResource =
 export const AGENT_CATEGORY = 'agent' as const;
 
 export const AGENT_RESOURCES = {
+  ASSET_MARKET: 'asset-market',
   PLAYGROUND: 'playground',
   SESSION_EXPLORER: 'session-explorer',
 } as const;
@@ -115,7 +116,17 @@ const KNOWLEDGE_MANAGEMENT_FEATURE_DEFS: ResourceDefinition[] = [
   },
 ];
 
-const AGENT_RESOURCE_DEFS: ResourceDefinition[] = [
+const AGENT_RW_RESOURCE_DEFS: ResourceDefinition[] = [
+  {
+    resource: AGENT_RESOURCES.ASSET_MARKET,
+    label: 'Asset market',
+    description: 'Browse platform assets and create or edit personal studio agents and MCP credentials.',
+    routePatterns: ['/agents/asset-market'],
+    apiPatterns: ['/api/studio', '/api/studio/*'],
+  },
+];
+
+const AGENT_FEATURE_DEFS: ResourceDefinition[] = [
   {
     resource: AGENT_RESOURCES.PLAYGROUND,
     label: 'Agent playground',
@@ -212,7 +223,8 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   ...buildPermissions(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCE_DEFS),
   ...buildPermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS),
   ...buildFeaturePermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_FEATURE_DEFS),
-  ...buildFeaturePermissions(AGENT_CATEGORY, AGENT_RESOURCE_DEFS),
+  ...buildPermissions(AGENT_CATEGORY, AGENT_RW_RESOURCE_DEFS),
+  ...buildFeaturePermissions(AGENT_CATEGORY, AGENT_FEATURE_DEFS),
   ...buildPermissions('admin', ADMIN_RESOURCE_DEFS),
 ];
 

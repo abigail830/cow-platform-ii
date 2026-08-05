@@ -7,6 +7,7 @@ import {
   GitBranch,
   KeyRound,
   Library,
+  Package,
   Search,
   ShieldCheck,
   Users,
@@ -29,6 +30,7 @@ const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   playground: Bot,
   'session-explorer': Search,
   'hybrid-search': Combine,
+  'asset-market': Package,
 };
 
 export function NavPageIcon({ name, ...props }: LucideProps & { name: NavPageIcon }) {

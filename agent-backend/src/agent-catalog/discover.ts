@@ -45,6 +45,7 @@ export function loadAgentSpec(agentDir: string): LoadedAgentSpec {
     ...parsed,
     agentDir,
     instructions,
+    source: 'fs',
   };
 }
 

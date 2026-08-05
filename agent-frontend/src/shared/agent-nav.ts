@@ -3,6 +3,7 @@ import {
   ADMIN_PAGES,
   AGENT_PAGES,
   AGENT_PLAYGROUND_PATH,
+  ASSET_MARKET_PATH,
   KNOWLEDGE_MANAGEMENT_PAGES,
   PLATFORM_BASIC_PAGES,
   SESSION_EXPLORER_PATH,
@@ -14,7 +15,11 @@ export const AGENT_PLAYER_ROLE = 'agent-player';
 
 export const HOME_PATH = '/';
 
-export const AGENT_PLAYER_ALLOWED_PATHS = [AGENT_PLAYGROUND_PATH, SESSION_EXPLORER_PATH] as const;
+export const AGENT_PLAYER_ALLOWED_PATHS = [
+  ASSET_MARKET_PATH,
+  AGENT_PLAYGROUND_PATH,
+  SESSION_EXPLORER_PATH,
+] as const;
 
 function roleKeys(user: AuthUser): string[] {
   if (user.roles?.length) return user.roles;
@@ -44,6 +49,9 @@ export function visibleAgentPages(user: AuthUser): NavPage[] {
     if (page.path === SESSION_EXPLORER_PATH) {
       return hasAgentFeaturePermission(user, 'session-explorer');
     }
+    if (page.path === ASSET_MARKET_PATH) {
+      return hasPermission(user, 'agent:asset-market', 'read');
+    }
     return hasPermission(user, page.permissionKey, 'read');
   });
 }
@@ -59,6 +67,10 @@ export function visibleNavPages(user: AuthUser): NavPage[] {
 
 export function canAccessAppPath(user: AuthUser, path: string): boolean {
   if (path === HOME_PATH) return true;
+
+  if (path === ASSET_MARKET_PATH || path.startsWith(`${ASSET_MARKET_PATH}/`)) {
+    return hasPermission(user, 'agent:asset-market', 'read');
+  }
 
   if (path === AGENT_PLAYGROUND_PATH || path.startsWith(`${AGENT_PLAYGROUND_PATH}/`)) {
     return hasAgentFeaturePermission(user, 'playground');
