@@ -13,7 +13,6 @@ import {
   type KbIndexedDocument,
   type KnowledgeBase,
 } from '../api/knowledgeBases.ts';
-import { listModelConfigs, type ModelConfig } from '../api/models.ts';
 import { IconDelete, IconRun } from '../components/AdminActionIcons.tsx';
 import { KbImportModal } from '../components/KbImportModal.tsx';
 import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
@@ -116,7 +115,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   const [rerunningDocId, setRerunningDocId] = useState<string | null>(null);
   const [batchReindexing, setBatchReindexing] = useState(false);
   const [reindexingAll, setReindexingAll] = useState(false);
-  const [embeddingModels, setEmbeddingModels] = useState<ModelConfig[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [detailChunks, setDetailChunks] = useState<KbDocumentChunks | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -189,13 +187,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!canWrite) return;
-    void listModelConfigs({ apiType: 'embeddings', limit: 100 })
-      .then((res) => setEmbeddingModels(res.models))
-      .catch(() => setEmbeddingModels([]));
-  }, [canWrite]);
 
   useKbImportJobPolling({
     knowledgeBaseId,
@@ -437,7 +428,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                         }
                         title={
                           !kb.is_configured
-                            ? 'Configure embedding model in Settings first'
+                            ? 'Configure Admin → Pipelines → kb-rag-index Config YAML first'
                             : selectionCount > 0 && selectedReindexableCount === 0
                               ? 'Only indexed or failed documents can be reindexed'
                               : RERUN_DOCUMENT_TITLE
@@ -481,7 +472,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                       disabled={!kb.is_configured || importJobActive || reindexingAll}
                       title={
                         !kb.is_configured
-                          ? 'Configure embedding model in Settings first'
+                          ? 'Configure Admin → Pipelines → kb-rag-index Config YAML first'
                           : REINDEX_ALL_TITLE
                       }
                       onClick={() => void handleReindexAll()}
@@ -506,7 +497,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                     type="button"
                     className="btn-primary"
                     disabled={!kb.is_configured || importJobActive}
-                    title={!kb.is_configured ? 'Configure embedding model in Settings first' : undefined}
+                    title={!kb.is_configured ? 'Configure Admin → Pipelines → kb-rag-index Config YAML first' : undefined}
                     onClick={() => setImportOpen(true)}
                   >
                     <Plus {...iconProps({ size: 16 })} aria-hidden />
@@ -726,7 +717,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
       {settingsOpen && kb && (
         <KbRagSettingsModal
           kb={kb}
-          embeddingModels={embeddingModels}
           onCancel={() => setSettingsOpen(false)}
           onSaved={(updated) => {
             setKb(updated);

@@ -9,7 +9,6 @@ import {
   appKnowledgeBases,
   db,
   type KnowledgeBaseType,
-  type KbChunkConfig,
   type KbImportJobStatus,
   type KbImportJobKind,
   type KbFaqSettings,
@@ -23,12 +22,14 @@ import {
   KB_IMPORT_MAX_PARSING_RESULT_BYTES,
 } from '../shared/kb-import-limits.ts';
 import { resolveDefaultPipelineIdForKbType } from '../shared/kb-pipeline-binding.ts';
-import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
+import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../shared/pipeline-config-store.ts';
 import { getModelConfigById } from '../shared/model-config-store.ts';
 import { countIndexedDocuments, countKbChunks } from './kb-chunks.ts';
 import { upsertKbChunkDocumentIndexing } from './kb-chunk-documents.ts';
 import { enrichFaqSettingsForApi } from '../builtin-agents/enrich-faq-settings.ts';
-import type { WorkerLlmConfig } from '../builtin-agents/worker-llm-config.ts';
+import { KB_IMPORT_JOB_KIND_TO_PIPELINE } from '../shared/pipeline-catalog.ts';
+import { resolveFaqIndexEmbedConfigForKb } from '../shared/faq-index-workflow.ts';
+import { pipelineSupportsFaqJobKind } from '../shared/faq-pipeline-binding.ts';
 
 async function ragKbCounts(knowledgeBaseId: string): Promise<{ indexedDocuments: number; chunks: number }> {
   try {
@@ -94,7 +95,8 @@ function kbCapabilities(type: string) {
 
 function isKbConfigured(row: KnowledgeBaseRow): boolean {
   if (row.type === 'rag' || row.type === 'faq') {
-    return row.embeddingModelConfigId != null;
+    // Embedding model/dims live on pipeline Config YAML; synced onto KB at create/index.
+    return row.pipelineId != null || row.embeddingModelConfigId != null;
   }
   return true;
 }
@@ -120,7 +122,6 @@ function toKnowledgeBasePublic(
     embedding_model_config_id: row.embeddingModelConfigId,
     embedding_model_name: options?.embeddingModelName ?? null,
     embedding_dimensions: row.embeddingDimensions,
-    chunk_config: row.chunkConfig,
     metadata_keys: row.metadataKeys,
     faq_settings:
       row.type === 'faq'
@@ -297,6 +298,44 @@ export async function createKnowledgeBase(input: {
     })
     .returning();
 
+  // FAQ / RAG index embedding comes from pipeline Config YAML — sync onto KB for search.
+  if ((input.type === 'faq' || input.type === 'rag') && row) {
+    try {
+      if (input.type === 'faq') {
+        const embed = await resolveFaqIndexEmbedConfigForKb({ pipelineId: row.pipelineId });
+        const [synced] = await db
+          .update(appKnowledgeBases)
+          .set({
+            embeddingModelConfigId: embed.modelConfigId,
+            embeddingDimensions: embed.dimensions,
+            updatedAt: new Date(),
+          })
+          .where(eq(appKnowledgeBases.id, row.id))
+          .returning();
+        if (synced) Object.assign(row, synced);
+      } else {
+        const { resolveRagIndexEmbedConfigForKb } = await import('../shared/rag-index-workflow.ts');
+        const embed = await resolveRagIndexEmbedConfigForKb({ pipelineId: row.pipelineId });
+        const [synced] = await db
+          .update(appKnowledgeBases)
+          .set({
+            embeddingModelConfigId: embed.modelConfigId,
+            embeddingDimensions: embed.dimensions,
+            updatedAt: new Date(),
+          })
+          .where(eq(appKnowledgeBases.id, row.id))
+          .returning();
+        if (synced) Object.assign(row, synced);
+      }
+    } catch (error) {
+      console.warn(
+        `[kb] ${input.type.toUpperCase()} KB created without synced embedding config: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+  }
+
   let pipelineName: string | null = null;
   if (row!.pipelineId) {
     const pipeline = await getPipelineConfigById(row!.pipelineId);
@@ -311,9 +350,7 @@ export async function updateKnowledgeBase(
   input: {
     name?: string;
     description?: string | null;
-    embedding_model_config_id?: string | null;
-    embedding_dimensions?: number;
-    chunk_config?: KbChunkConfig;
+    pipeline_id?: string | null;
     metadata_keys?: string[];
     faq_settings?: KbFaqSettings;
   },
@@ -327,24 +364,28 @@ export async function updateKnowledgeBase(
   const description =
     input.description !== undefined ? input.description?.trim() || null : row.description;
 
-  if (
-    input.embedding_model_config_id !== undefined &&
-    (row.type === 'rag' || row.type === 'faq')
-  ) {
-    const modelId = input.embedding_model_config_id?.trim() || null;
-    if (modelId) {
-      const model = await getModelConfigById(modelId);
-      if (!model) throw new Error('Embedding model not found');
-      if (model.apiType !== 'embeddings') {
-        throw new Error('Selected model must have api_type embeddings');
-      }
+  let nextPipelineId = row.pipelineId;
+  if (input.pipeline_id !== undefined && (row.type === 'faq' || row.type === 'rag')) {
+    if (row.type === 'faq') {
+      const { resolveFaqIndexPipeline } = await import('../shared/faq-pipeline-binding.ts');
+      const indexPipeline = await resolveFaqIndexPipeline({
+        pipelineId: input.pipeline_id?.trim() || null,
+      });
+      nextPipelineId = indexPipeline.id;
+    } else {
+      const { resolveRagIndexPipeline } = await import('../shared/rag-pipeline-binding.ts');
+      const indexPipeline = await resolveRagIndexPipeline({
+        pipelineId: input.pipeline_id?.trim() || null,
+      });
+      nextPipelineId = indexPipeline.id;
     }
   }
 
-  if (input.embedding_dimensions !== undefined) {
-    const dims = input.embedding_dimensions;
-    if (!Number.isInteger(dims) || dims < 1 || dims > 65536) {
-      throw new Error('embedding_dimensions must be a positive integer');
+  if (input.faq_settings !== undefined && row.type === 'faq') {
+    const extractId = input.faq_settings.extract_pipeline_id;
+    if (extractId !== undefined && extractId !== null && extractId.trim()) {
+      const { resolveFaqExtractPipeline } = await import('../shared/faq-pipeline-binding.ts');
+      await resolveFaqExtractPipeline({ extractPipelineId: extractId });
     }
   }
 
@@ -353,27 +394,64 @@ export async function updateKnowledgeBase(
     .set({
       name,
       description,
-      ...(input.embedding_model_config_id !== undefined &&
-      (row.type === 'rag' || row.type === 'faq')
-        ? { embeddingModelConfigId: input.embedding_model_config_id?.trim() || null }
-        : {}),
-      ...(input.embedding_dimensions !== undefined
-        ? { embeddingDimensions: input.embedding_dimensions }
-        : {}),
-      ...(input.chunk_config !== undefined && row.type === 'rag'
-        ? { chunkConfig: input.chunk_config }
+      ...(input.pipeline_id !== undefined && (row.type === 'faq' || row.type === 'rag')
+        ? { pipelineId: nextPipelineId }
         : {}),
       ...(input.metadata_keys !== undefined &&
       (row.type === 'rag' || row.type === 'faq')
         ? { metadataKeys: input.metadata_keys }
         : {}),
       ...(input.faq_settings !== undefined && row.type === 'faq'
-        ? { faqSettings: { ...row.faqSettings, ...input.faq_settings } }
+        ? {
+            faqSettings: {
+              auto_index_on_publish: input.faq_settings.auto_index_on_publish ?? false,
+              polish_agent_def_id: input.faq_settings.polish_agent_def_id ?? null,
+              extract_pipeline_id: input.faq_settings.extract_pipeline_id?.trim() || null,
+            },
+          }
         : {}),
       updatedAt: new Date(),
     })
     .where(eq(appKnowledgeBases.id, id))
     .returning();
+
+  // Sync embedding from selected index pipeline when pipeline changes.
+  if (
+    (row.type === 'faq' || row.type === 'rag') &&
+    input.pipeline_id !== undefined &&
+    updated
+  ) {
+    try {
+      const { getPipelineConfigById: getPipe } = await import('../shared/pipeline-config-store.ts');
+      const pipe = updated.pipelineId ? await getPipe(updated.pipelineId) : null;
+      if (pipe) {
+        const embed =
+          row.type === 'faq'
+            ? await (
+                await import('../shared/faq-index-workflow.ts')
+              ).resolveFaqIndexEmbedConfig(pipe)
+            : await (
+                await import('../shared/rag-index-workflow.ts')
+              ).resolveRagIndexEmbedConfig(pipe);
+        const [synced] = await db
+          .update(appKnowledgeBases)
+          .set({
+            embeddingModelConfigId: embed.modelConfigId,
+            embeddingDimensions: embed.dimensions,
+            updatedAt: new Date(),
+          })
+          .where(eq(appKnowledgeBases.id, id))
+          .returning();
+        return enrichKbPublic(synced!);
+      }
+    } catch (error) {
+      console.warn(
+        `[kb] ${row.type} index pipeline saved but embedding sync failed: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+  }
 
   return enrichKbPublic(updated!);
 }
@@ -664,7 +742,7 @@ export async function createKbImportJob(input: {
   faqIds?: string[];
   jobKind?: KbImportJobKind | null;
   pipelineId?: string | null;
-  workerLlmConfig?: WorkerLlmConfig | null;
+  configYaml?: string | null;
   createdBy?: string | null;
 }): Promise<KbImportJobRow> {
   const faqIds = input.faqIds ?? [];
@@ -682,7 +760,7 @@ export async function createKbImportJob(input: {
       documentIds,
       faqIds,
       totalCount,
-      workerLlmConfig: input.workerLlmConfig ?? null,
+      configYaml: input.configYaml?.trim() ? input.configYaml.trim() : null,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -779,6 +857,7 @@ export async function startKbPageIndexImport(input: {
     faqIds: [],
     jobKind: 'pageindex_import',
     pipelineId: kb.pipelineId,
+    configYaml: pipeline.configYaml,
     createdBy: input.createdBy,
   });
 
@@ -796,16 +875,26 @@ export async function startKbRagIndexImport(input: {
   if (kb.type !== 'rag') {
     throw new Error('Indexing import is only supported for RAG knowledge bases');
   }
-  if (!kb.embeddingModelConfigId) {
-    throw new Error('Configure an embedding model in settings before importing');
-  }
-  if (!kb.pipelineId) {
-    throw new Error('Knowledge base has no index pipeline configured');
-  }
 
-  const pipeline = await getPipelineConfigById(kb.pipelineId);
-  if (!pipeline || !pipeline.isEnabled) {
-    throw new Error('Knowledge base index pipeline is not available');
+  const { resolveRagIndexPipeline } = await import('../shared/rag-pipeline-binding.ts');
+  const { resolveRagIndexEmbedConfig } = await import('../shared/rag-index-workflow.ts');
+  const pipeline = await resolveRagIndexPipeline({ pipelineId: kb.pipelineId });
+  const embed = await resolveRagIndexEmbedConfig(pipeline);
+
+  if (
+    kb.embeddingModelConfigId !== embed.modelConfigId ||
+    kb.embeddingDimensions !== embed.dimensions ||
+    kb.pipelineId !== pipeline.id
+  ) {
+    await db
+      .update(appKnowledgeBases)
+      .set({
+        pipelineId: pipeline.id,
+        embeddingModelConfigId: embed.modelConfigId,
+        embeddingDimensions: embed.dimensions,
+        updatedAt: new Date(),
+      })
+      .where(eq(appKnowledgeBases.id, input.knowledgeBaseId));
   }
 
   const documentIds = await expandDocumentIdsForImport({
@@ -823,7 +912,8 @@ export async function startKbRagIndexImport(input: {
     documentIds,
     faqIds: [],
     jobKind: 'rag_index',
-    pipelineId: kb.pipelineId,
+    pipelineId: pipeline.id,
+    configYaml: embed.configYaml ?? pipeline.configYaml,
     createdBy: input.createdBy,
   });
 
@@ -842,7 +932,6 @@ export async function getKbWorkerConfig(knowledgeBaseId: string) {
     type: kb.type,
     embedding_model_config_id: kb.embeddingModelConfigId,
     embedding_dimensions: kb.embeddingDimensions,
-    chunk_config: kb.chunkConfig,
     metadata_keys: kb.metadataKeys,
     faq_settings: faqSettings,
   };
@@ -854,14 +943,30 @@ export async function resolveKbImportPipelineForJob(jobId: string) {
 
   let pipelineId = job.pipelineId;
   if (!pipelineId) {
-    const kb = await getKnowledgeBaseById(job.knowledgeBaseId);
-    pipelineId = kb?.pipelineId ?? null;
+    // Prefer job_kind → catalog pipeline. FAQ KBs default to kb-faq-index, so falling
+    // back to kb.pipelineId would mis-dispatch faq_extract jobs.
+    const byKind = job.jobKind ? KB_IMPORT_JOB_KIND_TO_PIPELINE[job.jobKind] : undefined;
+    if (byKind) {
+      const named = await getPipelineConfigByPipelineName(byKind);
+      pipelineId = named?.id ?? null;
+    }
+    if (!pipelineId) {
+      const kb = await getKnowledgeBaseById(job.knowledgeBaseId);
+      pipelineId = kb?.pipelineId ?? null;
+    }
   }
   if (!pipelineId) throw new Error('KB import pipeline not configured');
 
   const pipeline = await getPipelineConfigById(pipelineId);
   if (!pipeline || !pipeline.isEnabled) {
     throw new Error('KB import pipeline is not available');
+  }
+
+  const expectedOk = pipelineSupportsFaqJobKind(pipeline, job.jobKind);
+  if (job.jobKind && !expectedOk) {
+    throw new Error(
+      `KB import job kind "${job.jobKind}" is not compatible with pipeline "${pipeline.pipelineName}"`,
+    );
   }
 
   return { job, pipeline };
@@ -877,7 +982,9 @@ export type KbImportJobWorkerContext = {
   total_count: number;
   completed_count: number;
   failed_count: number;
-  worker_llm_config: WorkerLlmConfig | null;
+  /** Snapshot of pipeline config_yaml; null = CLI packaged default. */
+  config_yaml: string | null;
+  pipeline_name: string | null;
   api_url: string;
 };
 
@@ -889,6 +996,15 @@ export async function buildKbImportJobWorkerContext(jobId: string): Promise<KbIm
     process.env.OPENKMS_API_URL?.trim() ||
     `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
 
+  let pipelineName: string | null = null;
+  if (job.pipelineId) {
+    const pipeline = await getPipelineConfigById(job.pipelineId);
+    pipelineName = pipeline?.pipelineName ?? null;
+  }
+  if (!pipelineName && job.jobKind) {
+    pipelineName = KB_IMPORT_JOB_KIND_TO_PIPELINE[job.jobKind] ?? null;
+  }
+
   return {
     id: job.id,
     knowledge_base_id: job.knowledgeBaseId,
@@ -899,7 +1015,8 @@ export async function buildKbImportJobWorkerContext(jobId: string): Promise<KbIm
     total_count: job.totalCount,
     completed_count: job.completedCount,
     failed_count: job.failedCount,
-    worker_llm_config: job.workerLlmConfig ?? null,
+    config_yaml: job.configYaml ?? null,
+    pipeline_name: pipelineName,
     api_url: apiUrl,
   };
 }

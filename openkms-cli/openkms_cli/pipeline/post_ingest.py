@@ -211,9 +211,14 @@ def write_hash_dir_artifacts(
 
 
 def complete_job_after_parse(api: str, job_id: str, ctx: dict[str, Any]) -> None:
-    extraction_args = (ctx.get("extraction_args") or "").strip()
-    if extraction_args:
-        run_metadata_extraction_from_ctx(ctx, api, job_id)
+    from openkms_cli.core.workflow_config import metadata_extract_enabled, resolve_job_workflow_config
+
+    config = resolve_job_workflow_config(
+        pipeline_name=str(ctx.get("pipeline_name") or ""),
+        job_config_yaml=ctx.get("config_yaml"),
+    )
+    if metadata_extract_enabled(config):
+        run_metadata_extraction_from_ctx(ctx, api, job_id, workflow_config=config)
     else:
         patch_job(api, job_id, stage="done")
         console.print(f"[green]Job {job_id} done[/green]")
@@ -274,18 +279,38 @@ def finalize_job_artifacts(
     complete_job_after_parse(api, job_id, ctx)
 
 
-def run_metadata_extraction_from_ctx(ctx: dict[str, Any], api: str, job_id: str) -> None:
-    meta_config = ctx.get("metadata_extraction_config")
-    extraction_args = (ctx.get("extraction_args") or "").strip()
-    if not meta_config and not extraction_args:
+def run_metadata_extraction_from_ctx(
+    ctx: dict[str, Any],
+    api: str,
+    job_id: str,
+    *,
+    workflow_config: dict[str, Any] | None = None,
+) -> None:
+    from openkms_cli.core.model_resolve import ModelResolveError, model_connection, resolve_models_for_job
+    from openkms_cli.core.workflow_config import (
+        metadata_extract_enabled,
+        metadata_extract_section,
+        resolve_job_workflow_config,
+    )
+
+    config = workflow_config or resolve_job_workflow_config(
+        pipeline_name=str(ctx.get("pipeline_name") or ""),
+        job_config_yaml=ctx.get("config_yaml"),
+    )
+    if not metadata_extract_enabled(config):
         patch_job(api, job_id, stage="done")
         return
 
-    if not meta_config:
-        raise RuntimeError(
-            "This job has no metadata extraction config snapshot. "
-            "Re-run the pipeline after configuring a metadata extraction agent in Channel Settings."
-        )
+    meta = metadata_extract_section(config) or {}
+    try:
+        resolved = resolve_models_for_job(config, api_type="chat-completions")
+    except ModelResolveError as e:
+        raise RuntimeError(str(e)) from e
+
+    model_name = str(meta.get("model_name") or "").strip()
+    params = resolved.get(model_name)
+    if not params:
+        raise RuntimeError(f"No resolved credentials for model_name={model_name!r}")
 
     cfg = get_cli_settings()
     document_id = ctx["document"]["id"]
@@ -320,7 +345,8 @@ def run_metadata_extraction_from_ctx(ctx: dict[str, Any], api: str, job_id: str)
             prefix=prefix,
             extract_metadata=True,
             document_id=document_id,
-            metadata_extraction_config=meta_config,
+            metadata_extract=meta,
+            model_connection=model_connection(params),
             api_url=api,
             skip_upload=False,
             bucket=cfg.aws_bucket_name,

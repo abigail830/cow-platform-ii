@@ -1,4 +1,4 @@
-"""S3/OSS helpers shared by pipeline run and async workers."""
+"""S3/OSS helpers shared by async pipeline workers."""
 
 import os
 import re

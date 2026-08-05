@@ -3,6 +3,14 @@
 from openkms_cli.kb.chunking import chunk_document
 
 
+def test_markdown_header_without_size_keeps_large_section():
+    body = "x" * 2000
+    md = f"## Big section\n\n{body}"
+    chunks = chunk_document(md, {"strategy": "markdown_header"})
+    assert len(chunks) == 1
+    assert chunks[0]["metadata"].get("heading") == "Big section"
+
+
 def test_markdown_header_splits_oversized_sections():
     body = "x" * 2000
     md = f"## Big section\n\n{body}"

@@ -303,7 +303,7 @@ export function KnowledgeBasesListPage() {
                       <span className="kb-type-option-text">
                         RAG
                         <span className="admin-form-hint kb-type-pipeline-hint">
-                          — <strong>RAG KB Index</strong> pipeline · embedding in Settings
+                          — <strong>RAG KB Index</strong> pipeline · select in Settings
                         </span>
                       </span>
                     </label>

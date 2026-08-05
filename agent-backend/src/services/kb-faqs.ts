@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   appKbFaqs,
+  appKnowledgeBases,
   db,
   type KbFaqIndexStatus,
   type KbFaqPublicationStatus,
@@ -12,8 +13,6 @@ import { getDocumentById } from './documents.ts';
 import { decodeEmbeddingBase64 } from '../shared/kb-chunk-embedding.ts';
 import { spawnKbImportWorker } from './kb-import-runner.ts';
 import { resolveKbFaqWorkflowAgent } from '../builtin-agents/resolve-workflow-agent.ts';
-import { resolveKbFaqExtractWorkerConfig } from '../builtin-agents/enrich-faq-settings.ts';
-import { FAQ_EXTRACT_NOT_CONFIGURED } from '../builtin-agents/worker-llm-config.ts';
 import { runSyncAgent } from '../builtin-agents/sync-agent-runner.ts';
 import {
   createKbImportJob,
@@ -22,16 +21,17 @@ import {
   toKbImportJobPublic,
   type KbImportJobRow,
 } from './knowledge-bases.ts';
-import { getPipelineConfigByPipelineName } from '../shared/pipeline-config-store.ts';
-import { FAQ_KB_EXTRACT_PIPELINE_NAME, FAQ_KB_INDEX_PIPELINE_NAME } from '../shared/pipeline-catalog.ts';
+import {
+  resolveFaqIndexEmbedConfig,
+  resolveFaqIndexEmbedConfigForKb,
+} from '../shared/faq-index-workflow.ts';
+import { propagateDocMetadata } from '../shared/kb-faq-metadata.ts';
 
 export type KbFaqRow = typeof appKbFaqs.$inferSelect;
 
 function questionContentHash(question: string): string {
   return createHash('sha256').update(question.trim()).digest('hex').slice(0, 32);
 }
-
-import { propagateDocMetadata } from '../shared/kb-faq-metadata.ts';
 
 export function toKbFaqPublic(row: KbFaqRow) {
   return {
@@ -240,6 +240,19 @@ export async function batchPublishKbFaqs(knowledgeBaseId: string, faqIds: string
   const uniqueIds = [...new Set(faqIds.map((id) => id.trim()).filter(Boolean))];
   if (uniqueIds.length === 0) throw new Error('No FAQs selected');
 
+  const settings = (kb.faqSettings ?? {}) as KbFaqSettings;
+  if (settings.auto_index_on_publish) {
+    // Validate pipeline YAML embed config before publishing (avoids published+pending stuck state).
+    try {
+      await resolveFaqIndexEmbedConfigForKb({ pipelineId: kb.pipelineId });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(
+        `Cannot publish with auto-index: configure Admin → Pipelines → kb-faq-index Config YAML (${detail})`,
+      );
+    }
+  }
+
   const now = new Date();
   await db
     .update(appKbFaqs)
@@ -257,7 +270,6 @@ export async function batchPublishKbFaqs(knowledgeBaseId: string, faqIds: string
       ),
     );
 
-  const settings = (kb.faqSettings ?? {}) as KbFaqSettings;
   if (settings.auto_index_on_publish) {
     const job = await startKbFaqIndexJob({
       knowledgeBaseId,
@@ -436,18 +448,11 @@ export async function startKbFaqExtractJob(input: {
   if (!kb) throw new Error('Knowledge base not found');
   if (kb.type !== 'faq') throw new Error('Extract is only for FAQ knowledge bases');
 
-  let workerLlmConfig;
-  try {
-    workerLlmConfig = await resolveKbFaqExtractWorkerConfig(input.knowledgeBaseId);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`${FAQ_EXTRACT_NOT_CONFIGURED} (${detail})`);
-  }
-
-  const pipeline = await getPipelineConfigByPipelineName(FAQ_KB_EXTRACT_PIPELINE_NAME);
-  if (!pipeline || !pipeline.isEnabled) {
-    throw new Error('FAQ extract pipeline is not available');
-  }
+  const settings = (kb.faqSettings ?? {}) as KbFaqSettings;
+  const { resolveFaqExtractPipeline } = await import('../shared/faq-pipeline-binding.ts');
+  const pipeline = await resolveFaqExtractPipeline({
+    extractPipelineId: settings.extract_pipeline_id,
+  });
 
   const documentIds = await expandDocumentIdsForImport({
     channelIds: input.channelIds,
@@ -461,7 +466,7 @@ export async function startKbFaqExtractJob(input: {
     faqIds: [],
     jobKind: 'faq_extract',
     pipelineId: pipeline.id,
-    workerLlmConfig,
+    configYaml: pipeline.configYaml,
     createdBy: input.createdBy,
   });
 }
@@ -474,13 +479,26 @@ export async function startKbFaqIndexJob(input: {
   const kb = await getKnowledgeBaseById(input.knowledgeBaseId);
   if (!kb) throw new Error('Knowledge base not found');
   if (kb.type !== 'faq') throw new Error('Index is only for FAQ knowledge bases');
-  if (!kb.embeddingModelConfigId) {
-    throw new Error('Configure an embedding model in settings before indexing');
-  }
 
-  const pipeline = await getPipelineConfigByPipelineName(FAQ_KB_INDEX_PIPELINE_NAME);
-  if (!pipeline || !pipeline.isEnabled) {
-    throw new Error('FAQ index pipeline is not available');
+  const { resolveFaqIndexPipeline } = await import('../shared/faq-pipeline-binding.ts');
+  const pipeline = await resolveFaqIndexPipeline({ pipelineId: kb.pipelineId });
+
+  // Pipeline Config YAML is source of truth; sync onto KB for hybrid-search query-time.
+  const embed = await resolveFaqIndexEmbedConfig(pipeline);
+  if (
+    kb.embeddingModelConfigId !== embed.modelConfigId ||
+    kb.embeddingDimensions !== embed.dimensions ||
+    kb.pipelineId !== pipeline.id
+  ) {
+    await db
+      .update(appKnowledgeBases)
+      .set({
+        pipelineId: pipeline.id,
+        embeddingModelConfigId: embed.modelConfigId,
+        embeddingDimensions: embed.dimensions,
+        updatedAt: new Date(),
+      })
+      .where(eq(appKnowledgeBases.id, input.knowledgeBaseId));
   }
 
   const faqIds = [...new Set(input.faqIds.map((id) => id.trim()).filter(Boolean))];
@@ -506,6 +524,7 @@ export async function startKbFaqIndexJob(input: {
     faqIds: publishedIds,
     jobKind: 'faq_index',
     pipelineId: pipeline.id,
+    configYaml: embed.configYaml ?? pipeline.configYaml,
     createdBy: input.createdBy,
   });
 }

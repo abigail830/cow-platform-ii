@@ -1,10 +1,7 @@
-import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
-import { appBuiltinAgentDefs, appModelConfigs, db } from '../db/index.ts';
-import { resolveWorkflowAgent } from '../builtin-agents/resolve-workflow-agent.ts';
 import { buildChannelTreeForUser } from '../auth/resource-access.ts';
 import { denyUnlessChannelAccess } from '../auth/require-resource-access.ts';
 import { routeParam } from '../http/route-param.ts';
@@ -30,52 +27,19 @@ channels.get(
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
     const { listPipelineConfigs } = await import('../shared/pipeline-config-store.ts');
-    const { listRuntimeModelConfigs } = await import('../shared/model-config-store.ts');
+    const { isDocumentAsyncPipelineName } = await import('../services/pipeline-jobs.ts');
 
-    const [{ pipelines }, models] = await Promise.all([
-      listPipelineConfigs({ enabledOnly: true, limit: 100 }),
-      listRuntimeModelConfigs(),
-    ]);
-
-    const extractionModels = models
-      .filter((model) => model.apiType === 'chat-completions')
-      .map((model) => ({ id: model.id, name: model.name, isDefault: model.isDefault }))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-
-    const extractionAgents = await db
-      .select({
-        id: appBuiltinAgentDefs.id,
-        name: appBuiltinAgentDefs.name,
-        slug: appBuiltinAgentDefs.slug,
-        modelName: appModelConfigs.name,
-      })
-      .from(appBuiltinAgentDefs)
-      .leftJoin(appModelConfigs, eq(appBuiltinAgentDefs.modelConfigId, appModelConfigs.id))
-      .where(eq(appBuiltinAgentDefs.workflowKey, 'metadata_extract'))
-      .orderBy(asc(appBuiltinAgentDefs.name));
-
-    let platformDefaultMetadataExtractAgentId: string | null = null;
-    try {
-      const platform = await resolveWorkflowAgent({ workflowKey: 'metadata_extract' });
-      platformDefaultMetadataExtractAgentId = platform.id;
-    } catch {
-      platformDefaultMetadataExtractAgentId = null;
-    }
+    const { pipelines } = await listPipelineConfigs({ enabledOnly: true, limit: 100 });
+    const documentPipelines = pipelines.filter((pipeline) =>
+      isDocumentAsyncPipelineName(pipeline.pipelineName),
+    );
 
     return c.json({
-      pipelines: pipelines.map((pipeline) => ({
+      pipelines: documentPipelines.map((pipeline) => ({
         id: pipeline.id,
         name: pipeline.name,
         pipelineName: pipeline.pipelineName,
       })),
-      extractionModels,
-      metadataExtractAgents: extractionAgents.map((row) => ({
-        id: row.id,
-        name: row.name,
-        slug: row.slug,
-        model_name: row.modelName,
-      })),
-      platformDefaultMetadataExtractAgentId,
     });
   },
 );
@@ -139,8 +103,6 @@ channels.get(
       description: row.description,
       parent_id: row.parentId,
       sort_order: row.sortOrder,
-      metadata_extraction_model_id: row.metadataExtractionModelId,
-      metadata_extraction_agent_def_id: row.metadataExtractionAgentDefId,
       pipeline_id: row.pipelineId,
       auto_start_pipeline: row.autoStartPipeline,
       created_by: row.createdBy,
@@ -191,23 +153,11 @@ channels.put(
       name?: string;
       description?: string | null;
       parent_id?: string | null;
-      metadata_extraction_model_id?: string | null;
-      metadata_extraction_agent_def_id?: string | null;
       pipeline_id?: string | null;
       auto_start_pipeline?: boolean;
     }>();
 
     try {
-      const metadataExtractionModelId =
-        body.metadata_extraction_model_id === undefined
-          ? undefined
-          : body.metadata_extraction_model_id?.trim() || null;
-
-      const metadataExtractionAgentDefId =
-        body.metadata_extraction_agent_def_id === undefined
-          ? undefined
-          : body.metadata_extraction_agent_def_id?.trim() || null;
-
       const pipelineId =
         body.pipeline_id === undefined ? undefined : body.pipeline_id?.trim() || null;
 
@@ -218,8 +168,6 @@ channels.put(
         name: body.name,
         description: body.description,
         parentId: body.parent_id,
-        metadataExtractionModelId,
-        metadataExtractionAgentDefId,
         pipelineId,
         autoStartPipeline,
       });

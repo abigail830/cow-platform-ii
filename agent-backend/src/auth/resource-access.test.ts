@@ -68,7 +68,6 @@ describe('resource-access helpers', () => {
         sort_order: 0,
         pipeline_id: null,
         auto_start_pipeline: false,
-        metadata_extraction_model_id: null,
         created_at: '',
         updated_at: '',
         children: [
@@ -80,7 +79,6 @@ describe('resource-access helpers', () => {
             sort_order: 0,
             pipeline_id: null,
             auto_start_pipeline: false,
-            metadata_extraction_model_id: null,
             created_at: '',
             updated_at: '',
             children: [],

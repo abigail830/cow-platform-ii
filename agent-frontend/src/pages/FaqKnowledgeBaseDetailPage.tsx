@@ -23,7 +23,6 @@ import {
   type KbImportJob,
   type KnowledgeBase,
 } from '../api/knowledgeBases.ts';
-import { listModelConfigs, type ModelConfig } from '../api/models.ts';
 import { IconDelete, IconRun } from '../components/AdminActionIcons.tsx';
 import { KbFaqAddEditModal } from '../components/KbFaqAddEditModal.tsx';
 import { KbFaqDetailPanel } from '../components/KbFaqDetailPanel.tsx';
@@ -134,7 +133,6 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   const [indexing, setIndexing] = useState(false);
   const [extractBusy, setExtractBusy] = useState(false);
   const { notice: transientNotice, showNotice, clearNotice } = useTransientNotice(6000);
-  const [embeddingModels, setEmbeddingModels] = useState<ModelConfig[]>([]);
   const selectedFaqIdRef = useRef<string | null>(null);
   const totalRef = useRef(0);
   const faqTotalBeforeExtractRef = useRef<number | null>(null);
@@ -180,6 +178,11 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
     () => faqs.find((faq) => faq.id === selectedFaqId) ?? null,
     [faqs, selectedFaqId],
   );
+  const autoIndexOnPublish = Boolean(kb?.faq_settings?.auto_index_on_publish);
+  const publishBlockedByIndexConfig = autoIndexOnPublish && !kb?.is_configured;
+  const publishBlockedTitle = publishBlockedByIndexConfig
+    ? 'Configure Admin → Pipelines → kb-faq-index Config YAML first (auto-index on publish is enabled)'
+    : undefined;
 
   useEffect(() => {
     selectedFaqIdRef.current = selectedFaqId;
@@ -230,17 +233,6 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!canWrite) return;
-    void listModelConfigs({ apiType: 'embeddings', limit: 100 })
-      .then((embeddings) => {
-        setEmbeddingModels(embeddings.models);
-      })
-      .catch(() => {
-        setEmbeddingModels([]);
-      });
-  }, [canWrite]);
 
   useEffect(() => {
     if (!canWrite || !knowledgeBaseId) return;
@@ -358,16 +350,6 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   function openExtractModal() {
     setError('');
     clearNotice();
-    const extractionConfigured = Boolean(
-      kb?.faq_settings?.extraction_model_config_id && !kb?.faq_settings?.extraction_configuration_error,
-    );
-    if (!extractionConfigured) {
-      setError(
-        kb?.faq_settings?.extraction_configuration_error ??
-          'Configure an FAQ extraction agent in Settings (AI tab) before extracting from documents.',
-      );
-      return;
-    }
     setExtractOpen(true);
   }
 
@@ -528,11 +510,17 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                       <button
                         type="button"
                         className="btn-secondary"
-                        disabled={selectedDraftCount === 0 || batchBusy || jobActive}
+                        disabled={
+                          selectedDraftCount === 0 ||
+                          batchBusy ||
+                          jobActive ||
+                          publishBlockedByIndexConfig
+                        }
                         title={
-                          selectionCount > 0 && selectedDraftCount === 0
+                          publishBlockedTitle ??
+                          (selectionCount > 0 && selectedDraftCount === 0
                             ? 'Selected FAQs are already published'
-                            : undefined
+                            : undefined)
                         }
                         onClick={() => void handleBatchPublish()}
                       >
@@ -566,7 +554,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                         }
                         title={
                           !kb.is_configured
-                            ? 'Configure embedding model in Settings first'
+                            ? 'Configure Admin → Pipelines → kb-faq-index Config YAML first'
                             : selectionCount > 0 && selectedPublishedCount === 0
                               ? 'Publish selected FAQs before indexing'
                               : selectionCount > selectedPublishedCount
@@ -604,15 +592,8 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                     <button
                       type="button"
                       className="btn-primary"
-                      disabled={!kb.is_configured || jobActive || extractBusy || !kb.faq_settings?.extraction_model_config_id}
-                      title={
-                        kb.faq_settings?.extraction_configuration_error ??
-                          (!kb.faq_settings?.extraction_model_config_id
-                            ? 'Configure an FAQ extraction agent in Settings (AI tab)'
-                            : !kb.is_configured
-                              ? 'Configure embedding settings first'
-                              : undefined)
-                      }
+                      disabled={jobActive || extractBusy}
+                      title="Runs the kb-faq-extract pipeline (Config YAML model_name / prompts)"
                       onClick={openExtractModal}
                     >
                       {extractJobActive ? (
@@ -760,12 +741,13 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                                         <button
                                           type="button"
                                           className="icon-btn"
-                                          title="Publish FAQ"
+                                          title={publishBlockedTitle ?? 'Publish FAQ'}
                                           aria-label={`Publish ${faq.question}`}
                                           disabled={
                                             jobActive ||
                                             batchBusy ||
                                             indexing ||
+                                            publishBlockedByIndexConfig ||
                                             (publishingFaqId !== null &&
                                               publishingFaqId !== faq.id)
                                           }
@@ -881,7 +863,6 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
       {settingsOpen && kb && (
         <KbFaqSettingsModal
           kb={kb}
-          embeddingModels={embeddingModels}
           onCancel={() => setSettingsOpen(false)}
           onSaved={(updated) => {
             setKb(updated);

@@ -12,7 +12,6 @@ import {
   buildDocumentImportContext,
 } from '../../services/knowledge-bases.ts';
 import {
-  channelHasMetadataExtraction,
   metadataNeedsExtraction,
 } from '../../services/document-metadata-extraction.ts';
 import { uploadDocumentObject, StorageNotConfiguredError } from '../../storage/document-files.ts';
@@ -65,13 +64,8 @@ documents.get('/:id/metadata-needs-extraction', async (c) => {
 
   const doc = await getDocumentById(id);
   if (!doc) return c.json({ error: 'Document not found' }, 404);
-  const channel = await getChannelById(doc.channelId);
-  if (!channel) return c.json({ error: 'Channel not found' }, 404);
   return c.json({
-    needs_extraction: metadataNeedsExtraction(
-      doc.metadata as Record<string, unknown>,
-      channelHasMetadataExtraction(channel),
-    ),
+    needs_extraction: metadataNeedsExtraction(doc.metadata as Record<string, unknown>),
   });
 });
 

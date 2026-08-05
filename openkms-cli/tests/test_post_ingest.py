@@ -82,7 +82,8 @@ def test_finalize_job_artifacts(
         "document": {"id": "doc-1", "name": "readme.md"},
         "input_uri": "s3://bucket/documents/abc/original.md",
         "s3_prefix": "documents/abc",
-        "extraction_args": "",
+        "pipeline_name": "baidu-doc-parse",
+        "config_yaml": "metadata_extract:\n  enabled: false\n",
     }
     result = {"markdown": "# Doc", "file_hash": "abc"}
 

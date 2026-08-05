@@ -1,7 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import {
   appBuiltinAgentDefs,
-  appDocumentChannels,
   appKnowledgeBases,
   appModelConfigs,
   appWorkflowBindings,
@@ -14,6 +13,7 @@ type LegacyFaqSettings = {
   auto_index_on_publish?: boolean;
   extraction_agent_def_id?: string | null;
   polish_agent_def_id?: string | null;
+  extract_pipeline_id?: string | null;
   extraction_model_config_id?: string | null;
   extraction_prompt?: string;
   polish_model_config_id?: string | null;
@@ -103,7 +103,6 @@ export async function seedBuiltinAgents(): Promise<void> {
 
   await ensureWorkflowBindings(seededByWorkflow);
   await migrateLegacyFaqSettings(seededByWorkflow);
-  await migrateLegacyChannelMetadata(seededByWorkflow);
 }
 
 async function migrateLegacyFaqSettings(
@@ -117,40 +116,27 @@ async function migrateLegacyFaqSettings(
   for (const kb of kbs) {
     const settings = (kb.faqSettings ?? {}) as LegacyFaqSettings;
     let changed = false;
-    const next: LegacyFaqSettings = {
+    const next: {
+      auto_index_on_publish: boolean;
+      polish_agent_def_id: string | null;
+      extract_pipeline_id: string | null;
+    } = {
       auto_index_on_publish: settings.auto_index_on_publish ?? false,
-      extraction_agent_def_id: settings.extraction_agent_def_id ?? null,
       polish_agent_def_id: settings.polish_agent_def_id ?? null,
+      extract_pipeline_id: settings.extract_pipeline_id ?? null,
     };
 
-    if (!next.extraction_agent_def_id && (settings.extraction_model_config_id || settings.extraction_prompt)) {
-      const modelId = settings.extraction_model_config_id;
-      const prompt = settings.extraction_prompt?.trim();
-      const defaultExtractId = defaults.get('faq_extract');
-      const defaultPrompt = BUILTIN_AGENT_SEEDS.find((s) => s.workflowKey === 'faq_extract')?.userPromptTemplate;
-
-      if (modelId && prompt && defaultPrompt && prompt !== defaultPrompt) {
-        const [created] = await db
-          .insert(appBuiltinAgentDefs)
-          .values({
-            slug: `migrated-${kb.id.slice(0, 8)}-faq-extract`,
-            name: `Migrated — ${kb.name} — FAQ extract`,
-            description: 'Migrated from legacy KB faq_settings',
-            workflowKey: 'faq_extract',
-            apiType: 'chat-completions',
-            modelConfigId: modelId,
-            systemPrompt: 'You extract FAQ pairs from documents. Respond with valid JSON only.',
-            userPromptTemplate: prompt,
-            outputMode: 'json',
-            temperature: '0.2',
-            isSystem: false,
-            version: 1,
-          })
-          .returning({ id: appBuiltinAgentDefs.id });
-        next.extraction_agent_def_id = created.id;
-      } else if (defaultExtractId) {
-        next.extraction_agent_def_id = defaultExtractId;
-      }
+    // Drop legacy extract agent fields — FAQ extract uses pipeline Config YAML.
+    if (
+      settings.extraction_agent_def_id != null ||
+      settings.extraction_model_config_id != null ||
+      Boolean(settings.extraction_prompt) ||
+      'extraction_agent_def_id' in settings ||
+      'extraction_model_config_id' in settings ||
+      'extraction_prompt' in settings ||
+      'polish_model_config_id' in settings ||
+      'polish_prompt' in settings
+    ) {
       changed = true;
     }
 
@@ -191,69 +177,5 @@ async function migrateLegacyFaqSettings(
         .set({ faqSettings: next, updatedAt: new Date() })
         .where(eq(appKnowledgeBases.id, kb.id));
     }
-  }
-}
-
-async function migrateLegacyChannelMetadata(
-  defaults: Map<BuiltinWorkflowKey, string>,
-): Promise<void> {
-  const defaultMetadataId = defaults.get('metadata_extract');
-  if (!defaultMetadataId) return;
-
-  const [defaultAgent] = await db
-    .select({
-      id: appBuiltinAgentDefs.id,
-      modelConfigId: appBuiltinAgentDefs.modelConfigId,
-    })
-    .from(appBuiltinAgentDefs)
-    .where(eq(appBuiltinAgentDefs.id, defaultMetadataId))
-    .limit(1);
-  if (!defaultAgent) return;
-
-  const metadataSeed = BUILTIN_AGENT_SEEDS.find((s) => s.workflowKey === 'metadata_extract');
-
-  const channels = await db
-    .select({
-      id: appDocumentChannels.id,
-      name: appDocumentChannels.name,
-      metadataExtractionModelId: appDocumentChannels.metadataExtractionModelId,
-      metadataExtractionAgentDefId: appDocumentChannels.metadataExtractionAgentDefId,
-    })
-    .from(appDocumentChannels);
-
-  for (const channel of channels) {
-    if (channel.metadataExtractionAgentDefId) continue;
-    if (!channel.metadataExtractionModelId) continue;
-
-    let agentDefId = defaultMetadataId;
-    if (channel.metadataExtractionModelId !== defaultAgent.modelConfigId) {
-      const [created] = await db
-        .insert(appBuiltinAgentDefs)
-        .values({
-          slug: `migrated-${channel.id.slice(0, 8)}-metadata-extract`,
-          name: `Migrated — ${channel.name} — metadata extract`,
-          description: 'Migrated from legacy channel metadata_extraction_model_id',
-          workflowKey: 'metadata_extract',
-          apiType: 'chat-completions',
-          modelConfigId: channel.metadataExtractionModelId,
-          systemPrompt: metadataSeed?.systemPrompt ?? '',
-          userPromptTemplate: metadataSeed?.userPromptTemplate ?? '',
-          outputMode: metadataSeed?.outputMode ?? 'structured',
-          outputSchema: metadataSeed?.outputSchema ?? null,
-          temperature: metadataSeed?.temperature ?? '0.2',
-          isSystem: false,
-          version: 1,
-        })
-        .returning({ id: appBuiltinAgentDefs.id });
-      agentDefId = created.id;
-    }
-
-    await db
-      .update(appDocumentChannels)
-      .set({
-        metadataExtractionAgentDefId: agentDefId,
-        updatedAt: new Date(),
-      })
-      .where(eq(appDocumentChannels.id, channel.id));
   }
 }

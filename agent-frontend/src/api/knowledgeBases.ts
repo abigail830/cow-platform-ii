@@ -13,21 +13,13 @@ export type KnowledgeBaseCapabilities = {
 
 export type KbFaqSettings = {
   auto_index_on_publish?: boolean;
-  extraction_agent_def_id?: string | null;
   polish_agent_def_id?: string | null;
-  /** Populated server-side for CLI compatibility. */
-  extraction_model_config_id?: string | null;
-  extraction_configuration_error?: string | null;
-  configuration_error?: string | null;
-  extraction_prompt?: string;
+  extract_pipeline_id?: string | null;
+  extract_pipeline_name?: string | null;
+  /** Populated server-side from polish agent for UI. */
   polish_model_config_id?: string | null;
   polish_prompt?: string;
-};
-
-export type KbChunkConfig = {
-  strategy?: 'markdown_header' | 'fixed_size' | 'paragraph';
-  chunk_size?: number;
-  chunk_overlap?: number;
+  polish_configuration_error?: string | null;
 };
 
 export type KnowledgeBase = {
@@ -40,7 +32,6 @@ export type KnowledgeBase = {
   embedding_model_config_id?: string | null;
   embedding_model_name?: string | null;
   embedding_dimensions?: number;
-  chunk_config?: KbChunkConfig;
   metadata_keys?: string[];
   faq_settings?: KbFaqSettings;
   is_configured?: boolean;
@@ -197,9 +188,7 @@ export async function updateKnowledgeBase(
   input: {
     name?: string;
     description?: string | null;
-    embedding_model_config_id?: string | null;
-    embedding_dimensions?: number;
-    chunk_config?: KbChunkConfig;
+    pipeline_id?: string | null;
     metadata_keys?: string[];
     faq_settings?: KbFaqSettings;
   },
@@ -210,18 +199,41 @@ export async function updateKnowledgeBase(
     body: JSON.stringify({
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.embedding_model_config_id !== undefined
-        ? { embedding_model_config_id: input.embedding_model_config_id }
-        : {}),
-      ...(input.embedding_dimensions !== undefined
-        ? { embedding_dimensions: input.embedding_dimensions }
-        : {}),
-      ...(input.chunk_config !== undefined ? { chunk_config: input.chunk_config } : {}),
+      ...(input.pipeline_id !== undefined ? { pipeline_id: input.pipeline_id } : {}),
       ...(input.metadata_keys !== undefined ? { metadata_keys: input.metadata_keys } : {}),
       ...(input.faq_settings !== undefined ? { faq_settings: input.faq_settings } : {}),
     }),
   });
   return data as KnowledgeBase;
+}
+
+export type FaqPipelineOption = {
+  id: string;
+  name: string;
+  pipeline_name: string;
+  is_system: boolean;
+};
+
+export type FaqProcessingOptions = {
+  extract_pipelines: FaqPipelineOption[];
+  index_pipelines: FaqPipelineOption[];
+  default_extract_pipeline_id: string | null;
+  default_index_pipeline_id: string | null;
+};
+
+export type RagProcessingOptions = {
+  index_pipelines: FaqPipelineOption[];
+  default_index_pipeline_id: string | null;
+};
+
+export async function fetchFaqProcessingOptions(): Promise<FaqProcessingOptions> {
+  const data = await authFetch('/api/knowledge-bases/faq-processing-options');
+  return data as FaqProcessingOptions;
+}
+
+export async function fetchRagProcessingOptions(): Promise<RagProcessingOptions> {
+  const data = await authFetch('/api/knowledge-bases/rag-processing-options');
+  return data as RagProcessingOptions;
 }
 
 export async function deleteKnowledgeBase(id: string): Promise<void> {

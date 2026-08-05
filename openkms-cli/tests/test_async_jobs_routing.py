@@ -9,10 +9,11 @@ def test_run_async_job_routes_native_ingest() -> None:
     ctx = {
         "stage": "submitted",
         "provider": "aliyun",
+        "pipeline_name": "aliyun-docmind-parse",
         "document": {"id": "doc-1", "name": "readme.md"},
         "input_uri": "s3://bucket/documents/abc/original.md",
         "s3_prefix": "documents/abc",
-        "extraction_args": "",
+        "config_yaml": None,
     }
 
     with patch("openkms_cli.pipeline.async_jobs.get_job_context", return_value=ctx):
@@ -27,10 +28,11 @@ def test_run_async_job_routes_xmind_to_native_ingest() -> None:
     ctx = {
         "stage": "submitted",
         "provider": "baidu",
+        "pipeline_name": "baidu-doc-parse",
         "document": {"id": "doc-1", "name": "plan.xmind"},
         "input_uri": "s3://bucket/documents/abc/original.xmind",
         "s3_prefix": "documents/abc",
-        "extraction_args": "",
+        "config_yaml": None,
     }
 
     with patch("openkms_cli.pipeline.async_jobs.get_job_context", return_value=ctx):
@@ -45,11 +47,12 @@ def test_run_async_job_routes_cloud_pdf_to_poll_finalize() -> None:
     ctx = {
         "stage": "submitted",
         "provider": "baidu",
+        "pipeline_name": "baidu-doc-parse",
         "external_job_id": "task-123",
         "document": {"id": "doc-1", "name": "scan.pdf"},
         "input_uri": "s3://bucket/documents/abc/original.pdf",
         "s3_prefix": "documents/abc",
-        "extraction_args": "",
+        "config_yaml": None,
     }
 
     with patch("openkms_cli.pipeline.async_jobs.get_job_context", return_value=ctx):

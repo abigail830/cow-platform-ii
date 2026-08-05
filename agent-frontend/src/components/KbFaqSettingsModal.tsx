@@ -1,7 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  fetchFaqProcessingOptions,
   updateKnowledgeBase,
+  type FaqPipelineOption,
+  type FaqProcessingOptions,
   type KbFaqSettings,
   type KnowledgeBase,
 } from '../api/knowledgeBases.ts';
@@ -9,36 +12,45 @@ import {
   fetchBuiltinAgentOptions,
   resolveBuiltinAgentSelectValue,
 } from '../api/builtinAgents.ts';
-import type { ModelConfig } from '../api/models.ts';
 
-type SettingsTab = 'indexing' | 'ai';
+type SettingsTab = 'extract' | 'indexing' | 'polish';
 
 type KbFaqSettingsModalProps = {
   kb: KnowledgeBase;
-  embeddingModels: ModelConfig[];
   onCancel: () => void;
   onSaved: (kb: KnowledgeBase) => void;
 };
 
+function resolvePipelineSelectValue(
+  configuredId: string | null | undefined,
+  options: FaqPipelineOption[],
+  defaultId: string | null,
+): string {
+  if (configuredId && options.some((p) => p.id === configuredId)) return configuredId;
+  if (defaultId && options.some((p) => p.id === defaultId)) return defaultId;
+  return options[0]?.id ?? '';
+}
+
+function pipelineLabel(pipeline: FaqPipelineOption): string {
+  const system = pipeline.is_system ? ' (system default)' : '';
+  return `${pipeline.name}${system}`;
+}
+
 export function KbFaqSettingsModal({
   kb,
-  embeddingModels,
   onCancel,
   onSaved,
 }: KbFaqSettingsModalProps) {
   const settings = kb.faq_settings ?? {};
-  const [tab, setTab] = useState<SettingsTab>('indexing');
-  const [embeddingModelId, setEmbeddingModelId] = useState(kb.embedding_model_config_id ?? '');
-  const [embeddingDimensions, setEmbeddingDimensions] = useState(kb.embedding_dimensions ?? 1024);
+  const [tab, setTab] = useState<SettingsTab>('extract');
+  const [extractPipelineId, setExtractPipelineId] = useState('');
+  const [indexPipelineId, setIndexPipelineId] = useState('');
   const [metadataKeysText, setMetadataKeysText] = useState((kb.metadata_keys ?? []).join(', '));
   const [autoIndexOnPublish, setAutoIndexOnPublish] = useState(
     settings.auto_index_on_publish ?? false,
   );
-  const [extractionAgentId, setExtractionAgentId] = useState('');
   const [polishAgentId, setPolishAgentId] = useState('');
-  const [extractOptions, setExtractOptions] = useState<
-    Awaited<ReturnType<typeof fetchBuiltinAgentOptions>>['agents']
-  >([]);
+  const [pipelineOptions, setPipelineOptions] = useState<FaqProcessingOptions | null>(null);
   const [polishOptions, setPolishOptions] = useState<
     Awaited<ReturnType<typeof fetchBuiltinAgentOptions>>['agents']
   >([]);
@@ -48,22 +60,31 @@ export function KbFaqSettingsModal({
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([fetchBuiltinAgentOptions('faq_extract'), fetchBuiltinAgentOptions('faq_polish')])
-      .then(([extract, polish]) => {
+    void Promise.all([
+      fetchFaqProcessingOptions(),
+      fetchBuiltinAgentOptions('faq_polish'),
+    ])
+      .then(([pipelines, polish]) => {
         if (cancelled) return;
-        setExtractOptions(extract.agents);
-        setPolishOptions(polish.agents);
-        const nextSettings = kb.faq_settings ?? {};
-        setExtractionAgentId(
-          resolveBuiltinAgentSelectValue(
-            nextSettings.extraction_agent_def_id,
-            extract.agents,
-            extract.platform_default_agent_id,
+        setPipelineOptions(pipelines);
+        setExtractPipelineId(
+          resolvePipelineSelectValue(
+            kb.faq_settings?.extract_pipeline_id,
+            pipelines.extract_pipelines,
+            pipelines.default_extract_pipeline_id,
           ),
         );
+        setIndexPipelineId(
+          resolvePipelineSelectValue(
+            kb.pipeline_id,
+            pipelines.index_pipelines,
+            pipelines.default_index_pipeline_id,
+          ),
+        );
+        setPolishOptions(polish.agents);
         setPolishAgentId(
           resolveBuiltinAgentSelectValue(
-            nextSettings.polish_agent_def_id,
+            kb.faq_settings?.polish_agent_def_id,
             polish.agents,
             polish.platform_default_agent_id,
           ),
@@ -72,7 +93,7 @@ export function KbFaqSettingsModal({
       })
       .catch((err) => {
         if (!cancelled) {
-          setOptionsError(err instanceof Error ? err.message : 'Failed to load agent options');
+          setOptionsError(err instanceof Error ? err.message : 'Failed to load settings options');
         }
       });
     return () => {
@@ -82,14 +103,10 @@ export function KbFaqSettingsModal({
 
   useEffect(() => {
     const nextSettings = kb.faq_settings ?? {};
-    setEmbeddingModelId(kb.embedding_model_config_id ?? '');
-    setEmbeddingDimensions(kb.embedding_dimensions ?? 1024);
     setMetadataKeysText((kb.metadata_keys ?? []).join(', '));
     setAutoIndexOnPublish(nextSettings.auto_index_on_publish ?? false);
     setError('');
   }, [kb]);
-
-  const defaultEmbeddingModel = embeddingModels.find((model) => model.isDefault) ?? null;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -102,12 +119,11 @@ export function KbFaqSettingsModal({
         .filter(Boolean);
       const faqSettings: KbFaqSettings = {
         auto_index_on_publish: autoIndexOnPublish,
-        extraction_agent_def_id: extractionAgentId || null,
         polish_agent_def_id: polishAgentId || null,
+        extract_pipeline_id: extractPipelineId || null,
       };
       const updated = await updateKnowledgeBase(kb.id, {
-        embedding_model_config_id: embeddingModelId || null,
-        embedding_dimensions: embeddingDimensions,
+        pipeline_id: indexPipelineId || null,
         metadata_keys: metadataKeys,
         faq_settings: faqSettings,
       });
@@ -118,6 +134,10 @@ export function KbFaqSettingsModal({
       setSaving(false);
     }
   }
+
+  const extractPipelines = pipelineOptions?.extract_pipelines ?? [];
+  const indexPipelines = pipelineOptions?.index_pipelines ?? [];
+  const selectedIndex = indexPipelines.find((p) => p.id === indexPipelineId);
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onCancel}>
@@ -135,6 +155,15 @@ export function KbFaqSettingsModal({
           <button
             type="button"
             role="tab"
+            aria-selected={tab === 'extract'}
+            className={`modal-tab${tab === 'extract' ? ' active' : ''}`}
+            onClick={() => setTab('extract')}
+          >
+            Extract
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={tab === 'indexing'}
             className={`modal-tab${tab === 'indexing' ? ' active' : ''}`}
             onClick={() => setTab('indexing')}
@@ -144,129 +173,139 @@ export function KbFaqSettingsModal({
           <button
             type="button"
             role="tab"
-            aria-selected={tab === 'ai'}
-            className={`modal-tab${tab === 'ai' ? ' active' : ''}`}
-            onClick={() => setTab('ai')}
+            aria-selected={tab === 'polish'}
+            className={`modal-tab${tab === 'polish' ? ' active' : ''}`}
+            onClick={() => setTab('polish')}
           >
-            Builtin agents
+            Answer polish
           </button>
         </div>
 
         <form className="form-grid kb-faq-settings-form" onSubmit={(e) => void handleSubmit(e)}>
           <div className="kb-faq-settings-tab-body">
-          {tab === 'indexing' ? (
-            <>
-              <label className="form-field form-field-wide">
-                <span>Embedding model</span>
-                <select
-                  value={embeddingModelId}
-                  onChange={(e) => setEmbeddingModelId(e.target.value)}
-                  required
-                >
-                  <option value="">Select a model…</option>
-                  {embeddingModels.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name} ({model.modelId}){model.isDefault ? ' (default)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <span className="admin-form-hint kb-rag-form-hint">
-                  {defaultEmbeddingModel
-                    ? `Default: ${defaultEmbeddingModel.name}. Configure models under Admin → Models.`
-                    : 'Configure embedding models under Admin → Models.'}
-                </span>
-              </label>
-              <label className="form-field">
-                <span>Vector dimensions</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={65536}
-                  value={embeddingDimensions}
-                  onChange={(e) => setEmbeddingDimensions(Number(e.target.value))}
-                  required
-                />
-              </label>
-              <label className="form-field form-field-wide">
-                <span>Metadata keys (comma-separated)</span>
-                <input
-                  value={metadataKeysText}
-                  onChange={(e) => setMetadataKeysText(e.target.value)}
-                  placeholder="e.g. author, tags"
-                />
-              </label>
-              <label className="form-field form-field-wide kb-faq-checkbox-field">
-                <span className="kb-faq-checkbox-label">
+            {tab === 'extract' ? (
+              <>
+                <label className="form-field form-field-wide">
+                  <span>FAQ extract pipeline</span>
+                  <select
+                    value={extractPipelineId}
+                    onChange={(e) => setExtractPipelineId(e.target.value)}
+                    required
+                  >
+                    {extractPipelines.length === 0 ? (
+                      <option value="">No extract pipelines available</option>
+                    ) : (
+                      extractPipelines.map((pipeline) => (
+                        <option key={pipeline.id} value={pipeline.id}>
+                          {pipelineLabel(pipeline)}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <span className="admin-form-hint kb-rag-form-hint">
+                    Used by Extract from documents. Model and prompts come from the pipeline Config
+                    YAML. Manage pipelines under{' '}
+                    <Link
+                      to="/admin/pipelines"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="kb-faq-settings-hint-link"
+                    >
+                      Platform → Pipelines
+                    </Link>
+                    .
+                  </span>
+                </label>
+              </>
+            ) : tab === 'indexing' ? (
+              <>
+                <label className="form-field form-field-wide">
+                  <span>FAQ index pipeline</span>
+                  <select
+                    value={indexPipelineId}
+                    onChange={(e) => setIndexPipelineId(e.target.value)}
+                    required
+                  >
+                    {indexPipelines.length === 0 ? (
+                      <option value="">No index pipelines available</option>
+                    ) : (
+                      indexPipelines.map((pipeline) => (
+                        <option key={pipeline.id} value={pipeline.id}>
+                          {pipelineLabel(pipeline)}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <span className="admin-form-hint kb-rag-form-hint">
+                    Embedding model and dimensions come from this pipeline&apos;s Config YAML
+                    (<code>model_name</code> / <code>dimensions</code>).
+                    {kb.embedding_model_name ? (
+                      <>
+                        {' '}
+                        Currently synced: {kb.embedding_model_name} ({kb.embedding_dimensions}d)
+                        {selectedIndex ? ` via ${selectedIndex.name}` : ''}.
+                      </>
+                    ) : null}
+                  </span>
+                </label>
+                <label className="form-field form-field-wide">
+                  <span>Metadata keys (comma-separated)</span>
                   <input
-                    type="checkbox"
-                    className="brand-checkbox"
-                    checked={autoIndexOnPublish}
-                    onChange={(e) => setAutoIndexOnPublish(e.target.checked)}
+                    value={metadataKeysText}
+                    onChange={(e) => setMetadataKeysText(e.target.value)}
+                    placeholder="e.g. author, tags"
                   />
-                  Auto-index on publish
-                </span>
-                <span className="admin-form-hint">
-                  When enabled, publishing an FAQ automatically queues indexing.
-                </span>
-              </label>
-            </>
-          ) : (
-            <>
-              <div className="kb-faq-settings-agent-fields form-field-wide">
-              <label className="form-field">
-                <span>FAQ extraction agent</span>
-                <select
-                  value={extractionAgentId}
-                  onChange={(e) => setExtractionAgentId(e.target.value)}
-                  required
-                >
-                  {extractOptions.length === 0 ? (
-                    <option value="">No agents available</option>
-                  ) : (
-                    extractOptions.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                        {agent.model_name ? ` (${agent.model_name})` : ''}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </label>
-              <label className="form-field">
-                <span>FAQ polish agent</span>
-                <select
-                  value={polishAgentId}
-                  onChange={(e) => setPolishAgentId(e.target.value)}
-                  required
-                >
-                  {polishOptions.length === 0 ? (
-                    <option value="">No agents available</option>
-                  ) : (
-                    polishOptions.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                        {agent.model_name ? ` (${agent.model_name})` : ''}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </label>
-              </div>
-              <p className="admin-form-hint kb-faq-settings-hint form-field-wide">
-                Edit prompts and models in{' '}
-                <Link
-                  to="/admin/builtin-agents"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="kb-faq-settings-hint-link"
-                >
-                  Platform → Builtin agents
-                </Link>
-                .
-              </p>
-            </>
-          )}
-
+                </label>
+                <label className="form-field form-field-wide kb-faq-checkbox-field">
+                  <span className="kb-faq-checkbox-label">
+                    <input
+                      type="checkbox"
+                      className="brand-checkbox"
+                      checked={autoIndexOnPublish}
+                      onChange={(e) => setAutoIndexOnPublish(e.target.checked)}
+                    />
+                    Auto-index on publish
+                  </span>
+                  <span className="admin-form-hint">
+                    When enabled, publishing an FAQ automatically queues indexing.
+                  </span>
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="form-field form-field-wide">
+                  <span>FAQ polish agent</span>
+                  <select
+                    value={polishAgentId}
+                    onChange={(e) => setPolishAgentId(e.target.value)}
+                    required
+                  >
+                    {polishOptions.length === 0 ? (
+                      <option value="">No agents available</option>
+                    ) : (
+                      polishOptions.map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name}
+                          {agent.model_name ? ` (${agent.model_name})` : ''}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+                <p className="admin-form-hint kb-faq-settings-hint form-field-wide">
+                  Used by AI Polish Answer when editing an FAQ. Edit prompts and models in{' '}
+                  <Link
+                    to="/admin/builtin-agents"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="kb-faq-settings-hint-link"
+                  >
+                    Platform → Builtin agents
+                  </Link>
+                  .
+                </p>
+              </>
+            )}
           </div>
 
           <div className="modal-actions form-field-wide kb-faq-settings-actions">

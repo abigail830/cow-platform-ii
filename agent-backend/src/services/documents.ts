@@ -1,6 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { appDocumentChannels, appDocuments, appPipelineJobs, db } from '../db/index.ts';
-import { getModelConfigById } from '../shared/model-config-store.ts';
 import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { buildChannelTree, collectDescendantIds } from './channel-tree.ts';
 import {
@@ -20,8 +19,6 @@ export type ChannelNode = {
   sort_order: number;
   pipeline_id: string | null;
   auto_start_pipeline: boolean;
-  metadata_extraction_model_id: string | null;
-  metadata_extraction_agent_def_id: string | null;
   created_at: string;
   updated_at: string;
   children: ChannelNode[];
@@ -45,8 +42,6 @@ function toChannelPublic(row: ChannelRow) {
     sort_order: row.sortOrder,
     pipeline_id: row.pipelineId,
     auto_start_pipeline: row.autoStartPipeline,
-    metadata_extraction_model_id: row.metadataExtractionModelId,
-    metadata_extraction_agent_def_id: row.metadataExtractionAgentDefId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -122,8 +117,6 @@ export async function createChannel(input: {
       sortOrder: maxSort + 1,
       pipelineId: parent?.pipelineId ?? null,
       autoStartPipeline: parent?.pipelineId ? parent.autoStartPipeline : false,
-      metadataExtractionModelId: parent?.metadataExtractionModelId ?? null,
-      metadataExtractionAgentDefId: parent?.metadataExtractionAgentDefId ?? null,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -137,8 +130,6 @@ export async function updateChannel(
     name?: string;
     description?: string | null;
     parentId?: string | null;
-    metadataExtractionModelId?: string | null;
-    metadataExtractionAgentDefId?: string | null;
     pipelineId?: string | null;
     autoStartPipeline?: boolean;
   },
@@ -150,19 +141,12 @@ export async function updateChannel(
     const pipeline = await getPipelineConfigById(input.pipelineId);
     if (!pipeline) throw new Error('Pipeline not found');
     if (!pipeline.isEnabled) throw new Error('Pipeline is disabled');
-  }
-
-  if (input.metadataExtractionModelId !== undefined && input.metadataExtractionModelId !== null) {
-    const modelId = input.metadataExtractionModelId.trim();
-    if (!modelId) {
-      input.metadataExtractionModelId = null;
-    } else {
-      const model = await getModelConfigById(modelId);
-      if (!model) throw new Error('Extraction model not found');
-      if (model.apiType !== 'chat-completions') {
-        throw new Error('Extraction model must be a chat-completions model');
-      }
-      input.metadataExtractionModelId = modelId;
+    const { isDocumentAsyncPipelineName, ASYNC_PIPELINE_NAMES } = await import('./pipeline-jobs.ts');
+    if (!isDocumentAsyncPipelineName(pipeline.pipelineName)) {
+      throw new Error(
+        `Channel pipeline must be an async document parse pipeline ` +
+          `(${[...ASYNC_PIPELINE_NAMES].join(', ')}). Got: ${pipeline.pipelineName}`,
+      );
     }
   }
 
@@ -182,20 +166,6 @@ export async function updateChannel(
     }
   }
 
-  if (input.metadataExtractionAgentDefId !== undefined && input.metadataExtractionAgentDefId !== null) {
-    const agentId = input.metadataExtractionAgentDefId.trim();
-    if (!agentId) {
-      input.metadataExtractionAgentDefId = null;
-    } else {
-      const { resolveWorkflowAgent } = await import('../builtin-agents/resolve-workflow-agent.ts');
-      const agent = await resolveWorkflowAgent({
-        workflowKey: 'metadata_extract',
-        override: { agentDefId: agentId },
-      });
-      input.metadataExtractionAgentDefId = agent.id;
-    }
-  }
-
   if (input.pipelineId !== undefined && input.pipelineId === null) {
     input.autoStartPipeline = false;
   }
@@ -206,15 +176,6 @@ export async function updateChannel(
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
       ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
-      ...(input.metadataExtractionModelId !== undefined
-        ? { metadataExtractionModelId: input.metadataExtractionModelId }
-        : {}),
-      ...(input.metadataExtractionAgentDefId !== undefined
-        ? {
-            metadataExtractionAgentDefId: input.metadataExtractionAgentDefId,
-            metadataExtractionModelId: null,
-          }
-        : {}),
       ...(input.pipelineId !== undefined ? { pipelineId: input.pipelineId } : {}),
       ...(input.autoStartPipeline !== undefined ? { autoStartPipeline: input.autoStartPipeline } : {}),
       updatedAt: new Date(),

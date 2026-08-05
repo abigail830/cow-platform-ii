@@ -3,10 +3,6 @@ import {
   fetchChannelProcessingOptions,
   type ChannelProcessingOptions,
 } from '../api/documentChannels.ts';
-import {
-  fetchBuiltinAgentOptions,
-  type BuiltinAgentOption,
-} from '../api/builtinAgents.ts';
 import { ResourceAccessPanel, type ResourceAccessPanelHandle } from './ResourceAccessPanel.tsx';
 
 type ChannelSettingsModalProps = {
@@ -15,29 +11,16 @@ type ChannelSettingsModalProps = {
   initialDescription: string;
   initialPipelineId: string | null;
   initialAutoStartPipeline: boolean;
-  initialMetadataExtractionAgentDefId: string | null;
   onCancel: () => void;
   onSubmit: (input: {
     name: string;
     description: string;
     pipelineId: string | null;
     autoStartPipeline: boolean;
-    metadataExtractionAgentDefId: string | null;
   }) => Promise<void>;
 };
 
 type SettingsTab = 'general' | 'pipeline' | 'sharing';
-
-function resolveMetadataAgentSelectValue(
-  configuredId: string | null | undefined,
-  options: BuiltinAgentOption[],
-): string {
-  if (!configuredId) return '';
-  if (options.some((agent) => agent.id === configuredId)) {
-    return configuredId;
-  }
-  return '';
-}
 
 export function ChannelSettingsModal({
   channelId,
@@ -45,7 +28,6 @@ export function ChannelSettingsModal({
   initialDescription,
   initialPipelineId,
   initialAutoStartPipeline,
-  initialMetadataExtractionAgentDefId,
   onCancel,
   onSubmit,
 }: ChannelSettingsModalProps) {
@@ -54,8 +36,6 @@ export function ChannelSettingsModal({
   const [description, setDescription] = useState(initialDescription);
   const [pipelineId, setPipelineId] = useState(initialPipelineId ?? '');
   const [autoStartPipeline, setAutoStartPipeline] = useState(initialAutoStartPipeline);
-  const [metadataAgentId, setMetadataAgentId] = useState('');
-  const [metadataAgentOptions, setMetadataAgentOptions] = useState<BuiltinAgentOption[]>([]);
   const [options, setOptions] = useState<ChannelProcessingOptions | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [optionsError, setOptionsError] = useState('');
@@ -72,25 +52,16 @@ export function ChannelSettingsModal({
     setError('');
     setTab('general');
     setSharingCanManage(false);
-  }, [
-    initialAutoStartPipeline,
-    initialDescription,
-    initialName,
-    initialPipelineId,
-  ]);
+  }, [initialAutoStartPipeline, initialDescription, initialName, initialPipelineId]);
 
   useEffect(() => {
     let cancelled = false;
     setOptionsLoading(true);
     setOptionsError('');
-    void Promise.all([fetchChannelProcessingOptions(), fetchBuiltinAgentOptions('metadata_extract')])
-      .then(([data, agentOptions]) => {
+    void fetchChannelProcessingOptions()
+      .then((data) => {
         if (cancelled) return;
         setOptions(data);
-        setMetadataAgentOptions(agentOptions.agents);
-        setMetadataAgentId(
-          resolveMetadataAgentSelectValue(initialMetadataExtractionAgentDefId, agentOptions.agents),
-        );
         setOptionsError('');
       })
       .catch((err) => {
@@ -104,15 +75,12 @@ export function ChannelSettingsModal({
     return () => {
       cancelled = true;
     };
-  }, [initialMetadataExtractionAgentDefId]);
+  }, []);
 
   const selectedPipelineLabel =
     pipelineId && options
       ? (options.pipelines.find((pipeline) => pipeline.id === pipelineId)?.name ?? null)
       : null;
-
-  const selectedMetadataAgentLabel =
-    metadataAgentOptions.find((agent) => agent.id === metadataAgentId)?.name ?? null;
 
   async function handleFormSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -130,7 +98,6 @@ export function ChannelSettingsModal({
         description: description.trim(),
         pipelineId: pipelineId || null,
         autoStartPipeline: pipelineId ? autoStartPipeline : false,
-        metadataExtractionAgentDefId: metadataAgentId || null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save channel settings');
@@ -223,8 +190,11 @@ export function ChannelSettingsModal({
                         ))}
                       </select>
                       <span className="admin-form-hint">
-                        When set, documents in this channel can run the configured parse pipeline.
-                        {selectedPipelineLabel ? ` Selected: ${selectedPipelineLabel}.` : ' No pipeline selected.'}
+                        When set, documents in this channel run this parse pipeline (CLI worker + Config YAML,
+                        including metadata extract).
+                        {selectedPipelineLabel
+                          ? ` Selected: ${selectedPipelineLabel}.`
+                          : ' No pipeline selected.'}
                       </span>
                     </label>
                     {pipelineId && (
@@ -240,27 +210,6 @@ export function ChannelSettingsModal({
                         </span>
                       </label>
                     )}
-                    <label className="form-field form-field-wide">
-                      <span>Metadata extraction agent (optional)</span>
-                      <select
-                        value={metadataAgentId}
-                        onChange={(event) => setMetadataAgentId(event.target.value)}
-                      >
-                        <option value="">— None —</option>
-                        {metadataAgentOptions.map((agent) => (
-                          <option key={agent.id} value={agent.id}>
-                            {agent.name}
-                            {agent.model_name ? ` (${agent.model_name})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="admin-form-hint">
-                        Builtin agent for structured metadata extraction after parse.
-                        {selectedMetadataAgentLabel
-                          ? ` Selected: ${selectedMetadataAgentLabel}.`
-                          : ' Metadata extraction disabled.'}
-                      </span>
-                    </label>
                   </>
                 )}
               </div>

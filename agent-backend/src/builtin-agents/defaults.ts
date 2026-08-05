@@ -75,7 +75,8 @@ Rules:
   {
     slug: 'default-faq-extract',
     name: 'FAQ extract',
-    description: 'Extract FAQ question-answer pairs from document markdown.',
+    description:
+      'Prompt playground for FAQ extract. Production Extract from documents uses Admin → Pipelines → kb-faq-extract Config YAML.',
     workflowKey: 'faq_extract',
     apiType: 'chat-completions',
     systemPrompt: 'You extract FAQ pairs from documents. Respond with valid JSON only.',

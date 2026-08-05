@@ -11,8 +11,6 @@ export type DocumentChannel = {
   sort_order: number;
   pipeline_id: string | null;
   auto_start_pipeline: boolean;
-  metadata_extraction_model_id: string | null;
-  metadata_extraction_agent_def_id: string | null;
   created_at: string;
   updated_at: string;
   my_access?: ResourcePermissionFlags;
@@ -21,9 +19,6 @@ export type DocumentChannel = {
 
 export type ChannelProcessingOptions = {
   pipelines: Array<{ id: string; name: string; pipelineName: string }>;
-  extractionModels: Array<{ id: string; name: string; isDefault: boolean }>;
-  metadataExtractAgents: Array<{ id: string; name: string; slug: string; model_name: string | null }>;
-  platformDefaultMetadataExtractAgentId: string | null;
 };
 
 async function authFetch(path: string, init?: RequestInit) {
@@ -73,7 +68,6 @@ export async function updateDocumentChannel(
     description?: string | null;
     parentId?: string | null;
     pipelineId?: string | null;
-    metadataExtractionAgentDefId?: string | null;
     autoStartPipeline?: boolean;
   },
 ): Promise<DocumentChannel> {
@@ -85,7 +79,6 @@ export async function updateDocumentChannel(
       description: input.description,
       parent_id: input.parentId,
       pipeline_id: input.pipelineId,
-      metadata_extraction_agent_def_id: input.metadataExtractionAgentDefId,
       auto_start_pipeline: input.autoStartPipeline,
     }),
   });

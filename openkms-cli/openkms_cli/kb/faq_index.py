@@ -9,8 +9,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from openkms_cli.core.auth import try_api_request_auth
 from openkms_cli.core.settings import get_cli_settings
+from openkms_cli.kb.embedding_provider import embedding_supports_dimensions
 from openkms_cli.kb.embeddings import generate_embeddings
-from openkms_cli.kb.rag_index import _build_job_error_message, _load_embedding_credentials, _load_kb_config, _patch_job
+from openkms_cli.kb.rag_index import _build_job_error_message, _patch_job
 
 console = Console(stderr=True)
 _JOB_API = "/internal-api/kb-import-jobs"
@@ -18,6 +19,16 @@ _JOB_API = "/internal-api/kb-import-jobs"
 
 def _job_api(base: str) -> str:
     return f"{base}{_JOB_API}"
+
+
+def _as_dimensions(value: Any, default: int = 1024) -> int:
+    try:
+        if value is None or value == "":
+            return default
+        dims = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(dims, 65536))
 
 
 def run_faq_index(job_id: str, api_url: Optional[str] = None) -> None:
@@ -55,12 +66,43 @@ def run_faq_index(job_id: str, api_url: Optional[str] = None) -> None:
         console.print("[green]No FAQs to index[/green]")
         return
 
-    try:
-        kb_config = _load_kb_config(base, kb_id, auth_headers, basic)
-        metadata_keys = kb_config.get("metadata_keys") or []
-        embed_cfg = _load_embedding_credentials(base, kb_id, auth_headers, basic)
-        dimensions = int(embed_cfg.get("dimensions") or 1024)
+    from openkms_cli.core.model_resolve import ModelResolveError, resolve_models_for_job
+    from openkms_cli.core.workflow_config import resolve_job_workflow_config
 
+    pipeline_name = (job.get("pipeline_name") or "kb-faq-index").strip() or "kb-faq-index"
+    try:
+        workflow_config = resolve_job_workflow_config(
+            pipeline_name=pipeline_name,
+            job_config_yaml=job.get("config_yaml"),
+        )
+        resolved_models = resolve_models_for_job(workflow_config, cfg=cfg, api_type="embeddings")
+    except (ModelResolveError, ValueError) as e:
+        raise RuntimeError(str(e)) from e
+
+    model_name = str(workflow_config.get("model_name") or "").strip()
+    if not model_name or model_name not in resolved_models:
+        raise RuntimeError(
+            f"FAQ index config missing model_name (Models list bold name). "
+            f"Set it in Admin → Pipelines Config YAML or openkms-cli/workflows/{pipeline_name}.yml"
+        )
+
+    model_params = resolved_models[model_name]
+    dimensions = _as_dimensions(workflow_config.get("dimensions"), 1024)
+    embed_cfg: dict[str, Any] = {
+        "base_url": model_params.get("base_url"),
+        "api_key": model_params.get("api_key"),
+        "model_name": model_params.get("model_name"),
+        "extra_config": model_params.get("extra_config") or {},
+        "supports_dimensions": embedding_supports_dimensions(
+            {
+                "base_url": model_params.get("base_url"),
+                "model_name": model_params.get("model_name"),
+                "extra_config": model_params.get("extra_config") or {},
+            }
+        ),
+    }
+
+    try:
         faqs_resp = requests.get(
             f"{base}/internal-api/knowledge-bases/{kb_id}/faqs",
             params={"faq_ids": ",".join(faq_ids)},

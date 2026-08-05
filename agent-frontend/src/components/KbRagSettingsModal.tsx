@@ -1,64 +1,75 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import {
+  fetchRagProcessingOptions,
   updateKnowledgeBase,
-  type KbChunkConfig,
+  type FaqPipelineOption,
   type KnowledgeBase,
+  type RagProcessingOptions,
 } from '../api/knowledgeBases.ts';
-import type { ModelConfig } from '../api/models.ts';
-
-const CHUNK_STRATEGIES: Array<{ value: NonNullable<KbChunkConfig['strategy']>; label: string }> = [
-  { value: 'markdown_header', label: 'Markdown headers' },
-  { value: 'paragraph', label: 'Paragraphs' },
-  { value: 'fixed_size', label: 'Fixed size' },
-];
 
 type KbRagSettingsModalProps = {
   kb: KnowledgeBase;
-  embeddingModels: ModelConfig[];
   onCancel: () => void;
   onSaved: (kb: KnowledgeBase) => void;
 };
 
-function resolveEmbeddingModelId(
+function resolvePipelineSelectValue(
   configuredId: string | null | undefined,
-  models: ModelConfig[],
+  options: FaqPipelineOption[],
+  defaultId: string | null,
 ): string {
-  if (configuredId && models.some((model) => model.id === configuredId)) {
-    return configuredId;
-  }
-  return models.find((model) => model.isDefault)?.id ?? '';
+  if (configuredId && options.some((p) => p.id === configuredId)) return configuredId;
+  if (defaultId && options.some((p) => p.id === defaultId)) return defaultId;
+  return options[0]?.id ?? '';
+}
+
+function pipelineLabel(pipeline: FaqPipelineOption): string {
+  const system = pipeline.is_system ? ' (system default)' : '';
+  return `${pipeline.name}${system}`;
 }
 
 export function KbRagSettingsModal({
   kb,
-  embeddingModels,
   onCancel,
   onSaved,
 }: KbRagSettingsModalProps) {
-  const [embeddingModelId, setEmbeddingModelId] = useState(kb.embedding_model_config_id ?? '');
-  const [embeddingDimensions, setEmbeddingDimensions] = useState(kb.embedding_dimensions ?? 1024);
-  const [chunkStrategy, setChunkStrategy] = useState<NonNullable<KbChunkConfig['strategy']>>(
-    kb.chunk_config?.strategy ?? 'markdown_header',
-  );
-  const [chunkSize, setChunkSize] = useState(kb.chunk_config?.chunk_size ?? 8000);
-  const [chunkOverlap, setChunkOverlap] = useState(kb.chunk_config?.chunk_overlap ?? 50);
+  const [indexPipelineId, setIndexPipelineId] = useState('');
   const [metadataKeysText, setMetadataKeysText] = useState((kb.metadata_keys ?? []).join(', '));
+  const [pipelineOptions, setPipelineOptions] = useState<RagProcessingOptions | null>(null);
+  const [optionsError, setOptionsError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const showChunkSizeFields = chunkStrategy === 'fixed_size';
+  useEffect(() => {
+    let cancelled = false;
+    void fetchRagProcessingOptions()
+      .then((pipelines) => {
+        if (cancelled) return;
+        setPipelineOptions(pipelines);
+        setIndexPipelineId(
+          resolvePipelineSelectValue(
+            kb.pipeline_id,
+            pipelines.index_pipelines,
+            pipelines.default_index_pipeline_id,
+          ),
+        );
+        setOptionsError('');
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setOptionsError(err instanceof Error ? err.message : 'Failed to load pipeline options');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kb]);
 
   useEffect(() => {
-    setEmbeddingModelId(resolveEmbeddingModelId(kb.embedding_model_config_id, embeddingModels));
-    setEmbeddingDimensions(kb.embedding_dimensions ?? 1024);
-    setChunkStrategy(kb.chunk_config?.strategy ?? 'markdown_header');
-    setChunkSize(kb.chunk_config?.chunk_size ?? 8000);
-    setChunkOverlap(kb.chunk_config?.chunk_overlap ?? 50);
     setMetadataKeysText((kb.metadata_keys ?? []).join(', '));
     setError('');
-  }, [kb, embeddingModels]);
-
-  const defaultEmbeddingModel = embeddingModels.find((model) => model.isDefault) ?? null;
+  }, [kb]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -72,16 +83,7 @@ export function KbRagSettingsModal({
       const updated = await updateKnowledgeBase(kb.id, {
         name: kb.name,
         description: kb.description,
-        embedding_model_config_id: embeddingModelId || null,
-        embedding_dimensions: embeddingDimensions,
-        chunk_config:
-          chunkStrategy === 'fixed_size'
-            ? {
-                strategy: chunkStrategy,
-                chunk_size: chunkSize,
-                chunk_overlap: chunkOverlap,
-              }
-            : { strategy: chunkStrategy },
+        pipeline_id: indexPipelineId || null,
         metadata_keys: metadataKeys,
       });
       onSaved(updated);
@@ -91,6 +93,9 @@ export function KbRagSettingsModal({
       setSaving(false);
     }
   }
+
+  const indexPipelines = pipelineOptions?.index_pipelines ?? [];
+  const selectedIndex = indexPipelines.find((p) => p.id === indexPipelineId);
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onCancel}>
@@ -102,79 +107,47 @@ export function KbRagSettingsModal({
       >
         <h2 id="kb-rag-settings-title">RAG settings</h2>
         {error && <p className="admin-error" role="alert">{error}</p>}
+        {optionsError && <p className="admin-error" role="alert">{optionsError}</p>}
         <form className="form-grid" onSubmit={(e) => void handleSubmit(e)}>
           <label className="form-field form-field-wide">
-            <span>Embedding model</span>
+            <span>RAG index pipeline</span>
             <select
-              value={embeddingModelId}
-              onChange={(e) => setEmbeddingModelId(e.target.value)}
+              value={indexPipelineId}
+              onChange={(e) => setIndexPipelineId(e.target.value)}
               required
             >
-              <option value="">Select a model…</option>
-              {embeddingModels.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name} ({model.modelId}){model.isDefault ? ' (default)' : ''}
-                </option>
-              ))}
+              {indexPipelines.length === 0 ? (
+                <option value="">No index pipelines available</option>
+              ) : (
+                indexPipelines.map((pipeline) => (
+                  <option key={pipeline.id} value={pipeline.id}>
+                    {pipelineLabel(pipeline)}
+                  </option>
+                ))
+              )}
             </select>
             <span className="admin-form-hint kb-rag-form-hint">
-              {defaultEmbeddingModel
-                ? `Default: ${defaultEmbeddingModel.name}. Configure models under Admin → Models.`
-                : 'Configure embedding models under Admin → Models.'}
+              Embedding model, dimensions, and chunking come from this pipeline&apos;s Config YAML.
+              Manage under{' '}
+              <Link
+                to="/admin/pipelines"
+                target="_blank"
+                rel="noreferrer"
+                className="kb-faq-settings-hint-link"
+              >
+                Platform → Pipelines
+              </Link>
+              .
+              {kb.embedding_model_name ? (
+                <>
+                  {' '}
+                  Currently synced: {kb.embedding_model_name} ({kb.embedding_dimensions}d)
+                  {selectedIndex ? ` via ${selectedIndex.name}` : ''}.
+                </>
+              ) : null}{' '}
+              Changing pipeline settings requires re-indexing.
             </span>
           </label>
-          <label className="form-field">
-            <span>Vector dimensions</span>
-            <input
-              type="number"
-              min={1}
-              max={65536}
-              value={embeddingDimensions}
-              onChange={(e) => setEmbeddingDimensions(Number(e.target.value))}
-              required
-            />
-          </label>
-          <label className="form-field">
-            <span>Chunk strategy</span>
-            <select
-              value={chunkStrategy}
-              onChange={(e) =>
-                setChunkStrategy(e.target.value as NonNullable<KbChunkConfig['strategy']>)
-              }
-            >
-              {CHUNK_STRATEGIES.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {showChunkSizeFields ? (
-            <>
-              <label className="form-field">
-                <span>Chunk size</span>
-                <input
-                  type="number"
-                  min={100}
-                  max={100000}
-                  value={chunkSize}
-                  onChange={(e) => setChunkSize(Number(e.target.value))}
-                  required
-                />
-              </label>
-              <label className="form-field">
-                <span>Chunk overlap</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={10000}
-                  value={chunkOverlap}
-                  onChange={(e) => setChunkOverlap(Number(e.target.value))}
-                  required
-                />
-              </label>
-            </>
-          ) : null}
           <label className="form-field form-field-wide">
             <span>Metadata keys (comma-separated)</span>
             <input
@@ -182,9 +155,6 @@ export function KbRagSettingsModal({
               onChange={(e) => setMetadataKeysText(e.target.value)}
               placeholder="e.g. author, tags"
             />
-            <span className="admin-form-hint kb-rag-form-hint">
-              Changing embedding or chunk settings requires re-indexing.
-            </span>
           </label>
           <div className="modal-actions form-field-wide">
             <button type="button" className="btn-secondary" onClick={onCancel}>

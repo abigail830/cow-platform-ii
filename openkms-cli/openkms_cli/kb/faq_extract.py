@@ -109,26 +109,23 @@ def _chat_completions_url(base_url: str) -> str:
     return f"{base}/v1/chat/completions"
 
 
+def _as_temperature(value: Any, default: float = 0.2) -> float:
+    try:
+        if value is None or value == "":
+            return default
+        t = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, min(t, 2.0))
+
+
 def _chat_extract(
-    base: str,
-    model_id: str,
+    params: dict[str, Any],
     prompt: str,
-    headers: dict,
-    basic,
     *,
     system_prompt: str = "",
+    temperature: float = 0.2,
 ) -> list[dict[str, str]]:
-    params_resp = requests.get(
-        f"{base}/internal-api/models/cli-params",
-        params={"model_id": model_id, "api_type": "chat-completions"},
-        headers=headers,
-        auth=basic,
-        timeout=60,
-    )
-    if not params_resp.ok:
-        raise RuntimeError(f"cli-params {params_resp.status_code}")
-
-    params = params_resp.json()
     url = _chat_completions_url(params["base_url"])
     default_system = (
         "Extract FAQ pairs from the document. "
@@ -143,10 +140,12 @@ def _chat_extract(
 
     last_raw = ""
     for attempt in range(2):
+        # Retry slightly warmer so the model is less likely to return empty JSON again.
+        call_temperature = temperature if attempt == 0 else min(temperature + 0.15, 2.0)
         body: dict[str, Any] = {
             "model": params["model_name"],
             "messages": messages,
-            "temperature": 0.35 if attempt else 0.2,
+            "temperature": call_temperature,
         }
         if params.get("max_completion_tokens"):
             body["max_completion_tokens"] = int(params["max_completion_tokens"])
@@ -227,24 +226,44 @@ def run_faq_extract(job_id: str, api_url: Optional[str] = None) -> None:
     completed = int(job.get("completed_count") or 0)
     failed = int(job.get("failed_count") or 0)
     failure_notes: list[str] = []
-    worker_llm_config = job.get("worker_llm_config")
 
     if not document_ids:
         _patch_job(base, job_id, auth_headers, basic, {"status": "completed"})
         return
 
-    if not worker_llm_config or not (worker_llm_config.get("model_config_id") or "").strip():
+    from openkms_cli.core.model_resolve import ModelResolveError, resolve_models_for_job
+    from openkms_cli.core.workflow_config import resolve_job_workflow_config
+
+    pipeline_name = (job.get("pipeline_name") or "kb-faq-extract").strip() or "kb-faq-extract"
+    try:
+        workflow_config = resolve_job_workflow_config(
+            pipeline_name=pipeline_name,
+            job_config_yaml=job.get("config_yaml"),
+        )
+        resolved_models = resolve_models_for_job(workflow_config, cfg=cfg, api_type="chat-completions")
+    except (ModelResolveError, ValueError) as e:
+        raise RuntimeError(str(e)) from e
+
+    model_name = str(workflow_config.get("model_name") or "").strip()
+    if not model_name or model_name not in resolved_models:
         raise RuntimeError(
-            "This job has no extraction config snapshot. "
-            "Create a new extract job after configuring an FAQ extraction agent in KB Settings → AI tab."
+            f"FAQ extract config missing model_name (Models list bold name). "
+            f"Set it in Admin → Pipelines Config YAML or openkms-cli/workflows/{pipeline_name}.yml"
+        )
+    model_params = resolved_models[model_name]
+    extraction_prompt = str(workflow_config.get("user_prompt_template") or "").strip()
+    extraction_system_prompt = str(workflow_config.get("system_prompt") or "")
+    extraction_temperature = _as_temperature(workflow_config.get("temperature"), 0.2)
+    if not extraction_prompt:
+        raise RuntimeError(
+            f"FAQ extract config missing user_prompt_template. "
+            f"Set it in Admin → Pipelines → {pipeline_name} Config YAML "
+            f"or openkms-cli/workflows/{pipeline_name}.yml"
         )
 
     try:
         kb_config = _load_kb_config(base, kb_id, auth_headers, basic)
         metadata_keys = kb_config.get("metadata_keys") or []
-        extraction_model_id = worker_llm_config["model_config_id"]
-        extraction_prompt = worker_llm_config.get("user_prompt_template") or ""
-        extraction_system_prompt = worker_llm_config.get("system_prompt") or ""
 
         s3_client = get_s3_client(
             cfg.aws_endpoint_url or None,
@@ -285,12 +304,10 @@ def run_faq_extract(job_id: str, api_url: Optional[str] = None) -> None:
                         "markdown": markdown[:120000],
                     })
                     pairs = _chat_extract(
-                        base,
-                        extraction_model_id,
+                        model_params,
                         prompt,
-                        auth_headers,
-                        basic,
                         system_prompt=extraction_system_prompt,
+                        temperature=extraction_temperature,
                     )
                     if not pairs:
                         raise RuntimeError("No FAQ pairs extracted")

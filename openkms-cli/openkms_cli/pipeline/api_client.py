@@ -9,8 +9,6 @@ import typer
 from rich.console import Console
 
 from openkms_cli.core.auth import auth_expired_response, try_api_request_auth
-from openkms_cli.core.backend_defaults import fetch_cli_model_params
-from openkms_cli.core.settings import get_cli_settings
 from openkms_cli.pipeline.storage import get_s3_client
 
 console = Console(stderr=True)
@@ -180,12 +178,8 @@ def run_pipeline_metadata_extraction(
     prefix: str,
     extract_metadata: bool,
     document_id: str | None,
-    metadata_extraction_config: dict | None = None,
-    extraction_schema: str | None = None,
-    extraction_model_id: str | None = None,
-    extraction_model_name: str | None = None,
-    extraction_model_base_url: str | None = None,
-    extraction_api_key: str | None = None,
+    metadata_extract: dict | None = None,
+    model_connection: dict | None = None,
     api_url: str,
     skip_upload: bool,
     bucket: str,
@@ -210,8 +204,7 @@ def run_pipeline_metadata_extraction(
     )
     if needs_extraction is False:
         console.print(
-            "[dim]Skipped metadata extraction: channel has no extraction configured "
-            "or document metadata is already populated[/dim]"
+            "[dim]Skipped metadata extraction: document metadata is already populated[/dim]"
         )
         return auth_headers, basic_auth
     if needs_extraction is None:
@@ -220,26 +213,26 @@ def run_pipeline_metadata_extraction(
         )
 
     progress.update(task, description="Extracting metadata...")
-    schema_source = None
-    system_prompt = ""
-    user_prompt_template = ""
-    model_id = extraction_model_id
-    if metadata_extraction_config:
-        schema_source = metadata_extraction_config.get("output_schema")
-        system_prompt = metadata_extraction_config.get("system_prompt") or ""
-        user_prompt_template = metadata_extraction_config.get("user_prompt_template") or ""
-        model_id = metadata_extraction_config.get("model_config_id") or model_id
-
-    try:
-        if schema_source is not None:
-            schema_data = schema_source if isinstance(schema_source, (dict, list)) else json.loads(
-                extraction_schema or "[]"
-            )
-        else:
-            schema_data = json.loads(extraction_schema or "[]")
-    except json.JSONDecodeError as e:
-        console.print(f"[red]Invalid extraction schema JSON: {e}[/red]")
+    if not metadata_extract or not model_connection:
+        console.print(
+            "[red]Metadata extraction requires workflow metadata_extract + resolved model credentials[/red]"
+        )
         raise typer.Exit(1)
+
+    schema_source = metadata_extract.get("output_schema")
+    system_prompt = metadata_extract.get("system_prompt") or ""
+    user_prompt_template = metadata_extract.get("user_prompt_template") or ""
+
+    if schema_source is None:
+        console.print("[red]Metadata extraction config is missing output_schema[/red]")
+        raise typer.Exit(1)
+    schema_data = schema_source if isinstance(schema_source, (dict, list)) else None
+    if schema_data is None:
+        try:
+            schema_data = json.loads(str(schema_source))
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Invalid extraction schema JSON: {e}[/red]")
+            raise typer.Exit(1)
 
     try:
         from openkms_cli.parse.extract import extract_metadata_sync
@@ -247,54 +240,11 @@ def run_pipeline_metadata_extraction(
         console.print("[yellow]Metadata extraction skipped: pip install openkms-cli[metadata][/yellow]")
         return auth_headers, basic_auth
 
-    if extraction_model_base_url:
-        cfg = get_cli_settings()
-        model_config = {
-            "base_url": extraction_model_base_url,
-            "api_key": extraction_api_key or cfg.extraction_model_api_key or None,
-            "model_name": extraction_model_name or "gpt-4",
-        }
-    elif model_id:
-        cfg = get_cli_settings()
-        data = fetch_cli_model_params(
-            cfg,
-            model_id=model_id,
-            api_type="chat-completions",
-        )
-        if not data:
-            console.print(
-                f"[red]Failed to fetch extraction model via cli-params (model_id={model_id})[/red]"
-            )
-            raise typer.Exit(1)
-        model_config = {
-            "base_url": data.get("base_url"),
-            "api_key": data.get("api_key"),
-            "model_name": data.get("model_name"),
-        }
-    elif extraction_model_name:
-        cfg = get_cli_settings()
-        data = fetch_cli_model_params(
-            cfg,
-            model_name=extraction_model_name,
-            api_type="chat-completions",
-        )
-        if not data:
-            console.print(
-                "[red]Failed to fetch extraction model via cli-params "
-                f"(model_name={extraction_model_name})[/red]"
-            )
-            raise typer.Exit(1)
-        model_config = {
-            "base_url": data.get("base_url"),
-            "api_key": data.get("api_key"),
-            "model_name": data.get("model_name"),
-        }
-    else:
-        console.print(
-            "[red]Metadata extraction requires model_config_id in job snapshot "
-            "or legacy --extraction-model-* flags[/red]"
-        )
-        raise typer.Exit(1)
+    model_config = {
+        "base_url": model_connection.get("base_url"),
+        "api_key": model_connection.get("api_key"),
+        "model_name": model_connection.get("model_name"),
+    }
 
     markdown = result.get("markdown") or ""
     if user_prompt_template.strip():
@@ -317,6 +267,7 @@ def run_pipeline_metadata_extraction(
             "[dim]Document parse finished; fix the extraction model (e.g. 502 from chat/completions) "
             "or use Extract on the document page when it is healthy.[/dim]"
         )
+        return auth_headers, basic_auth
 
     if extracted is not None:
         persist_extracted_metadata_sidecar(

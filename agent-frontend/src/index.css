@@ -12,6 +12,12 @@
   --brand-green-soft: rgb(23 162 107 / 0.12);
   --brand-green-muted: rgb(23 162 107 / 0.28);
   --app-page-bg: #f8fafb;
+  accent-color: var(--brand-orange);
+}
+
+::selection {
+  background: rgba(255, 102, 17, 0.28);
+  color: inherit;
 }
 
 * {
@@ -2016,6 +2022,7 @@ textarea {
 .form-field textarea:focus-visible {
   outline: none;
   border-color: var(--brand-orange);
+  box-shadow: 0 0 0 1px var(--brand-orange);
 }
 
 .roles-layout {
@@ -2715,13 +2722,172 @@ textarea {
   margin-top: 0.35rem;
 }
 
-.pipeline-config-modal {
-  width: min(800px, 100%);
+.pipelines-config-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.pipeline-config-modal .admin-form-hint {
+.pipelines-config-layout {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0.25rem;
+}
+
+.pipelines-config-footer {
+  border-top: 1px solid #e2e8f0;
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+}
+
+.pipeline-config-panel {
+  background: #fff;
+}
+
+.pipeline-config-panel-form {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pipeline-config-panel .pipeline-form-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  overflow: auto;
+}
+
+.pipeline-config-panel .pipeline-form-body:has(.pipeline-yaml-tab) {
+  overflow: hidden;
+}
+
+.pipeline-config-panel-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.pipeline-config-panel-actions-left,
+.pipeline-config-panel-actions-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pipeline-config-panel-actions-left {
+  min-width: 0;
+}
+
+.pipeline-config-panel-actions-right {
+  margin-left: auto;
+}
+
+.pipeline-yaml-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.pipeline-system-edit-meta {
+  margin-bottom: 0.15rem;
+}
+
+.pipeline-yaml-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+.pipeline-yaml-editor-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.pipeline-yaml-help {
+  margin-left: 0;
+}
+
+.pipeline-yaml-help .field-tooltip-panel {
+  left: 0;
+  right: auto;
+  min-width: 16rem;
+  max-width: 22rem;
+}
+
+/* Fill remaining panel height even when YAML is only a few lines. */
+.pipeline-config-panel .pipeline-config-yaml.yaml-code-editor {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  display: block;
+}
+
+.pipeline-config-panel .pipeline-config-yaml > .cm-theme,
+.pipeline-config-panel .pipeline-config-yaml > .cm-editor {
+  position: absolute !important;
+  inset: 0;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+.pipeline-config-panel .pipeline-config-yaml .cm-editor {
+  height: 100% !important;
+  max-height: none !important;
+}
+
+.pipeline-config-panel .pipeline-config-yaml .cm-scroller {
+  min-height: 0;
+  overflow: auto !important;
+}
+
+.yaml-code-editor {
+  display: flex;
+  flex-direction: column;
+}
+
+.yaml-code-editor .cm-editor {
+  flex: 1;
+  min-height: 12rem;
+}
+
+.pipeline-yaml-ok {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #15803d;
+  flex: 0 0 auto;
+}
+
+.pipeline-config-panel .admin-form-hint {
   white-space: normal;
-  margin-top: 0.35rem;
+  margin-top: 0.15rem;
+  flex: 0 0 auto;
+}
+
+.pipeline-config-panel .form-grid {
+  /* Content-sized — do not flex-grow or grid-stretch inputs (Config tab fill is yaml-only). */
+  flex: 0 0 auto;
+  align-content: start;
+  align-items: start;
+}
+
+.pipeline-config-panel .form-field {
+  align-content: start;
 }
 
 .pipeline-command-field {
@@ -2740,7 +2906,7 @@ textarea {
   transform: translateY(0);
 }
 
-.pipeline-config-modal .pipeline-command-tooltip {
+.pipeline-config-panel .pipeline-command-tooltip {
   top: calc(100% + 0.35rem);
   left: 0;
   width: 100%;
@@ -2844,7 +3010,7 @@ textarea {
   white-space: nowrap;
 }
 
-.pipeline-config-modal .pipeline-command-tooltip .field-tooltip-list code {
+.pipeline-config-panel .pipeline-command-tooltip .field-tooltip-list code {
   font-size: 0.75rem;
 }
 
@@ -2895,6 +3061,15 @@ textarea {
 .form-field textarea:focus-visible {
   outline: none;
   border-color: var(--brand-orange);
+  box-shadow: 0 0 0 1px var(--brand-orange);
+}
+
+input:not([type='checkbox']):not([type='radio']):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--brand-orange);
+  box-shadow: 0 0 0 1px var(--brand-orange);
 }
 
 .form-checkbox {
@@ -3534,6 +3709,10 @@ textarea {
 }
 
 .pipelines-config-table .pipeline-multiline-cell {
+  vertical-align: top;
+}
+
+.pipelines-config-table .pipeline-cell-clamp {
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -3543,31 +3722,38 @@ textarea {
   word-break: break-word;
   overflow-wrap: anywhere;
   line-height: 1.45;
-  vertical-align: top;
 }
 
 .pipelines-config-table .pipeline-desc-cell {
   color: #64748b;
 }
 
-.pipelines-config-table .pipeline-command-cell {
+.pipelines-config-table .pipeline-command-cell .pipeline-cell-clamp {
   white-space: pre-wrap;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.pipelines-config-table .pipeline-config-cell {
+  font-size: 0.8125rem;
+  color: #475569;
 }
 
 .pipelines-config-table col.pipelines-col-name {
-  width: 14%;
+  width: 16%;
 }
 
 .pipelines-config-table col.pipelines-col-desc {
-  width: 20%;
+  width: 22%;
 }
 
-.pipelines-config-table col.pipelines-col-model {
-  width: 11%;
+.pipelines-config-table col.pipelines-col-config {
+  width: 10%;
 }
 
 .pipelines-config-table col.pipelines-col-command {
-  width: 26%;
+  width: 28%;
 }
 
 .pipelines-config-table col.pipelines-col-updated {
@@ -3575,23 +3761,33 @@ textarea {
 }
 
 .pipelines-config-table col.pipelines-col-enabled {
-  width: 5%;
+  width: 6%;
 }
 
 .pipelines-config-table col.pipelines-col-actions {
   width: 4.5rem;
 }
 
+.pipelines-config-table col.pipelines-col-hint {
+  width: 2.5rem;
+}
+
 .pipelines-config-table td.pipeline-desc-cell,
-.pipelines-config-table td.pipeline-command-cell {
+.pipelines-config-table td.pipeline-command-cell,
+.pipelines-config-table td.pipeline-config-cell {
   padding-top: 0.55rem;
   padding-bottom: 0.55rem;
 }
 
-.pipelines-config-table td.pipeline-actions-cell {
-  width: 4.5rem;
+.pipelines-config-table td.pipeline-actions-cell,
+.pipelines-config-table td.pipeline-enabled-cell,
+.pipelines-config-table td.pipeline-updated-cell {
   white-space: nowrap;
   vertical-align: middle;
+}
+
+.pipelines-config-table td.pipeline-actions-cell {
+  width: 4.5rem;
 }
 
 .pipeline-enabled-toggle {
@@ -3608,8 +3804,8 @@ textarea {
   font-size: 0.6875rem;
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--brand-orange-muted);
+  color: var(--brand-orange);
   font-weight: 600;
   vertical-align: middle;
 }
@@ -5111,6 +5307,18 @@ textarea {
 .kb-faq-settings-tab-body {
   flex: 1;
   min-height: 17.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.kb-faq-settings-tab-body > .kb-faq-checkbox-field {
+  margin-top: 0.15rem;
+}
+
+.kb-faq-settings-tab-body > .admin-form-hint {
+  margin-top: 0.1rem;
+  margin-bottom: 0;
 }
 
 .kb-faq-settings-agent-fields {

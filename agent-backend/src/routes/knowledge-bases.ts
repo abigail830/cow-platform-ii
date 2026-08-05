@@ -60,6 +60,34 @@ knowledgeBases.use('/:id', knowledgeBaseAccessMiddleware());
 knowledgeBases.use('/:id/*', knowledgeBaseAccessMiddleware());
 
 knowledgeBases.get(
+  '/rag-processing-options',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const { listRagPipelineOptions } = await import('../shared/rag-pipeline-binding.ts');
+    const options = await listRagPipelineOptions();
+    return c.json(options);
+  },
+);
+
+knowledgeBases.get(
+  '/faq-processing-options',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const { listFaqPipelineOptions } = await import('../shared/faq-pipeline-binding.ts');
+    const options = await listFaqPipelineOptions();
+    return c.json(options);
+  },
+);
+
+knowledgeBases.get(
   '/import-sources',
   requireResourcePermission(
     KNOWLEDGE_MANAGEMENT_CATEGORY,
@@ -196,14 +224,12 @@ knowledgeBases.patch(
       name?: string;
       description?: string | null;
       type?: string;
-      embedding_model_config_id?: string | null;
-      embedding_dimensions?: number;
-      chunk_config?: { strategy?: string; chunk_size?: number; chunk_overlap?: number };
+      pipeline_id?: string | null;
       metadata_keys?: string[];
       faq_settings?: {
         auto_index_on_publish?: boolean;
-        extraction_agent_def_id?: string | null;
         polish_agent_def_id?: string | null;
+        extract_pipeline_id?: string | null;
       };
     }>().catch(() => ({}));
 
@@ -218,9 +244,7 @@ knowledgeBases.patch(
       const kb = await updateKnowledgeBase(id, {
         name: body.name,
         description: body.description,
-        embedding_model_config_id: body.embedding_model_config_id,
-        embedding_dimensions: body.embedding_dimensions,
-        chunk_config: body.chunk_config,
+        pipeline_id: body.pipeline_id,
         metadata_keys: body.metadata_keys,
         faq_settings: body.faq_settings,
       });

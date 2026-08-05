@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { appModelConfigs, appPipelineConfigs, db } from '../db/index.ts';
 import { kbPipelineUiMeta } from './pipeline-catalog.ts';
+import { normalizePipelineConfigYaml } from './pipeline-config-yaml.ts';
 
 export type PipelineConfigRow = typeof appPipelineConfigs.$inferSelect;
 
@@ -11,6 +12,8 @@ export type PublicPipelineConfig = {
   pipelineName: string;
   commandTemplate: string;
   workflowFile: string | null;
+  /** Worker YAML override; null = CLI packaged default. */
+  configYaml: string | null;
   modelConfigId: string | null;
   modelConfigName: string | null;
   isEnabled: boolean;
@@ -38,6 +41,7 @@ function toPublicPipeline(
     pipelineName: row.pipelineName,
     commandTemplate: row.commandTemplate,
     workflowFile: row.workflowFile,
+    configYaml: row.configYaml ?? null,
     modelConfigId: row.modelConfigId,
     modelConfigName: modelName,
     isEnabled: row.isEnabled,
@@ -96,6 +100,9 @@ export async function listPipelineConfigs(input?: {
 }
 
 export async function getPipelineConfigById(id: string): Promise<PublicPipelineConfig | null> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    return null;
+  }
   const [row] = await db
     .select({
       pipeline: appPipelineConfigs,
@@ -129,6 +136,7 @@ export async function createPipelineConfig(input: {
   pipelineName: string;
   commandTemplate: string;
   workflowFile?: string | null;
+  configYaml?: string | null;
   modelConfigId?: string | null;
   isEnabled?: boolean;
 }): Promise<PublicPipelineConfig> {
@@ -142,6 +150,8 @@ export async function createPipelineConfig(input: {
     if (model.apiType !== 'vlm') throw new Error('Pipeline model must be a VLM model');
   }
 
+  const configYaml = normalizePipelineConfigYaml(input.configYaml);
+
   const [row] = await db
     .insert(appPipelineConfigs)
     .values({
@@ -150,6 +160,7 @@ export async function createPipelineConfig(input: {
       pipelineName: input.pipelineName.trim(),
       commandTemplate: input.commandTemplate.trim(),
       workflowFile: input.workflowFile?.trim() || null,
+      configYaml,
       modelConfigId: input.modelConfigId ?? null,
       isEnabled: input.isEnabled ?? true,
       isSystem: false,
@@ -166,6 +177,7 @@ export async function updatePipelineConfig(
     pipelineName?: string;
     commandTemplate?: string;
     workflowFile?: string | null;
+    configYaml?: string | null;
     modelConfigId?: string | null;
     isEnabled?: boolean;
   },
@@ -174,7 +186,7 @@ export async function updatePipelineConfig(
   if (!existing) throw new Error('Pipeline not found');
 
   if (existing.isSystem) {
-    const forbidden = ['name', 'pipelineName', 'modelConfigId', 'isEnabled'].filter(
+    const forbidden = ['pipelineName', 'commandTemplate', 'modelConfigId', 'isEnabled'].filter(
       (key) => input[key as keyof typeof input] !== undefined,
     );
     if (forbidden.length > 0) {
@@ -192,16 +204,22 @@ export async function updatePipelineConfig(
     if (model.apiType !== 'vlm') throw new Error('Pipeline model must be a VLM model');
   }
 
+  const configYaml =
+    input.configYaml !== undefined ? normalizePipelineConfigYaml(input.configYaml) : undefined;
+
   const [row] = await db
     .update(appPipelineConfigs)
     .set({
-      ...(input.name !== undefined && !existing.isSystem ? { name: input.name.trim() } : {}),
+      ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
       ...(input.pipelineName !== undefined && !existing.isSystem
         ? { pipelineName: input.pipelineName.trim() }
         : {}),
-      ...(input.commandTemplate !== undefined ? { commandTemplate: input.commandTemplate.trim() } : {}),
+      ...(input.commandTemplate !== undefined && !existing.isSystem
+        ? { commandTemplate: input.commandTemplate.trim() }
+        : {}),
       ...(input.workflowFile !== undefined ? { workflowFile: input.workflowFile?.trim() || null } : {}),
+      ...(configYaml !== undefined ? { configYaml } : {}),
       ...(input.modelConfigId !== undefined && !existing.isSystem
         ? { modelConfigId: input.modelConfigId }
         : {}),

@@ -34,9 +34,14 @@ def run_native_ingest_async_job(
     stage = str(ctx.get("stage") or "")
 
     if stage == "parsed":
-        extraction_args = (ctx.get("extraction_args") or "").strip()
-        if extraction_args:
-            run_metadata_extraction_from_ctx(ctx, api, job_id)
+        from openkms_cli.core.workflow_config import metadata_extract_enabled, resolve_job_workflow_config
+
+        config = resolve_job_workflow_config(
+            pipeline_name=str(ctx.get("pipeline_name") or ""),
+            job_config_yaml=ctx.get("config_yaml"),
+        )
+        if metadata_extract_enabled(config):
+            run_metadata_extraction_from_ctx(ctx, api, job_id, workflow_config=config)
         else:
             patch_job(api, job_id, stage="done")
             console.print(f"[green]Job {job_id} done[/green]")

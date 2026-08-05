@@ -5,13 +5,12 @@ import {
   DEFAULT_KB_FAQ_EXTRACT_COMMAND_TEMPLATE,
   DEFAULT_KB_FAQ_INDEX_COMMAND_TEMPLATE,
   DEFAULT_KB_PAGEINDEX_IMPORT_COMMAND_TEMPLATE,
-  DEFAULT_KB_PAGEINDEX_IMPORT_WORKFLOW_FILE,
   DEFAULT_KB_RAG_INDEX_COMMAND_TEMPLATE,
   FAQ_KB_EXTRACT_PIPELINE_NAME,
   FAQ_KB_INDEX_PIPELINE_NAME,
   RAG_KB_PIPELINE_NAME,
+  defaultKbImportWorkflowFile,
 } from '../shared/pipeline-catalog.ts';
-import { workerLlmConfigFromJobSnapshot } from '../builtin-agents/worker-llm-config.ts';
 import { buildWorkerCliArgsFromTemplate } from '../shared/pipeline-command-template.ts';
 import {
   resolveKbImportPipelineForJob,
@@ -111,8 +110,7 @@ async function dispatchKbImportGithub(jobId: string): Promise<void> {
   const workflowFile =
     pipeline.workflowFile?.trim() ||
     process.env.GITHUB_KB_IMPORT_WORKFLOW?.trim() ||
-    process.env.GITHUB_KB_PAGEINDEX_IMPORT_WORKFLOW?.trim() ||
-    DEFAULT_KB_PAGEINDEX_IMPORT_WORKFLOW_FILE;
+    defaultKbImportWorkflowFile(pipeline.pipelineName);
 
   const workerCliArgs = await buildKbImportCliArgs(jobId);
 
@@ -125,9 +123,7 @@ async function dispatchKbImportGithub(jobId: string): Promise<void> {
 async function assertKbImportJobReady(jobId: string): Promise<void> {
   const job = await getKbImportJobById(jobId);
   if (!job) throw new Error('KB import job not found');
-  if (job.jobKind === 'faq_extract') {
-    workerLlmConfigFromJobSnapshot(job.workerLlmConfig);
-  }
+  // faq_extract prompts/model come from job.config_yaml or CLI packaged default — no agent snapshot.
 }
 
 /**

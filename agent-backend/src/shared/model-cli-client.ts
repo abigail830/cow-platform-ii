@@ -10,20 +10,6 @@ export type ModelCliParamsResponse = {
   max_concurrency: number | null;
 };
 
-function shellQuote(value: string): string {
-  if (/^[A-Za-z0-9_./:@=-]+$/.test(value)) return value;
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-export function formatVlmCliArgs(params: ModelCliParamsResponse): string {
-  let args = '';
-  if (params.base_url) args += ` --vlm-url ${shellQuote(params.base_url)}`;
-  if (params.model_name) args += ` --model ${shellQuote(params.model_name)}`;
-  if (params.api_key) args += ` --vlm-api-key ${shellQuote(params.api_key)}`;
-  if (params.max_concurrency != null) args += ` --max-concurrency ${params.max_concurrency}`;
-  return args;
-}
-
 export function formatExtractionCliArgs(): string {
   return ' --extract-metadata';
 }

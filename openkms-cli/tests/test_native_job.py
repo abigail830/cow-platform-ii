@@ -10,10 +10,11 @@ def test_run_native_ingest_async_job_submitted_flow() -> None:
 
     ctx = {
         "stage": "submitted",
+        "pipeline_name": "baidu-doc-parse",
         "document": {"id": "doc-1", "name": "readme.md", "file_hash": "a" * 64},
         "input_uri": "s3://bucket/documents/x/original.md",
         "s3_prefix": "documents/x",
-        "extraction_args": "",
+        "config_yaml": None,
     }
     stored = MagicMock()
     stored.read_bytes.return_value = b"# Title"
@@ -51,8 +52,9 @@ def test_run_native_ingest_async_job_parsed_stage_metadata() -> None:
 
     ctx = {
         "stage": "parsed",
+        "pipeline_name": "baidu-doc-parse",
         "document": {"id": "doc-1", "name": "readme.md"},
-        "extraction_args": "--extract-metadata --extraction-schema s",
+        "config_yaml": None,
     }
 
     with patch("openkms_cli.pipeline.native_job.run_metadata_extraction_from_ctx") as mock_meta:

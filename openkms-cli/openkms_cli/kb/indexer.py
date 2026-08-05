@@ -143,9 +143,11 @@ def chunk_document(text: str, config: dict[str, Any] | None) -> list[dict[str, A
     chunker = CHUNKERS.get(strategy, _chunk_fixed_size)
     kwargs = {k: v for k, v in config.items() if k != "strategy"}
     chunks = chunker(text, **kwargs)
-    chunk_size = int(config.get("chunk_size") or _DEFAULT_CHUNK_SIZE)
-    chunk_overlap = int(config.get("chunk_overlap") or _DEFAULT_CHUNK_OVERLAP)
-    if strategy != "fixed_size":
+    # fixed_size already uses chunk_size / chunk_overlap in the chunker.
+    # markdown_header / paragraph: only apply a max-size split when knobs are set.
+    if strategy != "fixed_size" and ("chunk_size" in config or "chunk_overlap" in config):
+        chunk_size = int(config.get("chunk_size") or _DEFAULT_CHUNK_SIZE)
+        chunk_overlap = int(config.get("chunk_overlap") or _DEFAULT_CHUNK_OVERLAP)
         chunks = _enforce_max_chunk_size(chunks, chunk_size, chunk_overlap)
     return chunks
 

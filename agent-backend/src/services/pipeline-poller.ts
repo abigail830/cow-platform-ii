@@ -106,9 +106,8 @@ async function watchdogStuckJobs(): Promise<void> {
       .where(eq(appPipelineJobs.stage, 'parsed'));
 
     for (const job of parsedRows) {
-      const hasMetadataStep =
-        Boolean(job.metadataExtractionConfig) || Boolean(job.extractionArgs?.trim());
-      if (!hasMetadataStep) continue;
+      // Metadata step is decided by worker config YAML (job snapshot or CLI default).
+      // Re-spawn if still stuck in parsed (worker may have crashed mid-metadata).
       const staleMs = Date.now() - new Date(job.updatedAt).getTime();
       if (staleMs < PARSED_STALE_MS) continue;
       console.info(`[pipeline] re-spawn metadata resume for job ${job.id} (parsed stale ${staleMs}ms)`);

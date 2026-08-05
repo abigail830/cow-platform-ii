@@ -12,14 +12,6 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-export type WorkerLlmConfigSnapshot = {
-  model_config_id: string;
-  system_prompt: string;
-  user_prompt_template: string;
-  output_schema?: Record<string, unknown> | null;
-  agent_def_id?: string | null;
-};
-
 /** pgvector column — driver uses `[f1,f2,...]` string form. */
 export const pgVector = customType<{ data: number[]; driverData: string }>({
   dataType() {
@@ -38,6 +30,7 @@ export const pgVector = customType<{ data: number[]; driverData: string }>({
   },
 });
 
+/** Chunking options for RAG index pipeline Config YAML (not stored on KB row). */
 export type KbChunkConfig = {
   strategy?: 'markdown_header' | 'fixed_size' | 'paragraph';
   chunk_size?: number;
@@ -194,6 +187,8 @@ export const appPipelineConfigs = pgTable(
     pipelineName: text('pipeline_name').notNull(),
     commandTemplate: text('command_template').notNull(),
     workflowFile: text('workflow_file'),
+    /** Optional worker YAML override; null = CLI packaged default for pipeline_name. */
+    configYaml: text('config_yaml'),
     modelConfigId: uuid('model_config_id').references(() => appModelConfigs.id, { onDelete: 'set null' }),
     isEnabled: boolean('is_enabled').notNull().default(true),
     isSystem: boolean('is_system').notNull().default(false),
@@ -250,10 +245,6 @@ export const appDocumentChannels = pgTable(
     description: text('description'),
     parentId: uuid('parent_id'),
     sortOrder: integer('sort_order').notNull().default(0),
-    metadataExtractionModelId: uuid('metadata_extraction_model_id').references(() => appModelConfigs.id, {
-      onDelete: 'set null',
-    }),
-    metadataExtractionAgentDefId: uuid('metadata_extraction_agent_def_id'),
     pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
     autoStartPipeline: boolean('auto_start_pipeline').notNull().default(false),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
@@ -327,14 +318,15 @@ export type KbFaqIndexStatus = (typeof KB_FAQ_INDEX_STATUSES)[number];
 
 export type KbFaqSettings = {
   auto_index_on_publish?: boolean;
-  extraction_agent_def_id?: string | null;
   polish_agent_def_id?: string | null;
+  /** Override for FAQ extract; null = platform default kb-faq-extract. */
+  extract_pipeline_id?: string | null;
 };
 
 export const DEFAULT_KB_FAQ_SETTINGS: KbFaqSettings = {
   auto_index_on_publish: false,
-  extraction_agent_def_id: null,
   polish_agent_def_id: null,
+  extract_pipeline_id: null,
 };
 
 export const appKnowledgeBases = pgTable(
@@ -349,7 +341,6 @@ export const appKnowledgeBases = pgTable(
       onDelete: 'set null',
     }),
     embeddingDimensions: integer('embedding_dimensions').notNull().default(1024),
-    chunkConfig: jsonb('chunk_config').$type<KbChunkConfig>().notNull().default(DEFAULT_KB_CHUNK_CONFIG),
     metadataKeys: jsonb('metadata_keys').$type<string[]>().notNull().default([]),
     faqSettings: jsonb('faq_settings')
       .$type<KbFaqSettings>()
@@ -382,7 +373,8 @@ export const appKbImportJobs = pgTable(
     completedCount: integer('completed_count').notNull().default(0),
     failedCount: integer('failed_count').notNull().default(0),
     errorMessage: text('error_message'),
-    workerLlmConfig: jsonb('worker_llm_config').$type<WorkerLlmConfigSnapshot | null>(),
+    /** Snapshot of pipeline config_yaml at job create; null = CLI uses packaged default. */
+    configYaml: text('config_yaml'),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -553,9 +545,8 @@ export const appPipelineJobs = pgTable(
     provider: text('provider').notNull(),
     stage: text('stage').notNull().default('submitted'),
     externalJobId: text('external_job_id'),
-    extractionArgs: text('extraction_args'),
-    metadataExtractionConfig: jsonb('metadata_extraction_config').$type<WorkerLlmConfigSnapshot | null>(),
-    vlmArgs: text('vlm_args'),
+    /** Snapshot of pipeline config_yaml at job create; null = CLI uses packaged default. */
+    configYaml: text('config_yaml'),
     errorMessage: text('error_message'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

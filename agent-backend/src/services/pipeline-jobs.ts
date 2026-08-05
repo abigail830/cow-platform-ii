@@ -6,17 +6,19 @@ import {
   type PipelineJobStage,
   type PipelineProvider,
 } from '../db/index.ts';
-import type { WorkerLlmConfig } from '../builtin-agents/worker-llm-config.ts';
-
-export type { PipelineJobStage };
 import { getChannelById } from './documents.ts';
 import { getS3Config } from '../storage/s3-config.ts';
 
+/** Document Channel parse pipelines (async cloud submit → poll → finalize). */
 export const ASYNC_PIPELINE_NAMES = new Set([
   'baidu-doc-parse',
   'aliyun-docmind-parse',
   'paddleocr-doc-parse',
 ]);
+
+export function isDocumentAsyncPipelineName(pipelineName: string): boolean {
+  return ASYNC_PIPELINE_NAMES.has(pipelineName);
+}
 
 export function pipelineProviderForName(pipelineName: string): PipelineProvider | null {
   if (pipelineName === 'baidu-doc-parse' || pipelineName === 'paddleocr-doc-parse') return 'baidu';
@@ -30,6 +32,12 @@ function s3PrefixFromKey(s3Key: string): string {
   return idx >= 0 ? normalized.slice(0, idx) : normalized;
 }
 
+/** Normalize pipeline override: blank → null (CLI uses packaged default). */
+export function snapshotConfigYaml(configYaml: string | null | undefined): string | null {
+  const raw = configYaml?.trim();
+  return raw ? raw : null;
+}
+
 export type PipelineJobContext = {
   id: string;
   document_id: string;
@@ -37,9 +45,7 @@ export type PipelineJobContext = {
   provider: PipelineProvider;
   stage: PipelineJobStage;
   external_job_id: string | null;
-  extraction_args: string | null;
-  metadata_extraction_config: WorkerLlmConfig | null;
-  vlm_args: string | null;
+  config_yaml: string | null;
   error_message: string | null;
   document: {
     id: string;
@@ -58,9 +64,7 @@ export async function createPipelineJob(input: {
   documentId: string;
   pipelineName: string;
   provider: PipelineProvider;
-  extractionArgs?: string | null;
-  metadataExtractionConfig?: WorkerLlmConfig | null;
-  vlmArgs?: string | null;
+  configYaml?: string | null;
 }): Promise<typeof appPipelineJobs.$inferSelect> {
   const [row] = await db
     .insert(appPipelineJobs)
@@ -69,9 +73,7 @@ export async function createPipelineJob(input: {
       pipelineName: input.pipelineName,
       provider: input.provider,
       stage: 'submitted',
-      extractionArgs: input.extractionArgs ?? null,
-      metadataExtractionConfig: input.metadataExtractionConfig ?? null,
-      vlmArgs: input.vlmArgs ?? null,
+      configYaml: snapshotConfigYaml(input.configYaml),
     })
     .returning();
   return row!;
@@ -129,7 +131,6 @@ export async function updatePipelineJob(
     stage?: PipelineJobStage;
     externalJobId?: string | null;
     errorMessage?: string | null;
-    vlmArgs?: string | null;
   },
 ): Promise<typeof appPipelineJobs.$inferSelect | null> {
   const [row] = await db
@@ -138,7 +139,6 @@ export async function updatePipelineJob(
       ...(input.stage !== undefined ? { stage: input.stage } : {}),
       ...(input.externalJobId !== undefined ? { externalJobId: input.externalJobId } : {}),
       ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
-      ...(input.vlmArgs !== undefined ? { vlmArgs: input.vlmArgs } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appPipelineJobs.id, id))
@@ -177,9 +177,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     provider: job.provider as PipelineProvider,
     stage: job.stage as PipelineJobStage,
     external_job_id: job.externalJobId,
-    extraction_args: job.extractionArgs,
-    metadata_extraction_config: job.metadataExtractionConfig ?? null,
-    vlm_args: job.vlmArgs,
+    config_yaml: job.configYaml ?? null,
     error_message: job.errorMessage,
     document: {
       id: doc.id,

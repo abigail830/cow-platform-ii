@@ -20,7 +20,7 @@ app = typer.Typer(
 app.add_typer(parse_app, name="parse", help="Document parsing commands")
 app.add_typer(kb_app, name="kb", help="Knowledge base import (PageIndex) and future RAG index")
 app.add_typer(page_index_app, name="page-index", help="Build page_index.json (strategy-selectable)")
-app.add_typer(pipeline_app, name="pipeline", help="Pipeline: run (doc-parse, kb-index)")
+app.add_typer(pipeline_app, name="pipeline", help="Async document-parse pipeline jobs")
 app.add_typer(wiki_app, name="wiki", help="Wiki spaces: put, sync, upload-file")
 
 

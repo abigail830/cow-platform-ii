@@ -1,7 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import {
   appBuiltinAgentDefs,
-  appDocumentChannels,
   appKnowledgeBases,
   appWorkflowBindings,
   db,
@@ -86,7 +85,7 @@ export async function resolveWorkflowAgent(input: {
 
 export async function resolveKbFaqWorkflowAgent(
   kbId: string,
-  workflowKey: 'faq_extract' | 'faq_polish',
+  workflowKey: 'faq_polish',
 ): Promise<ResolvedBuiltinAgent> {
   const [kb] = await db
     .select({ faqSettings: appKnowledgeBases.faqSettings })
@@ -96,38 +95,9 @@ export async function resolveKbFaqWorkflowAgent(
   if (!kb) throw new Error('Knowledge base not found');
 
   const settings = (kb.faqSettings ?? {}) as KbFaqSettings;
-  const agentDefId =
-    workflowKey === 'faq_extract' ? settings.extraction_agent_def_id : settings.polish_agent_def_id;
 
   return resolveWorkflowAgent({
     workflowKey,
-    override: { agentDefId: agentDefId ?? null },
+    override: { agentDefId: settings.polish_agent_def_id ?? null },
   });
-}
-
-export async function resolveChannelMetadataAgent(channelId: string): Promise<ResolvedBuiltinAgent> {
-  const [channel] = await db
-    .select({ agentDefId: appDocumentChannels.metadataExtractionAgentDefId })
-    .from(appDocumentChannels)
-    .where(eq(appDocumentChannels.id, channelId))
-    .limit(1);
-  if (!channel) throw new Error('Channel not found');
-
-  return resolveWorkflowAgent({
-    workflowKey: 'metadata_extract',
-    override: { agentDefId: channel.agentDefId },
-  });
-}
-
-/** Expand agent def into legacy faq_settings fields for CLI compatibility. */
-export function toLegacyFaqExtractionFields(agent: ResolvedBuiltinAgent): {
-  extraction_model_config_id: string;
-  extraction_prompt: string;
-  extraction_system_prompt: string;
-} {
-  return {
-    extraction_model_config_id: agent.modelConfigId,
-    extraction_prompt: agent.userPromptTemplate,
-    extraction_system_prompt: agent.systemPrompt,
-  };
 }

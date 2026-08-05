@@ -4,7 +4,9 @@ Command-line tools for **document parsing** and **pipeline** steps. The openKMS 
 
 ## Configuration
 
-Set variables in **`.env`** (this package’s `.env`, then the current directory’s `.env`). Names and defaults are defined in **`openkms_cli/settings.py`** — each env var is explicit there. CLI flags override `.env` when you pass them.
+Set variables in **`.env`** (this package’s `.env`, then the current directory’s `.env`). Names and defaults are defined in **`openkms_cli/core/settings.py`** — each env var is explicit there. CLI flags override `.env` when you pass them.
+
+**Worker config YAML:** Packaged defaults live in **`workflows/{pipelineName}.yml`**. Admin → Pipelines can store an override in `config_yaml` (empty = use packaged default). Jobs snapshot that override (or null). YAML uses **`model_name`** = the bold name from Admin → Models (e.g. `deepSeek-V4-Flash`); the CLI resolves credentials once per job via **`GET /internal-api/models/cli-params?model_name=…`**. Do not put `api_key` / `base_url` / UUID model ids in YAML.
 
 Copy **`openkms-cli/.env.example`** and adjust. For auth against the API, match **`OPENKMS_AUTH_MODE`** with the backend (`oidc` vs `local`).
 
@@ -51,22 +53,17 @@ openkms-cli parse run ./inputs/ -o ./parsed
 openkms-cli parse run document.pdf --method baidu-doc-parse -o ./parsed
 ```
 
-**Pipeline** — list names, then run:
+**Pipeline** — async document jobs (backend creates the job; CLI runs the worker):
 
 ```bash
 openkms-cli pipeline list
-# Index a knowledge base (linked channel documents + linked wiki spaces).
-# Set OPENKMS_API_URL and auth in openkms-cli/.env (see openkms_cli/settings.py).
-openkms-cli pipeline run --pipeline-name kb-index --knowledge-base-id <KB_UUID> --api-url http://127.0.0.1:8102
+# One-shot worker (submit → poll → finalize + optional metadata):
+openkms-cli pipeline run-async --job-id <JOB_UUID>
+# Optional page-index strategy (defaults by provider):
+openkms-cli pipeline run-async --job-id <JOB_UUID> --page-index-strategy baidu-layouts
 ```
 
-Wiki content is pulled only for **wiki spaces already linked** to that KB (`GET /api/knowledge-bases/{id}/wiki-spaces`). Re-run the same command after adding or removing links.
-
-```bash
-openkms-cli pipeline run --input ./doc.pdf --s3-prefix <prefix>
-# Baidu Cloud (no local VLM): stages on BOS presigned file_url, polls Baidu API
-openkms-cli pipeline run --pipeline-name baidu-doc-parse --input ./doc.pdf --s3-prefix <prefix>
-```
+Knowledge-base workers use the **`kb`** subcommands (not `pipeline`), e.g. `openkms-cli kb faq-extract --job-id …`.
 
 **Wiki** — upsert markdown pages and upload assets (requires API auth: OIDC client credentials or local HTTP Basic, same as pipeline metadata sync):
 
@@ -76,9 +73,9 @@ openkms-cli wiki sync --space-id <uuid> --dir ./my-wiki-root
 openkms-cli wiki upload-file --space-id <uuid> --file ./diagram.png
 ```
 
-Doc-parse pipelines need S3 credentials in `.env` unless you use **`--skip-upload`** with a local **`--input`** file.
+Async doc-parse jobs need S3 credentials in `.env`.
 
-**Pipeline + channel metadata extraction:** If `--extract-metadata` runs and the extraction LLM returns an error (e.g. HTTP 502), the CLI prints a warning and **still exits successfully** after a successful parse so the worker can mark the document completed; use **Extract** in the UI when the model is available.
+**Pipeline + channel metadata extraction:** Metadata uses the job’s `metadata_extraction_config` snapshot. If the extraction LLM returns an error (e.g. HTTP 502), the CLI prints a warning and **still exits successfully** after a successful parse so the worker can mark the document completed; use **Extract** in the UI when the model is available.
 
 **Module entry:**
 

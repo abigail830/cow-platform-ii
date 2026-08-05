@@ -8,6 +8,7 @@ export type PipelineConfig = {
   description: string | null;
   pipelineName: string;
   commandTemplate: string;
+  configYaml: string | null;
   modelConfigId: string | null;
   modelConfigName: string | null;
   isEnabled: boolean;
@@ -31,6 +32,7 @@ export type PipelineConfigInput = {
   description?: string | null;
   pipelineName: string;
   commandTemplate: string;
+  configYaml?: string | null;
   modelConfigId?: string | null;
   isEnabled?: boolean;
 };
@@ -63,7 +65,18 @@ async function authFetch(path: string, init?: RequestInit) {
     },
   });
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  let data: Record<string, unknown> = {};
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      throw new Error(
+        res.ok
+          ? 'Invalid JSON response from server'
+          : text.slice(0, 200) || `HTTP ${res.status}`,
+      );
+    }
+  }
   if (!res.ok) throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
   return data;
 }
@@ -107,4 +120,46 @@ export async function updatePipelineConfig(
 
 export async function deletePipelineConfig(id: string): Promise<void> {
   await authFetch(`/api/admin/pipelines/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchDefaultPipelineConfigYaml(pipelineName: string): Promise<string> {
+  const query = new URLSearchParams({ pipeline_name: pipelineName.trim() });
+  const data = await authFetch(`/api/admin/pipelines/default-config-yaml?${query}`);
+  return String(data.config_yaml ?? '');
+}
+
+export async function validatePipelineConfigYaml(
+  configYaml: string,
+): Promise<{ ok: true; configYaml: string | null } | { ok: false; error: string }> {
+  const token = getToken();
+  if (!token) throw new Error('Not authenticated');
+  const res = await fetch(apiUrl('/api/admin/pipelines/validate-config-yaml'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ configYaml }),
+  });
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return {
+        ok: false,
+        error: res.ok
+          ? 'Invalid JSON response from server'
+          : text.slice(0, 200) || `HTTP ${res.status}`,
+      };
+    }
+  }
+  if (!res.ok) {
+    return { ok: false, error: formatApiError(data.error, `HTTP ${res.status}`) };
+  }
+  return {
+    ok: true,
+    configYaml: (data.config_yaml as string | null | undefined) ?? null,
+  };
 }
