@@ -53,6 +53,14 @@ def submit_job(job_id: str, api_url: str | None = None) -> None:
     doc = ctx.get("document") or {}
     document_id = doc.get("id") or ctx.get("document_id")
 
+    if provider == "paddle":
+        fail_job(
+            api,
+            job_id,
+            "paddleocr-doc-parse uses sync VLM parse in pipeline run-async (no cloud submit step)",
+        )
+        raise SystemExit(1)
+
     work = Path(tempfile.mkdtemp(prefix="openkms-pipeline-"))
     try:
         if provider == "baidu":
@@ -167,6 +175,9 @@ def poll_job(job_id: str, api_url: str | None = None) -> None:
         return
 
     provider = ctx.get("provider")
+    if provider == "paddle":
+        console.print(f"[dim]Job {job_id} provider=paddle; skip poll (sync VLM)[/dim]")
+        return
     try:
         if provider == "baidu":
             ready, failed, detail = _poll_baidu(external_id)
@@ -254,14 +265,20 @@ def run_async_job(
     """
     cfg = get_cli_settings()
     api = (api_url or cfg.openkms_api_url).rstrip("/")
-    interval = poll_interval if poll_interval is not None else cfg.async_poll_interval_seconds
-    wait_cap = max_wait if max_wait is not None else cfg.async_max_wait_seconds
 
     try:
         ctx = get_job_context(api, job_id)
     except PipelineJobApiError as e:
         console.print(f"[red]{e}[/red]")
         raise SystemExit(1) from e
+
+    from openkms_cli.core.workflow_config import resolve_job_workflow_config
+
+    workflow_config = resolve_job_workflow_config(
+        pipeline_name=str(ctx.get("pipeline_name") or ""),
+        job_config_yaml=ctx.get("config_yaml"),
+    )
+    interval, wait_cap = _resolve_poll_settings(workflow_config, poll_interval, max_wait)
 
     stage = str(ctx.get("stage") or "")
     if stage in {"done", "failed"}:
@@ -272,23 +289,25 @@ def run_async_job(
     if is_native_ingest(ingest_kind):
         from openkms_cli.pipeline.native_job import run_native_ingest_async_job
 
+        resolved_page_index = _resolve_page_index_strategy(
+            workflow_config,
+            provider=None,
+            ingest_kind=ingest_kind,
+            cli_override=page_index_strategy,
+        )
         run_native_ingest_async_job(
             job_id,
             api,
             ctx,
-            page_index_strategy=page_index_strategy,
+            page_index_strategy=resolved_page_index,
         )
         return
 
     if stage == "parsed":
-        from openkms_cli.core.workflow_config import metadata_extract_enabled, resolve_job_workflow_config
+        from openkms_cli.core.workflow_config import metadata_extract_enabled
 
-        config = resolve_job_workflow_config(
-            pipeline_name=str(ctx.get("pipeline_name") or ""),
-            job_config_yaml=ctx.get("config_yaml"),
-        )
-        if metadata_extract_enabled(config):
-            run_metadata_extraction_from_ctx(ctx, api, job_id, workflow_config=config)
+        if metadata_extract_enabled(workflow_config):
+            run_metadata_extraction_from_ctx(ctx, api, job_id, workflow_config=workflow_config)
         else:
             patch_job(api, job_id, stage="done")
             console.print(f"[green]Job {job_id} done[/green]")
@@ -299,9 +318,35 @@ def run_async_job(
         console.print(f"[green]Job {job_id} done[/green]")
         return
 
+    provider = str(ctx.get("provider") or "")
+    if provider == "paddle":
+        if stage == "submitted":
+            resolved_page_index = _resolve_page_index_strategy(
+                workflow_config,
+                provider="paddle",
+                cli_override=page_index_strategy,
+            )
+            from openkms_cli.providers.paddle.job import run_paddle_vlm_sync_job
+
+            run_paddle_vlm_sync_job(
+                api,
+                job_id,
+                ctx,
+                workflow_config=workflow_config,
+                page_index_strategy=resolved_page_index,
+            )
+        else:
+            console.print(f"[dim]Job {job_id} provider=paddle stage={stage}; nothing to do[/dim]")
+        return
+
     if stage != "submitted":
         console.print(f"[dim]Job {job_id} stage={stage}; run finalize only[/dim]")
-        finalize_job(job_id, api_url, page_index_strategy=page_index_strategy)
+        resolved_page_index = _resolve_page_index_strategy(
+            workflow_config,
+            provider=str(ctx.get("provider") or "") or None,
+            cli_override=page_index_strategy,
+        )
+        finalize_job(job_id, api_url, page_index_strategy=resolved_page_index, workflow_config=workflow_config)
         return
 
     external_id = (ctx.get("external_job_id") or "").strip()
@@ -316,7 +361,51 @@ def run_async_job(
         poll_interval=interval,
         max_wait=wait_cap,
     )
-    finalize_job(job_id, api_url, page_index_strategy=page_index_strategy)
+    resolved_page_index = _resolve_page_index_strategy(
+        workflow_config,
+        provider=str(ctx.get("provider") or "") or None,
+        cli_override=page_index_strategy,
+    )
+    finalize_job(
+        job_id,
+        api_url,
+        page_index_strategy=resolved_page_index,
+        workflow_config=workflow_config,
+    )
+
+
+def _resolve_poll_settings(
+    workflow_config: dict[str, Any],
+    poll_interval: int | None,
+    max_wait: int | None,
+) -> tuple[int, int]:
+    from openkms_cli.core.workflow_config import resolve_async_poll_settings
+
+    cfg = get_cli_settings()
+    return resolve_async_poll_settings(
+        workflow_config,
+        cli_poll_interval=poll_interval,
+        cli_max_wait=max_wait,
+        settings_poll_default=cfg.async_poll_interval_seconds,
+        settings_max_wait_default=cfg.async_max_wait_seconds,
+    )
+
+
+def _resolve_page_index_strategy(
+    workflow_config: dict[str, Any],
+    *,
+    provider: str | None,
+    ingest_kind: Any | None = None,
+    cli_override: str | None,
+) -> str | None:
+    from openkms_cli.core.workflow_config import resolve_page_index_strategy
+
+    return resolve_page_index_strategy(
+        workflow_config,
+        provider=provider,
+        ingest_kind=ingest_kind,
+        cli_override=cli_override,
+    )
 
 
 def _poll_baidu(task_id: str) -> tuple[bool, bool, str | None]:
@@ -358,6 +447,7 @@ def finalize_job(
     job_id: str,
     api_url: str | None = None,
     page_index_strategy: str | None = None,
+    workflow_config: dict[str, Any] | None = None,
 ) -> None:
     cfg = get_cli_settings()
     api = (api_url or cfg.openkms_api_url).rstrip("/")
@@ -366,6 +456,14 @@ def finalize_job(
     except PipelineJobApiError as e:
         console.print(f"[red]{e}[/red]")
         raise SystemExit(1) from e
+
+    if workflow_config is None:
+        from openkms_cli.core.workflow_config import resolve_job_workflow_config
+
+        workflow_config = resolve_job_workflow_config(
+            pipeline_name=str(ctx.get("pipeline_name") or ""),
+            job_config_yaml=ctx.get("config_yaml"),
+        )
 
     stage = ctx.get("stage")
     if stage in {"done", "failed"}:
@@ -385,11 +483,10 @@ def finalize_job(
     _stored, original_content, _ext = download_input_to_temp(ctx, work)
 
     try:
-        from openkms_cli.page_index.strategy import effective_page_index_strategy
-
-        resolved_strategy = effective_page_index_strategy(
-            provider=provider,
-            override=page_index_strategy,
+        resolved_strategy = _resolve_page_index_strategy(
+            workflow_config,
+            provider=str(provider or "") or None,
+            cli_override=page_index_strategy,
         )
 
         if provider == "baidu":
@@ -412,7 +509,7 @@ def finalize_job(
             result=result,
             hash_dir=hash_dir,
             ingest_kind=IngestKind.CLOUD_OCR,
-            page_index_strategy=page_index_strategy,
+            page_index_strategy=resolved_strategy,
             provider=provider,
             original_content=original_content,
         )
@@ -513,6 +610,7 @@ def _finalize_aliyun(
 
 
 def extract_metadata_job(job_id: str, api_url: str | None = None) -> None:
+    """Run metadata extraction for a parsed document job (standalone metadata-extract pipeline)."""
     cfg = get_cli_settings()
     api = (api_url or cfg.openkms_api_url).rstrip("/")
     try:
@@ -521,8 +619,30 @@ def extract_metadata_job(job_id: str, api_url: str | None = None) -> None:
         console.print(f"[red]{e}[/red]")
         raise SystemExit(1) from e
 
+    stage = str(ctx.get("stage") or "")
+    if stage not in {"parsed", "extracted_metadata"}:
+        fail_job(
+            api,
+            job_id,
+            f"Metadata extract requires stage=parsed (document already parsed), got {stage!r}",
+        )
+        raise SystemExit(1)
+
+    from openkms_cli.core.workflow_config import (
+        metadata_extract_enabled,
+        resolve_job_workflow_config,
+    )
+
+    workflow_config = resolve_job_workflow_config(
+        pipeline_name=str(ctx.get("pipeline_name") or ""),
+        job_config_yaml=ctx.get("config_yaml"),
+    )
+    if not metadata_extract_enabled(workflow_config):
+        fail_job(api, job_id, "Metadata extraction is disabled in workflow config")
+        raise SystemExit(1)
+
     try:
-        run_metadata_extraction_from_ctx(ctx, api, job_id)
+        run_metadata_extraction_from_ctx(ctx, api, job_id, workflow_config=workflow_config)
     except Exception as e:
         fail_job(api, job_id, str(e))
         raise SystemExit(1) from e

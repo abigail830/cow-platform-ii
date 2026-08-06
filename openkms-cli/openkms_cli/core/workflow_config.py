@@ -122,3 +122,69 @@ def metadata_extract_enabled(config: dict[str, Any]) -> bool:
         return False
     # enabled true or omitted → on when section present with model_name
     return bool(str(meta.get("model_name") or "").strip())
+
+
+def page_index_section(config: dict[str, Any]) -> dict[str, Any] | None:
+    section = config.get("page_index")
+    if not isinstance(section, dict):
+        return None
+    return section
+
+
+def async_section(config: dict[str, Any]) -> dict[str, Any] | None:
+    section = config.get("async")
+    if not isinstance(section, dict):
+        return None
+    return section
+
+
+def resolve_page_index_strategy(
+    config: dict[str, Any],
+    *,
+    provider: str | None = None,
+    ingest_kind: Any | None = None,
+    cli_override: str | None = None,
+) -> str | None:
+    """CLI override wins; else YAML ``page_index.strategy``; else provider heuristic."""
+    from openkms_cli.ingest.registry import is_native_ingest
+    from openkms_cli.page_index.strategy import (
+        effective_page_index_strategy,
+        page_index_strategy_for_native_ingest,
+    )
+
+    override: str | None = None
+    if cli_override and str(cli_override).strip():
+        override = str(cli_override).strip()
+    else:
+        section = page_index_section(config)
+        raw = section.get("strategy") if section else None
+        if raw is not None and str(raw).strip():
+            override = str(raw).strip()
+
+    if ingest_kind is not None and is_native_ingest(ingest_kind):
+        return page_index_strategy_for_native_ingest(override, ingest_kind=ingest_kind)
+    return effective_page_index_strategy(provider=provider, override=override)
+
+
+def resolve_async_poll_settings(
+    config: dict[str, Any],
+    *,
+    cli_poll_interval: int | None,
+    cli_max_wait: int | None,
+    settings_poll_default: int,
+    settings_max_wait_default: int,
+) -> tuple[int, int]:
+    """CLI flags override YAML ``async``; settings env is the last fallback."""
+    section = async_section(config)
+    interval = cli_poll_interval
+    wait_cap = cli_max_wait
+    if isinstance(section, dict):
+        if interval is None and section.get("poll_interval_seconds") is not None:
+            interval = int(section["poll_interval_seconds"])
+        if wait_cap is None and section.get("max_wait_seconds") is not None:
+            wait_cap = int(section["max_wait_seconds"])
+    if interval is None:
+        interval = settings_poll_default
+    if wait_cap is None:
+        wait_cap = settings_max_wait_default
+    return interval, wait_cap

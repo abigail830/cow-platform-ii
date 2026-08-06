@@ -6,6 +6,7 @@ export const PAGE_INDEX_KB_PIPELINE_NAME = 'kb-pageindex-import';
 export const RAG_KB_PIPELINE_NAME = 'kb-rag-index';
 export const FAQ_KB_INDEX_PIPELINE_NAME = 'kb-faq-index';
 export const FAQ_KB_EXTRACT_PIPELINE_NAME = 'kb-faq-extract';
+export const METADATA_EXTRACT_PIPELINE_NAME = 'metadata-extract';
 
 /** Map KB import job_kind → system pipeline_name (dispatch / fallback). */
 export const KB_IMPORT_JOB_KIND_TO_PIPELINE: Partial<Record<string, string>> = {

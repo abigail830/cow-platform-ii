@@ -57,7 +57,8 @@ jobs:
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('openkms-cli/uv.lock') }}
 
       - name: Install dependencies
-        run: uv sync --frozen --extra pipeline --extra aliyun --extra metadata
+        # parse = paddleocr-doc-parse (VLM); baidu = baidu-doc-parse; aliyun = docmind
+        run: uv sync --frozen --extra pipeline --extra parse --extra baidu --extra aliyun --extra metadata
 
       - name: Validate backend URL
         env:

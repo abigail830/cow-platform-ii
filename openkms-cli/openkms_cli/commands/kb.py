@@ -7,7 +7,7 @@ from rich.console import Console
 
 console = Console(stderr=True)
 
-kb_app = typer.Typer(help="Knowledge base operations (PageIndex import, future RAG index)")
+kb_app = typer.Typer(help="Knowledge base workers (PageIndex import, RAG index, FAQ extract/index)")
 
 
 @kb_app.command("pageindex-import")

@@ -4,17 +4,19 @@ Command-line tools for **document parsing** and **pipeline** steps. The openKMS 
 
 ## Configuration
 
-Set variables in **`.env`** (this package’s `.env`, then the current directory’s `.env`). Names and defaults are defined in **`openkms_cli/core/settings.py`** — each env var is explicit there. CLI flags override `.env` when you pass them.
+Set variables in **`.env`** (this package’s `.env`, then the current directory’s `.env`). Names and defaults are defined in **`openkms_cli/core/settings.py`**. CLI flags override `.env` when you pass them.
 
 **Worker config YAML:** Packaged defaults live in **`workflows/{pipelineName}.yml`**. Admin → Pipelines can store an override in `config_yaml` (empty = use packaged default). Jobs snapshot that override (or null). YAML uses **`model_name`** = the bold name from Admin → Models (e.g. `deepSeek-V4-Flash`); the CLI resolves credentials once per job via **`GET /internal-api/models/cli-params?model_name=…`**. Do not put `api_key` / `base_url` / UUID model ids in YAML.
 
+**Doc-parse YAML knobs:** `page_index.strategy` and `async.poll_interval_seconds` / `max_wait_seconds` are read from workflow YAML by default. CLI flags (`--page-index-strategy`, `--poll-interval`, `--max-wait`) override YAML when passed.
+
 Copy **`openkms-cli/.env.example`** and adjust. For auth against the API, match **`OPENKMS_AUTH_MODE`** with the backend (`oidc` vs `local`).
 
-**Embeddings (kb-index):** With **`OPENKMS_API_URL`** and the same auth as other CLI calls, **`kb-index`** calls **`GET {OPENKMS_API_URL}/internal-api/models/kb-embedding-credentials?knowledge_base_id=…`** (same pattern as **`document-parse-defaults`**) and receives **`base_url`**, **`model_name`**, and **`api_key`**. There are **no** `--embedding-model-*` CLI flags. Optional **`OPENKMS_EMBEDDING_MODEL_*`** in this `.env` override those values when needed.
+**Baidu Cloud (`baidu-doc-parse`):** Set **`OPENKMS_BAIDU_CLOUD_API_KEY`**, **`OPENKMS_BAIDU_CLOUD_SECRET_KEY`**, and **`OPENKMS_BAIDU_BOS_BUCKET`**. The CLI uploads to BOS and submits a presigned `file_url` to Baidu’s **paddle-vl-parser** document-parse SaaS API. Install: `pip install -e ".[baidu,pipeline]"`.
 
-**Baidu Cloud (baidu-doc-parse / paddleocr-doc-parse):** Set **`OPENKMS_BAIDU_CLOUD_API_KEY`**, **`OPENKMS_BAIDU_CLOUD_SECRET_KEY`**, and **`OPENKMS_BAIDU_BOS_BUCKET`**. The CLI uploads to BOS, submits a **presigned `file_url`** to **paddle-vl-parser** (Baidu Cloud API — no local `paddleocr`). `paddleocr-doc-parse` is a deprecated alias of the same flow. Install: `pip install -e ".[baidu,pipeline]"`.
+**Platform VLM (`paddleocr-doc-parse`):** Set workflow YAML **`model_name`** to a VLM model in Admin → Models (e.g. `paddleocr-vl-1.5`). Credentials resolve via **`cli-params`** — no Baidu keys. Install: `pip install -e ".[parse,pipeline,metadata]"`.
 
-**Adobe PDF Services:** Office formats (**DOC/DOCX/PPT/PPTX/XLS/XLSX/TXT/RTF**) may be converted to PDF via **Adobe Create PDF** before Baidu upload. Set **`OPENKMS_ADOBE_CLIENT_ID`** and **`OPENKMS_ADOBE_CLIENT_SECRET`**.
+**Adobe PDF Services:** Office formats may be converted to PDF via Adobe Create PDF before Baidu upload. Set **`OPENKMS_ADOBE_CLIENT_ID`** and **`OPENKMS_ADOBE_CLIENT_SECRET`**.
 
 ## Install
 
@@ -22,7 +24,7 @@ Copy **`openkms-cli/.env.example`** and adjust. For auth against the API, match 
 cd openkms-cli
 pip install -e .                    # CLI only
 pip install -e ".[pipeline,baidu,aliyun,metadata]"   # platform pipelines
-pip install -e ".[kb]"              # + knowledge-base indexing
+pip install -e ".[kb]"              # knowledge-base workers
 ```
 
 Python **≥ 3.10**.
@@ -35,7 +37,7 @@ pip install -e ".[dev]"
 pytest tests/
 ```
 
-Covers **`backend_defaults`** merge / fetch behavior (mocked HTTP), **`parser`** restructuring plus small layout helpers (no Paddle install required), and **`parse_result`** schema validation against `tests/fixtures/document_parse_result_minimal.json`.
+Covers **workflow YAML** loading, **parser** helpers, and **`parse_result`** schema validation against `tests/fixtures/document_parse_result_minimal.json`.
 
 **Parse result schema:** `schemas/document_parse_result.schema.json` defines the canonical `result.json` shape. Pipelines validate output via `openkms_cli.parse_result.validate_parse_result`.
 
@@ -43,13 +45,10 @@ Covers **`backend_defaults`** merge / fetch behavior (mocked HTTP), **`parser`**
 
 **Parse** (local files → `parsed/{file_hash}/…`):
 
-Supported inputs: **PDF**, **PNG/JPG/JPEG/WEBP/GIF/BMP/TIFF** (direct); **DOC/DOCX/PPT/PPTX/XLS/XLSX/TXT/RTF** (Adobe PDF Services → PDF, needs **`OPENKMS_ADOBE_*`** credentials). **EPUB** is not supported on paddle — use **`baidu-doc-parse`** (Baidu accepts EPUB natively; CLI converts EPUB via **mutool** only for Baidu upload).
+Supported inputs: **PDF**, images (direct); **Office** (Adobe PDF Services → PDF); **EPUB** on Baidu path only (mutool).
 
 ```bash
 openkms-cli parse run document.pdf -o ./parsed
-openkms-cli parse run ./inputs/ -o ./parsed
-
-# Baidu Cloud (no local VLM; needs OPENKMS_BAIDU_CLOUD_* in .env):
 openkms-cli parse run document.pdf --method baidu-doc-parse -o ./parsed
 ```
 
@@ -57,25 +56,23 @@ openkms-cli parse run document.pdf --method baidu-doc-parse -o ./parsed
 
 ```bash
 openkms-cli pipeline list
-# One-shot worker (submit → poll → finalize + optional metadata):
 openkms-cli pipeline run-async --job-id <JOB_UUID>
-# Optional page-index strategy (defaults by provider):
+# Optional overrides (default from workflow YAML):
 openkms-cli pipeline run-async --job-id <JOB_UUID> --page-index-strategy baidu-layouts
+openkms-cli pipeline extract-metadata --job-id <JOB_UUID>   # parsed docs only
 ```
 
-Knowledge-base workers use the **`kb`** subcommands (not `pipeline`), e.g. `openkms-cli kb faq-extract --job-id …`.
+Knowledge-base workers use **`kb`** subcommands, e.g. `openkms-cli kb rag-index --job-id …`.
 
-**Wiki** — upsert markdown pages and upload assets (requires API auth: OIDC client credentials or local HTTP Basic, same as pipeline metadata sync):
+**Wiki** — upsert markdown pages and upload assets (requires API auth):
 
 ```bash
 openkms-cli wiki put --space-id <uuid> --path guides/onboarding --file ./page.md
-openkms-cli wiki sync --space-id <uuid> --dir ./my-wiki-root
-openkms-cli wiki upload-file --space-id <uuid> --file ./diagram.png
 ```
 
 Async doc-parse jobs need S3 credentials in `.env`.
 
-**Pipeline + channel metadata extraction:** Metadata uses the job’s `metadata_extraction_config` snapshot. If the extraction LLM returns an error (e.g. HTTP 502), the CLI prints a warning and **still exits successfully** after a successful parse so the worker can mark the document completed; use **Extract** in the UI when the model is available.
+**Metadata extraction:** Configured in workflow YAML (`metadata_extract` section). Bundled into doc-parse pipelines by default; standalone **`metadata-extract`** pipeline runs only extraction on jobs at stage `parsed`. On LLM errors the CLI may warn and still exit successfully after a successful parse so the worker can mark the document completed.
 
 **Module entry:**
 
@@ -100,19 +97,6 @@ Add a Typer subapp under `openkms_cli/` and register it in **`app.py`**.
 
 ## GitHub Actions (remote worker)
 
-This monorepo includes **`.github/workflows/openkms-pipeline.yml`** for running `pipeline run-async` on GitHub-hosted runners (alternative to the backend spawning a local subprocess).
+This monorepo includes **`.github/workflows/openkms-pipeline.yml`** for running `pipeline run-async` on GitHub-hosted runners. The workflow installs **`pipeline`**, **`parse`** (paddleocr-doc-parse), **`baidu`**, **`aliyun`**, and **`metadata`** extras.
 
-**Manual test:** GitHub → Actions → OpenKMS Pipeline → Run workflow → enter `job_id` from `app_pipeline_jobs`.
-
-**Repository secrets** (Settings → Secrets and variables → Actions):
-
-| Secret | Purpose |
-|--------|---------|
-| `OPENKMS_API_URL` | Public backend URL (not localhost) |
-| `OPENKMS_CLI_BASIC_USER` / `OPENKMS_CLI_BASIC_PASSWORD` | Internal API auth |
-| `AWS_*` | S3 / OSS for document artifacts |
-| `OPENKMS_DOCMIND_ENDPOINT` | Aliyun Document Mind |
-
-**Caching:** `uv` package cache + `.venv` cache keyed on `uv.lock`. First run installs deps (~1–3 min); later runs typically finish install in under a minute when the lockfile is unchanged.
-
-**Backend trigger:** `POST https://api.github.com/repos/abigail830/cow-platform-ii/actions/workflows/openkms-pipeline.yml/dispatches` with `inputs.job_id`.
+**Repository secrets:** `OPENKMS_API_URL`, `OPENKMS_CLI_BASIC_*`, `AWS_*`, `OPENKMS_DOCMIND_ENDPOINT` (Aliyun), `OPENKMS_BAIDU_*` (Baidu file parser) as needed. Paddle VLM uses **`model_name`** in job workflow YAML + platform Models (no Baidu secrets).

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from openkms_cli.core.backend_defaults import fetch_cli_model_params
+from openkms_cli.core.cli_params import fetch_cli_model_params
 from openkms_cli.core.settings import CliSettings, get_cli_settings
 from openkms_cli.core.workflow_config import collect_model_names
 

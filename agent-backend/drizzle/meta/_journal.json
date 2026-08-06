@@ -274,6 +274,20 @@
       "when": 1785195000000,
       "tag": "0038_drop_kb_chunk_config",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1785196000000,
+      "tag": "0039_metadata_extract_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785197000000,
+      "tag": "0040_paddle_vlm_pipeline",
+      "breakpoints": true
     }
   ]
 }

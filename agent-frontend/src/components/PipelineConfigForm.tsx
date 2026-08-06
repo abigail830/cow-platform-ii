@@ -5,6 +5,7 @@ import { YamlCodeEditor } from './YamlCodeEditor.tsx';
 import {
   DEFAULT_ALIYUN_PIPELINE_COMMAND_TEMPLATE,
   DEFAULT_BAIDU_PIPELINE_COMMAND_TEMPLATE,
+  DEFAULT_PADDLE_PIPELINE_COMMAND_TEMPLATE,
   DEFAULT_PIPELINE_COMMAND_TEMPLATE,
   fetchDefaultPipelineConfigYaml,
   validatePipelineConfigYaml,
@@ -30,9 +31,8 @@ const ASYNC_TEMPLATE_PLACEHOLDERS = [
 
 function defaultTemplateForPipelineName(pipelineName: string): string {
   if (pipelineName === 'aliyun-docmind-parse') return DEFAULT_ALIYUN_PIPELINE_COMMAND_TEMPLATE;
-  if (pipelineName === 'baidu-doc-parse' || pipelineName === 'paddleocr-doc-parse') {
-    return DEFAULT_BAIDU_PIPELINE_COMMAND_TEMPLATE;
-  }
+  if (pipelineName === 'baidu-doc-parse') return DEFAULT_BAIDU_PIPELINE_COMMAND_TEMPLATE;
+  if (pipelineName === 'paddleocr-doc-parse') return DEFAULT_PADDLE_PIPELINE_COMMAND_TEMPLATE;
   return DEFAULT_PIPELINE_COMMAND_TEMPLATE;
 }
 

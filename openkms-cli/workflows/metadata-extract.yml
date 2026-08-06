@@ -1,10 +1,7 @@
-# Default worker config for paddleocr-doc-parse (platform VLM; async job, one run-async worker pass).
-# model_name = Models list bold name (app_model_configs.name), api_type must be vlm.
-
-model_name: "paddleocr-vl-1.5"
-
-page_index:
-  strategy: markdown-headings
+# Default worker config for metadata-extract (standalone metadata-only pipeline).
+# Run on documents that are already parsed (job stage=parsed).
+# model_name = Models list bold name (app_model_configs.name), api_type=chat-completions.
+# Credentials via GET /internal-api/models/cli-params?model_name=…
 
 metadata_extract:
   enabled: true

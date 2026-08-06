@@ -10,8 +10,8 @@ console = Console(stderr=True)
 
 SUPPORTED_PIPELINES: dict[str, tuple[str, str]] = {
     "paddleocr-doc-parse": (
-        "PaddleOCR Document Parse (Baidu API)",
-        "Deprecated alias: same Baidu Cloud PaddleOCR-VL API as baidu-doc-parse.",
+        "PaddleOCR Document Parse (platform VLM)",
+        "Sync VLM parse via platform model (workflow YAML model_name); markdown-headings page index.",
     ),
     "baidu-doc-parse": (
         "Baidu Cloud Document Parse",
@@ -20,6 +20,10 @@ SUPPORTED_PIPELINES: dict[str, tuple[str, str]] = {
     "aliyun-docmind-parse": (
         "Aliyun Document Mind Parse",
         "Parse via Aliyun Document Mind (大模型版) with presigned OSS FileUrl; async job stages.",
+    ),
+    "metadata-extract": (
+        "Metadata Extract",
+        "LLM metadata extraction on already-parsed documents (job stage=parsed).",
     ),
 }
 
@@ -123,7 +127,7 @@ def pipeline_extract_metadata(
     job_id: str = typer.Option(..., "--job-id", help="Pipeline job UUID"),
     api_url: Optional[str] = typer.Option(None, "--api-url", help="Backend API URL"),
 ) -> None:
-    """Run metadata extraction for a parsed async job."""
+    """Run metadata extraction for a parsed document job (metadata-extract pipeline or re-run)."""
     from openkms_cli.pipeline.async_jobs import extract_metadata_job
 
     extract_metadata_job(job_id, api_url)

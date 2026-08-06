@@ -1,4 +1,4 @@
-"""Document parsing CLI commands (Baidu Cloud PaddleOCR-VL API)."""
+"""Document parsing CLI commands (Baidu file parser or platform VLM)."""
 
 from pathlib import Path
 from typing import Optional
@@ -19,7 +19,7 @@ from openkms_cli.pipeline.post_ingest import original_basename_from_path, write_
 console = Console()
 
 parse_app = typer.Typer(
-    help="Parse documents via Baidu Cloud PaddleOCR-VL API (baidu-doc-parse)",
+    help="Parse documents locally (baidu-doc-parse file parser or paddleocr-doc-parse platform VLM)",
 )
 
 _PARSE_METHODS = frozenset({"baidu-doc-parse", "paddleocr-doc-parse"})
@@ -31,11 +31,6 @@ def _resolve_parse_method(method: str) -> str:
             f"[red]Unknown --method {method!r}. Choose from: {', '.join(sorted(_PARSE_METHODS))}[/red]"
         )
         raise typer.Exit(1)
-    if method == "paddleocr-doc-parse":
-        console.print(
-            "[yellow]--method paddleocr-doc-parse is deprecated; use baidu-doc-parse "
-            "(same Baidu Cloud API).[/yellow]"
-        )
     return method
 
 
@@ -58,7 +53,7 @@ def parse_run(
         "baidu-doc-parse",
         "--method",
         "-m",
-        help="Parse backend (baidu-doc-parse; paddleocr-doc-parse is a deprecated alias)",
+        help="Parse backend: baidu-doc-parse (Baidu file parser) or paddleocr-doc-parse (platform VLM)",
     ),
     baidu_poll_interval: int = typer.Option(
         8,
@@ -72,21 +67,34 @@ def parse_run(
     ),
 ) -> None:
     """
-    Parse document(s) via Baidu Cloud. Output structure matches openKMS backend:
+    Parse document(s). Output structure matches openKMS backend:
       {file_hash}/original.{ext}
       {file_hash}/result.json
       {file_hash}/markdown.md
       ...
     """
-    _resolve_parse_method(method)
+    method = _resolve_parse_method(method)
     s = get_cli_settings()
+    use_baidu = method == "baidu-doc-parse"
 
-    if not s.baidu_cloud_api_key or not s.baidu_cloud_secret_key:
+    if use_baidu and (not s.baidu_cloud_api_key or not s.baidu_cloud_secret_key):
         console.print(
             "[red]Baidu parse requires OPENKMS_BAIDU_CLOUD_API_KEY and "
             "OPENKMS_BAIDU_CLOUD_SECRET_KEY[/red]"
         )
         raise typer.Exit(1)
+
+    vlm_runtime = None
+    if not use_baidu:
+        from openkms_cli.core.workflow_config import load_packaged_default
+        from openkms_cli.providers.paddle.vlm_config import resolve_vlm_from_workflow
+
+        try:
+            workflow = load_packaged_default("paddleocr-doc-parse")
+            vlm_runtime = resolve_vlm_from_workflow(workflow, cfg=s)
+        except Exception as e:
+            console.print(f"[red]Paddle VLM config: {e}[/red]")
+            raise typer.Exit(1)
 
     batch_exts = supported_batch_extensions()
 
@@ -103,9 +111,21 @@ def parse_run(
     out_base.mkdir(parents=True, exist_ok=True)
 
     try:
-        from openkms_cli.providers.baidu.parser import BaiduParseError, prepare_for_baidu_parse, run_baidu_parser
+        if use_baidu:
+            from openkms_cli.providers.baidu.parser import (
+                BaiduParseError,
+                prepare_for_baidu_parse,
+                run_baidu_parser,
+            )
+            office_convert_error: type[Exception] = BaiduParseError
+        else:
+            from openkms_cli.parse.office_convert import OfficeConvertError, prepare_for_vlm_parse
+            from openkms_cli.parse.parser import run_parser
+
+            office_convert_error = OfficeConvertError
     except ImportError as e:
-        console.print("[red]Baidu parser not available. pip install openkms-cli (requests)[/red]")
+        dep = "openkms-cli[baidu]" if use_baidu else "openkms-cli[parse]"
+        console.print(f"[red]Parser not available. pip install {dep}[/red]")
         console.print(f"[dim]{e}[/dim]")
         raise typer.Exit(1)
 
@@ -128,27 +148,46 @@ def parse_run(
                         out_base=out_base,
                     )
                 else:
-                    try:
-                        parse_path, hash_src = prepare_for_baidu_parse(fp.resolve(), work_sub)
-                    except BaiduParseError as e:
-                        console.print(f"[red]{fp}: {e}[/red]")
-                        raise typer.Exit(1)
+                    if use_baidu:
+                        try:
+                            parse_path, hash_src = prepare_for_baidu_parse(fp.resolve(), work_sub)
+                        except BaiduParseError as e:
+                            console.print(f"[red]{fp}: {e}[/red]")
+                            raise typer.Exit(1)
 
-                    ch_source = None if parse_path.resolve() == hash_src.resolve() else hash_src
+                        ch_source = None if parse_path.resolve() == hash_src.resolve() else hash_src
 
-                    def _baidu_status(status: str) -> None:
-                        progress.update(task, description=f"Baidu parse: {status}...")
+                        def _baidu_status(status: str) -> None:
+                            progress.update(task, description=f"Baidu parse: {status}...")
 
-                    result, _, _ = run_baidu_parser(
-                        input_path=parse_path,
-                        output_dir=out_base,
-                        api_key=s.baidu_cloud_api_key,
-                        secret_key=s.baidu_cloud_secret_key,
-                        content_hash_source=ch_source,
-                        poll_interval=baidu_poll_interval,
-                        max_wait=baidu_max_wait,
-                        on_status=_baidu_status,
-                    )
+                        result, _, _ = run_baidu_parser(
+                            input_path=parse_path,
+                            output_dir=out_base,
+                            api_key=s.baidu_cloud_api_key,
+                            secret_key=s.baidu_cloud_secret_key,
+                            content_hash_source=ch_source,
+                            poll_interval=baidu_poll_interval,
+                            max_wait=baidu_max_wait,
+                            on_status=_baidu_status,
+                        )
+                    else:
+                        assert vlm_runtime is not None
+                        try:
+                            parse_path, hash_src = prepare_for_vlm_parse(fp.resolve(), work_sub)
+                        except OfficeConvertError as e:
+                            console.print(f"[red]{fp}: {e}[/red]")
+                            raise typer.Exit(1)
+
+                        ch_source = None if parse_path.resolve() == hash_src.resolve() else hash_src
+                        result, _, _ = run_parser(
+                            input_path=parse_path,
+                            output_dir=out_base,
+                            vlm_url=vlm_runtime.base_url,
+                            vlm_api_key=vlm_runtime.api_key,
+                            model=vlm_runtime.model_name,
+                            max_concurrency=vlm_runtime.max_concurrency,
+                            content_hash_source=ch_source,
+                        )
                     file_hash = result["file_hash"]
                     hash_dir = out_base / file_hash
                     ext = Path(hash_src).suffix.lower().lstrip(".") or "bin"
@@ -158,7 +197,7 @@ def parse_run(
                         original_content=Path(hash_src).read_bytes(),
                         original_basename=original_basename_from_path(hash_src),
                     )
-            except BaiduParseError as e:
+            except office_convert_error as e:
                 console.print(f"[red]Failed {fp}: {e}[/red]")
                 raise typer.Exit(1)
             except Exception as e:

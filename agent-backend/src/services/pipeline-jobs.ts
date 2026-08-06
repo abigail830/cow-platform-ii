@@ -21,7 +21,8 @@ export function isDocumentAsyncPipelineName(pipelineName: string): boolean {
 }
 
 export function pipelineProviderForName(pipelineName: string): PipelineProvider | null {
-  if (pipelineName === 'baidu-doc-parse' || pipelineName === 'paddleocr-doc-parse') return 'baidu';
+  if (pipelineName === 'baidu-doc-parse') return 'baidu';
+  if (pipelineName === 'paddleocr-doc-parse') return 'paddle';
   if (pipelineName === 'aliyun-docmind-parse') return 'aliyun';
   return null;
 }

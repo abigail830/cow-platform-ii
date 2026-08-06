@@ -83,21 +83,29 @@ async function watchdogStuckJobs(): Promise<void> {
 
     for (const job of submittedRows) {
       const isCloudProvider = job.provider === 'baidu' || job.provider === 'aliyun';
-      if (!isCloudProvider) continue;
-
-      const externalId = job.externalJobId?.trim();
       const ageMs = Date.now() - new Date(job.createdAt).getTime();
-      if (isCloudProvider && !externalId && ageMs > SUBMIT_STALE_MS) {
-        const message =
-          'Submit never received external_job_id from the cloud provider (timed out). ' +
-          'Check CLI logs and cloud credentials in openkms-cli/.env.';
-        await updatePipelineJob(job.id, { stage: 'failed', errorMessage: message });
-        await markDocumentForJobStage(job.documentId, 'failed');
-        console.error(`[pipeline] job ${job.id} timed out without external_job_id`);
+
+      if (isCloudProvider) {
+        const externalId = job.externalJobId?.trim();
+        if (!externalId && ageMs > SUBMIT_STALE_MS) {
+          const message =
+            'Submit never received external_job_id from the cloud provider (timed out). ' +
+            'Check CLI logs and cloud credentials in openkms-cli/.env.';
+          await updatePipelineJob(job.id, { stage: 'failed', errorMessage: message });
+          await markDocumentForJobStage(job.documentId, 'failed');
+          console.error(`[pipeline] job ${job.id} timed out without external_job_id`);
+          continue;
+        }
+
+        await spawnAsyncPipelineWorker(job.id, job.pipelineName);
         continue;
       }
 
-      await spawnAsyncPipelineWorker(job.id, job.pipelineName);
+      // paddle: sync VLM in one run-async — re-spawn if worker died mid-parse
+      if (job.provider === 'paddle' && ageMs > SUBMIT_STALE_MS) {
+        console.info(`[pipeline] re-spawn paddle VLM worker for job ${job.id} (stale ${ageMs}ms)`);
+        await spawnAsyncPipelineWorker(job.id, job.pipelineName);
+      }
     }
 
     const parsedRows = await db

@@ -51,6 +51,9 @@ export const DEFAULT_PIPELINE_COMMAND_TEMPLATE =
 export const DEFAULT_BAIDU_PIPELINE_COMMAND_TEMPLATE =
   'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy baidu-layouts';
 
+export const DEFAULT_PADDLE_PIPELINE_COMMAND_TEMPLATE =
+  'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy markdown-headings';
+
 export const DEFAULT_ALIYUN_PIPELINE_COMMAND_TEMPLATE =
   'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy aliyun-layouts';
 

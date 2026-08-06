@@ -287,7 +287,7 @@ export const PIPELINE_JOB_STAGES = [
 ] as const;
 export type PipelineJobStage = (typeof PIPELINE_JOB_STAGES)[number];
 
-export const PIPELINE_PROVIDERS = ['baidu', 'aliyun'] as const;
+export const PIPELINE_PROVIDERS = ['baidu', 'aliyun', 'paddle'] as const;
 export type PipelineProvider = (typeof PIPELINE_PROVIDERS)[number];
 
 export const KNOWLEDGE_BASE_TYPES = ['page_index', 'rag', 'faq'] as const;

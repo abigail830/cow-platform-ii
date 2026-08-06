@@ -40,6 +40,8 @@ def default_page_index_strategy(*, provider: str | None = None) -> str:
         return ALIYUN_STRATEGY
     if provider == "baidu":
         return BAIDU_STRATEGY
+    if provider == "paddle":
+        return MARKDOWN_STRATEGY
     return MARKDOWN_STRATEGY
 
 

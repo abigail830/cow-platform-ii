@@ -12,6 +12,7 @@ from openkms_cli.page_index.strategy import (
 def test_default_by_provider():
     assert default_page_index_strategy(provider="aliyun") == "aliyun-layouts"
     assert default_page_index_strategy(provider="baidu") == "baidu-layouts"
+    assert default_page_index_strategy(provider="paddle") == "markdown-headings"
     assert default_page_index_strategy(provider=None) == "markdown-headings"
 
 

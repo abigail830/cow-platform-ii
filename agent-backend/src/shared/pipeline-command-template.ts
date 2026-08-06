@@ -11,6 +11,7 @@ export function parseAsyncWorkerTemplate(commandTemplate: string, pipelineName: 
 
   const workerLine =
     lines.find((line) => /\bpipeline\s+run-async\b/.test(line)) ??
+    lines.find((line) => /\bpipeline\s+extract-metadata\b/.test(line)) ??
     lines.find((line) => /\bpipeline\s+finalize\b/.test(line)) ??
     lines[0] ??
     '';
@@ -98,11 +99,17 @@ export function buildWorkerCliArgsFromTemplate(
 
 /** Full async job in one CLI process (submit + poll + finalize worker). */
 export function defaultAsyncWorkerTemplate(pipelineName: string): string {
+  if (pipelineName === 'metadata-extract') {
+    return 'openkms-cli pipeline extract-metadata --job-id {job_id}';
+  }
   if (pipelineName === 'aliyun-docmind-parse') {
     return 'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy aliyun-layouts';
   }
-  if (pipelineName === 'baidu-doc-parse' || pipelineName === 'paddleocr-doc-parse') {
+  if (pipelineName === 'baidu-doc-parse') {
     return 'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy baidu-layouts';
+  }
+  if (pipelineName === 'paddleocr-doc-parse') {
+    return 'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy markdown-headings';
   }
   return 'openkms-cli pipeline run-async --job-id {job_id}';
 }

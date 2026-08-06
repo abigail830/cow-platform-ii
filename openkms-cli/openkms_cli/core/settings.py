@@ -29,36 +29,9 @@ class CliSettings(BaseSettings):
     cli_basic_user: str = Field(default="", validation_alias="OPENKMS_CLI_BASIC_USER")
     cli_basic_password: str = Field(default="", validation_alias="OPENKMS_CLI_BASIC_PASSWORD")
 
-    # --- VLM (parse + pipeline) ---
-    vlm_url: str = Field(default="http://localhost:8101/", validation_alias="OPENKMS_VLM_URL")
-    vlm_api_key: str = Field(default="", validation_alias="OPENKMS_VLM_API_KEY")
-    vlm_model: str = Field(
-        default="PaddlePaddle/PaddleOCR-VL-1.5",
-        validation_alias="OPENKMS_VLM_MODEL",
-    )
-    vlm_config_name: str = Field(
-        default="",
-        validation_alias="OPENKMS_VLM_CONFIG_NAME",
-    )
-    vlm_max_concurrency: int = Field(default=3, validation_alias="OPENKMS_VLM_MAX_CONCURRENCY")
-
-    # --- Backend API (pipeline metadata sync, kb-index, etc.) ---
+    # --- Backend API (pipeline workers, metadata sync, KB jobs) ---
     openkms_api_url: str = Field(default="http://localhost:8102", validation_alias="OPENKMS_API_URL")
     frontend_url: str = Field(default="", validation_alias="OPENKMS_FRONTEND_URL")
-
-    # --- Embedding overrides (kb-index pipeline) ---
-    embedding_model_base_url: str = Field(default="", validation_alias="OPENKMS_EMBEDDING_MODEL_BASE_URL")
-    embedding_model_name: str = Field(default="", validation_alias="OPENKMS_EMBEDDING_MODEL_NAME")
-    embedding_model_api_key: str = Field(default="", validation_alias="OPENKMS_EMBEDDING_MODEL_API_KEY")
-
-    # --- Metadata extraction (pipeline --extraction-model-base-url path) ---
-    extraction_model_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices(
-            "OPENKMS_EXTRACTION_MODEL_API_KEY",
-            "EXTRACTION_MODEL_API_KEY",
-        ),
-    )
 
     # --- Baidu Cloud OCR (baidu-doc-parse pipeline) ---
     baidu_cloud_api_key: str = Field(default="", validation_alias="OPENKMS_BAIDU_CLOUD_API_KEY")
