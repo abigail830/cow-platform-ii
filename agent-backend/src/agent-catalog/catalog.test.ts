@@ -28,3 +28,10 @@ test('kb-qa and content-studio prompts load', () => {
   const studio = loadAgentSpec(`${agentCatalogRoot()}/content-studio`);
   assert.match(studio.instructions, /document|slide|powerpoint|word/i);
 });
+
+test('product-analytics prompt and datasource binding load', () => {
+  const analytics = loadAgentSpec(`${agentCatalogRoot()}/product-analytics`);
+  assert.match(analytics.instructions, /product analytics|adoption|platform/i);
+  assert.deepEqual(analytics.datasourceNames, ['platform-analytics']);
+  assert.equal(analytics.mcp.length, 0);
+});

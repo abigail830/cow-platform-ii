@@ -86,6 +86,8 @@ export const agentYamlSchema = z.object({
     }),
   prompt: z.string().default('./prompt.md'),
   skills: z.array(z.string()).default([]),
+  /** Resolve user-owned datasources by name at runtime (postgres/mysql MCP tools). */
+  datasourceNames: z.array(z.string().min(1).max(64)).default([]),
   mcp: z.array(mcpServerSchema).default([]),
   sandbox: sandboxSchema.default({ provider: 'none' }),
   context: agentContextSchema.optional(),

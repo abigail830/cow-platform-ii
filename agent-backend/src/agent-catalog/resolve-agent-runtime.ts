@@ -21,6 +21,19 @@ export type CatalogAgentRuntimeConfig = {
 
 const runtimeByAgentId = new Map<string, Promise<CatalogAgentRuntimeConfig>>();
 
+/** FS agents with datasourceNames resolve MCP per user — do not use the shared warm cache. */
+export function agentRuntimeNeedsUserScope(spec: LoadedAgentSpec): boolean {
+  if (spec.source === 'studio') return true;
+  return (spec.datasourceNames?.length ?? 0) > 0;
+}
+
+export function agentRuntimeCacheKey(spec: LoadedAgentSpec): string {
+  if (agentRuntimeNeedsUserScope(spec)) {
+    return `${spec.id}::${getAgentRequestContext()?.userId ?? 'anon'}`;
+  }
+  return `${spec.id}::shared`;
+}
+
 async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAgentRuntimeConfig> {
   const sessionFileTools = createSessionFileTools();
   const mcpTools = await connectAgentMcpTools(spec);
@@ -47,8 +60,7 @@ async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAg
 }
 
 export function resolveCatalogAgentRuntime(spec: LoadedAgentSpec): Promise<CatalogAgentRuntimeConfig> {
-  const userId = spec.source === 'studio' ? (getAgentRequestContext()?.userId ?? 'anon') : 'shared';
-  const cacheKey = `${spec.id}::${userId}`;
+  const cacheKey = agentRuntimeCacheKey(spec);
   const cached = runtimeByAgentId.get(cacheKey);
   if (cached) return cached;
 
@@ -58,7 +70,8 @@ export function resolveCatalogAgentRuntime(spec: LoadedAgentSpec): Promise<Catal
 }
 
 export async function warmCatalogAgentRuntimes(specs: LoadedAgentSpec[]): Promise<void> {
-  await Promise.all(specs.map((spec) => resolveCatalogAgentRuntime(spec)));
+  const warmable = specs.filter((spec) => !agentRuntimeNeedsUserScope(spec));
+  await Promise.all(warmable.map((spec) => resolveCatalogAgentRuntime(spec)));
 }
 
 export function resetCatalogAgentRuntimeCacheForTests(): void {

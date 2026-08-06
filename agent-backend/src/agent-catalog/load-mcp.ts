@@ -4,6 +4,7 @@ import { expandMcpTemplateString, parseMcpServersJson } from '../agent-assets/pa
 import { loadPlatformMcpTemplate } from '../agent-assets/manifest.ts';
 import { DATASOURCE_ID_HEADER } from '../database-mcp/constants.ts';
 import { discoverStaticPlatformMcpTools } from '../database-mcp/static-discovery.ts';
+import { listDatasourceIdsByNamesForUser } from '../database-mcp/datasource-service.ts';
 import { appUserDatasources, appUserMcpCredentials, db } from '../db/index.ts';
 import {
   createAgentRequestForwardingFetch,
@@ -202,14 +203,14 @@ function datasourceMcpPath(type: string): string {
   throw new Error(`Unsupported datasource type "${type}"`);
 }
 
-async function connectStudioDatasources(spec: LoadedAgentSpec): Promise<ToolDefinition[]> {
-  const ids = spec.studioMeta?.datasourceIds ?? [];
+async function connectDatasourcesByIds(
+  specId: string,
+  userId: string,
+  ids: string[],
+): Promise<ToolDefinition[]> {
   if (ids.length === 0) return [];
 
-  const userId = getAgentRequestContext()?.userId;
-  if (!userId) return [];
-
-  const cacheKey = `${spec.id}::${userId}::ds`;
+  const cacheKey = `${specId}::${userId}::ds::${[...new Set(ids)].sort().join(',')}`;
   let connections = connectionCache.get(cacheKey);
   if (!connections) {
     connections = [];
@@ -252,6 +253,27 @@ async function connectStudioDatasources(spec: LoadedAgentSpec): Promise<ToolDefi
     tools.push(...filterMcpTools(connection, undefined));
   }
   return tools;
+}
+
+async function connectStudioDatasources(spec: LoadedAgentSpec): Promise<ToolDefinition[]> {
+  const ids = spec.studioMeta?.datasourceIds ?? [];
+  const userId = getAgentRequestContext()?.userId;
+  if (!userId || ids.length === 0) return [];
+  return connectDatasourcesByIds(spec.id, userId, ids);
+}
+
+async function connectFsAgentDatasources(spec: LoadedAgentSpec): Promise<ToolDefinition[]> {
+  const names = spec.datasourceNames ?? [];
+  const userId = getAgentRequestContext()?.userId;
+  if (!userId || names.length === 0) return [];
+  const ids = await listDatasourceIdsByNamesForUser(userId, names);
+  if (ids.length === 0) {
+    console.warn(
+      `[mcp] agent "${spec.id}" datasourceNames not found for user: ${names.join(', ')}`,
+    );
+    return [];
+  }
+  return connectDatasourcesByIds(spec.id, userId, ids);
 }
 
 async function connectStudioPlatformMcp(spec: LoadedAgentSpec): Promise<ToolDefinition[]> {
@@ -322,20 +344,24 @@ export async function connectAgentMcpTools(spec: LoadedAgentSpec): Promise<ToolD
     ]);
     return [...platform, ...datasources];
   }
-  if (!spec.mcp.length) return [];
-
-  let connections = connectionCache.get(spec.id);
-  if (!connections) {
-    connections = await Promise.all(spec.mcp.map((server) => connectServer(server)));
-    connectionCache.set(spec.id, connections);
-  }
-
-  const tools: ToolDefinition[] = [];
-  for (const connection of connections) {
-    const serverSpec = spec.mcp.find((entry) => entry.name === connection.name);
-    tools.push(...filterMcpTools(connection, serverSpec?.allowTools));
-  }
-  return tools;
+  const [mcpTools, datasourceTools] = await Promise.all([
+    (async () => {
+      if (!spec.mcp.length) return [];
+      let connections = connectionCache.get(spec.id);
+      if (!connections) {
+        connections = await Promise.all(spec.mcp.map((server) => connectServer(server)));
+        connectionCache.set(spec.id, connections);
+      }
+      const tools: ToolDefinition[] = [];
+      for (const connection of connections) {
+        const serverSpec = spec.mcp.find((entry) => entry.name === connection.name);
+        tools.push(...filterMcpTools(connection, serverSpec?.allowTools));
+      }
+      return tools;
+    })(),
+    connectFsAgentDatasources(spec),
+  ]);
+  return [...mcpTools, ...datasourceTools];
 }
 
 export async function closeAllMcpConnections(): Promise<void> {

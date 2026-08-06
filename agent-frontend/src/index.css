@@ -1227,15 +1227,14 @@ textarea {
   align-items: flex-end;
   gap: 0.375rem;
   background: #fafafa;
-  border: 1.5px solid #ff6611;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 0.25rem;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s;
 }
 
 .input-bar:focus-within {
-  border-color: #ff6611;
-  box-shadow: 0 0 0 3px rgba(255, 102, 17, 0.1);
+  border-color: #cbd5e1;
 }
 
 .input-bar .attach-btn {
@@ -1277,6 +1276,13 @@ textarea {
   min-height: 3.5rem;
   max-height: 120px;
   line-height: 1.5;
+}
+
+.input-bar textarea:focus,
+.input-bar textarea:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .input-bar textarea::placeholder {

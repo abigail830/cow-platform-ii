@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { appUserDatasources, db } from '../db/index.ts';
 import {
   decryptModelConfigApiKey,
@@ -120,6 +120,16 @@ export async function deleteDatasourceForUser(userId: string, datasourceId: stri
     .where(and(eq(appUserDatasources.id, datasourceId), eq(appUserDatasources.createdBy, userId)))
     .returning({ id: appUserDatasources.id });
   return deleted.length > 0;
+}
+
+export async function listDatasourceIdsByNamesForUser(userId: string, names: string[]): Promise<string[]> {
+  const unique = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  if (!unique.length) return [];
+  const rows = await db
+    .select({ id: appUserDatasources.id })
+    .from(appUserDatasources)
+    .where(and(eq(appUserDatasources.createdBy, userId), inArray(appUserDatasources.name, unique)));
+  return rows.map((row) => row.id);
 }
 
 export async function assertDatasourceIdsOwnedByUser(

@@ -404,6 +404,7 @@ studio.post('/datasources', requireAuth, async (c) => {
   const body = datasourceBodySchema.parse(await c.req.json());
   try {
     const row = await createDatasourceForUser(user.id, body);
+    invalidateCatalogAgentRuntimeCache();
     return c.json(
       {
         datasource: {
@@ -434,6 +435,7 @@ studio.delete('/datasources/:id', requireAuth, async (c) => {
   const user = getUser(c);
   const ok = await deleteDatasourceForUser(user.id, c.req.param('id'));
   if (!ok) return c.json({ error: 'Not found' }, 404);
+  invalidateCatalogAgentRuntimeCache();
   return c.json({ ok: true });
 });
 

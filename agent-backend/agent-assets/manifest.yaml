@@ -16,6 +16,10 @@ skills:
     path: skills/docx
     title: Word
     description: Create and edit DOCX documents.
+  - id: product-analytics
+    path: skills/product-analytics
+    title: Product Analytics
+    description: Read-only SQL analytics against the platform database for usage and adoption.
 mcp:
   - id: hybrid-search
     path: mcp/hybrid-search.json

@@ -1,0 +1,46 @@
+id: product-analytics
+displayName: Product Analytics
+description: >-
+  Analyze platform usage, adoption, and user behavior from the application database
+  — sessions, agents, knowledge bases, pipelines, and builder activity.
+icon: ChartLine
+
+model:
+  configName: deepSeek-V4-Flash
+  profile: glm-4.7-flash
+
+prompt: ./prompt.md
+
+skills:
+  - /agent-assets/skills/product-analytics
+
+datasourceNames:
+  - platform-analytics
+
+mcp: []
+
+context:
+  temporal: true
+  timezone: Asia/Shanghai
+
+access:
+  defaultForRoles:
+    - admin
+
+a2a:
+  enabled: true
+  skills:
+    - id: product-analytics
+      name: Product Analytics
+      description: >-
+        Query platform PostgreSQL for usage metrics, adoption funnels, agent engagement,
+        knowledge-base health, and builder activity.
+      tags:
+        - product:analytics
+        - data:postgres
+        - audience:product-manager
+      examples:
+        - How many active users used the playground in the last 30 days?
+        - Which agents have the most sessions and what is the median turn latency?
+        - Show document upload and pipeline parse success rates by file type.
+        - How many RAG knowledge bases exist and how many chunks are indexed?
