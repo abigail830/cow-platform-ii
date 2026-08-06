@@ -1,8 +1,10 @@
 import { connectMcpServer, type McpServerConnection, type ToolDefinition } from '@flue/runtime';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { expandMcpTemplateString, parseMcpServersJson } from '../agent-assets/parse-mcp-servers.ts';
 import { loadPlatformMcpTemplate } from '../agent-assets/manifest.ts';
-import { appUserMcpCredentials, db } from '../db/index.ts';
+import { DATASOURCE_ID_HEADER } from '../database-mcp/constants.ts';
+import { discoverStaticPlatformMcpTools } from '../database-mcp/static-discovery.ts';
+import { appUserDatasources, appUserMcpCredentials, db } from '../db/index.ts';
 import {
   createAgentRequestForwardingFetch,
   getAgentRequestContext,
@@ -119,6 +121,8 @@ export async function listPlatformMcpDiscoveredTools(
   | { status: 'needs_key'; tools: [] }
   | { status: 'error'; tools: []; error: string }
 > {
+  const staticTools = discoverStaticPlatformMcpTools(platformMcpId);
+  if (staticTools) return staticTools;
   try {
     const template = loadPlatformMcpTemplate(platformMcpId);
     const parsed = parseMcpServersJson({ mcpServers: template.mcpServers });
@@ -172,6 +176,82 @@ export async function listPlatformMcpDiscoveredTools(
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+function createDatasourceForwardingFetch(datasourceId: string): typeof fetch {
+  return async (input, init) => {
+    const ctx = getAgentRequestContext();
+    const headers = new Headers(init?.headers);
+    if (ctx?.authorization) {
+      headers.set('authorization', ctx.authorization);
+    }
+    if (ctx?.openkmsApiKey) {
+      headers.set('x-openkms-api-key', ctx.openkmsApiKey);
+    }
+    if (ctx?.instanceId) {
+      headers.set('x-flue-instance-id', ctx.instanceId);
+    }
+    headers.set(DATASOURCE_ID_HEADER, datasourceId);
+    return fetch(input, { ...init, headers });
+  };
+}
+
+function datasourceMcpPath(type: string): string {
+  if (type === 'postgres') return '/api/mcp/postgres';
+  if (type === 'mysql') return '/api/mcp/mysql';
+  throw new Error(`Unsupported datasource type "${type}"`);
+}
+
+async function connectStudioDatasources(spec: LoadedAgentSpec): Promise<ToolDefinition[]> {
+  const ids = spec.studioMeta?.datasourceIds ?? [];
+  if (ids.length === 0) return [];
+
+  const userId = getAgentRequestContext()?.userId;
+  if (!userId) return [];
+
+  const cacheKey = `${spec.id}::${userId}::ds`;
+  let connections = connectionCache.get(cacheKey);
+  if (!connections) {
+    connections = [];
+    const rows = await db
+      .select({
+        id: appUserDatasources.id,
+        name: appUserDatasources.name,
+        type: appUserDatasources.type,
+      })
+      .from(appUserDatasources)
+      .where(
+        and(eq(appUserDatasources.createdBy, userId), inArray(appUserDatasources.id, ids)),
+      );
+
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+    for (const datasourceId of ids) {
+      const row = rowById.get(datasourceId);
+      if (!row) continue;
+      const url = `${resolveOpenkmsApiBaseUrl()}${datasourceMcpPath(row.type)}`;
+      try {
+        connections.push(
+          await connectMcpServer(row.name, {
+            url,
+            transport: 'streamable-http',
+            fetch: createDatasourceForwardingFetch(datasourceId),
+          }),
+        );
+      } catch (error) {
+        console.warn(
+          `[mcp] datasource "${row.name}" (${datasourceId}) unavailable:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+    connectionCache.set(cacheKey, connections);
+  }
+
+  const tools: ToolDefinition[] = [];
+  for (const connection of connections) {
+    tools.push(...filterMcpTools(connection, undefined));
+  }
+  return tools;
 }
 
 async function connectStudioPlatformMcp(spec: LoadedAgentSpec): Promise<ToolDefinition[]> {
@@ -236,7 +316,11 @@ async function connectStudioPlatformMcp(spec: LoadedAgentSpec): Promise<ToolDefi
 
 export async function connectAgentMcpTools(spec: LoadedAgentSpec): Promise<ToolDefinition[]> {
   if (spec.source === 'studio') {
-    return connectStudioPlatformMcp(spec);
+    const [platform, datasources] = await Promise.all([
+      connectStudioPlatformMcp(spec),
+      connectStudioDatasources(spec),
+    ]);
+    return [...platform, ...datasources];
   }
   if (!spec.mcp.length) return [];
 

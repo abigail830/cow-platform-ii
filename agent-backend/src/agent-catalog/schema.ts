@@ -112,6 +112,7 @@ export type LoadedAgentSpec = AgentYaml & {
     createdBy: string;
     platformMcpIds: string[];
     privateMcpIds: string[];
+    datasourceIds: string[];
     origin: string;
   };
 };

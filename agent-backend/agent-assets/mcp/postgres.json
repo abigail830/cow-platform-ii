@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "url": "${OPENKMS_API_URL}/api/mcp/postgres",
+      "transport": "streamable-http",
+      "headers": {
+        "Authorization": "Bearer ${USER_API_KEY}",
+        "X-Datasource-Id": "<your-datasource-uuid>"
+      }
+    }
+  }
+}

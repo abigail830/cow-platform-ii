@@ -33,6 +33,12 @@ import {
   hasStoredModelConfigApiKey,
   sealModelConfigApiKeyForStorage,
 } from '../shared/model-config-secret.ts';
+import {
+  assertDatasourceIdsOwnedByUser,
+  createDatasourceForUser,
+  deleteDatasourceForUser,
+  listDatasourcesForUser,
+} from '../database-mcp/datasource-service.ts';
 
 const studio = new Hono();
 
@@ -41,6 +47,21 @@ const slugSchema = z
   .min(2)
   .max(64)
   .regex(/^[a-z][a-z0-9-]*$/);
+
+const datasourceBodySchema = z.object({
+  name: slugSchema,
+  displayTitle: z.string().max(120).optional(),
+  type: z.enum(['postgres', 'mysql']),
+  host: z.string().min(1).max(255),
+  port: z.number().int().min(1).max(65535),
+  username: z.string().min(1).max(128),
+  password: z.string().min(1),
+  database: z.string().min(1).max(128),
+  ssl: z.boolean().optional(),
+  readonly: z.boolean().optional(),
+  maxRows: z.number().int().min(1).max(1000).optional(),
+  statementTimeoutMs: z.number().int().min(1000).max(120_000).optional(),
+});
 
 const agentBodySchema = z.object({
   slug: slugSchema,
@@ -53,6 +74,7 @@ const agentBodySchema = z.object({
   skillIds: z.array(z.string()).default([]),
   platformMcpIds: z.array(z.string()).default([]),
   privateMcpIds: z.array(z.string().uuid()).default([]),
+  datasourceIds: z.array(z.string().uuid()).default([]),
   sandbox: z.record(z.string(), z.unknown()).default({ provider: 'none' }),
   a2a: z.record(z.string(), z.unknown()).nullable().optional(),
 });
@@ -241,6 +263,7 @@ studio.post(
     if (!model) return c.json({ error: 'modelConfigId not found' }, 400);
 
     try {
+      await assertDatasourceIdsOwnedByUser(user.id, body.datasourceIds);
       const [row] = await db
         .insert(appStudioAgents)
         .values({
@@ -256,6 +279,7 @@ studio.post(
           skillIds: body.skillIds,
           platformMcpIds: body.platformMcpIds,
           privateMcpIds: body.privateMcpIds,
+          datasourceIds: body.datasourceIds,
           sandbox: body.sandbox,
           a2a: body.a2a ?? null,
         })
@@ -266,6 +290,9 @@ studio.post(
       const message = error instanceof Error ? error.message : String(error);
       if (/unique|duplicate/i.test(message)) {
         return c.json({ error: `slug "${body.slug}" already exists` }, 409);
+      }
+      if (/datasource|not allowed|password/i.test(message)) {
+        return c.json({ error: message }, 400);
       }
       throw error;
     }
@@ -303,6 +330,14 @@ studio.patch(
     const body = agentBodySchema.partial().parse(await c.req.json());
     if (body.slug && body.slug !== existing.slug) {
       return c.json({ error: 'slug cannot be changed' }, 400);
+    }
+    if (body.datasourceIds) {
+      try {
+        await assertDatasourceIdsOwnedByUser(user.id, body.datasourceIds);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return c.json({ error: message }, 400);
+      }
     }
     const [row] = await db
       .update(appStudioAgents)
@@ -356,6 +391,50 @@ studio.put('/agents/:id/access', requireAuth, async (c) => {
     if (message === 'Forbidden') return c.json({ error: 'Forbidden' }, 403);
     throw error;
   }
+});
+
+studio.get('/datasources', requireAuth, async (c) => {
+  const user = getUser(c);
+  const datasources = await listDatasourcesForUser(user.id);
+  return c.json({ datasources });
+});
+
+studio.post('/datasources', requireAuth, async (c) => {
+  const user = getUser(c);
+  const body = datasourceBodySchema.parse(await c.req.json());
+  try {
+    const row = await createDatasourceForUser(user.id, body);
+    return c.json(
+      {
+        datasource: {
+          id: row.id,
+          name: row.name,
+          displayTitle: row.displayTitle,
+          type: row.type,
+          host: row.host,
+          port: row.port,
+          username: row.username,
+          database: row.database,
+          ssl: row.ssl,
+          readonly: row.readonly,
+          maxRows: row.maxRows,
+          statementTimeoutMs: row.statementTimeoutMs,
+          updatedAt: row.updatedAt,
+        },
+      },
+      201,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: message }, 400);
+  }
+});
+
+studio.delete('/datasources/:id', requireAuth, async (c) => {
+  const user = getUser(c);
+  const ok = await deleteDatasourceForUser(user.id, c.req.param('id'));
+  if (!ok) return c.json({ error: 'Not found' }, 404);
+  return c.json({ ok: true });
 });
 
 studio.get('/my-mcp-servers', requireAuth, async (c) => {

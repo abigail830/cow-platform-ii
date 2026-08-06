@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mysql": {
+      "url": "${OPENKMS_API_URL}/api/mcp/mysql",
+      "transport": "streamable-http",
+      "headers": {
+        "Authorization": "Bearer ${USER_API_KEY}",
+        "X-Datasource-Id": "<your-datasource-uuid>"
+      }
+    }
+  }
+}

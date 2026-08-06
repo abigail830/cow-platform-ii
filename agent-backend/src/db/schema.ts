@@ -697,6 +697,7 @@ export const appStudioAgents = pgTable(
     skillIds: jsonb('skill_ids').$type<string[]>().notNull().default([]),
     platformMcpIds: jsonb('platform_mcp_ids').$type<string[]>().notNull().default([]),
     privateMcpIds: jsonb('private_mcp_ids').$type<string[]>().notNull().default([]),
+    datasourceIds: jsonb('datasource_ids').$type<string[]>().notNull().default([]),
     sandbox: jsonb('sandbox').$type<Record<string, unknown>>().notNull().default({ provider: 'none' }),
     a2a: jsonb('a2a').$type<Record<string, unknown> | null>(),
     version: integer('version').notNull().default(1),
@@ -742,5 +743,33 @@ export const appUserMcpCredentials = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [uniqueIndex('uq_user_mcp_credentials_user_platform').on(t.userId, t.platformMcpId)],
+);
+
+export const appUserDatasources = pgTable(
+  'app_user_datasources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => appUsers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    displayTitle: text('display_title'),
+    type: text('type').notNull(),
+    host: text('host').notNull(),
+    port: integer('port').notNull(),
+    username: text('username').notNull(),
+    database: text('database').notNull(),
+    passwordEncrypted: text('password_encrypted').notNull(),
+    ssl: boolean('ssl').notNull().default(false),
+    readonly: boolean('readonly').notNull().default(true),
+    maxRows: integer('max_rows').notNull().default(100),
+    statementTimeoutMs: integer('statement_timeout_ms').notNull().default(30_000),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_user_datasources_created_by').on(t.createdBy),
+    uniqueIndex('uq_user_datasources_owner_name').on(t.createdBy, t.name),
+  ],
 );
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, Fragment, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ChevronRight,
@@ -9,13 +9,17 @@ import {
   KeyRound,
   MessageSquare,
   Pencil,
+  Plus,
   Trash2,
   X,
 } from 'lucide-react';
 import { listModelConfigs, type ModelConfig } from '../api/models.ts';
 import {
   createStudioAgent,
+  createUserDatasource,
+  DATASOURCE_MCP_TEMPLATE_IDS,
   deleteStudioAgent,
+  deleteUserDatasource,
   getPlatformAgentCopyDraft,
   getPlatformMcpDetail,
   getSkillFile,
@@ -23,15 +27,19 @@ import {
   getStudioAgent,
   listStudioAgents,
   listStudioAssets,
+  listUserDatasources,
   putPlatformMcpCredential,
   updateStudioAgent,
   type AssetSummary,
   type SkillTreeNode,
   type StudioAgent,
   type StudioAgentDraft,
+  type UserDatasource,
 } from '../api/studio.ts';
 import { iconProps } from '../components/icons/icon-props.ts';
+import { MarkdownCodeEditor } from '../components/MarkdownCodeEditor.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
+import { applyParsedDatabaseUrl, parseDatabaseUrl } from '../shared/parse-database-url.ts';
 import {
   AGENT_PLAYGROUND_PATH,
   ASSET_MARKET_PATH,
@@ -145,6 +153,7 @@ export function AssetMarketPage() {
         modelConfigId: detail.modelConfigId,
         skillIds: detail.skillIds,
         platformMcpIds: detail.platformMcpIds,
+        datasourceIds: detail.datasourceIds,
         sandbox: detail.sandbox,
       });
       setEditing('new');
@@ -247,62 +256,14 @@ export function AssetMarketPage() {
         </div>
       ) : tab === 'mcp' ? (
         <div className={`asset-market-browse${viewingMcpId ? ' has-detail' : ''}`}>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Id</th>
-                  <th>Description</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assets.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="admin-table-empty">
-                      No MCP servers published yet.
-                    </td>
-                  </tr>
-                ) : (
-                  assets.map((asset) => (
-                    <tr
-                      key={`${asset.type}:${asset.id}`}
-                      className={viewingMcpId === asset.id ? 'asset-market-row selected' : undefined}
-                    >
-                      <td>
-                        <strong>{asset.title}</strong>
-                      </td>
-                      <td className="mono-cell">{asset.id}</td>
-                      <td className="admin-muted">{asset.description || '—'}</td>
-                      <td>
-                        <div className="row-actions">
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="View config"
-                            onClick={() => setViewingMcpId(asset.id)}
-                          >
-                            <Eye {...iconProps()} aria-hidden />
-                          </button>
-                          {canWrite ? (
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              title="Save API key"
-                              onClick={() => setMcpKeyFor(asset.id)}
-                            >
-                              <KeyRound {...iconProps()} aria-hidden />
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <McpMarketTab
+            assets={assets}
+            canWrite={canWrite}
+            viewingMcpId={viewingMcpId}
+            onViewMcp={setViewingMcpId}
+            onMcpKey={setMcpKeyFor}
+            onError={setError}
+          />
           {viewingMcpId ? (
             <McpConfigPanel mcpId={viewingMcpId} onClose={() => setViewingMcpId(null)} />
           ) : null}
@@ -748,10 +709,16 @@ function McpConfigPanel({ mcpId, onClose }: { mcpId: string; onClose: () => void
         <div className="asset-market-mcp-body">
           <section className="asset-market-mcp-tools" aria-label="Discovered tools">
             <h3>Tools</h3>
-            {toolStatus === 'needs_key' ? (
+            {toolStatus === 'needs_key' && !DATASOURCE_MCP_TEMPLATE_IDS.has(mcpId) ? (
               <p className="admin-muted">
                 Save an API key to connect and list tools (discovered at runtime, not stored in
                 config).
+              </p>
+            ) : null}
+            {DATASOURCE_MCP_TEMPLATE_IDS.has(mcpId) ? (
+              <p className="admin-muted">
+                Create a data source below with your database connection, then attach it to an agent.
+                Tools are discovered when the agent runs.
               </p>
             ) : null}
             {toolStatus === 'error' ? (
@@ -851,6 +818,421 @@ function McpCredentialModal({
   );
 }
 
+function McpMarketTab({
+  assets,
+  canWrite,
+  viewingMcpId,
+  onViewMcp,
+  onMcpKey,
+  onError,
+}: {
+  assets: AssetSummary[];
+  canWrite: boolean;
+  viewingMcpId: string | null;
+  onViewMcp: (id: string) => void;
+  onMcpKey: (id: string) => void;
+  onError: (message: string) => void;
+}) {
+  const [datasources, setDatasources] = useState<UserDatasource[]>([]);
+  const [datasourcesLoading, setDatasourcesLoading] = useState(false);
+  const [expandedMcpIds, setExpandedMcpIds] = useState<Set<string>>(new Set());
+  const [datasourceFormEngine, setDatasourceFormEngine] = useState<'postgres' | 'mysql' | null>(
+    null,
+  );
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+
+  const reloadDatasources = useCallback(async () => {
+    setDatasourcesLoading(true);
+    try {
+      setDatasources(await listUserDatasources());
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDatasourcesLoading(false);
+    }
+  }, [onError]);
+
+  useEffect(() => {
+    void reloadDatasources();
+  }, [reloadDatasources]);
+
+  function toggleExpanded(mcpId: string) {
+    setExpandedMcpIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(mcpId)) next.delete(mcpId);
+      else next.add(mcpId);
+      return next;
+    });
+  }
+
+  async function handleDeleteDatasource(id: string) {
+    if (!window.confirm('Delete this data source? Agents must be updated separately.')) return;
+    setDeleteBusyId(id);
+    try {
+      await deleteUserDatasource(id);
+      await reloadDatasources();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleteBusyId(null);
+    }
+  }
+
+  if (assets.length === 0) {
+    return <p className="admin-muted">No MCP servers published yet.</p>;
+  }
+
+  return (
+    <>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Id</th>
+              <th>Description</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {assets.map((asset) => {
+              const isDatasourceMcp = DATASOURCE_MCP_TEMPLATE_IDS.has(asset.id);
+              const engine = isDatasourceMcp ? (asset.id as 'postgres' | 'mysql') : null;
+              const engineSources = engine
+                ? datasources.filter((item) => item.type === engine)
+                : [];
+              const expanded = expandedMcpIds.has(asset.id);
+
+              return (
+                <Fragment key={`${asset.type}:${asset.id}`}>
+                  <tr
+                    className={viewingMcpId === asset.id ? 'asset-market-row selected' : undefined}
+                  >
+                    <td>
+                      <strong>{asset.title}</strong>
+                    </td>
+                    <td className="mono-cell">{asset.id}</td>
+                    <td className="admin-muted">
+                      {isDatasourceMcp ? (
+                        <>
+                          {asset.description || '—'}
+                          <span className="asset-market-ds-count">
+                            {' '}
+                            · {engineSources.length} data source
+                            {engineSources.length === 1 ? '' : 's'}
+                          </span>
+                        </>
+                      ) : (
+                        asset.description || '—'
+                      )}
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        {isDatasourceMcp ? (
+                          <>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title={expanded ? 'Hide data sources' : 'Show data sources'}
+                              aria-expanded={expanded}
+                              onClick={() => toggleExpanded(asset.id)}
+                            >
+                              <ChevronRight
+                                {...iconProps({
+                                  className: expanded
+                                    ? 'asset-market-chevron open'
+                                    : 'asset-market-chevron',
+                                })}
+                              />
+                            </button>
+                            {canWrite ? (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Add data source"
+                                onClick={() => setDatasourceFormEngine(engine)}
+                              >
+                                <Plus {...iconProps()} aria-hidden />
+                              </button>
+                            ) : null}
+                          </>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="View config"
+                          onClick={() => onViewMcp(asset.id)}
+                        >
+                          <Eye {...iconProps()} aria-hidden />
+                        </button>
+                        {canWrite && !isDatasourceMcp ? (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Save API key"
+                            onClick={() => onMcpKey(asset.id)}
+                          >
+                            <KeyRound {...iconProps()} aria-hidden />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                  {isDatasourceMcp && expanded ? (
+                    <tr className="asset-market-datasource-subrow">
+                      <td colSpan={4}>
+                        {datasourcesLoading ? (
+                          <p className="admin-muted">Loading data sources…</p>
+                        ) : engineSources.length === 0 ? (
+                          <p className="admin-muted">
+                            No data sources yet.
+                            {canWrite ? ' Use + to add one.' : null}
+                          </p>
+                        ) : (
+                          <table className="admin-table asset-market-datasource-nested">
+                            <thead>
+                              <tr>
+                                <th>Name</th>
+                                <th>Host</th>
+                                <th>Database</th>
+                                {canWrite ? <th>Actions</th> : null}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {engineSources.map((item) => (
+                                <tr key={item.id}>
+                                  <td>
+                                    <span className="mono-cell">{item.name}</span>
+                                    {item.displayTitle ? (
+                                      <span className="admin-muted"> · {item.displayTitle}</span>
+                                    ) : null}
+                                  </td>
+                                  <td className="mono-cell">
+                                    {item.host}:{item.port}
+                                    {item.ssl ? ' · SSL' : ''}
+                                  </td>
+                                  <td className="mono-cell">{item.database}</td>
+                                  {canWrite ? (
+                                    <td>
+                                      <button
+                                        type="button"
+                                        className="icon-btn"
+                                        title="Delete data source"
+                                        disabled={deleteBusyId === item.id}
+                                        onClick={() => void handleDeleteDatasource(item.id)}
+                                      >
+                                        <Trash2 {...iconProps()} aria-hidden />
+                                      </button>
+                                    </td>
+                                  ) : null}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {datasourceFormEngine ? (
+        <DatasourceFormModal
+          engine={datasourceFormEngine}
+          onCancel={() => setDatasourceFormEngine(null)}
+          onSaved={async () => {
+            setDatasourceFormEngine(null);
+            setExpandedMcpIds((prev) => new Set(prev).add(datasourceFormEngine));
+            await reloadDatasources();
+          }}
+          onError={onError}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function DatasourceFormModal({
+  engine,
+  onCancel,
+  onSaved,
+  onError,
+}: {
+  engine: 'postgres' | 'mysql';
+  onCancel: () => void;
+  onSaved: () => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [connectionUrl, setConnectionUrl] = useState('');
+  const [urlHint, setUrlHint] = useState('');
+  const [name, setName] = useState('');
+  const [host, setHost] = useState('');
+  const [port, setPort] = useState(engine === 'postgres' ? '5432' : '3306');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [database, setDatabase] = useState('');
+  const [ssl, setSsl] = useState(engine === 'postgres');
+
+  const engineLabel = engine === 'postgres' ? 'PostgreSQL' : 'MySQL';
+
+  function applyConnectionUrl(raw: string) {
+    const trimmed = raw.trim();
+    setConnectionUrl(trimmed);
+    if (!trimmed) {
+      setUrlHint('');
+      return;
+    }
+    const parsed = parseDatabaseUrl(trimmed);
+    if ('error' in parsed) {
+      setUrlHint(parsed.error);
+      return;
+    }
+    const applied = applyParsedDatabaseUrl(parsed, engine);
+    if ('error' in applied) {
+      setUrlHint(applied.error);
+      return;
+    }
+    setUrlHint('');
+    setHost(applied.host);
+    setPort(String(applied.port));
+    setUsername(applied.username);
+    setPassword(applied.password);
+    setDatabase(applied.database);
+    setSsl(applied.ssl);
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await createUserDatasource({
+        name,
+        type: engine,
+        host,
+        port: Number(port),
+        username,
+        password,
+        database,
+        ssl,
+      });
+      await onSaved();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div
+        className="modal-card model-config-form asset-market-datasource-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="datasource-form-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="asset-market-datasource-modal-header">
+          <div>
+            <h2 id="datasource-form-title">Add {engineLabel} data source</h2>
+            <p className="admin-muted">Paste DATABASE_URL or fill connection fields.</p>
+          </div>
+          <button type="button" className="icon-btn" title="Close" onClick={onCancel}>
+            <X {...iconProps()} aria-hidden />
+          </button>
+        </header>
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <div className="form-grid">
+            <label className="form-field form-field-wide">
+              <span>Connection URL</span>
+              <input
+                value={connectionUrl}
+                onChange={(e) => applyConnectionUrl(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData('text');
+                  if (pasted.trim()) {
+                    e.preventDefault();
+                    applyConnectionUrl(pasted);
+                  }
+                }}
+                placeholder={
+                  engine === 'postgres'
+                    ? 'postgresql://user:pass@host.neon.tech/dbname?sslmode=require'
+                    : 'mysql://user:pass@host.example.com/dbname'
+                }
+                autoComplete="off"
+              />
+              <span className="admin-form-hint">
+                Paste <code>DATABASE_URL</code> to auto-fill (default port{' '}
+                {engine === 'postgres' ? '5432' : '3306'}).
+              </span>
+              {urlHint ? (
+                <span className="admin-muted" role="status">
+                  {urlHint}
+                </span>
+              ) : null}
+            </label>
+            <label className="form-field">
+              <span>Name</span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                placeholder="analytics-db"
+                pattern="[a-z0-9_-]+"
+                title="Lowercase letters, numbers, underscore, hyphen"
+              />
+            </label>
+            <label className="form-field">
+              <span>Host</span>
+              <input value={host} onChange={(e) => setHost(e.target.value)} required />
+            </label>
+            <label className="form-field">
+              <span>Port</span>
+              <input value={port} onChange={(e) => setPort(e.target.value)} required type="number" />
+            </label>
+            <label className="form-field">
+              <span>Username</span>
+              <input value={username} onChange={(e) => setUsername(e.target.value)} required />
+            </label>
+            <label className="form-field">
+              <span>Password</span>
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                type="password"
+                autoComplete="new-password"
+              />
+            </label>
+            <label className="form-field form-field-wide">
+              <span>Database</span>
+              <input value={database} onChange={(e) => setDatabase(e.target.value)} required />
+            </label>
+            <label className="form-checkbox form-field-wide">
+              <input type="checkbox" checked={ssl} onChange={(e) => setSsl(e.target.checked)} />
+              <span>Use SSL/TLS</span>
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : 'Save data source'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function StudioAgentForm({
   initial,
   duplicateFrom,
@@ -869,6 +1251,7 @@ function StudioAgentForm({
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [skills, setSkills] = useState<AssetSummary[]>([]);
   const [mcps, setMcps] = useState<AssetSummary[]>([]);
+  const [datasources, setDatasources] = useState<UserDatasource[]>([]);
 
   const [slug, setSlug] = useState(initial?.slug ?? duplicateFrom?.slug ?? '');
   const [displayName, setDisplayName] = useState(
@@ -889,15 +1272,35 @@ function StudioAgentForm({
   const [platformMcpIds, setPlatformMcpIds] = useState<string[]>(
     initial?.platformMcpIds ?? duplicateFrom?.platformMcpIds ?? [],
   );
+  const [datasourceIds, setDatasourceIds] = useState<string[]>(
+    initial?.datasourceIds ?? duplicateFrom?.datasourceIds ?? [],
+  );
+
+  const attachableMcps = useMemo(
+    () => mcps.filter((mcp) => !DATASOURCE_MCP_TEMPLATE_IDS.has(mcp.id)),
+    [mcps],
+  );
+  const postgresSources = useMemo(
+    () => datasources.filter((source) => source.type === 'postgres'),
+    [datasources],
+  );
+  const mysqlSources = useMemo(
+    () => datasources.filter((source) => source.type === 'mysql'),
+    [datasources],
+  );
+
+  type StudioAgentFormTab = 'general' | 'prompt' | 'integrations';
+  const [formTab, setFormTab] = useState<StudioAgentFormTab>('general');
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [modelList, skillList, mcpList, detail] = await Promise.all([
+        const [modelList, skillList, mcpList, datasourceList, detail] = await Promise.all([
           listModelConfigs({ apiType: 'chat-completions', limit: 100 }),
           listStudioAssets('skill'),
           listStudioAssets('mcp'),
+          listUserDatasources(),
           initial ? getStudioAgent(initial.id) : Promise.resolve(null),
         ]);
         if (cancelled) return;
@@ -905,6 +1308,7 @@ function StudioAgentForm({
         setModels(modelsOnly);
         setSkills(skillList);
         setMcps(mcpList);
+        setDatasources(datasourceList);
         if (detail) {
           setSlug(detail.slug);
           setDisplayName(detail.displayName);
@@ -913,6 +1317,7 @@ function StudioAgentForm({
           setModelConfigId(detail.modelConfigId ?? '');
           setSkillIds(detail.skillIds ?? []);
           setPlatformMcpIds(detail.platformMcpIds ?? []);
+          setDatasourceIds(detail.datasourceIds ?? []);
         } else if (duplicateFrom) {
           setSlug(duplicateFrom.slug);
           setDisplayName(duplicateFrom.displayName);
@@ -921,6 +1326,7 @@ function StudioAgentForm({
           setModelConfigId(duplicateFrom.modelConfigId ?? modelsOnly[0]?.id ?? '');
           setSkillIds(duplicateFrom.skillIds ?? []);
           setPlatformMcpIds(duplicateFrom.platformMcpIds ?? []);
+          setDatasourceIds(duplicateFrom.datasourceIds ?? []);
         } else if (modelsOnly[0] && !modelConfigId) {
           setModelConfigId(modelsOnly[0].id);
         }
@@ -951,6 +1357,7 @@ function StudioAgentForm({
       modelConfigId,
       skillIds,
       platformMcpIds,
+      datasourceIds,
       privateMcpIds: [],
       sandbox: duplicateFrom?.sandbox ?? { provider: 'none' },
     };
@@ -967,98 +1374,190 @@ function StudioAgentForm({
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-card model-config-form" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="modal-card model-config-form studio-agent-modal"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+      >
         <h2>{initial ? 'Edit agent' : isCopy ? 'Copy agent' : 'New agent'}</h2>
         {loading ? (
           <p className="admin-muted">Loading…</p>
         ) : (
-          <form onSubmit={(e) => void onSubmit(e)}>
-            <div className="form-grid">
-              <label className="form-field">
-                <span>Slug</span>
-                <input
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  required
-                  disabled={Boolean(initial)}
-                  placeholder="my-agent"
-                />
-              </label>
-              <label className="form-field">
-                <span>Name</span>
-                <input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  required
-                  placeholder="My agent"
-                />
-              </label>
-              <label className="form-field form-field-wide">
-                <span>Description</span>
-                <input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="What this agent does"
-                />
-              </label>
-              <label className="form-field form-field-wide">
-                <span>Model</span>
-                <select
-                  value={modelConfigId}
-                  onChange={(e) => setModelConfigId(e.target.value)}
-                  required
-                >
-                  {models.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-field form-field-wide">
-                <span>Prompt</span>
-                <textarea
-                  rows={8}
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="System instructions for this agent"
-                />
-              </label>
-              <fieldset className="form-field form-field-wide">
-                <legend>Skills</legend>
-                {skills.length === 0 ? (
-                  <p className="admin-muted">No skills available.</p>
-                ) : (
-                  skills.map((skill) => (
-                    <label key={skill.id} className="form-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={skillIds.includes(skill.id)}
-                        onChange={() => setSkillIds((prev) => toggleId(prev, skill.id))}
-                      />
-                      <span>{skill.title}</span>
-                    </label>
-                  ))
-                )}
-              </fieldset>
-              <fieldset className="form-field form-field-wide">
-                <legend>Platform MCP</legend>
-                {mcps.length === 0 ? (
-                  <p className="admin-muted">No MCP servers available.</p>
-                ) : (
-                  mcps.map((mcp) => (
-                    <label key={mcp.id} className="form-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={platformMcpIds.includes(mcp.id)}
-                        onChange={() => setPlatformMcpIds((prev) => toggleId(prev, mcp.id))}
-                      />
-                      <span>{mcp.title}</span>
-                    </label>
-                  ))
-                )}
-              </fieldset>
+          <form className="studio-agent-modal-form" onSubmit={(e) => void onSubmit(e)}>
+            <div className="modal-tabs" role="tablist" aria-label="Agent editor">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={formTab === 'general'}
+                className={`modal-tab${formTab === 'general' ? ' active' : ''}`}
+                onClick={() => setFormTab('general')}
+              >
+                General
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={formTab === 'prompt'}
+                className={`modal-tab${formTab === 'prompt' ? ' active' : ''}`}
+                onClick={() => setFormTab('prompt')}
+              >
+                Prompt
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={formTab === 'integrations'}
+                className={`modal-tab${formTab === 'integrations' ? ' active' : ''}`}
+                onClick={() => setFormTab('integrations')}
+              >
+                Integrations
+              </button>
             </div>
+
+            <div className="studio-agent-modal-body">
+              {formTab === 'general' ? (
+                <div className="studio-agent-tab-panel">
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span>Slug</span>
+                      <input
+                        value={slug}
+                        onChange={(e) => setSlug(e.target.value)}
+                        required
+                        disabled={Boolean(initial)}
+                        placeholder="my-agent"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Name</span>
+                      <input
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        required
+                        placeholder="My agent"
+                      />
+                    </label>
+                    <label className="form-field form-field-wide">
+                      <span>Description</span>
+                      <input
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="What this agent does"
+                      />
+                    </label>
+                    <label className="form-field form-field-wide">
+                      <span>Model</span>
+                      <select
+                        value={modelConfigId}
+                        onChange={(e) => setModelConfigId(e.target.value)}
+                        required
+                      >
+                        {models.map((model) => (
+                          <option key={model.id} value={model.id}>
+                            {model.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+
+              {formTab === 'prompt' ? (
+                <div className="studio-agent-tab-panel studio-agent-prompt-tab">
+                  <p className="admin-muted studio-agent-prompt-hint">
+                    System instructions for this agent. Markdown is supported.
+                  </p>
+                  <MarkdownCodeEditor
+                    className="studio-agent-prompt-editor"
+                    value={instructions}
+                    onChange={setInstructions}
+                    placeholder="You are a helpful assistant…"
+                  />
+                </div>
+              ) : null}
+
+              {formTab === 'integrations' ? (
+                <div className="studio-agent-tab-panel">
+                  <div className="form-grid studio-agent-integrations-tab">
+                  <fieldset className="form-field form-field-wide">
+                    <legend>Skills</legend>
+                    {skills.length === 0 ? (
+                      <p className="admin-muted">No skills available.</p>
+                    ) : (
+                      skills.map((skill) => (
+                        <label key={skill.id} className="form-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={skillIds.includes(skill.id)}
+                            onChange={() => setSkillIds((prev) => toggleId(prev, skill.id))}
+                          />
+                          <span>{skill.title}</span>
+                        </label>
+                      ))
+                    )}
+                  </fieldset>
+                  <fieldset className="form-field form-field-wide">
+                    <legend>Platform MCP</legend>
+                    {attachableMcps.length === 0 ? (
+                      <p className="admin-muted">No MCP servers available.</p>
+                    ) : (
+                      attachableMcps.map((mcp) => (
+                        <label key={mcp.id} className="form-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={platformMcpIds.includes(mcp.id)}
+                            onChange={() => setPlatformMcpIds((prev) => toggleId(prev, mcp.id))}
+                          />
+                          <span>{mcp.title}</span>
+                        </label>
+                      ))
+                    )}
+                  </fieldset>
+                  <fieldset className="form-field form-field-wide">
+                    <legend>PostgreSQL data sources</legend>
+                    {postgresSources.length === 0 ? (
+                      <p className="admin-muted">
+                        Add PostgreSQL data sources under the PostgreSQL MCP on the MCP tab.
+                      </p>
+                    ) : (
+                      postgresSources.map((source) => (
+                        <label key={source.id} className="form-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={datasourceIds.includes(source.id)}
+                            onChange={() => setDatasourceIds((prev) => toggleId(prev, source.id))}
+                          />
+                          <span>{source.displayTitle || source.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </fieldset>
+                  <fieldset className="form-field form-field-wide">
+                    <legend>MySQL data sources</legend>
+                    {mysqlSources.length === 0 ? (
+                      <p className="admin-muted">
+                        Add MySQL data sources under the MySQL MCP on the MCP tab.
+                      </p>
+                    ) : (
+                      mysqlSources.map((source) => (
+                        <label key={source.id} className="form-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={datasourceIds.includes(source.id)}
+                            onChange={() => setDatasourceIds((prev) => toggleId(prev, source.id))}
+                          />
+                          <span>{source.displayTitle || source.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </fieldset>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             {error ? (
               <p className="error" role="alert">
                 {error}

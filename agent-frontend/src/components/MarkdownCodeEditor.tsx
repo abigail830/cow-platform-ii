@@ -1,9 +1,9 @@
 import CodeMirror from '@uiw/react-codemirror';
-import { yaml } from '@codemirror/lang-yaml';
+import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
 import { brandCodeEditorTheme } from './code-editor-theme.ts';
 
-type YamlCodeEditorProps = {
+type MarkdownCodeEditorProps = {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
@@ -11,20 +11,20 @@ type YamlCodeEditorProps = {
   className?: string;
 };
 
-export function YamlCodeEditor({
+export function MarkdownCodeEditor({
   value,
   onChange,
   disabled = false,
   placeholder,
   className,
-}: YamlCodeEditorProps) {
+}: MarkdownCodeEditorProps) {
   return (
-    <div className={className ? `yaml-code-editor ${className}` : 'yaml-code-editor'}>
+    <div className={className ? `markdown-code-editor ${className}` : 'markdown-code-editor'}>
       <CodeMirror
         value={value}
         height="100%"
         theme={brandCodeEditorTheme}
-        extensions={[yaml(), EditorView.lineWrapping]}
+        extensions={[markdown(), EditorView.lineWrapping]}
         editable={!disabled}
         readOnly={disabled}
         basicSetup={{

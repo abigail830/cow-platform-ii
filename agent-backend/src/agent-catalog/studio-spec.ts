@@ -67,6 +67,7 @@ export async function studioRowToLoadedSpec(row: StudioAgentRow): Promise<Loaded
       createdBy: row.createdBy,
       platformMcpIds: row.platformMcpIds ?? [],
       privateMcpIds: row.privateMcpIds ?? [],
+      datasourceIds: row.datasourceIds ?? [],
       origin: row.origin,
     },
   };

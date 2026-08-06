@@ -14,6 +14,8 @@ import documents from './routes/documents.ts';
 import knowledgeBases from './routes/knowledge-bases.ts';
 import hybridSearch from './routes/hybrid-search.ts';
 import hybridSearchMcp from './routes/mcp/hybrid-search.ts';
+import postgresMcp from './routes/mcp/postgres.ts';
+import mysqlMcp from './routes/mcp/mysql.ts';
 import users from './routes/users.ts';
 import sessionExplorer from './routes/session-explorer.ts';
 import sessionFiles from './routes/session-files.ts';
@@ -56,6 +58,7 @@ app.use(
       'Content-Type',
       OPENKMS_API_KEY_HEADER,
       'x-flue-instance-id',
+      'x-datasource-id',
       'mcp-session-id',
       'Last-Event-ID',
       'mcp-protocol-version',
@@ -78,6 +81,8 @@ app.route('/api/documents', documents);
 app.route('/api/knowledge-bases', knowledgeBases);
 app.route('/api/hybrid-search', hybridSearch);
 app.route('/api/mcp/hybrid-search', hybridSearchMcp);
+app.route('/api/mcp/postgres', postgresMcp);
+app.route('/api/mcp/mysql', mysqlMcp);
 app.route('/api/users', users);
 app.route('/api/session-explorer', sessionExplorer);
 app.route('/api/studio', studio);

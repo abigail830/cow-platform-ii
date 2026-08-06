@@ -25,6 +25,14 @@ mcp:
     path: mcp/zhipu-web-search.json
     title: Zhipu Web Search
     description: Web search via Zhipu remote MCP.
+  - id: postgres
+    path: mcp/postgres.json
+    title: PostgreSQL
+    description: Platform-managed PostgreSQL datasource MCP (create a datasource, then attach to agents).
+  - id: mysql
+    path: mcp/mysql.json
+    title: MySQL
+    description: Platform-managed MySQL datasource MCP (create a datasource, then attach to agents).
 sandbox:
   - id: e2b-content-studio
     path: sandbox/e2b-content-studio.yaml

@@ -40,8 +40,40 @@ export type StudioAgent = {
   skillIds?: string[];
   platformMcpIds?: string[];
   privateMcpIds?: string[];
+  datasourceIds?: string[];
   sandbox?: Record<string, unknown>;
   a2a?: Record<string, unknown> | null;
+};
+
+export type UserDatasource = {
+  id: string;
+  name: string;
+  displayTitle: string | null;
+  type: 'postgres' | 'mysql';
+  host: string;
+  port: number;
+  username: string;
+  database: string;
+  ssl: boolean;
+  readonly: boolean;
+  maxRows: number;
+  statementTimeoutMs: number;
+  updatedAt: string;
+};
+
+export type CreateDatasourceInput = {
+  name: string;
+  displayTitle?: string;
+  type: 'postgres' | 'mysql';
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  database: string;
+  ssl?: boolean;
+  readonly?: boolean;
+  maxRows?: number;
+  statementTimeoutMs?: number;
 };
 
 export async function listStudioAssets(type?: string): Promise<AssetSummary[]> {
@@ -129,6 +161,7 @@ export type StudioAgentDraft = {
   modelConfigId?: string | null;
   skillIds?: string[];
   platformMcpIds?: string[];
+  datasourceIds?: string[];
   sandbox?: Record<string, unknown>;
 };
 
@@ -170,3 +203,23 @@ export async function putPlatformMcpCredential(platformMcpId: string, apiKey: st
     body: JSON.stringify({ apiKey }),
   });
 }
+
+export async function listUserDatasources(): Promise<UserDatasource[]> {
+  const data = await authFetch('/api/studio/datasources');
+  return (data.datasources ?? []) as UserDatasource[];
+}
+
+export async function createUserDatasource(body: CreateDatasourceInput): Promise<UserDatasource> {
+  const data = await authFetch('/api/studio/datasources', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return data.datasource as UserDatasource;
+}
+
+export async function deleteUserDatasource(id: string): Promise<void> {
+  await authFetch(`/api/studio/datasources/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** Platform MCP templates that use datasource instances instead of API keys. */
+export const DATASOURCE_MCP_TEMPLATE_IDS = new Set(['postgres', 'mysql']);

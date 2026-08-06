@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveMcpServerUrl } from './load-mcp.ts';
+
+const prevDatabaseUrl = process.env.DATABASE_URL;
+process.env.DATABASE_URL = 'postgresql://test:test@127.0.0.1:5432/test';
+
+const { resolveMcpServerUrl } = await import('./load-mcp.ts');
 
 test('resolveMcpServerUrl defaults HYBRID_SEARCH_MCP_URL to OPENKMS_API_URL when unset', () => {
   const prev = process.env.HYBRID_SEARCH_MCP_URL;
@@ -22,3 +26,6 @@ test('resolveMcpServerUrl defaults HYBRID_SEARCH_MCP_URL to OPENKMS_API_URL when
     else process.env.OPENKMS_API_URL = prevBase;
   }
 });
+
+if (prevDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+else process.env.DATABASE_URL = prevDatabaseUrl;
