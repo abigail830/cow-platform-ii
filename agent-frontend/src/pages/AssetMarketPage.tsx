@@ -38,6 +38,7 @@ import {
 } from '../api/studio.ts';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { MarkdownCodeEditor } from '../components/MarkdownCodeEditor.tsx';
+import { ReadOnlyCodeEditor, readOnlyCodeLanguageForPath } from '../components/ReadOnlyCodeEditor.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { applyParsedDatabaseUrl, parseDatabaseUrl } from '../shared/parse-database-url.ts';
 import {
@@ -46,6 +47,7 @@ import {
   getNavPage,
 } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
+import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 
 type Tab = 'agents' | 'skills' | 'mcp' | 'sandbox';
 
@@ -85,6 +87,15 @@ export function AssetMarketPage() {
   const [viewingSkillId, setViewingSkillId] = useState<string | null>(null);
   const [viewingMcpId, setViewingMcpId] = useState<string | null>(null);
   const [copyBusyId, setCopyBusyId] = useState<string | null>(null);
+
+  const skillsBrowseSplit = useResizableSplit('asset-market-skills-browse-split', 38, {
+    minPct: 24,
+    maxPct: 72,
+  });
+  const mcpBrowseSplit = useResizableSplit('asset-market-mcp-browse-split', 38, {
+    minPct: 24,
+    maxPct: 72,
+  });
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -179,7 +190,7 @@ export function AssetMarketPage() {
   }
 
   return (
-    <main className="admin-page">
+    <main className="admin-page asset-market-page">
       <header className="admin-header">
         <div>
           <AdminPageTitle main={PAGE.titleMain} accent={PAGE.titleAccent} />
@@ -243,19 +254,71 @@ export function AssetMarketPage() {
           onDelete={handleDelete}
         />
       ) : tab === 'skills' ? (
-        <div className={`asset-market-browse${viewingSkillId ? ' has-detail' : ''}`}>
+        viewingSkillId ? (
+          <div
+            ref={skillsBrowseSplit.containerRef}
+            className="asset-market-browse has-detail"
+            style={
+              {
+                ['--asset-market-browse-left-pct' as string]: `${skillsBrowseSplit.leftPct}%`,
+              }
+            }
+          >
+            <div className="asset-market-browse-list">
+              <AssetTable
+                assets={assets}
+                empty="No skills published yet."
+                selectedId={viewingSkillId}
+                onView={(id) => setViewingSkillId(id)}
+              />
+            </div>
+            <div
+              className="asset-market-split-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize skills list and preview"
+              onMouseDown={skillsBrowseSplit.onHandleMouseDown}
+            />
+            <SkillBrowserPanel skillId={viewingSkillId} onClose={() => setViewingSkillId(null)} />
+          </div>
+        ) : (
           <AssetTable
             assets={assets}
             empty="No skills published yet."
-            selectedId={viewingSkillId}
             onView={(id) => setViewingSkillId(id)}
           />
-          {viewingSkillId ? (
-            <SkillBrowserPanel skillId={viewingSkillId} onClose={() => setViewingSkillId(null)} />
-          ) : null}
-        </div>
+        )
       ) : tab === 'mcp' ? (
-        <div className={`asset-market-browse${viewingMcpId ? ' has-detail' : ''}`}>
+        viewingMcpId ? (
+          <div
+            ref={mcpBrowseSplit.containerRef}
+            className="asset-market-browse has-detail"
+            style={
+              {
+                ['--asset-market-browse-left-pct' as string]: `${mcpBrowseSplit.leftPct}%`,
+              }
+            }
+          >
+            <div className="asset-market-browse-list">
+              <McpMarketTab
+                assets={assets}
+                canWrite={canWrite}
+                viewingMcpId={viewingMcpId}
+                onViewMcp={setViewingMcpId}
+                onMcpKey={setMcpKeyFor}
+                onError={setError}
+              />
+            </div>
+            <div
+              className="asset-market-split-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize MCP list and preview"
+              onMouseDown={mcpBrowseSplit.onHandleMouseDown}
+            />
+            <McpConfigPanel mcpId={viewingMcpId} onClose={() => setViewingMcpId(null)} />
+          </div>
+        ) : (
           <McpMarketTab
             assets={assets}
             canWrite={canWrite}
@@ -264,10 +327,7 @@ export function AssetMarketPage() {
             onMcpKey={setMcpKeyFor}
             onError={setError}
           />
-          {viewingMcpId ? (
-            <McpConfigPanel mcpId={viewingMcpId} onClose={() => setViewingMcpId(null)} />
-          ) : null}
-        </div>
+        )
       ) : (
         <AssetTable assets={assets} empty="No sandboxes published yet." />
       )}
@@ -504,6 +564,11 @@ function SkillBrowserPanel({ skillId, onClose }: { skillId: string; onClose: () 
   const [loading, setLoading] = useState(true);
   const [fileLoading, setFileLoading] = useState(false);
   const [error, setError] = useState('');
+  const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit(
+    'asset-market-skill-file-split',
+    22,
+    { minPct: 12, maxPct: 42 },
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -561,10 +626,7 @@ function SkillBrowserPanel({ skillId, onClose }: { skillId: string; onClose: () 
   return (
     <aside className="asset-market-detail-panel" aria-label={`Skill ${skillId}`}>
       <header className="asset-market-detail-header">
-        <div>
-          <h2>{skillId}</h2>
-          <p className="admin-muted">Skill files</p>
-        </div>
+        <h2>{skillId}</h2>
         <button type="button" className="icon-btn" title="Close" onClick={onClose}>
           <X {...iconProps()} aria-hidden />
         </button>
@@ -577,7 +639,11 @@ function SkillBrowserPanel({ skillId, onClose }: { skillId: string; onClose: () 
       {loading ? (
         <p className="admin-muted">Loading…</p>
       ) : (
-        <div className="asset-market-skill-split">
+        <div
+          ref={containerRef}
+          className="asset-market-skill-split"
+          style={{ ['--asset-market-skill-left-pct' as string]: `${leftPct}%` }}
+        >
           <nav className="asset-market-skill-tree" aria-label="Skill directory">
             <SkillTreeList
               nodes={tree}
@@ -585,15 +651,27 @@ function SkillBrowserPanel({ skillId, onClose }: { skillId: string; onClose: () 
               onOpenFile={(p) => void openFile(p)}
             />
           </nav>
+          <div
+            className="asset-market-split-handle"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize file tree and preview"
+            onMouseDown={onHandleMouseDown}
+          />
           <div className="asset-market-skill-file">
             {selectedPath ? (
               <>
-                <div className="asset-market-skill-file-path mono-cell">{selectedPath}</div>
-                {truncated ? <p className="admin-muted">Preview truncated to 256 KB.</p> : null}
+                {truncated ? (
+                  <p className="admin-muted asset-market-skill-truncated">Preview truncated to 256 KB.</p>
+                ) : null}
                 {fileLoading ? (
-                  <p className="admin-muted">Loading…</p>
+                  <p className="admin-muted asset-market-skill-file-loading">Loading…</p>
                 ) : (
-                  <pre className="asset-market-code">{content}</pre>
+                  <ReadOnlyCodeEditor
+                    className="asset-market-skill-codemirror"
+                    value={content}
+                    language={readOnlyCodeLanguageForPath(selectedPath)}
+                  />
                 )}
               </>
             ) : (

@@ -7754,6 +7754,22 @@ select:focus-visible {
 }
 
 /* Asset Market browse / skill preview */
+.admin-page.asset-market-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.admin-page.asset-market-page:has(.asset-market-browse.has-detail) {
+  overflow: hidden;
+}
+
+.admin-page.asset-market-page > .admin-header,
+.admin-page.asset-market-page > .admin-page-tabs,
+.admin-page.asset-market-page > .admin-error {
+  flex-shrink: 0;
+}
+
 .asset-market-browse {
   display: flex;
   flex-direction: column;
@@ -7762,10 +7778,40 @@ select:focus-visible {
 }
 
 .asset-market-browse.has-detail {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 1.15fr);
-  gap: 0.75rem;
-  align-items: start;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+
+.asset-market-browse-list {
+  min-width: 0;
+}
+
+.asset-market-browse.has-detail .asset-market-browse-list {
+  flex: 0 0 var(--asset-market-browse-left-pct, 38%);
+  min-width: 8rem;
+  max-width: 72%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.asset-market-browse.has-detail .asset-market-browse-list .admin-table-wrap {
+  max-height: none;
+}
+
+.asset-market-split-handle {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: #f1f5f9;
+  transition: background 0.15s ease;
+}
+
+.asset-market-split-handle:hover,
+.asset-market-split-handle:active {
+  background: #fdba74;
 }
 
 .asset-market-row.selected td {
@@ -7775,8 +7821,9 @@ select:focus-visible {
 .asset-market-detail-panel {
   display: flex;
   flex-direction: column;
-  min-height: 24rem;
-  max-height: calc(100vh - 12rem);
+  min-height: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fff;
@@ -7785,11 +7832,12 @@ select:focus-visible {
 
 .asset-market-detail-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.65rem 0.75rem;
   border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
 .asset-market-detail-header h2 {
@@ -7797,6 +7845,7 @@ select:focus-visible {
   font-size: 0.875rem;
   font-weight: 600;
   color: #0f172a;
+  min-width: 0;
 }
 
 .asset-market-detail-panel > .admin-error,
@@ -7805,16 +7854,19 @@ select:focus-visible {
 }
 
 .asset-market-skill-split {
-  display: grid;
-  grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   min-height: 0;
   flex: 1;
   overflow: hidden;
 }
 
 .asset-market-skill-tree {
+  flex: 0 0 var(--asset-market-skill-left-pct, 22%);
+  min-width: 6.5rem;
+  min-height: 0;
   overflow: auto;
-  border-right: 1px solid #e2e8f0;
   padding: 0.5rem 0.35rem;
 }
 
@@ -7864,16 +7916,51 @@ select:focus-visible {
 .asset-market-skill-file {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   padding: 0.5rem 0.65rem;
 }
 
-.asset-market-skill-file-path {
-  margin-bottom: 0.35rem;
-  font-size: 0.6875rem;
-  color: #64748b;
+.asset-market-skill-file-loading {
+  margin: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asset-market-skill-truncated {
+  flex-shrink: 0;
+  margin: 0 0 0.35rem;
+}
+
+/* Read-only CodeMirror — fill skill preview column (fixed panel height). */
+.asset-market-skill-codemirror.read-only-code-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+  display: block;
+}
+
+.asset-market-skill-codemirror.read-only-code-editor > .cm-theme,
+.asset-market-skill-codemirror.read-only-code-editor > .cm-editor {
+  position: absolute !important;
+  inset: 0;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+.asset-market-skill-codemirror.read-only-code-editor .cm-editor {
+  height: 100% !important;
+  max-height: none !important;
+}
+
+.asset-market-skill-codemirror.read-only-code-editor .cm-scroller {
+  min-height: 0;
+  overflow: auto !important;
 }
 
 .asset-market-code {
@@ -7897,11 +7984,33 @@ select:focus-visible {
 
 @media (max-width: 960px) {
   .asset-market-browse.has-detail {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .asset-market-browse.has-detail .asset-market-browse-list {
+    flex: none;
+    max-width: none;
+    max-height: none;
+  }
+
+  .asset-market-split-handle {
+    display: none;
   }
 
   .asset-market-detail-panel {
-    max-height: none;
+    flex: none;
+    min-height: 24rem;
+    max-height: calc(100vh - 12rem);
+  }
+
+  .asset-market-skill-split {
+    flex-direction: column;
+  }
+
+  .asset-market-skill-tree {
+    flex: none;
+    max-height: 8rem;
   }
 }
 
