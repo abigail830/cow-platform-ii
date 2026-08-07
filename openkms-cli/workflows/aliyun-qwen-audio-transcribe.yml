@@ -5,6 +5,6 @@
 model_name: "qwen-audio-3.0-asr-flash-filetrans"
 
 asr:
-  enable_diarization: true
+  enable_diarization: false
   # context_prompt: |
   #   Meeting about product planning. Participants: Alice, Bob.

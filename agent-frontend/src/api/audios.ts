@@ -29,6 +29,27 @@ export type AudioRecord = {
   pipeline_job: AudioPipelineJob | null;
 };
 
+export function resolveEffectiveAudioStatus(audio: Pick<AudioRecord, 'status' | 'pipeline_job'>): string {
+  if (audio.pipeline_job?.stage === 'failed') return 'failed';
+  if (audio.pipeline_job?.stage === 'done') return 'completed';
+  return audio.status;
+}
+
+export function isAudioPipelineActive(audio: Pick<AudioRecord, 'status' | 'pipeline_job'>): boolean {
+  const status = resolveEffectiveAudioStatus(audio);
+  if (status === 'running') return true;
+  const stage = audio.pipeline_job?.stage;
+  return stage === 'submitted' || stage === 'transcribing';
+}
+
+export function isAudioPipelineBusy(
+  audio: Pick<AudioRecord, 'id' | 'status' | 'pipeline_job'>,
+  runningIds?: Set<string>,
+): boolean {
+  if (runningIds?.has(audio.id)) return true;
+  return resolveEffectiveAudioStatus(audio) === 'running';
+}
+
 /** Below Vercel serverless body limit (~4.5 MB); use direct OSS upload above this. */
 export const DIRECT_UPLOAD_THRESHOLD_BYTES = 3.5 * 1024 * 1024;
 export const CHUNK_UPLOAD_THRESHOLD_BYTES = 10 * 1024 * 1024;

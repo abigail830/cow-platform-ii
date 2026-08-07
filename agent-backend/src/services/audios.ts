@@ -7,6 +7,7 @@ import {
   getLatestAudioPipelineJobForAudio,
   getLatestAudioPipelineJobsForAudios,
 } from './audio-pipeline-jobs.ts';
+import { reconcileStaleAudioPipelineJobs } from './audio-pipeline-reconcile.ts';
 import { isAudioAsyncPipelineName, ASYNC_AUDIO_PIPELINE_NAMES } from './audio-pipeline-names.ts';
 
 export type AudioChannelRow = typeof appAudioChannels.$inferSelect;
@@ -232,6 +233,8 @@ export async function listAudios(input: {
     .limit(limit)
     .offset(offset);
 
+  await reconcileStaleAudioPipelineJobs(rows.map((row) => row.id));
+
   const jobMap = await getLatestAudioPipelineJobsForAudios(rows.map((row) => row.id));
 
   return {
@@ -248,6 +251,7 @@ export async function getAudioById(id: string): Promise<AudioRow | null> {
 export async function getAudioPublicById(id: string): Promise<ReturnType<typeof toAudioPublic> | null> {
   const row = await getAudioById(id);
   if (!row) return null;
+  await reconcileStaleAudioPipelineJobs([id]);
   const job = await getLatestAudioPipelineJobForAudio(id);
   return toAudioPublic(row, job);
 }

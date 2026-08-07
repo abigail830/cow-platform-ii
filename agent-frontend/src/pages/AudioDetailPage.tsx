@@ -5,6 +5,9 @@ import {
   getAudio,
   getAudioDownloadUrl,
   getAudioTranscript,
+  isAudioPipelineActive,
+  isAudioPipelineBusy,
+  resolveEffectiveAudioStatus,
   runAudioPipeline,
   type AudioRecord,
 } from '../api/audios.ts';
@@ -52,10 +55,10 @@ export function AudioDetailPage() {
   }, [loadDetail]);
 
   useEffect(() => {
-    if (!audioId || audio?.status !== 'running') return;
+    if (!audioId || !audio || !isAudioPipelineActive(audio)) return;
     const intervalId = window.setInterval(() => void loadDetail(), 5000);
     return () => window.clearInterval(intervalId);
-  }, [audio?.status, audioId, loadDetail]);
+  }, [audio, audioId, loadDetail]);
 
   async function handleRunPipeline() {
     if (!audioId) return;
@@ -82,6 +85,9 @@ export function AudioDetailPage() {
     return <p className="admin-error">{error || 'Audio not found'}</p>;
   }
 
+  const effectiveStatus = resolveEffectiveAudioStatus(audio);
+  const pipelineBusy = isAudioPipelineBusy(audio) || runningPipeline;
+
   return (
     <div className="document-detail-page">
       <div className="document-detail-header">
@@ -90,10 +96,10 @@ export function AudioDetailPage() {
         </Link>
         <h2 className="document-detail-title">{audio.name}</h2>
         <p className="admin-muted">
-          Status: {formatDocumentStatusLabel(audio.status)}
+          Status: {formatDocumentStatusLabel(effectiveStatus)}
           {audio.pipeline_job ? ` · Pipeline: ${audio.pipeline_job.stage}` : ''}
         </p>
-        {audio.status !== 'running' && (
+        {!pipelineBusy && effectiveStatus !== 'running' && (
           <button
             type="button"
             className="btn-secondary"
@@ -115,7 +121,7 @@ export function AudioDetailPage() {
 
       <section className="audio-transcript-section">
         <h3>Transcript</h3>
-        {audio.status === 'running' && !transcript && (
+        {effectiveStatus === 'running' && !transcript && (
           <p className="admin-muted">
             <Loader2 {...iconProps()} className="spin" aria-hidden /> Transcription in progress…
           </p>
@@ -124,9 +130,9 @@ export function AudioDetailPage() {
           <div className="document-markdown-panel">
             <Markdown content={transcript} />
           </div>
-        ) : audio.status === 'completed' ? (
+        ) : effectiveStatus === 'completed' ? (
           <p className="admin-table-empty">No transcript artifact found in storage.</p>
-        ) : audio.status === 'failed' ? (
+        ) : effectiveStatus === 'failed' ? (
           <p className="admin-error">{audio.pipeline_job?.error_message ?? 'Transcription failed.'}</p>
         ) : (
           <p className="admin-table-empty">Run the transcription pipeline to generate a transcript.</p>

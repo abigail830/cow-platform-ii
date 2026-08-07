@@ -47,7 +47,7 @@ def _load_workflow(ctx: dict[str, Any]) -> dict[str, Any]:
 
 def _asr_options(workflow: dict[str, Any]) -> tuple[bool, str | None]:
     asr_cfg = workflow.get("asr") if isinstance(workflow.get("asr"), dict) else {}
-    enable_diarization = bool(asr_cfg.get("enable_diarization", True))
+    enable_diarization = bool(asr_cfg.get("enable_diarization", False))
     context_prompt = asr_cfg.get("context_prompt")
     prompt = str(context_prompt).strip() if context_prompt else None
     return enable_diarization, prompt or None

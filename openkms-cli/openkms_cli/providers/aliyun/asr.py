@@ -33,7 +33,7 @@ def submit_file_transcription(
     api_key: str,
     base_url: str,
     model: str = DEFAULT_MODEL,
-    enable_diarization: bool = True,
+    enable_diarization: bool = False,
     context_prompt: str | None = None,
     timeout: int = 120,
 ) -> str:

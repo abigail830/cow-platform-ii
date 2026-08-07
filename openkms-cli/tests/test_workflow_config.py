@@ -141,4 +141,4 @@ def test_metadata_extract_pipeline_default():
 def test_audio_transcribe_default_collects_model_name():
     cfg = load_packaged_default("aliyun-qwen-audio-transcribe")
     assert collect_model_names(cfg) == ["qwen-audio-3.0-asr-flash-filetrans"]
-    assert cfg["asr"]["enable_diarization"] is True
+    assert cfg["asr"]["enable_diarization"] is False

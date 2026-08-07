@@ -4,7 +4,10 @@ import { flattenAudioChannels } from '../api/audioChannels.ts';
 import {
   deleteAudio,
   formatAudioBytes,
+  isAudioPipelineActive,
+  isAudioPipelineBusy,
   listAudios,
+  resolveEffectiveAudioStatus,
   runAudioPipeline,
   uploadAudio,
   type AudioRecord,
@@ -72,7 +75,7 @@ export function AudioListPage() {
   }, [loadAudios]);
 
   useEffect(() => {
-    const hasRunning = items.some((item) => item.status === 'running');
+    const hasRunning = items.some((item) => isAudioPipelineActive(item));
     if (!hasRunning || !selectedChannelId) return;
     const intervalId = window.setInterval(() => void loadAudios({ silent: true }), 5000);
     return () => window.clearInterval(intervalId);
@@ -200,7 +203,8 @@ export function AudioListPage() {
               </tr>
             ) : (
               items.map((audio) => {
-                const isPipelineBusy = runningIds.has(audio.id) || audio.status === 'running';
+                const effectiveStatus = resolveEffectiveAudioStatus(audio);
+                const isPipelineBusy = isAudioPipelineBusy(audio, runningIds);
                 const isDeleting = deletingIds.has(audio.id);
 
                 return (
@@ -212,7 +216,7 @@ export function AudioListPage() {
                     </td>
                     <td className="documents-table-meta">{audio.file_type}</td>
                     <td className="documents-table-meta">{formatAudioBytes(audio.size_bytes)}</td>
-                    <td className="documents-status-col">{formatDocumentStatusLabel(audio.status)}</td>
+                    <td className="documents-status-col">{formatDocumentStatusLabel(effectiveStatus)}</td>
                     <td className="documents-table-meta">{formatAudioStage(audio.pipeline_job?.stage)}</td>
                     <td className="documents-table-meta">
                       {new Date(audio.created_at).toLocaleString()}
