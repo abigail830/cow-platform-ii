@@ -52,6 +52,8 @@ Run `npx tsc --noEmit` locally before deploy to catch type errors.
 
 Do **not** set `PIPELINE_WORKER=spawn` on Vercel.
 
+Document parse jobs dispatch **`openkms-pipeline.yml`** (Actions name: **OpenKMS Document Parse**). Audio transcription uses a separate workflow **`openkms-audio-transcribe.yml`** (Actions name: **OpenKMS Audio Transcribe**), linked from the system `aliyun-qwen-audio-transcribe` pipeline row (`workflow_file`).
+
 ## KB PageIndex import (isolated from document parse)
 
 Knowledge base import uses **separate** jobs (`app_kb_import_jobs`) and GHA workflow from the linked pipeline row (`workflow_file`, default **`openkms-kb-pageindex-import.yml`**). CLI args come from `app_pipeline_configs.command_template` on the KB’s `pipeline_id` (PageIndex KBs auto-link to system `kb-pageindex-import` at creation). It does **not** use `openkms-pipeline.yml` or `app_pipeline_jobs`.

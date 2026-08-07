@@ -11,6 +11,8 @@ import {
 export {
   ASYNC_AUDIO_PIPELINE_NAMES,
   audioPipelineProviderForName,
+  defaultAudioPipelineWorkflowFile,
+  DEFAULT_AUDIO_TRANSCRIBE_WORKFLOW_FILE,
   isAudioAsyncPipelineName,
 } from './audio-pipeline-names.ts';
 

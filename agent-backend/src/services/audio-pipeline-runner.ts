@@ -11,14 +11,15 @@ import {
 } from '../shared/pipeline-command-template.ts';
 import { getAudioChannelById } from './audios.ts';
 import {
-  resolveGithubActionsConfig,
-  triggerGithubActionsPipeline,
-} from './pipeline-github-actions.ts';
+  resolveAudioPipelineGithubConfig,
+  triggerAudioPipelineGithubActions,
+} from './audio-pipeline-github-actions.ts';
 import { resolvePipelineWorkerMode } from './pipeline-worker-mode.ts';
 import {
   ASYNC_AUDIO_PIPELINE_NAMES,
   audioPipelineProviderForName,
   createAudioPipelineJob,
+  defaultAudioPipelineWorkflowFile,
   isAudioAsyncPipelineName,
 } from './audio-pipeline-jobs.ts';
 import { spawn } from 'node:child_process';
@@ -116,17 +117,29 @@ function spawnAudioPipelineCliLocal(args: string[], apiUrl?: string): void {
 }
 
 async function dispatchGithubActionsAudioWorker(jobId: string, pipelineName: string): Promise<void> {
-  const config = resolveGithubActionsConfig();
-  if (!config) {
+  const baseConfig = resolveAudioPipelineGithubConfig();
+  if (!baseConfig) {
     throw new Error(
       'PIPELINE_WORKER=github_actions requires GITHUB_PIPELINE_TOKEN (or GITHUB_TOKEN) ' +
         'and GITHUB_PIPELINE_REPOSITORY',
     );
   }
-  await triggerGithubActionsPipeline({ jobId }, config);
+
+  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
+  const workflowFile =
+    pipeline?.workflowFile?.trim() ||
+    process.env.GITHUB_AUDIO_PIPELINE_WORKFLOW?.trim() ||
+    defaultAudioPipelineWorkflowFile(pipelineName);
+
+  const workerCliArgs = await buildAudioWorkerCliArgs(jobId, pipelineName);
+
+  await triggerAudioPipelineGithubActions(
+    { jobId, workerCliArgs },
+    { ...baseConfig, workflowFile },
+  );
   console.info(
-    `[audio-pipeline] dispatched GitHub Actions workflow=${config.workflowFile} ` +
-      `repo=${config.repository} job=${jobId}`,
+    `[audio-pipeline] dispatched GitHub Actions workflow=${workflowFile} ` +
+      `repo=${baseConfig.repository} job=${jobId}`,
   );
 }
 

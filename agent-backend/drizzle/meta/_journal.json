@@ -309,6 +309,13 @@
       "when": 1785200000000,
       "tag": "0043_audio",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1785201000000,
+      "tag": "0044_audio_pipeline_workflow",
+      "breakpoints": true
     }
   ]
 }

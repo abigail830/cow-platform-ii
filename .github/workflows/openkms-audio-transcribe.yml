@@ -1,26 +1,25 @@
-# Run pipeline jobs on GitHub-hosted runners (monorepo: openkms-cli/).
+# Audio transcription pipeline — isolated from document parse pipeline.
 #
-# Manual: Actions → OpenKMS Document Parse → Run workflow → job_id from backend DB.
+# Manual: Actions → OpenKMS Audio Transcribe → Run workflow → job_id from app_audio_pipeline_jobs.
 # Trigger API (backend):
-#   POST /repos/abigail830/cow-platform-ii/actions/workflows/openkms-pipeline.yml/dispatches
+#   POST /repos/{owner}/{repo}/actions/workflows/openkms-audio-transcribe.yml/dispatches
 
-name: OpenKMS Document Parse
+name: OpenKMS Audio Transcribe
 
 on:
   workflow_dispatch:
     inputs:
       job_id:
-        description: Pipeline job UUID (app_pipeline_jobs.id)
+        description: Audio pipeline job UUID (app_audio_pipeline_jobs.id)
         required: true
         type: string
-      page_index_strategy:
-        description: Page index strategy
+      worker_cli_args:
+        description: JSON array of openkms-cli args (from pipeline command template)
         required: false
-        default: aliyun-layouts
         type: string
 
 concurrency:
-  group: openkms-pipeline-${{ inputs.job_id }}
+  group: openkms-audio-transcribe-${{ inputs.job_id }}
   cancel-in-progress: false
 
 defaults:
@@ -28,8 +27,8 @@ defaults:
     working-directory: openkms-cli
 
 jobs:
-  run-async:
-    name: run-async (${{ inputs.job_id }})
+  audio-transcribe:
+    name: audio-transcribe (${{ inputs.job_id }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -48,7 +47,6 @@ jobs:
           enable-cache: true
           cache-dependency-glob: openkms-cli/uv.lock
 
-      # Reuse .venv when uv.lock unchanged — avoids reinstalling wheels every run.
       - name: Restore virtualenv cache
         id: venv-cache
         uses: actions/cache@v4
@@ -57,15 +55,14 @@ jobs:
           key: venv-${{ runner.os }}-py3.12-${{ hashFiles('openkms-cli/uv.lock') }}
 
       - name: Install dependencies
-        # parse = paddleocr-doc-parse (VLM); baidu = baidu-doc-parse; aliyun = docmind
-        run: uv sync --frozen --extra pipeline --extra parse --extra baidu --extra aliyun --extra metadata
+        run: uv sync --frozen --extra pipeline
 
       - name: Validate backend URL
         env:
           OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
         run: |
           if [ -z "$OPENKMS_API_URL" ]; then
-            echo "::error::GitHub secret OPENKMS_API_URL is not set. Use a public URL (not http://127.0.0.1)."
+            echo "::error::GitHub secret OPENKMS_API_URL is not set."
             exit 1
           fi
           case "$OPENKMS_API_URL" in
@@ -74,13 +71,12 @@ jobs:
               exit 1
               ;;
           esac
-          echo "Checking ${OPENKMS_API_URL}/health ..."
           curl -fsS --max-time 15 "${OPENKMS_API_URL%/}/health" || {
-            echo "::error::Backend health check failed. Ensure the API is deployed and reachable from the internet."
+            echo "::error::Backend health check failed."
             exit 1
           }
 
-      - name: Run pipeline (submit → poll → finalize)
+      - name: Run audio transcription (submit → poll → finalize)
         env:
           OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
           OPENKMS_AUTH_MODE: local
@@ -91,10 +87,24 @@ jobs:
           AWS_BUCKET_NAME: ${{ secrets.AWS_BUCKET_NAME }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
-          OPENKMS_DOCMIND_ENDPOINT: ${{ secrets.OPENKMS_DOCMIND_ENDPOINT }}
-          OPENKMS_ASYNC_POLL_INTERVAL_SECONDS: "8"
-          OPENKMS_ASYNC_MAX_WAIT_SECONDS: "600"
         run: |
-          uv run openkms-cli pipeline run-async \
-            --job-id "${{ inputs.job_id }}" \
-            --page-index-strategy "${{ inputs.page_index_strategy }}"
+          ARGS_JSON='${{ inputs.worker_cli_args }}'
+          if [ -n "$ARGS_JSON" ] && [ "$ARGS_JSON" != "null" ]; then
+            uv run openkms-cli $(python3 -c 'import json,sys; print(" ".join(json.loads(sys.argv[1])))' "$ARGS_JSON")
+          else
+            uv run openkms-cli audio-pipeline run-async --job-id "${{ inputs.job_id }}"
+          fi
+
+      - name: Mark job failed on workflow error
+        if: failure()
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+          OPENKMS_CLI_BASIC_USER: ${{ secrets.OPENKMS_CLI_BASIC_USER }}
+          OPENKMS_CLI_BASIC_PASSWORD: ${{ secrets.OPENKMS_CLI_BASIC_PASSWORD }}
+        run: |
+          JOB_ID="${{ inputs.job_id }}"
+          curl -fsS -X PATCH "${OPENKMS_API_URL%/}/internal-api/audio-pipeline/jobs/${JOB_ID}" \
+            -u "${OPENKMS_CLI_BASIC_USER}:${OPENKMS_CLI_BASIC_PASSWORD}" \
+            -H "Content-Type: application/json" \
+            -d '{"stage":"failed","error_message":"GitHub Actions worker failed before audio transcription completed"}' \
+            || echo "::warning::Could not mark audio pipeline job as failed"
