@@ -17,6 +17,14 @@ const connectionCache = new Map<string, McpServerConnection[]>();
 
 const DEFAULT_HYBRID_SEARCH_MCP_URL_ENV = 'HYBRID_SEARCH_MCP_URL';
 export const HYBRID_SEARCH_MCP_API_KEY_ENV = 'HYBRID_SEARCH_MCP_API_KEY';
+const DEFAULT_PAGEINDEX_SEARCH_MCP_URL_ENV = 'PAGEINDEX_SEARCH_MCP_URL';
+export const PAGEINDEX_SEARCH_MCP_API_KEY_ENV = 'PAGEINDEX_SEARCH_MCP_API_KEY';
+
+const PLATFORM_LOOPBACK_MCP_IDS = new Set(['hybrid-search', 'pageindex-search']);
+
+function isPlatformLoopbackMcp(platformMcpId: string): boolean {
+  return PLATFORM_LOOPBACK_MCP_IDS.has(platformMcpId);
+}
 
 export function resolveOpenkmsApiBaseUrl(): string {
   return process.env.OPENKMS_API_URL?.trim()?.replace(/\/$/, '') ?? 'http://127.0.0.1:8787';
@@ -52,6 +60,9 @@ export function resolveMcpServerUrl(server: McpServerYaml): string {
   if (urlEnv === DEFAULT_HYBRID_SEARCH_MCP_URL_ENV) {
     return `${resolveOpenkmsApiBaseUrl()}/api/mcp/hybrid-search`;
   }
+  if (urlEnv === DEFAULT_PAGEINDEX_SEARCH_MCP_URL_ENV) {
+    return `${resolveOpenkmsApiBaseUrl()}/api/mcp/pageindex-search`;
+  }
 
   throw new Error(`Missing MCP url env ${urlEnv} for server "${server.name}"`);
 }
@@ -84,7 +95,7 @@ function filterMcpTools(
 
 async function userApiKeyForPlatformMcp(platformMcpId: string, userId?: string): Promise<string | undefined> {
   const ctx = getAgentRequestContext();
-  if (platformMcpId === 'hybrid-search') {
+  if (platformMcpId === 'hybrid-search' || platformMcpId === 'pageindex-search') {
     const fromHeader = ctx?.openkmsApiKey?.trim();
     if (fromHeader) return fromHeader.startsWith('Bearer ') ? fromHeader.slice(7) : fromHeader;
   }
@@ -106,6 +117,9 @@ function resolvePlatformMcpApiKey(
   if (userKey) return userKey;
   if (platformMcpId === 'hybrid-search') {
     return process.env[HYBRID_SEARCH_MCP_API_KEY_ENV]?.replace(/^Bearer\s+/i, '');
+  }
+  if (platformMcpId === 'pageindex-search') {
+    return process.env[PAGEINDEX_SEARCH_MCP_API_KEY_ENV]?.replace(/^Bearer\s+/i, '');
   }
   if (platformMcpId === 'zhipu-web-search') {
     return process.env.ZHIPU_API_KEY?.trim();
@@ -154,7 +168,7 @@ export async function listPlatformMcpDiscoveredTools(
         url,
         transport: server.transport,
         headers,
-        ...(platformMcpId === 'hybrid-search'
+        ...(isPlatformLoopbackMcp(platformMcpId)
           ? { fetch: createAgentRequestForwardingFetch() }
           : {}),
       });
@@ -317,7 +331,7 @@ async function connectStudioPlatformMcp(spec: LoadedAgentSpec): Promise<ToolDefi
             url,
             transport: server.transport,
             headers,
-            ...(platformMcpId === 'hybrid-search'
+            ...(isPlatformLoopbackMcp(platformMcpId)
               ? { fetch: createAgentRequestForwardingFetch() }
               : {}),
           }),

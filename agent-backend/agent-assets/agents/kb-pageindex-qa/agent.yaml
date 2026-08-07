@@ -1,0 +1,53 @@
+id: kb-pageindex-qa
+displayName: PageIndex Q&A
+description: >-
+  Answer long-document questions via PageIndex dual-path retrieval
+  (document discovery → tree navigation → section read), not RAG chunk search.
+icon: BookOpenText
+
+model:
+  configName: deepSeek-V4-Flash
+  profile: glm-4.7-flash
+
+prompt: ./prompt.md
+
+skills:
+  - /agent-assets/skills/kb-pageindex-qa
+
+mcp:
+  - name: pageindex-search
+    internalPath: /api/mcp/pageindex-search
+    transport: streamable-http
+    useAgentRequestHeaders: true
+    allowTools:
+      - mcp__pageindex-search__list_knowledge_bases
+      - mcp__pageindex-search__browse_documents
+      - mcp__pageindex-search__search_documents
+      - mcp__pageindex-search__get_document
+      - mcp__pageindex-search__get_document_structure
+      - mcp__pageindex-search__get_section_content
+
+context:
+  temporal: true
+  timezone: Asia/Shanghai
+
+access:
+  defaultForRoles:
+    - admin
+    - agent-player
+
+a2a:
+  enabled: true
+  skills:
+    - id: kb-pageindex-qa
+      name: PageIndex Q&A
+      description: >-
+        Answer questions from PageIndex knowledge bases using facet/FTS discovery
+        and chapter-tree section reads with citations.
+      tags:
+        - product:kb-pageindex-qa
+        - retrieval:pageindex-search
+      examples:
+        - What does the Vietnam 2026 guide say about corporate tax rates?
+        - Find the section on labor contracts and summarize the key obligations.
+        - Which documents in channel CorpService/VN cover foreign investment?
