@@ -33,6 +33,21 @@ function isQwenAlibabaMaaSConfig(config: RuntimeModelConfig): boolean {
   }
 }
 
+function isDeepSeekOfficialConfig(config: RuntimeModelConfig): boolean {
+  const provider = config.provider.trim().toLowerCase();
+  if (provider.includes('deepseek')) return true;
+
+  const baseUrl = config.baseUrl?.trim();
+  if (!baseUrl) return false;
+
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase();
+    return hostname.includes('deepseek.com');
+  } catch {
+    return false;
+  }
+}
+
 function isAzureHostedModelConfig(config: RuntimeModelConfig): boolean {
   const provider = config.provider.trim().toLowerCase();
   if (provider.includes('azure')) return true;
@@ -75,6 +90,7 @@ function catalogProviderIdForConfig(config: RuntimeModelConfig): string | null {
   if (isAzureHostedModelConfig(config)) return 'azure-openai-responses';
   const provider = config.provider.trim().toLowerCase();
   if (provider.includes('siliconflow')) return 'siliconflow';
+  if (isDeepSeekOfficialConfig(config)) return 'deepseek';
   if (provider === 'openai') return 'openai';
   if (isQwenAlibabaMaaSConfig(config)) return 'opencode-go';
   return null;

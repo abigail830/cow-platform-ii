@@ -57,6 +57,29 @@ test('resolveFlueModelFromConfig uses azure-openai-responses catalog provider fo
   assert.equal(model, 'azure-openai-responses/gpt-5.4-mini');
 });
 
+test('resolveFlueModelFromConfig uses deepseek catalog for DeepSeek official API', () => {
+  const model = resolveFlueModelFromConfig(
+    sampleConfig({
+      name: 'deepSeek-V4-Flash',
+      modelId: 'deepseek-v4-flash',
+      provider: 'Deepseek',
+      baseUrl: 'https://api.deepseek.com',
+    }),
+  );
+  assert.equal(model, 'deepseek/deepseek-v4-flash');
+});
+
+test('resolveFlueModelFromConfig uses deepseek catalog when baseUrl is deepseek.com', () => {
+  const model = resolveFlueModelFromConfig(
+    sampleConfig({
+      provider: 'Custom',
+      modelId: 'deepseek-v4-flash',
+      baseUrl: 'https://api.deepseek.com/v1',
+    }),
+  );
+  assert.equal(model, 'deepseek/deepseek-v4-flash');
+});
+
 test('resolveFlueModelFromConfig uses opencode-go catalog for Alibaba Qwen MaaS', () => {
   const model = resolveFlueModelFromConfig(
     sampleConfig({
