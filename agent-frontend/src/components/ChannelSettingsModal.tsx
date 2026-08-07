@@ -4,6 +4,7 @@ import {
   type ChannelProcessingOptions,
 } from '../api/documentChannels.ts';
 import { ResourceAccessPanel, type ResourceAccessPanelHandle } from './ResourceAccessPanel.tsx';
+import type { ResourceType } from '../api/resourceAccess.ts';
 
 type ChannelSettingsModalProps = {
   channelId: string;
@@ -18,6 +19,10 @@ type ChannelSettingsModalProps = {
     pipelineId: string | null;
     autoStartPipeline: boolean;
   }) => Promise<void>;
+  resourceType?: ResourceType;
+  fetchProcessingOptions?: () => Promise<ChannelProcessingOptions>;
+  pipelineHint?: string;
+  sharingInheritHint?: string;
 };
 
 type SettingsTab = 'general' | 'pipeline' | 'sharing';
@@ -30,6 +35,10 @@ export function ChannelSettingsModal({
   initialAutoStartPipeline,
   onCancel,
   onSubmit,
+  resourceType = 'document_channel',
+  fetchProcessingOptions = fetchChannelProcessingOptions,
+  pipelineHint = 'When set, documents in this channel run this parse pipeline (CLI worker + Config YAML, including metadata extract).',
+  sharingInheritHint = 'Documents inherit access rules from their channel. Sub-channels inherit parent channel rules.',
 }: ChannelSettingsModalProps) {
   const [tab, setTab] = useState<SettingsTab>('general');
   const [name, setName] = useState(initialName);
@@ -58,7 +67,7 @@ export function ChannelSettingsModal({
     let cancelled = false;
     setOptionsLoading(true);
     setOptionsError('');
-    void fetchChannelProcessingOptions()
+    void fetchProcessingOptions()
       .then((data) => {
         if (cancelled) return;
         setOptions(data);
@@ -190,8 +199,7 @@ export function ChannelSettingsModal({
                         ))}
                       </select>
                       <span className="admin-form-hint">
-                        When set, documents in this channel run this parse pipeline (CLI worker + Config YAML,
-                        including metadata extract).
+                        {pipelineHint}
                         {selectedPipelineLabel
                           ? ` Selected: ${selectedPipelineLabel}.`
                           : ' No pipeline selected.'}
@@ -219,10 +227,10 @@ export function ChannelSettingsModal({
               <ResourceAccessPanel
                 ref={sharingRef}
                 showFooter={false}
-                resourceType="document_channel"
+                resourceType={resourceType}
                 resourceId={channelId}
                 resourceLabel={name.trim() || initialName}
-                inheritHint="Documents inherit access rules from their channel. Sub-channels inherit parent channel rules."
+                inheritHint={sharingInheritHint}
                 onCapabilitiesChange={({ canManage }) => setSharingCanManage(canManage)}
               />
             )}

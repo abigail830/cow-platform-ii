@@ -1,4 +1,5 @@
 import {
+  Mic,
   Boxes,
   Bot,
   Combine,
@@ -23,6 +24,7 @@ const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   'builtin-agents': Bot,
   storage: Database,
   documents: FileText,
+  audio: Mic,
   knowledge: Library,
   users: Users,
   roles: ShieldCheck,

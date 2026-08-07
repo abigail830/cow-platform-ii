@@ -1,11 +1,40 @@
 import type { Context } from 'hono';
 import { getUser } from './jwt.ts';
 import {
+  resolveAudioChannelPermission,
+  getAudioChannelIdForAudio,
+} from './audio-resource-access.ts';
+import {
   getDocumentChannelIdForDocument,
   resolveChannelPermission,
   resolveKnowledgeBasePermission,
   type ResourcePermissionLevel,
 } from './resource-access.ts';
+
+export async function denyUnlessAudioChannelAccess(
+  c: Context,
+  channelId: string,
+  required: ResourcePermissionLevel,
+): Promise<Response | null> {
+  const user = getUser(c);
+  const allowed = await resolveAudioChannelPermission(user.id, channelId).then((flags) => {
+    if (required === 'manage') return flags.manage;
+    if (required === 'write') return flags.write || flags.manage;
+    return flags.read || flags.write || flags.manage;
+  });
+  if (!allowed) return c.json({ error: 'Forbidden' }, 403);
+  return null;
+}
+
+export async function denyUnlessAudioAccess(
+  c: Context,
+  audioId: string,
+  required: ResourcePermissionLevel,
+): Promise<Response | null> {
+  const channelId = await getAudioChannelIdForAudio(audioId);
+  if (!channelId) return c.json({ error: 'Audio not found' }, 404);
+  return denyUnlessAudioChannelAccess(c, channelId, required);
+}
 
 export async function denyUnlessChannelAccess(
   c: Context,

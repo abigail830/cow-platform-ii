@@ -211,7 +211,7 @@ export const appUserRoles = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.roleId] })],
 );
 
-export const RESOURCE_TYPES = ['document_channel', 'knowledge_base', 'studio_agent'] as const;
+export const RESOURCE_TYPES = ['document_channel', 'audio_channel', 'knowledge_base', 'studio_agent'] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
 
 export const GRANTEE_TYPES = ['user', 'others'] as const;
@@ -275,6 +275,73 @@ export const appDocuments = pgTable(
   (t) => [
     index('idx_documents_channel').on(t.channelId, t.updatedAt),
     index('idx_documents_hash').on(t.fileHash),
+  ],
+);
+
+export const appAudioChannels = pgTable(
+  'app_audio_channels',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    parentId: uuid('parent_id'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
+    autoStartPipeline: boolean('auto_start_pipeline').notNull().default(false),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_audio_channels_parent').on(t.parentId, t.sortOrder)],
+);
+
+export const appAudios = pgTable(
+  'app_audios',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => appAudioChannels.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    fileType: text('file_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull().default(0),
+    fileHash: text('file_hash').notNull(),
+    s3Key: text('s3_key').notNull(),
+    status: text('status').notNull().default('uploaded'),
+    durationSec: integer('duration_sec'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+    uploadedBy: uuid('uploaded_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_audios_channel').on(t.channelId, t.updatedAt),
+    index('idx_audios_hash').on(t.fileHash),
+  ],
+);
+
+export const AUDIO_PIPELINE_JOB_STAGES = ['submitted', 'transcribing', 'done', 'failed'] as const;
+export type AudioPipelineJobStage = (typeof AUDIO_PIPELINE_JOB_STAGES)[number];
+
+export const appAudioPipelineJobs = pgTable(
+  'app_audio_pipeline_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    audioId: uuid('audio_id')
+      .notNull()
+      .references(() => appAudios.id, { onDelete: 'cascade' }),
+    pipelineName: text('pipeline_name').notNull(),
+    provider: text('provider').notNull(),
+    stage: text('stage').notNull().default('submitted'),
+    externalJobId: text('external_job_id'),
+    configYaml: text('config_yaml'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_audio_pipeline_jobs_audio').on(t.audioId, t.createdAt),
+    index('idx_audio_pipeline_jobs_stage').on(t.stage, t.provider),
   ],
 );
 

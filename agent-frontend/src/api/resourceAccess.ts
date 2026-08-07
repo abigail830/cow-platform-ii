@@ -30,7 +30,7 @@ export type ResourceAccessSettings = {
   my_access: ResourcePermissionFlags;
 };
 
-export type ResourceType = 'document_channel' | 'knowledge_base';
+export type ResourceType = 'document_channel' | 'audio_channel' | 'knowledge_base';
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
@@ -46,9 +46,13 @@ async function authFetch(path: string, init?: RequestInit) {
 }
 
 function accessPath(resourceType: ResourceType, resourceId: string): string {
-  return resourceType === 'document_channel'
-    ? `/api/document-channels/${resourceId}/access`
-    : `/api/knowledge-bases/${resourceId}/access`;
+  if (resourceType === 'document_channel') {
+    return `/api/document-channels/${resourceId}/access`;
+  }
+  if (resourceType === 'audio_channel') {
+    return `/api/audio-channels/${resourceId}/access`;
+  }
+  return `/api/knowledge-bases/${resourceId}/access`;
 }
 
 export async function fetchResourceAccess(
@@ -83,7 +87,9 @@ export async function transferResourceOwner(
   const path =
     resourceType === 'document_channel'
       ? `/api/document-channels/${resourceId}/access/transfer-owner`
-      : `/api/knowledge-bases/${resourceId}/access/transfer-owner`;
+      : resourceType === 'audio_channel'
+        ? `/api/audio-channels/${resourceId}/access/transfer-owner`
+        : `/api/knowledge-bases/${resourceId}/access/transfer-owner`;
   const data = await authFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

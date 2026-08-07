@@ -4,6 +4,7 @@ export type NavPageIcon =
   | 'storage'
   | 'builtin-agents'
   | 'documents'
+  | 'audio'
   | 'knowledge'
   | 'users'
   | 'roles'
@@ -95,6 +96,14 @@ export const AGENT_PAGES: readonly NavPage[] = [
 ];
 
 export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
+  {
+    path: '/knowledge/audio',
+    navLabel: 'Audio',
+    titleMain: 'Audio',
+    titleAccent: '',
+    permissionKey: 'knowledge-management:audio',
+    icon: 'audio',
+  },
   {
     path: '/knowledge/documents',
     navLabel: 'Document',

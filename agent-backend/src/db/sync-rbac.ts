@@ -43,6 +43,8 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
     'agent:session-explorer',
   ],
   'knowledge-manager': [
+    'knowledge-management:audio:read',
+    'knowledge-management:audio:write',
     'knowledge-management:documents:read',
     'knowledge-management:documents:write',
     'knowledge-management:knowledge-bases:read',

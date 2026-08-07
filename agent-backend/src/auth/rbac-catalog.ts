@@ -20,6 +20,7 @@ export const ADMIN_RESOURCES = {
 export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'knowledge-management' as const;
 
 export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
+  AUDIO: 'audio',
   DOCUMENTS: 'documents',
   KNOWLEDGE_BASES: 'knowledge-bases',
   HYBRID_SEARCH: 'hybrid-search',
@@ -86,6 +87,18 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
 ];
 
 const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
+  {
+    resource: KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO,
+    label: 'Audio',
+    description: 'Audio channel folders and meeting recording uploads.',
+    routePatterns: ['/knowledge/audio'],
+    apiPatterns: [
+      '/api/audio-channels',
+      '/api/audio-channels/*',
+      '/api/audios',
+      '/api/audios/*',
+    ],
+  },
   {
     resource: KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS,
     label: 'Documents',

@@ -16,6 +16,9 @@ import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
 import { BuiltinAgentsPage } from './pages/BuiltinAgentsPage.tsx';
 import { BuiltinAgentEditPage } from './pages/BuiltinAgentEditPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
+import { AudioLayout } from './pages/AudioLayout.tsx';
+import { AudioDetailPage } from './pages/AudioDetailPage.tsx';
+import { AudioListPage } from './pages/AudioListPage.tsx';
 import { DocumentsLayout } from './pages/DocumentsLayout.tsx';
 import { DocumentDetailPage } from './pages/DocumentDetailPage.tsx';
 import { DocumentsListPage } from './pages/DocumentsListPage.tsx';
@@ -57,6 +60,10 @@ export default function App() {
           <Route path="/knowledge/hybrid-search" element={<HybridSearchPage />} />
           <Route path="/knowledge/knowledge-bases" element={<KnowledgeBasesListPage />} />
           <Route path="/knowledge/knowledge-bases/:knowledgeBaseId" element={<KnowledgeBaseDetailRouter />} />
+          <Route path="/knowledge/audio" element={<AudioLayout />}>
+            <Route index element={<AudioListPage />} />
+            <Route path=":audioId" element={<AudioDetailPage />} />
+          </Route>
           <Route path="/knowledge/documents" element={<DocumentsLayout />}>
             <Route index element={<DocumentsListPage />} />
             <Route path=":documentId" element={<DocumentDetailPage />} />

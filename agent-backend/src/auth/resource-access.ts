@@ -1,5 +1,6 @@
 import { and, asc, eq, ilike, inArray, or } from 'drizzle-orm';
 import {
+  appAudioChannels,
   appDocumentChannels,
   appKnowledgeBases,
   appResourceGrants,
@@ -79,6 +80,15 @@ async function loadOwnerId(resourceType: ResourceType, resourceId: string): Prom
       .select({ createdBy: appDocumentChannels.createdBy })
       .from(appDocumentChannels)
       .where(eq(appDocumentChannels.id, resourceId))
+      .limit(1);
+    return row?.createdBy ?? null;
+  }
+
+  if (resourceType === 'audio_channel') {
+    const [row] = await db
+      .select({ createdBy: appAudioChannels.createdBy })
+      .from(appAudioChannels)
+      .where(eq(appAudioChannels.id, resourceId))
       .limit(1);
     return row?.createdBy ?? null;
   }
@@ -329,6 +339,14 @@ export async function getResourceAccessSettings(
       .limit(1);
     if (!exists) return null;
   }
+  if (ownerId === null && resourceType === 'audio_channel') {
+    const [exists] = await db
+      .select({ id: appAudioChannels.id })
+      .from(appAudioChannels)
+      .where(eq(appAudioChannels.id, resourceId))
+      .limit(1);
+    if (!exists) return null;
+  }
   if (ownerId === null && resourceType === 'knowledge_base') {
     const [exists] = await db
       .select({ id: appKnowledgeBases.id })
@@ -381,7 +399,12 @@ export async function getResourceAccessSettings(
   const myAccess =
     resourceType === 'document_channel'
       ? await resolveChannelPermission(viewerUserId, resourceId)
-      : resourceType === 'studio_agent'
+      : resourceType === 'audio_channel'
+        ? await (await import('./audio-resource-access.ts')).resolveAudioChannelPermission(
+            viewerUserId,
+            resourceId,
+          )
+        : resourceType === 'studio_agent'
         ? await resolveStudioAgentPermission(viewerUserId, resourceId)
         : await resolveKnowledgeBasePermission(viewerUserId, resourceId);
 
@@ -402,7 +425,13 @@ export async function replaceResourceAccessSettings(
   const canManage =
     resourceType === 'document_channel'
       ? await userHasChannelAccess(actorUserId, resourceId, 'manage')
-      : resourceType === 'studio_agent'
+      : resourceType === 'audio_channel'
+        ? await (await import('./audio-resource-access.ts')).userHasAudioChannelAccess(
+            actorUserId,
+            resourceId,
+            'manage',
+          )
+        : resourceType === 'studio_agent'
         ? await userHasStudioAgentAccess(actorUserId, resourceId, 'manage')
         : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
   if (!canManage) throw new Error('Forbidden');
@@ -460,7 +489,13 @@ export async function transferResourceOwner(
   const canManage =
     resourceType === 'document_channel'
       ? await userHasChannelAccess(actorUserId, resourceId, 'manage')
-      : resourceType === 'studio_agent'
+      : resourceType === 'audio_channel'
+        ? await (await import('./audio-resource-access.ts')).userHasAudioChannelAccess(
+            actorUserId,
+            resourceId,
+            'manage',
+          )
+        : resourceType === 'studio_agent'
         ? await userHasStudioAgentAccess(actorUserId, resourceId, 'manage')
         : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
   if (!canManage) throw new Error('Forbidden');
@@ -474,6 +509,13 @@ export async function transferResourceOwner(
       .set({ createdBy: newOwnerUserId, updatedAt: new Date() })
       .where(eq(appDocumentChannels.id, resourceId))
       .returning({ id: appDocumentChannels.id });
+    if (!updated) throw new Error('Channel not found');
+  } else if (resourceType === 'audio_channel') {
+    const [updated] = await db
+      .update(appAudioChannels)
+      .set({ createdBy: newOwnerUserId, updatedAt: new Date() })
+      .where(eq(appAudioChannels.id, resourceId))
+      .returning({ id: appAudioChannels.id });
     if (!updated) throw new Error('Channel not found');
   } else if (resourceType === 'studio_agent') {
     const [updated] = await db

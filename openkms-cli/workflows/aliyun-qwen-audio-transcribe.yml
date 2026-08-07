@@ -1,0 +1,7 @@
+# Default worker config for aliyun-qwen-audio-transcribe pipeline.
+
+asr:
+  model: qwen-audio-3.0-asr-flash-filetrans
+  enable_diarization: true
+  # context_prompt: |
+  #   Meeting about product planning. Participants: Alice, Bob.

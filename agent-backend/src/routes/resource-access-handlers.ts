@@ -7,7 +7,7 @@ import {
   type ResourceAccessPutInput,
   type ResourceType,
 } from '../auth/resource-access.ts';
-import { denyUnlessChannelAccess, denyUnlessKnowledgeBaseAccess } from '../auth/require-resource-access.ts';
+import { denyUnlessChannelAccess, denyUnlessKnowledgeBaseAccess, denyUnlessAudioChannelAccess } from '../auth/require-resource-access.ts';
 
 export async function handleGetResourceAccess(
   c: Context,
@@ -18,7 +18,9 @@ export async function handleGetResourceAccess(
   const denied =
     resourceType === 'document_channel'
       ? await denyUnlessChannelAccess(c, resourceId, 'read')
-      : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'read');
+      : resourceType === 'audio_channel'
+        ? await denyUnlessAudioChannelAccess(c, resourceId, 'read')
+        : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'read');
   if (denied) return denied;
 
   const settings = await getResourceAccessSettings(resourceType, resourceId, user.id);
@@ -35,7 +37,9 @@ export async function handlePutResourceAccess(
   const denied =
     resourceType === 'document_channel'
       ? await denyUnlessChannelAccess(c, resourceId, 'manage')
-      : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'manage');
+      : resourceType === 'audio_channel'
+        ? await denyUnlessAudioChannelAccess(c, resourceId, 'manage')
+        : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'manage');
   if (denied) return denied;
 
   const body = await c.req.json<ResourceAccessPutInput>().catch(() => null);
@@ -62,7 +66,9 @@ export async function handleTransferResourceOwner(
   const denied =
     resourceType === 'document_channel'
       ? await denyUnlessChannelAccess(c, resourceId, 'manage')
-      : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'manage');
+      : resourceType === 'audio_channel'
+        ? await denyUnlessAudioChannelAccess(c, resourceId, 'manage')
+        : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'manage');
   if (denied) return denied;
 
   const body = await c.req.json<{ user_id?: string }>().catch(() => ({}));
