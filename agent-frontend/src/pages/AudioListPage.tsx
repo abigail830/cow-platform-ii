@@ -7,32 +7,16 @@ import {
   isAudioPipelineActive,
   isAudioPipelineBusy,
   listAudios,
-  resolveEffectiveAudioStatus,
   runAudioPipeline,
   uploadAudio,
   type AudioRecord,
 } from '../api/audios.ts';
 import { IconDelete, IconRun } from '../components/AdminActionIcons.tsx';
-import { formatDocumentStatusLabel } from '../components/DocumentPipelineStatus.tsx';
+import { AudioPipelineStatus } from '../components/AudioPipelineStatus.tsx';
 import { AudioUploadModal } from '../components/AudioUploadModal.tsx';
 import { Loader2, Search } from 'lucide-react';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useAudioOutletContext } from './AudioOutletContext.tsx';
-
-function formatAudioStage(stage: string | undefined): string {
-  switch (stage) {
-    case 'submitted':
-      return 'Submitting';
-    case 'transcribing':
-      return 'Transcribing';
-    case 'done':
-      return 'Done';
-    case 'failed':
-      return 'Failed';
-    default:
-      return stage ?? '—';
-  }
-}
 
 export function AudioListPage() {
   const { channels, selectedChannelId, loadingChannels } = useAudioOutletContext();
@@ -177,7 +161,6 @@ export function AudioListPage() {
               <th>Type</th>
               <th>Size</th>
               <th className="documents-status-col">Status</th>
-              <th>Pipeline</th>
               <th>Uploaded</th>
               <th className="admin-table-actions-col">Actions</th>
             </tr>
@@ -185,25 +168,24 @@ export function AudioListPage() {
           <tbody>
             {!selectedChannelId ? (
               <tr>
-                <td colSpan={7} className="admin-table-empty">
+                <td colSpan={6} className="admin-table-empty">
                   Select or create a channel to manage audio files.
                 </td>
               </tr>
             ) : loadingChannels || loading ? (
               <tr>
-                <td colSpan={7} className="admin-table-empty">
+                <td colSpan={6} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="admin-table-empty">
+                <td colSpan={6} className="admin-table-empty">
                   No audio files in this channel yet.
                 </td>
               </tr>
             ) : (
               items.map((audio) => {
-                const effectiveStatus = resolveEffectiveAudioStatus(audio);
                 const isPipelineBusy = isAudioPipelineBusy(audio, runningIds);
                 const isDeleting = deletingIds.has(audio.id);
 
@@ -216,8 +198,9 @@ export function AudioListPage() {
                     </td>
                     <td className="documents-table-meta">{audio.file_type}</td>
                     <td className="documents-table-meta">{formatAudioBytes(audio.size_bytes)}</td>
-                    <td className="documents-status-col">{formatDocumentStatusLabel(effectiveStatus)}</td>
-                    <td className="documents-table-meta">{formatAudioStage(audio.pipeline_job?.stage)}</td>
+                    <td className="documents-status-col">
+                      <AudioPipelineStatus audio={audio} />
+                    </td>
                     <td className="documents-table-meta">
                       {new Date(audio.created_at).toLocaleString()}
                     </td>

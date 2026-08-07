@@ -105,6 +105,26 @@ export async function getLatestAudioPipelineJobsForAudios(
   return map;
 }
 
+export const GENERIC_AUDIO_GHA_FAILURE_MESSAGE =
+  'GitHub Actions worker failed before audio transcription completed';
+
+/** Keep a specific CLI/provider error when GHA failure step sends a generic message. */
+export function resolveAudioPipelineJobErrorMessage(
+  existing: string | null | undefined,
+  incoming: string | null | undefined,
+): string | null {
+  const next = incoming?.trim() || null;
+  const prev = existing?.trim();
+  if (
+    next === GENERIC_AUDIO_GHA_FAILURE_MESSAGE &&
+    prev &&
+    prev !== GENERIC_AUDIO_GHA_FAILURE_MESSAGE
+  ) {
+    return prev;
+  }
+  return next;
+}
+
 export function audioPipelineJobToPublic(job: typeof appAudioPipelineJobs.$inferSelect) {
   return {
     id: job.id,

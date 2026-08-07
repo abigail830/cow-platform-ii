@@ -50,6 +50,14 @@ export function isAudioPipelineBusy(
   return resolveEffectiveAudioStatus(audio) === 'running';
 }
 
+export const GENERIC_AUDIO_GHA_FAILURE_MESSAGE =
+  'GitHub Actions worker failed before audio transcription completed';
+
+export function displayAudioPipelineError(message: string | null | undefined): string | null {
+  const trimmed = message?.trim();
+  return trimmed ? trimmed : null;
+}
+
 /** Below Vercel serverless body limit (~4.5 MB); use direct OSS upload above this. */
 export const DIRECT_UPLOAD_THRESHOLD_BYTES = 3.5 * 1024 * 1024;
 export const CHUNK_UPLOAD_THRESHOLD_BYTES = 10 * 1024 * 1024;

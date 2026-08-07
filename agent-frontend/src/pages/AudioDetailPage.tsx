@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import {
+  displayAudioPipelineError,
   getAudio,
   getAudioDownloadUrl,
   getAudioTranscript,
@@ -75,8 +76,9 @@ export function AudioDetailPage() {
 
   if (loading) {
     return (
-      <p className="admin-muted documents-loading">
-        <Loader2 {...iconProps()} className="spin" aria-hidden /> Loading…
+      <p className="document-detail-loading" role="status" aria-live="polite">
+        <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
+        Loading audio…
       </p>
     );
   }
@@ -87,18 +89,21 @@ export function AudioDetailPage() {
 
   const effectiveStatus = resolveEffectiveAudioStatus(audio);
   const pipelineBusy = isAudioPipelineBusy(audio) || runningPipeline;
+  const pipelineError = displayAudioPipelineError(audio.pipeline_job?.error_message);
 
   return (
-    <div className="document-detail-page">
-      <div className="document-detail-header">
+    <div className="document-detail-page audio-detail-page">
+      <div className="document-detail-toolbar">
         <Link to="/knowledge/audio" className="document-detail-back">
-          <ArrowLeft {...iconProps()} aria-hidden /> Back to list
+          <ArrowLeft {...iconProps({ size: 16 })} aria-hidden />
+          Back to list
         </Link>
-        <h2 className="document-detail-title">{audio.name}</h2>
-        <p className="admin-muted">
-          Status: {formatDocumentStatusLabel(effectiveStatus)}
-          {audio.pipeline_job ? ` · Pipeline: ${audio.pipeline_job.stage}` : ''}
-        </p>
+        <div className="document-detail-title-row">
+          <h2 className="document-detail-title">{audio.name}</h2>
+          <span className={`document-status-badge status-${effectiveStatus}`}>
+            {formatDocumentStatusLabel(effectiveStatus)}
+          </span>
+        </div>
         {!pipelineBusy && effectiveStatus !== 'running' && (
           <button
             type="button"
@@ -111,33 +116,48 @@ export function AudioDetailPage() {
         )}
       </div>
 
-      {error && <p className="admin-error">{error}</p>}
+      {error && <p className="error inline">{error}</p>}
 
-      {audioUrl && (
-        <div className="audio-player-wrap">
-          <audio controls src={audioUrl} className="audio-player" />
+      {pipelineError && effectiveStatus === 'failed' && (
+        <div className="audio-pipeline-failure-banner" role="alert">
+          <strong>Transcription failed</strong>
+          <p>{pipelineError}</p>
         </div>
       )}
 
-      <section className="audio-transcript-section">
-        <h3>Transcript</h3>
-        {effectiveStatus === 'running' && !transcript && (
-          <p className="admin-muted">
-            <Loader2 {...iconProps()} className="spin" aria-hidden /> Transcription in progress…
-          </p>
+      <div className="audio-detail-layout">
+        {audioUrl && (
+          <section className="audio-detail-panel" aria-label="Audio playback">
+            <h3 className="document-detail-panel-heading">Audio</h3>
+            <audio controls src={audioUrl} className="audio-player" />
+          </section>
         )}
-        {transcript ? (
-          <div className="document-markdown-panel">
-            <Markdown content={transcript} />
-          </div>
-        ) : effectiveStatus === 'completed' ? (
-          <p className="admin-table-empty">No transcript artifact found in storage.</p>
-        ) : effectiveStatus === 'failed' ? (
-          <p className="admin-error">{audio.pipeline_job?.error_message ?? 'Transcription failed.'}</p>
-        ) : (
-          <p className="admin-table-empty">Run the transcription pipeline to generate a transcript.</p>
-        )}
-      </section>
+
+        <section className="audio-detail-panel audio-detail-transcript" aria-label="Transcript">
+          <h3 className="document-detail-panel-heading">Transcript</h3>
+          {effectiveStatus === 'running' && !transcript && (
+            <p className="document-detail-loading" role="status" aria-live="polite">
+              <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
+              Transcription in progress…
+            </p>
+          )}
+          {transcript ? (
+            <div className="document-markdown-panel">
+              <Markdown content={transcript} />
+            </div>
+          ) : effectiveStatus === 'completed' ? (
+            <p className="document-detail-panel-empty">No transcript artifact found in storage.</p>
+          ) : effectiveStatus === 'failed' ? (
+            <p className="document-detail-panel-empty">
+              No transcript was generated. See the error above and retry when ready.
+            </p>
+          ) : (
+            <p className="document-detail-panel-empty">
+              Run the transcription pipeline to generate a transcript.
+            </p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

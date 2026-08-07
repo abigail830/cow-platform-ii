@@ -5,6 +5,7 @@ import {
   buildAudioPipelineJobContext,
   getAudioPipelineJobById,
   markAudioForJobStage,
+  resolveAudioPipelineJobErrorMessage,
   updateAudioPipelineJob,
   type AudioPipelineJobStage,
 } from '../../services/audio-pipeline-jobs.ts';
@@ -44,7 +45,11 @@ audioPipelineJobs.patch('/:id', async (c) => {
   const updated = await updateAudioPipelineJob(job.id, {
     stage: body.stage,
     externalJobId: body.external_job_id,
-    errorMessage: body.error_message,
+    ...(body.error_message !== undefined
+      ? {
+          errorMessage: resolveAudioPipelineJobErrorMessage(job.errorMessage, body.error_message),
+        }
+      : {}),
   });
 
   if (body.stage) {

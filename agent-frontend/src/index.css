@@ -4063,6 +4063,60 @@ select:focus-visible {
   overflow: hidden;
 }
 
+.audio-detail-page {
+  overflow: auto;
+}
+
+.audio-detail-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.audio-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.audio-detail-transcript .document-markdown-panel {
+  max-height: min(60vh, 42rem);
+  overflow: auto;
+}
+
+.audio-player {
+  display: block;
+  width: 100%;
+}
+
+.audio-pipeline-failure-banner {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.audio-pipeline-failure-banner strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.audio-pipeline-failure-banner p {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
 .document-metadata-panel {
   display: flex;
   flex-direction: column;
