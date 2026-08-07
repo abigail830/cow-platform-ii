@@ -26,8 +26,7 @@ const API_TYPE_FILTERS: Array<{ id: 'all' | ModelApiType; label: string }> = [
   { id: 'embeddings', label: 'Embeddings' },
   { id: 'rerank', label: 'Rerank' },
   { id: 'vlm', label: 'VLM' },
-  { id: 'image-generation', label: 'Image generation' },
-  { id: 'video-generation', label: 'Video generation' },
+  { id: 'audio-asr', label: 'Audio ASR' },
 ];
 
 export function ModelsConfigPage() {

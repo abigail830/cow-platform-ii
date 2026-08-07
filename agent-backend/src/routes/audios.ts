@@ -16,6 +16,9 @@ import {
   fileTypeFromExtension,
   formatStorageError,
   getStorageReadUrl,
+  getStorageUploadUrl,
+  guessAudioContentType,
+  headStorageObject,
   MAX_AUDIO_BYTES,
   readStorageText,
   sha256Hex,
@@ -24,6 +27,7 @@ import {
   transcriptS3Key,
   uploadAudioObject,
   validateAudioFilename,
+  validateFileHash,
 } from '../storage/audio-files.ts';
 import {
   createAudioRecord,
@@ -42,6 +46,50 @@ audios.use('*', requireAuth);
 
 function storageUnavailable(c: { json: (body: unknown, status?: number) => Response }) {
   return c.json({ error: 'Object storage is not configured' }, 503);
+}
+
+async function finalizeAudioRecord(input: {
+  channelId: string;
+  filename: string;
+  fileHash: string;
+  s3Key: string;
+  sizeBytes: number;
+  uploadedBy: string;
+}) {
+  if (input.sizeBytes > MAX_AUDIO_BYTES) {
+    throw new Error('File exceeds maximum allowed size');
+  }
+
+  const filename = validateAudioFilename(input.filename);
+  const fileHash = validateFileHash(input.fileHash);
+  const ext = extensionFromFilename(filename);
+  const expectedKey = buildAudioS3Key(fileHash, ext);
+  if (input.s3Key !== expectedKey) {
+    throw new Error('s3_key does not match file_hash and filename');
+  }
+
+  const head = await headStorageObject(expectedKey);
+  if (!head.exists) {
+    throw new Error('Uploaded object not found in storage. Complete the direct upload first.');
+  }
+  if (head.size !== input.sizeBytes) {
+    throw new Error(`Uploaded object size mismatch (expected ${input.sizeBytes}, got ${head.size})`);
+  }
+
+  const audio = await createAudioRecord({
+    channelId: input.channelId,
+    name: filename,
+    fileType: fileTypeFromExtension(ext),
+    sizeBytes: input.sizeBytes,
+    fileHash,
+    s3Key: expectedKey,
+    uploadedBy: input.uploadedBy,
+  });
+
+  void autoStartAudioPipelineAfterUpload(audio.id, input.channelId);
+
+  const refreshed = await getAudioPublicById(audio.id);
+  return refreshed ?? audio;
 }
 
 async function persistUploadedAudio(input: {
@@ -63,22 +111,15 @@ async function persistUploadedAudio(input: {
 
   await uploadAudioObject(s3Key, input.buffer, input.contentType);
 
-  const audio = await createAudioRecord({
+  return finalizeAudioRecord({
     channelId: input.channelId,
-    name: filename,
-    fileType: fileTypeFromExtension(ext),
-    sizeBytes: input.buffer.length,
+    filename,
     fileHash,
     s3Key,
+    sizeBytes: input.buffer.length,
     uploadedBy: input.uploadedBy,
   });
-
-  await autoStartAudioPipelineAfterUpload(audio.id, input.channelId);
-
-  const refreshed = await getAudioPublicById(audio.id);
-  return refreshed ?? audio;
 }
-
 function fileFromFormValue(value: unknown): File | null {
   if (value instanceof File) return value;
   return null;
@@ -187,6 +228,116 @@ audios.get(
     const audio = await getAudioPublicById(id);
     if (!audio) return c.json({ error: 'Audio not found' }, 404);
     return c.json(audio);
+  },
+);
+
+audios.post(
+  '/upload-init',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'write'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const body = await c.req.json<{
+      channel_id?: string;
+      filename?: string;
+      file_hash?: string;
+      size_bytes?: number;
+      content_type?: string;
+    }>();
+
+    const channelId = body.channel_id?.trim() ?? '';
+    const filename = body.filename?.trim() ?? '';
+    const sizeBytes = Number(body.size_bytes);
+
+    if (!channelId || !filename) {
+      return c.json({ error: 'channel_id and filename are required' }, 400);
+    }
+    if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
+      return c.json({ error: 'size_bytes is required' }, 400);
+    }
+    if (sizeBytes > MAX_AUDIO_BYTES) {
+      return c.json({ error: 'File exceeds maximum allowed size' }, 400);
+    }
+
+    const denied = await denyUnlessAudioChannelAccess(c, channelId, 'write');
+    if (denied) return denied;
+
+    try {
+      validateAudioFilename(filename);
+      const fileHash = validateFileHash(body.file_hash ?? '');
+      const ext = extensionFromFilename(filename);
+      const s3Key = buildAudioS3Key(fileHash, ext);
+      const contentType = body.content_type?.trim() || guessAudioContentType(ext);
+
+      const head = await headStorageObject(s3Key);
+      if (head.exists && head.size === sizeBytes) {
+        return c.json({
+          s3_key: s3Key,
+          file_hash: fileHash,
+          skip_upload: true,
+        });
+      }
+
+      const uploadUrl = await getStorageUploadUrl(s3Key, contentType);
+      return c.json({
+        s3_key: s3Key,
+        file_hash: fileHash,
+        upload_url: uploadUrl,
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        skip_upload: false,
+      });
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: error instanceof Error ? error.message : 'Upload init failed' }, 400);
+    }
+  },
+);
+
+audios.post(
+  '/upload-complete',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'write'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const user = getUser(c);
+    const body = await c.req.json<{
+      channel_id?: string;
+      filename?: string;
+      file_hash?: string;
+      s3_key?: string;
+      size_bytes?: number;
+    }>();
+
+    const channelId = body.channel_id?.trim() ?? '';
+    const filename = body.filename?.trim() ?? '';
+    const s3Key = body.s3_key?.trim() ?? '';
+    const sizeBytes = Number(body.size_bytes);
+
+    if (!channelId || !filename || !s3Key) {
+      return c.json({ error: 'channel_id, filename, and s3_key are required' }, 400);
+    }
+    if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
+      return c.json({ error: 'size_bytes is required' }, 400);
+    }
+
+    const denied = await denyUnlessAudioChannelAccess(c, channelId, 'write');
+    if (denied) return denied;
+
+    try {
+      const audio = await finalizeAudioRecord({
+        channelId,
+        filename,
+        fileHash: body.file_hash ?? '',
+        s3Key,
+        sizeBytes,
+        uploadedBy: user.id,
+      });
+      return c.json(audio, 201);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: error instanceof Error ? error.message : 'Upload complete failed' }, 400);
+    }
   },
 );
 

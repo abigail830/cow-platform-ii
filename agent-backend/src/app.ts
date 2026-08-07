@@ -55,7 +55,7 @@ const app = new Hono();
 app.use(
   '*',
   cors({
-    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5180').split(','),
+    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5180,http://127.0.0.1:5180').split(','),
     allowHeaders: [
       'Authorization',
       'Content-Type',

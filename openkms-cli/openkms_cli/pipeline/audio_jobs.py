@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
 from rich.console import Console
 
 from openkms_cli.core.settings import get_cli_settings
+from openkms_cli.core.workflow_config import resolve_job_workflow_config
 from openkms_cli.pipeline.audio_api import (
     AudioPipelineJobApiError,
     get_audio_job_context,
@@ -17,28 +17,17 @@ from openkms_cli.pipeline.audio_api import (
 from openkms_cli.pipeline.post_ingest import parse_s3_uri
 from openkms_cli.pipeline.storage import get_s3_client
 from openkms_cli.providers.aliyun.asr import (
-    DEFAULT_MODEL,
     AliyunAsrError,
     format_transcript_markdown,
+    query_transcription_task,
     submit_file_transcription,
     upload_transcript_artifacts,
     wait_for_transcription,
 )
+from openkms_cli.providers.aliyun.asr_config import resolve_asr_from_workflow
 from openkms_cli.providers.aliyun.docmind import presign_s3_get_url, redact_file_url
 
 console = Console(stderr=True)
-
-
-def _load_workflow(config_yaml: str | None) -> dict[str, Any]:
-    if not config_yaml or not config_yaml.strip():
-        return {
-            "asr": {
-                "model": DEFAULT_MODEL,
-                "enable_diarization": True,
-            }
-        }
-    data = yaml.safe_load(config_yaml)
-    return data if isinstance(data, dict) else {}
 
 
 def fail_audio_job(api_url: str, job_id: str, message: str) -> None:
@@ -47,6 +36,21 @@ def fail_audio_job(api_url: str, job_id: str, message: str) -> None:
         patch_audio_job(api_url, job_id, stage="failed", error_message=message[:2000])
     except AudioPipelineJobApiError as e:
         console.print(f"[yellow]Could not mark audio job failed: {e}[/yellow]")
+
+
+def _load_workflow(ctx: dict[str, Any]) -> dict[str, Any]:
+    return resolve_job_workflow_config(
+        pipeline_name=str(ctx.get("pipeline_name") or "aliyun-qwen-audio-transcribe"),
+        job_config_yaml=ctx.get("config_yaml"),
+    )
+
+
+def _asr_options(workflow: dict[str, Any]) -> tuple[bool, str | None]:
+    asr_cfg = workflow.get("asr") if isinstance(workflow.get("asr"), dict) else {}
+    enable_diarization = bool(asr_cfg.get("enable_diarization", True))
+    context_prompt = asr_cfg.get("context_prompt")
+    prompt = str(context_prompt).strip() if context_prompt else None
+    return enable_diarization, prompt or None
 
 
 def submit_audio_job(job_id: str, api_url: str | None = None) -> None:
@@ -79,14 +83,10 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
     cfg = get_cli_settings()
     if not cfg.aws_access_key_id or not cfg.aws_secret_access_key:
         raise AliyunAsrError("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required for OSS presign")
-    if not cfg.dashscope_api_key:
-        raise AliyunAsrError("DASHSCOPE_API_KEY is required")
 
-    workflow = _load_workflow(ctx.get("config_yaml"))
-    asr_cfg = workflow.get("asr") if isinstance(workflow.get("asr"), dict) else {}
-    model = str(asr_cfg.get("model") or DEFAULT_MODEL)
-    enable_diarization = bool(asr_cfg.get("enable_diarization", True))
-    context_prompt = asr_cfg.get("context_prompt")
+    workflow = _load_workflow(ctx)
+    asr_runtime = resolve_asr_from_workflow(workflow, cfg=cfg)
+    enable_diarization, context_prompt = _asr_options(workflow)
 
     audio = ctx["audio"]
     bucket, key = parse_s3_uri(ctx["input_uri"])
@@ -102,14 +102,18 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
         expires_in=cfg.oss_presign_ttl_seconds,
     )
     console.print(f"[dim]asr_file_url={redact_file_url(file_url)} ttl={cfg.oss_presign_ttl_seconds}s[/dim]")
+    console.print(
+        f"[dim]asr_model={asr_runtime.model} config={asr_runtime.display_name} "
+        f"base={asr_runtime.base_url.rstrip('/')}[/dim]"
+    )
 
     task_id = submit_file_transcription(
         file_url=file_url,
-        api_key=cfg.dashscope_api_key,
-        base_url=cfg.dashscope_base_url,
-        model=model,
+        api_key=asr_runtime.api_key,
+        base_url=asr_runtime.base_url,
+        model=asr_runtime.model,
         enable_diarization=enable_diarization,
-        context_prompt=str(context_prompt) if context_prompt else None,
+        context_prompt=context_prompt,
     )
     patch_audio_job(api_url, job_id, stage="transcribing", external_job_id=task_id)
 
@@ -136,11 +140,14 @@ def poll_audio_job(job_id: str, api_url: str | None = None) -> None:
     if stage == "submitted":
         patch_audio_job(api, job_id, stage="transcribing")
 
+    workflow = _load_workflow(ctx)
+    asr_runtime = resolve_asr_from_workflow(workflow, cfg=cfg)
+
     try:
         data = wait_for_transcription(
             task_id=external_id,
-            api_key=cfg.dashscope_api_key,
-            base_url=cfg.dashscope_base_url,
+            api_key=asr_runtime.api_key,
+            base_url=asr_runtime.base_url,
             poll_interval_seconds=cfg.async_poll_interval_seconds,
             max_wait_seconds=max(cfg.async_max_wait_seconds, 7200),
         )
@@ -162,26 +169,27 @@ def finalize_audio_job(
     if ctx is None:
         ctx = get_audio_job_context(api, job_id)
 
+    workflow = _load_workflow(ctx)
+    asr_runtime = resolve_asr_from_workflow(workflow, cfg=cfg)
+
     if asr_result is None:
         external_id = (ctx.get("external_job_id") or "").strip()
         if not external_id:
             fail_audio_job(api, job_id, "Missing external_job_id for finalize")
             raise SystemExit(1)
-        from openkms_cli.providers.aliyun.asr import query_transcription_task
-
         asr_result = query_transcription_task(
             task_id=external_id,
-            api_key=cfg.dashscope_api_key,
-            base_url=cfg.dashscope_base_url,
+            api_key=asr_runtime.api_key,
+            base_url=asr_runtime.base_url,
         )
-
-    workflow = _load_workflow(ctx.get("config_yaml"))
-    asr_cfg = workflow.get("asr") if isinstance(workflow.get("asr"), dict) else {}
-    model = str(asr_cfg.get("model") or DEFAULT_MODEL)
 
     audio = ctx["audio"]
     file_name = str(audio.get("name") or "audio")
-    transcript_md = format_transcript_markdown(filename=file_name, asr_result=asr_result, model=model)
+    transcript_md = format_transcript_markdown(
+        filename=file_name,
+        asr_result=asr_result,
+        model=asr_runtime.model,
+    )
 
     bucket, _ = parse_s3_uri(ctx["input_uri"])
     s3_prefix = str(ctx.get("s3_prefix") or "")

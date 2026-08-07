@@ -48,8 +48,7 @@ export const MODEL_API_TYPES = [
   'embeddings',
   'rerank',
   'vlm',
-  'image-generation',
-  'video-generation',
+  'audio-asr',
 ] as const;
 
 export type ModelApiType = (typeof MODEL_API_TYPES)[number];

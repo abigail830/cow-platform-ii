@@ -103,6 +103,9 @@ def collect_model_names(config: dict[str, Any]) -> list[str]:
     meta = config.get("metadata_extract")
     if isinstance(meta, dict):
         add(meta.get("model_name"))
+    asr = config.get("asr")
+    if isinstance(asr, dict):
+        add(asr.get("model_name"))
     return names
 
 

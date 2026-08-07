@@ -11,6 +11,8 @@ import {
   storeUploadChunk,
   transcriptS3Key,
   validateAudioFilename,
+  validateFileHash,
+  guessAudioContentType,
 } from './audio-files.ts';
 
 describe('audio-files', () => {
@@ -37,6 +39,13 @@ describe('audio-files', () => {
     const hash = sha256Hex(buffer);
     assert.equal(hash, sha256Hex(buffer));
     assert.match(hash, /^[a-f0-9]{64}$/);
+    assert.equal(validateFileHash(hash), hash);
+    assert.throws(() => validateFileHash('not-a-hash'), /SHA-256/);
+  });
+
+  it('guesses audio content types from extensions', () => {
+    assert.equal(guessAudioContentType('m4a'), 'audio/mp4');
+    assert.equal(guessAudioContentType('mp3'), 'audio/mpeg');
   });
 
   it('assembles chunked upload sessions in order', () => {

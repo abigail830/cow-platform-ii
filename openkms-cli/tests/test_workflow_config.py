@@ -136,3 +136,9 @@ def test_metadata_extract_pipeline_default():
     cfg = load_packaged_default("metadata-extract")
     assert metadata_extract_enabled(cfg)
     assert "deepSeek-V4-Flash" in collect_model_names(cfg)
+
+
+def test_audio_transcribe_default_collects_model_name():
+    cfg = load_packaged_default("aliyun-qwen-audio-transcribe")
+    assert collect_model_names(cfg) == ["qwen-audio-3.0-asr-flash-filetrans"]
+    assert cfg["asr"]["enable_diarization"] is True

@@ -36,6 +36,14 @@ function placeholdersForApiType(apiType: ModelApiType) {
       baseUrl: 'https://api.siliconflow.cn/v1',
     };
   }
+  if (apiType === 'audio-asr') {
+    return {
+      name: 'qwen-audio-3.0-asr-flash-filetrans',
+      modelId: 'qwen-audio-3.0-asr-flash-filetrans',
+      provider: 'Alibaba DashScope',
+      baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    };
+  }
   return {
     name: 'My model',
     modelId: 'provider/model-name',

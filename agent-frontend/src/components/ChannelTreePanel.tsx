@@ -1,23 +1,31 @@
 import { Folder, Plus, Settings, Trash2 } from 'lucide-react';
-import type { DocumentChannel } from '../api/documentChannels.ts';
+import type { ResourcePermissionFlags } from '../api/resourceAccess.ts';
 import { iconProps } from './icons/icon-props.ts';
 
-function channelCanManage(channel: DocumentChannel): boolean {
+export type ChannelTreeNode = {
+  id: string;
+  name: string;
+  my_access?: ResourcePermissionFlags;
+  children: ChannelTreeNode[];
+};
+
+function channelCanManage(channel: ChannelTreeNode): boolean {
   return Boolean(channel.my_access?.manage);
 }
 
-type ChannelTreePanelProps = {
-  channels: DocumentChannel[];
+type ChannelTreePanelProps<T extends ChannelTreeNode> = {
+  channels: T[];
   selectedId: string | null;
   canCreateRoot: boolean;
+  emptyMessage?: string;
   onSelect: (channelId: string) => void;
   onCreateRoot: () => void;
   onCreateChild: (parentId: string) => void;
-  onSettings: (channel: DocumentChannel) => void;
-  onDelete: (channel: DocumentChannel) => void;
+  onSettings: (channel: T) => void;
+  onDelete: (channel: T) => void;
 };
 
-function ChannelTreeNode({
+function ChannelTreeNode<T extends ChannelTreeNode>({
   channel,
   depth,
   selectedId,
@@ -27,14 +35,14 @@ function ChannelTreeNode({
   onSettings,
   onDelete,
 }: {
-  channel: DocumentChannel;
+  channel: T;
   depth: number;
   selectedId: string | null;
   canCreateRoot: boolean;
   onSelect: (channelId: string) => void;
   onCreateChild: (parentId: string) => void;
-  onSettings: (channel: DocumentChannel) => void;
-  onDelete: (channel: DocumentChannel) => void;
+  onSettings: (channel: T) => void;
+  onDelete: (channel: T) => void;
 }) {
   const active = selectedId === channel.id;
   const canManage = channelCanManage(channel);
@@ -67,7 +75,7 @@ function ChannelTreeNode({
           {channel.children.map((child) => (
             <ChannelTreeNode
               key={child.id}
-              channel={child}
+              channel={child as T}
               depth={depth + 1}
               selectedId={selectedId}
               canCreateRoot={canCreateRoot}
@@ -83,16 +91,17 @@ function ChannelTreeNode({
   );
 }
 
-export function ChannelTreePanel({
+export function ChannelTreePanel<T extends ChannelTreeNode>({
   channels,
   selectedId,
   canCreateRoot,
+  emptyMessage = 'No channels yet. Create one to organize documents.',
   onSelect,
   onCreateRoot,
   onCreateChild,
   onSettings,
   onDelete,
-}: ChannelTreePanelProps) {
+}: ChannelTreePanelProps<T>) {
   return (
     <aside className="documents-channel-panel">
       <div className="documents-channel-panel-header">
@@ -104,7 +113,7 @@ export function ChannelTreePanel({
         )}
       </div>
       {channels.length === 0 ? (
-        <p className="documents-channel-empty">No channels yet. Create one to organize documents.</p>
+        <p className="documents-channel-empty">{emptyMessage}</p>
       ) : (
         <ul className="channel-tree-list root">
           {channels.map((channel) => (

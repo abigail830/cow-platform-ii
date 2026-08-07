@@ -1,6 +1,7 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
+import { sha256HexFromFile } from '../shared/file-hash.ts';
 
 export type AudioPipelineJob = {
   id: string;
@@ -28,17 +29,46 @@ export type AudioRecord = {
   pipeline_job: AudioPipelineJob | null;
 };
 
-const CHUNK_THRESHOLD = 10 * 1024 * 1024;
+/** Below Vercel serverless body limit (~4.5 MB); use direct OSS upload above this. */
+export const DIRECT_UPLOAD_THRESHOLD_BYTES = 3.5 * 1024 * 1024;
+export const CHUNK_UPLOAD_THRESHOLD_BYTES = 10 * 1024 * 1024;
+export const UPLOAD_CHUNK_SIZE_BYTES = 5 * 1024 * 1024;
+
+function usesRemoteApiOrigin(): boolean {
+  return Boolean(import.meta.env.VITE_API_ORIGIN?.trim());
+}
+
+function shouldUseDirectUpload(file: File): boolean {
+  return usesRemoteApiOrigin() || file.size > DIRECT_UPLOAD_THRESHOLD_BYTES;
+}
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
-  });
+  let res: Response;
+  try {
+    res = await fetch(apiUrl(path), {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Network request failed';
+    if (message === 'Failed to fetch') {
+      throw new Error(
+        'Upload request failed (network error). For production, ensure OSS CORS allows PUT from your frontend origin.',
+      );
+    }
+    throw error instanceof Error ? error : new Error(message);
+  }
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  let data: Record<string, unknown> = {};
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      throw new Error(`Unexpected server response (${res.status})`);
+    }
+  }
   if (!res.ok) throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
   return data;
 }
@@ -92,10 +122,81 @@ export async function getAudioDownloadUrl(id: string): Promise<{ url: string; fi
   };
 }
 
-export async function uploadAudio(channelId: string, file: File): Promise<AudioRecord> {
-  if (file.size > CHUNK_THRESHOLD) {
-    return uploadAudioChunked(channelId, file);
+type UploadInitResponse = {
+  s3_key: string;
+  file_hash: string;
+  upload_url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  skip_upload?: boolean;
+};
+
+async function uploadAudioDirect(channelId: string, file: File): Promise<AudioRecord> {
+  const fileHash = await sha256HexFromFile(file);
+  const init = (await authFetch('/api/audios/upload-init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel_id: channelId,
+      filename: file.name,
+      file_hash: fileHash,
+      size_bytes: file.size,
+      content_type: file.type || undefined,
+    }),
+  })) as UploadInitResponse;
+
+  if (!init.skip_upload) {
+    const uploadUrl = init.upload_url;
+    if (!uploadUrl) throw new Error('Server did not return an upload URL');
+
+    const headers = init.headers ?? {};
+    let putRes: Response;
+    try {
+      putRes = await fetch(uploadUrl, {
+        method: init.method ?? 'PUT',
+        body: file,
+        headers,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Direct storage upload failed';
+      if (message === 'Failed to fetch') {
+        throw new Error(
+          'Direct storage upload failed (network/CORS). In Aliyun OSS CORS, allow PUT from your frontend origin.',
+        );
+      }
+      throw error instanceof Error ? error : new Error(message);
+    }
+
+    if (!putRes.ok) {
+      throw new Error(`Direct storage upload failed (HTTP ${putRes.status})`);
+    }
   }
+
+  const data = await authFetch('/api/audios/upload-complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel_id: channelId,
+      filename: file.name,
+      file_hash: init.file_hash ?? fileHash,
+      s3_key: init.s3_key,
+      size_bytes: file.size,
+    }),
+  });
+  return data as AudioRecord;
+}
+
+export async function uploadAudio(channelId: string, file: File): Promise<AudioRecord> {
+  if (shouldUseDirectUpload(file)) {
+    return uploadAudioDirect(channelId, file);
+  }
+  if (file.size > CHUNK_UPLOAD_THRESHOLD_BYTES) {
+    return uploadAudioInChunks(channelId, file);
+  }
+  return uploadSingleAudio(channelId, file);
+}
+
+async function uploadSingleAudio(channelId: string, file: File): Promise<AudioRecord> {
   const form = new FormData();
   form.append('channel_id', channelId);
   form.append('file', file);
@@ -103,26 +204,29 @@ export async function uploadAudio(channelId: string, file: File): Promise<AudioR
   return data as AudioRecord;
 }
 
-async function uploadAudioChunked(channelId: string, file: File): Promise<AudioRecord> {
-  const chunkSize = CHUNK_THRESHOLD;
-  const totalChunks = Math.ceil(file.size / chunkSize);
+async function uploadAudioInChunks(channelId: string, file: File): Promise<AudioRecord> {
+  const totalChunks = Math.ceil(file.size / UPLOAD_CHUNK_SIZE_BYTES);
   let uploadId = '';
 
-  for (let index = 0; index < totalChunks; index += 1) {
-    const start = index * chunkSize;
-    const end = Math.min(start + chunkSize, file.size);
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+    const start = chunkIndex * UPLOAD_CHUNK_SIZE_BYTES;
+    const end = Math.min(start + UPLOAD_CHUNK_SIZE_BYTES, file.size);
     const chunk = file.slice(start, end);
+
     const form = new FormData();
     form.append('channel_id', channelId);
     form.append('filename', file.name);
-    form.append('chunk_index', String(index));
+    form.append('chunk_index', String(chunkIndex));
     form.append('total_chunks', String(totalChunks));
     form.append('file_chunk', chunk, file.name);
     if (uploadId) form.append('upload_id', uploadId);
 
     const data = await authFetch('/api/audios/upload-chunk', { method: 'POST', body: form });
-    if (data.upload_id && !uploadId) uploadId = String(data.upload_id);
-    if (data.id) return data as AudioRecord;
+    if (data.upload_id && typeof data.upload_id === 'string') {
+      uploadId = data.upload_id;
+      continue;
+    }
+    return data as AudioRecord;
   }
 
   throw new Error('Chunked upload did not complete');

@@ -62,12 +62,12 @@ export function AudioUploadModal({ channelName, onCancel, onUpload }: AudioUploa
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-card model-config-form" onClick={(event) => event.stopPropagation()}>
         <h2>Upload audio</h2>
-        <p className="admin-muted">Channel: {channelName}</p>
+        <p className="admin-form-hint">Upload to channel: {channelName}</p>
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div
-            className={`upload-dropzone${dragOver ? ' drag-over' : ''}`}
+            className={`document-upload-dropzone${dragOver ? ' drag-over' : ''}`}
             onDragOver={(event) => {
               event.preventDefault();
               setDragOver(true);
@@ -80,6 +80,15 @@ export function AudioUploadModal({ channelName, onCancel, onUpload }: AudioUploa
             }}
             onClick={() => inputRef.current?.click()}
           >
+            <p className="document-upload-dropzone-title">
+              Drag and drop audio files here, or click to browse (multiple files supported).
+            </p>
+            <p className="document-upload-dropzone-hint">
+              M4A, MP3, WAV, FLAC, AAC, and more. Large files upload in chunks.
+            </p>
+            <div className="document-upload-plus-box" aria-hidden>
+              <Plus {...iconProps({ size: ICON_SIZE_LG })} />
+            </div>
             <input
               ref={inputRef}
               type="file"
@@ -88,19 +97,28 @@ export function AudioUploadModal({ channelName, onCancel, onUpload }: AudioUploa
               hidden
               onChange={(event) => addFiles(event.target.files)}
             />
-            <Plus {...iconProps({ size: ICON_SIZE_LG })} aria-hidden />
-            <p>Drop audio files here or click to browse</p>
-            <p className="admin-form-hint">Supported: m4a, mp3, wav, flac, aac, and more</p>
           </div>
 
           {files.length > 0 && (
-            <ul className="upload-file-list">
+            <ul className="document-upload-file-list" aria-label="Files to upload">
               {files.map((file) => {
                 const key = fileKey(file);
                 return (
                   <li key={key}>
-                    <span>{file.name}</span>
-                    <button type="button" className="icon-btn" onClick={() => removeFile(key)} aria-label="Remove">
+                    <span className="document-upload-file-name" title={file.name}>
+                      {file.name}
+                    </span>
+                    <span className="document-upload-file-size">
+                      {(file.size / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-btn document-upload-file-remove"
+                      title="Remove from list"
+                      aria-label={`Remove ${file.name}`}
+                      disabled={busy}
+                      onClick={() => removeFile(key)}
+                    >
                       <X {...iconProps()} aria-hidden />
                     </button>
                   </li>
@@ -114,7 +132,7 @@ export function AudioUploadModal({ channelName, onCancel, onUpload }: AudioUploa
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={busy || files.length === 0}>
+            <button type="submit" className="btn-primary" disabled={busy}>
               {busy ? 'Uploading…' : 'Upload'}
             </button>
           </div>

@@ -7,8 +7,7 @@ export const MODEL_API_TYPES = [
   'embeddings',
   'rerank',
   'vlm',
-  'image-generation',
-  'video-generation',
+  'audio-asr',
 ] as const;
 
 export type ModelApiType = (typeof MODEL_API_TYPES)[number];
@@ -18,8 +17,7 @@ export const MODEL_API_TYPE_LABELS: Record<ModelApiType, string> = {
   embeddings: 'Embeddings',
   rerank: 'Rerank',
   vlm: 'VLM',
-  'image-generation': 'Image generation',
-  'video-generation': 'Video generation',
+  'audio-asr': 'Audio ASR',
 };
 
 export type ModelConfig = {

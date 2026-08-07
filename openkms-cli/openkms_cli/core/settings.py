@@ -147,16 +147,6 @@ class CliSettings(BaseSettings):
     aws_bucket_name: str = Field(default="openkms", validation_alias="AWS_BUCKET_NAME")
     aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")
 
-    # --- DashScope / Qwen-Audio (aliyun-qwen-audio-transcribe pipeline) ---
-    dashscope_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("DASHSCOPE_API_KEY", "OPENKMS_DASHSCOPE_API_KEY"),
-    )
-    dashscope_base_url: str = Field(
-        default="https://dashscope.aliyuncs.com/api/v1",
-        validation_alias="OPENKMS_DASHSCOPE_BASE_URL",
-    )
-
 
 @lru_cache(maxsize=1)
 def get_cli_settings() -> CliSettings:

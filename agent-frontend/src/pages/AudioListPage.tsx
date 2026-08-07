@@ -32,7 +32,7 @@ function formatAudioStage(stage: string | undefined): string {
 }
 
 export function AudioListPage() {
-  const { channels, selectedChannelId, loadingChannels, canWrite } = useAudioOutletContext();
+  const { channels, selectedChannelId, loadingChannels } = useAudioOutletContext();
 
   const [items, setItems] = useState<AudioRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -90,6 +90,7 @@ export function AudioListPage() {
   async function handleDelete(audio: AudioRecord) {
     if (!window.confirm(`Delete "${audio.name}"?`)) return;
     setDeletingIds((current) => new Set(current).add(audio.id));
+    setError('');
     try {
       await deleteAudio(audio.id);
       await loadAudios();
@@ -107,9 +108,10 @@ export function AudioListPage() {
   async function handleRunPipeline(audio: AudioRecord) {
     if (!channelHasPipeline) return;
     setRunningIds((current) => new Set(current).add(audio.id));
+    setError('');
     try {
       await runAudioPipeline(audio.id);
-      await loadAudios();
+      await loadAudios({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start pipeline');
     } finally {
@@ -122,92 +124,151 @@ export function AudioListPage() {
   }
 
   return (
-    <div className="documents-list-panel">
-      <div className="documents-toolbar">
-        <div className="documents-toolbar-search">
-          <Search {...iconProps()} aria-hidden />
-          <input
-            type="search"
-            placeholder="Search audio files"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            disabled={!selectedChannelId}
-          />
+    <>
+      <div className="admin-toolbar">
+        <div className="admin-toolbar-left">
+          <div className="admin-search">
+            <Search {...iconProps()} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search audio files…"
+              disabled={!selectedChannelId}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => void loadAudios()}
+            disabled={!selectedChannelId || loading}
+          >
+            Refresh
+          </button>
         </div>
-        {canWrite && canWriteChannel && selectedChannelId && (
-          <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
-            Upload audio
+        {canWriteChannel && (
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!selectedChannelId}
+            onClick={() => setUploadOpen(true)}
+          >
+            + Upload
           </button>
         )}
       </div>
 
-      {error && <p className="admin-error">{error}</p>}
-
-      {loadingChannels || loading ? (
-        <p className="admin-muted documents-loading">
-          <Loader2 {...iconProps()} className="spin" aria-hidden /> Loading…
+      {selectedChannel && (
+        <p className="documents-channel-context">
+          Channel: <strong>{selectedChannel.name}</strong>
+          {selectedChannel.description ? ` — ${selectedChannel.description}` : ''}
         </p>
-      ) : !selectedChannelId ? (
-        <p className="admin-table-empty">Select or create a channel to view audio files.</p>
-      ) : items.length === 0 ? (
-        <p className="admin-table-empty">No audio files in this channel yet.</p>
-      ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
+      )}
+
+      {error && <p className="error inline">{error}</p>}
+
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Size</th>
+              <th className="documents-status-col">Status</th>
+              <th>Pipeline</th>
+              <th>Uploaded</th>
+              <th className="admin-table-actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!selectedChannelId ? (
               <tr>
-                <th>Name</th>
-                <th>Size</th>
-                <th>Status</th>
-                <th>Pipeline</th>
-                <th>Updated</th>
-                <th aria-label="Actions" />
+                <td colSpan={7} className="admin-table-empty">
+                  Select or create a channel to manage audio files.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {items.map((audio) => (
-                <tr key={audio.id}>
-                  <td>
-                    <Link to={`/knowledge/audio/${audio.id}`} className="documents-name-link">
-                      {audio.name}
-                    </Link>
-                  </td>
-                  <td>{formatAudioBytes(audio.size_bytes)}</td>
-                  <td>{formatDocumentStatusLabel(audio.status)}</td>
-                  <td>{formatAudioStage(audio.pipeline_job?.stage)}</td>
-                  <td>{new Date(audio.updated_at).toLocaleString()}</td>
-                  <td>
-                    <div className="row-actions">
-                      {canWriteChannel && channelHasPipeline && (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title="Run transcription pipeline"
-                          disabled={audio.status === 'running' || runningIds.has(audio.id)}
-                          onClick={() => void handleRunPipeline(audio)}
-                        >
-                          <IconRun />
-                        </button>
-                      )}
-                      {canWriteChannel && (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title="Delete"
-                          disabled={deletingIds.has(audio.id)}
-                          onClick={() => void handleDelete(audio)}
-                        >
-                          <IconDelete />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="admin-muted documents-list-footer">{total} file(s)</p>
-        </div>
+            ) : loadingChannels || loading ? (
+              <tr>
+                <td colSpan={7} className="admin-table-empty">
+                  Loading…
+                </td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="admin-table-empty">
+                  No audio files in this channel yet.
+                </td>
+              </tr>
+            ) : (
+              items.map((audio) => {
+                const isPipelineBusy = runningIds.has(audio.id) || audio.status === 'running';
+                const isDeleting = deletingIds.has(audio.id);
+
+                return (
+                  <tr key={audio.id}>
+                    <td>
+                      <Link to={`/knowledge/audio/${audio.id}`} className="document-name-link">
+                        {audio.name}
+                      </Link>
+                    </td>
+                    <td className="documents-table-meta">{audio.file_type}</td>
+                    <td className="documents-table-meta">{formatAudioBytes(audio.size_bytes)}</td>
+                    <td className="documents-status-col">{formatDocumentStatusLabel(audio.status)}</td>
+                    <td className="documents-table-meta">{formatAudioStage(audio.pipeline_job?.stage)}</td>
+                    <td className="documents-table-meta">
+                      {new Date(audio.created_at).toLocaleString()}
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        {canWriteChannel && channelHasPipeline && (
+                          <button
+                            type="button"
+                            className={`icon-btn icon-btn--run${isPipelineBusy ? ' is-busy' : ''}`}
+                            title={
+                              isPipelineBusy
+                                ? 'Transcription running…'
+                                : 'Run transcription pipeline'
+                            }
+                            disabled={isPipelineBusy}
+                            aria-busy={isPipelineBusy}
+                            onClick={() => void handleRunPipeline(audio)}
+                          >
+                            {isPipelineBusy ? (
+                              <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                            ) : (
+                              <IconRun />
+                            )}
+                          </button>
+                        )}
+                        {canWriteChannel && (
+                          <button
+                            type="button"
+                            className={`icon-btn danger icon-btn--delete${isDeleting ? ' is-busy' : ''}`}
+                            title={isDeleting ? 'Deleting…' : 'Delete'}
+                            disabled={isDeleting}
+                            aria-busy={isDeleting}
+                            onClick={() => void handleDelete(audio)}
+                          >
+                            {isDeleting ? (
+                              <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                            ) : (
+                              <IconDelete />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedChannelId && total > items.length && (
+        <p className="documents-list-meta">
+          Showing {items.length} of {total} audio files
+        </p>
       )}
 
       {uploadOpen && selectedChannel && (
@@ -217,6 +278,6 @@ export function AudioListPage() {
           onUpload={handleUpload}
         />
       )}
-    </div>
+    </>
   );
 }

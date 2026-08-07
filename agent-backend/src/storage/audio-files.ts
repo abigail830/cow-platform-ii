@@ -4,6 +4,7 @@ import {
   assertStorageClient,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   StorageNotConfiguredError,
 } from './s3-client.ts';
@@ -46,6 +47,41 @@ function cleanupExpiredSessions(): void {
 
 export function sha256Hex(data: Buffer): string {
   return createHash('sha256').update(data).digest('hex');
+}
+
+const FILE_HASH_RE = /^[a-f0-9]{64}$/;
+
+export function validateFileHash(fileHash: string): string {
+  const normalized = fileHash.trim().toLowerCase();
+  if (!FILE_HASH_RE.test(normalized)) {
+    throw new Error('file_hash must be a 64-character SHA-256 hex digest');
+  }
+  return normalized;
+}
+
+export function guessAudioContentType(ext: string): string {
+  switch (ext.toLowerCase()) {
+    case 'm4a':
+      return 'audio/mp4';
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'wav':
+      return 'audio/wav';
+    case 'flac':
+      return 'audio/flac';
+    case 'aac':
+      return 'audio/aac';
+    case 'ogg':
+      return 'audio/ogg';
+    case 'opus':
+      return 'audio/opus';
+    case 'webm':
+      return 'audio/webm';
+    case 'amr':
+      return 'audio/amr';
+    default:
+      return 'application/octet-stream';
+  }
 }
 
 export function extensionFromFilename(filename: string): string {
@@ -123,6 +159,43 @@ export async function getStorageReadUrl(key: string, expiresIn = 3600): Promise<
     new GetObjectCommand({ Bucket: config.bucket, Key: key }),
     { expiresIn },
   );
+}
+
+export async function getStorageUploadUrl(
+  key: string,
+  contentType: string,
+  expiresIn = 3600,
+): Promise<string> {
+  const { client, config } = assertStorageClient();
+  return getSignedUrl(
+    client,
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      ContentType: contentType || 'application/octet-stream',
+    }),
+    { expiresIn },
+  );
+}
+
+export async function headStorageObject(
+  key: string,
+): Promise<{ exists: boolean; size: number; contentType: string | null }> {
+  const { client, config } = assertStorageClient();
+  try {
+    const response = await client.send(
+      new HeadObjectCommand({ Bucket: config.bucket, Key: key }),
+    );
+    return {
+      exists: true,
+      size: Number(response.ContentLength ?? 0),
+      contentType: response.ContentType ?? null,
+    };
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+    if (status === 404) return { exists: false, size: 0, contentType: null };
+    throw error;
+  }
 }
 
 export async function readStorageText(key: string): Promise<string | null> {

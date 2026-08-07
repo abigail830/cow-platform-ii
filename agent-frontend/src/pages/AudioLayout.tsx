@@ -139,6 +139,7 @@ export function AudioLayout() {
             channels={channels}
             selectedId={selectedChannelId}
             canCreateRoot={canWrite}
+            emptyMessage="No channels yet. Create one to organize audio files."
             onSelect={setSelectedChannelId}
             onCreateRoot={() => setChannelModal({ mode: 'create', parentId: null })}
             onCreateChild={(parentId) => setChannelModal({ mode: 'create', parentId })}
