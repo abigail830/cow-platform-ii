@@ -64,7 +64,11 @@ export function resolveCatalogAgentRuntime(spec: LoadedAgentSpec): Promise<Catal
   const cached = runtimeByAgentId.get(cacheKey);
   if (cached) return cached;
 
-  const pending = buildAgentRuntimeConfig(spec);
+  const pending = buildAgentRuntimeConfig(spec).catch((error) => {
+    // Do not poison the cache with a rejected warm/connect attempt.
+    runtimeByAgentId.delete(cacheKey);
+    throw error;
+  });
   runtimeByAgentId.set(cacheKey, pending);
   return pending;
 }

@@ -16,8 +16,11 @@ skills:
 
 mcp:
   - name: pageindex-search
-    internalPath: /api/mcp/pageindex-search
+    urlEnv: PAGEINDEX_SEARCH_MCP_URL
     transport: streamable-http
+    headersEnv:
+      # Same platform API key as hybrid-search (loopback MCP auth).
+      Authorization: HYBRID_SEARCH_MCP_API_KEY
     useAgentRequestHeaders: true
     allowTools:
       - mcp__pageindex-search__list_knowledge_bases
