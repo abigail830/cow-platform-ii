@@ -23,6 +23,7 @@ export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
   DOCUMENTS: 'documents',
   KNOWLEDGE_BASES: 'knowledge-bases',
   HYBRID_SEARCH: 'hybrid-search',
+  PAGEINDEX_SEARCH: 'pageindex-search',
 } as const;
 
 export type KnowledgeManagementResource =
@@ -113,6 +114,13 @@ const KNOWLEDGE_MANAGEMENT_FEATURE_DEFS: ResourceDefinition[] = [
     description: 'Cross-knowledge-base hybrid retrieval playground.',
     routePatterns: ['/knowledge/hybrid-search'],
     apiPatterns: ['/api/hybrid-search', '/api/hybrid-search/*'],
+  },
+  {
+    resource: KNOWLEDGE_MANAGEMENT_RESOURCES.PAGEINDEX_SEARCH,
+    label: 'PageIndex search',
+    description: 'Document discovery and tree navigation over PageIndex knowledge bases.',
+    routePatterns: ['/knowledge/pageindex-search'],
+    apiPatterns: ['/api/pageindex-search', '/api/pageindex-search/*', '/api/mcp/pageindex-search'],
   },
 ];
 

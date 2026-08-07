@@ -4,6 +4,10 @@ skills:
     path: skills/kb-qa
     title: Knowledge Q&A
     description: Guidance for hybrid search and knowledge-base answering.
+  - id: kb-pageindex-qa
+    path: skills/kb-pageindex-qa
+    title: PageIndex Knowledge Q&A
+    description: Dual-path discovery and tree navigation over PageIndex knowledge bases.
   - id: html-slides
     path: skills/html-slides
     title: HTML Slides
@@ -25,6 +29,10 @@ mcp:
     path: mcp/hybrid-search.json
     title: Hybrid Search
     description: Search knowledge bases via the platform hybrid-search MCP.
+  - id: pageindex-search
+    path: mcp/pageindex-search.json
+    title: PageIndex Search
+    description: Discover and read PageIndex knowledge bases via progressive tree navigation.
   - id: zhipu-web-search
     path: mcp/zhipu-web-search.json
     title: Zhipu Web Search

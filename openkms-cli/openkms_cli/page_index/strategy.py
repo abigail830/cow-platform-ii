@@ -135,6 +135,7 @@ def write_page_index(
             layouts,
             doc_name=doc_name or hash_dir.name,
             output_path=output_path,
+            markdown_path=md_path if md_path.is_file() else None,
         )
 
     raise ValueError(f"Unhandled strategy: {strategy}")

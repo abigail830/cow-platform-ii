@@ -18,8 +18,11 @@ Do not use bash, `node scripts/…`, or `read_skill_resource` for retrieval.
 
 ## Combined workflow
 
-1. **Knowledge base first** — hybrid-search MCP (see tool descriptions for list → search order and query formulation).
-2. **Web only when needed** — after judging KB results: empty, weakly related, or likely stale for time-sensitive topics. Not on every turn.
-3. **Synthesize** — answer the user's intent in your own words; cite only evidence you used (KB names/sources; web title + URL).
+1. **Choose retrieval mode**
+   - Short-fact / FAQ / chunk-style recall → **hybrid-search** (this skill).
+   - Long-document argumentation / chapter navigation → **pageindex-search** + skill `kb-pageindex-qa` (separate MCP).
+2. **Knowledge base first** — hybrid-search MCP (see tool descriptions for list → search order and query formulation).
+3. **Web only when needed** — after judging KB results: empty, weakly related, or likely stale for time-sensitive topics. Not on every turn.
+4. **Synthesize** — answer the user's intent in your own words; cite only evidence you used (KB names/sources; web title + URL).
 
 Separate sections when mixing sources (e.g. web supplement labeled as unverified by KB). Do not present model knowledge as organizational fact.

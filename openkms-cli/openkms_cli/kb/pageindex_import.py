@@ -37,17 +37,25 @@ def _read_s3_json(client, bucket: str, key: str) -> Optional[dict[str, Any]]:
     return json.loads(text)
 
 
+def _is_empty_meta_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip() == "":
+        return True
+    if isinstance(value, list) and len(value) == 0:
+        return True
+    return False
+
+
 def _merge_metadata(db_meta: dict | None, sidecar: dict | None) -> Optional[dict[str, Any]]:
-    db_values = list((db_meta or {}).values())
-    if db_values and not all(
-        v is None or v == "" or (isinstance(v, list) and len(v) == 0) for v in db_values
-    ):
-        return db_meta
-    if sidecar:
-        return sidecar
-    if db_meta:
-        return db_meta
-    return None
+    """Field-level merge: keep non-empty DB values; fill blanks from sidecar."""
+    if not db_meta and not sidecar:
+        return None
+    merged: dict[str, Any] = dict(db_meta or {})
+    for key, value in (sidecar or {}).items():
+        if _is_empty_meta_value(merged.get(key)) and not _is_empty_meta_value(value):
+            merged[key] = value
+    return merged or None
 
 
 def _slim_parsing_result(data: dict[str, Any], warnings: list[str]) -> dict[str, Any]:
@@ -66,14 +74,19 @@ def _slim_parsing_result(data: dict[str, Any], warnings: list[str]) -> dict[str,
     return {k: v for k, v in slim.items() if v is not None}
 
 
-def _trim_markdown(text: str | None, warnings: list[str]) -> str | None:
+def _prepare_markdown_payload(
+    text: str | None,
+    *,
+    markdown_s3_key: str,
+    warnings: list[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Return (markdown_body, markdown_s3_key). Oversized MD is not truncated."""
     if not text:
-        return None
-    encoded = text.encode("utf-8")
-    if len(encoded) <= MAX_MARKDOWN_BYTES:
-        return text
-    warnings.append("markdown_truncated")
-    return encoded[:MAX_MARKDOWN_BYTES].decode("utf-8", errors="ignore")
+        return None, None
+    if len(text.encode("utf-8")) <= MAX_MARKDOWN_BYTES:
+        return text, None
+    warnings.append("markdown_via_s3")
+    return None, markdown_s3_key
 
 
 def _patch_job(
@@ -202,32 +215,53 @@ def run_pageindex_import(job_id: str, api_url: Optional[str] = None) -> None:
 
                     ctx = ctx_resp.json()
                     prefix = ctx["s3_prefix"]
+                    markdown_key = f"{prefix}/markdown.md"
 
-                    markdown = _read_s3_text(s3_client, bucket, f"{prefix}/markdown.md")
+                    markdown = _read_s3_text(s3_client, bucket, markdown_key)
                     page_index = _read_s3_json(s3_client, bucket, f"{prefix}/page_index.json")
                     parsing_result = _read_s3_json(s3_client, bucket, f"{prefix}/result.json")
                     extracted = _read_s3_json(s3_client, bucket, f"{prefix}/extracted_metadata.json")
                     metadata = _merge_metadata(ctx.get("metadata"), extracted)
 
-                    markdown = _trim_markdown(markdown, warnings)
+                    if page_index and markdown:
+                        try:
+                            from openkms_cli.page_index.summarize import enrich_page_index_summaries
+
+                            page_index = enrich_page_index_summaries(page_index, markdown)
+                        except Exception as enrich_exc:
+                            warnings.append(f"summary_enrich_failed:{enrich_exc}")
+
+                    if metadata is None or not str(metadata.get("abstract") or "").strip():
+                        warnings.append("abstract_missing")
+
+                    markdown_body, markdown_s3_key = _prepare_markdown_payload(
+                        markdown,
+                        markdown_s3_key=markdown_key,
+                        warnings=warnings,
+                    )
                     if parsing_result:
                         parsing_result = _slim_parsing_result(parsing_result, warnings)
+
+                    put_payload: dict[str, Any] = {
+                        "document_name": ctx.get("name"),
+                        "channel_path": ctx.get("channel_path"),
+                        "original_s3_key": ctx.get("original_s3_key"),
+                        "metadata": metadata,
+                        "page_index": page_index,
+                        "parsing_result": parsing_result,
+                        "import_status": "completed",
+                        "import_warnings": warnings or None,
+                    }
+                    if markdown_s3_key:
+                        put_payload["markdown_s3_key"] = markdown_s3_key
+                    else:
+                        put_payload["markdown"] = markdown_body
 
                     put_resp = requests.put(
                         f"{base}/internal-api/knowledge-bases/{kb_id}/items/{document_id}",
                         headers={**auth_headers, "Content-Type": "application/json"},
                         auth=basic,
-                        json={
-                            "document_name": ctx.get("name"),
-                            "channel_path": ctx.get("channel_path"),
-                            "original_s3_key": ctx.get("original_s3_key"),
-                            "metadata": metadata,
-                            "page_index": page_index,
-                            "markdown": markdown,
-                            "parsing_result": parsing_result,
-                            "import_status": "completed",
-                            "import_warnings": warnings or None,
-                        },
+                        json=put_payload,
                         timeout=300,
                     )
                     if not put_resp.ok:

@@ -136,6 +136,7 @@ knowledgeBasesInternal.put('/:kbId/items/:documentId', async (c) => {
     metadata?: Record<string, unknown> | null;
     page_index?: Record<string, unknown> | null;
     markdown?: string | null;
+    markdown_s3_key?: string | null;
     parsing_result?: Record<string, unknown> | null;
     import_status?: KbItemImportStatus;
     import_error?: string | null;
@@ -154,6 +155,7 @@ knowledgeBasesInternal.put('/:kbId/items/:documentId', async (c) => {
       metadata: body.metadata,
       page_index: body.page_index,
       markdown: body.markdown,
+      markdown_s3_key: body.markdown_s3_key,
       parsing_result: body.parsing_result,
       import_status: body.import_status,
       import_error: body.import_error,

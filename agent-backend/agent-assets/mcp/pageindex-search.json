@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "pageindex-search": {
+      "url": "${OPENKMS_API_URL}/api/mcp/pageindex-search",
+      "transport": "streamable-http",
+      "headers": {
+        "Authorization": "Bearer ${USER_API_KEY}"
+      }
+    }
+  }
+}

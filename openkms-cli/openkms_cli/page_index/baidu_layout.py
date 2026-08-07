@@ -100,6 +100,7 @@ def build_page_index_from_baidu_layouts(
     layouts: list[dict[str, Any]],
     *,
     doc_name: str = "document",
+    markdown: str | None = None,
 ) -> dict[str, Any]:
     """Build hierarchical page index from Baidu pages[].layouts entries."""
     node_list: list[dict[str, Any]] = []
@@ -121,6 +122,9 @@ def build_page_index_from_baidu_layouts(
             node["page_num"] = int(page_num) + 1
         node_list.append(node)
 
+    if markdown:
+        _assign_line_nums_from_markdown(node_list, markdown)
+
     structure = _build_tree_preserving_node_ids(node_list)
     _format_structure(
         structure,
@@ -133,12 +137,41 @@ def build_page_index_from_baidu_layouts(
     }
 
 
+def _assign_line_nums_from_markdown(nodes: list[dict[str, Any]], markdown: str) -> None:
+    """Best-effort: map each title to the next matching markdown line (1-based)."""
+    lines = markdown.split("\n")
+    cursor = 0
+    for node in nodes:
+        title = str(node.get("title") or "").strip()
+        if not title:
+            continue
+        needle = title.casefold()
+        found = None
+        for idx in range(cursor, len(lines)):
+            stripped = lines[idx].strip()
+            if not stripped:
+                continue
+            # Prefer heading lines, else plain containment
+            candidate = re.sub(r"^#+\s*", "", stripped).strip().casefold()
+            if candidate == needle or needle in candidate or candidate in needle:
+                found = idx + 1
+                cursor = idx + 1
+                break
+        if found is not None:
+            node["line_num"] = found
+
+
 def write_page_index_from_baidu_layouts(
     layouts: list[dict[str, Any]],
     *,
     doc_name: str,
     output_path: Path,
+    markdown: str | None = None,
+    markdown_path: Path | None = None,
 ) -> dict[str, Any]:
-    tree = build_page_index_from_baidu_layouts(layouts, doc_name=doc_name)
+    md = markdown
+    if md is None and markdown_path is not None and markdown_path.is_file():
+        md = markdown_path.read_text(encoding="utf-8")
+    tree = build_page_index_from_baidu_layouts(layouts, doc_name=doc_name, markdown=md)
     output_path.write_text(json.dumps(tree, indent=2, ensure_ascii=False), encoding="utf-8")
     return tree

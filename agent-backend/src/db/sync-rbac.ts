@@ -53,6 +53,7 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
     'platform-basic:storage:write',
     'platform-basic:models:read',
     'knowledge-management:hybrid-search',
+    'knowledge-management:pageindex-search',
   ],
 };
 

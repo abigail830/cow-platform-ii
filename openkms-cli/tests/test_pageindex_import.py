@@ -4,38 +4,47 @@ from openkms_cli.kb.pageindex_import import (
     MAX_MARKDOWN_BYTES,
     MAX_PARSING_RESULT_BYTES,
     _merge_metadata,
+    _prepare_markdown_payload,
     _slim_parsing_result,
-    _trim_markdown,
 )
 
 
-def test_trim_markdown_under_limit():
+def test_prepare_markdown_under_limit():
     text = "hello"
     warnings: list[str] = []
-    assert _trim_markdown(text, warnings) == "hello"
+    body, s3_key = _prepare_markdown_payload(text, markdown_s3_key="p/markdown.md", warnings=warnings)
+    assert body == "hello"
+    assert s3_key is None
     assert warnings == []
 
 
-def test_trim_markdown_over_limit():
+def test_prepare_markdown_over_limit_uses_s3():
     text = "a" * (MAX_MARKDOWN_BYTES + 100)
     warnings: list[str] = []
-    result = _trim_markdown(text, warnings)
-    assert result is not None
-    assert len(result.encode("utf-8")) <= MAX_MARKDOWN_BYTES
-    assert warnings == ["markdown_truncated"]
+    body, s3_key = _prepare_markdown_payload(text, markdown_s3_key="p/markdown.md", warnings=warnings)
+    assert body is None
+    assert s3_key == "p/markdown.md"
+    assert warnings == ["markdown_via_s3"]
 
 
-def test_merge_metadata_prefers_db_when_populated():
-    db = {"author": "Alice", "tags": ["a"]}
-    sidecar = {"author": "Bob"}
-    assert _merge_metadata(db, sidecar) == db
+def test_merge_metadata_field_level():
+    db = {"author": "Alice", "abstract": "", "tags": []}
+    sidecar = {"author": "Bob", "abstract": "Doc about X", "tags": ["x"]}
+    merged = _merge_metadata(db, sidecar)
+    assert merged == {"author": "Alice", "abstract": "Doc about X", "tags": ["x"]}
 
 
 def test_merge_metadata_uses_sidecar_when_db_empty():
     db = {"author": "", "tags": []}
     sidecar = {"author": "Bob", "tags": ["x"]}
     merged = _merge_metadata(db, sidecar)
-    assert merged == sidecar
+    assert merged == {"author": "Bob", "tags": ["x"]}
+
+
+def test_merge_metadata_prefers_db_nonempty():
+    db = {"author": "Alice", "tags": ["a"]}
+    sidecar = {"author": "Bob", "tags": ["b"]}
+    assert _merge_metadata(db, sidecar) == {"author": "Alice", "tags": ["a"]}
 
 
 def test_slim_parsing_result_when_small():

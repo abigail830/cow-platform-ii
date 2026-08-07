@@ -11,7 +11,7 @@ from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
 DEFAULT_SCHEMA = [
-    {"key": "abstract", "label": "Abstract", "type": "string", "description": "One-sentence summary of the document's main content"},
+    {"key": "abstract", "label": "Abstract", "type": "string", "description": "2-4 sentence summary of the document's main content and purpose"},
     {"key": "author", "label": "Author", "type": "string", "description": "Primary author name"},
     {"key": "publish_date", "label": "Publish Date", "type": "date", "description": "Publication date in YYYY-MM-DD format"},
     {"key": "source", "label": "Source", "type": "string", "description": "Journal, conference, or publisher name"},
@@ -20,6 +20,42 @@ DEFAULT_SCHEMA = [
 ]
 
 TRUNCATE_CHARS = 8000
+
+
+def sample_markdown_for_extraction(markdown: str, max_chars: int = TRUNCATE_CHARS) -> str:
+    """Prefer opening + first paragraphs under top-level headings to reduce head bias."""
+    if len(markdown) <= max_chars:
+        return markdown
+
+    lines = markdown.split("\n")
+    chunks: list[str] = []
+    budget = max_chars
+
+    # Always take the opening
+    opening = "\n".join(lines[:80])
+    chunks.append(opening[: budget // 2])
+    used = len(chunks[0])
+    remaining = max_chars - used
+
+    # Sample after each level-1/2 heading
+    header_re = re.compile(r"^(#{1,2})\s+")
+    i = 0
+    samples: list[str] = []
+    while i < len(lines) and remaining > 0:
+        if header_re.match(lines[i].strip()):
+            block = "\n".join(lines[i : i + 12])
+            take = block[: min(400, remaining)]
+            if take:
+                samples.append(take)
+                remaining -= len(take)
+            i += 12
+            continue
+        i += 1
+
+    if samples:
+        chunks.append("\n\n".join(samples)[: max(0, max_chars - used)])
+    text = "\n\n".join(chunks)
+    return text[:max_chars]
 
 _LLM_EXTRACTION_PROFILE = OpenAIModelProfile(
     supports_json_schema_output=False,
@@ -146,7 +182,7 @@ def extract_metadata_sync(
         system_prompt=resolved_system,
     )
 
-    truncated = markdown[:TRUNCATE_CHARS]
+    truncated = sample_markdown_for_extraction(markdown, TRUNCATE_CHARS)
     if user_prompt and user_prompt.strip():
         prompt = user_prompt.replace("{markdown}", truncated)
     else:

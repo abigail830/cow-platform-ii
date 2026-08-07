@@ -633,6 +633,8 @@ export async function upsertKbItemFromWorker(
     metadata?: Record<string, unknown> | null;
     page_index?: Record<string, unknown> | null;
     markdown?: string | null;
+    /** When set, backend loads full markdown from S3 (avoids oversized HTTP body). */
+    markdown_s3_key?: string | null;
     parsing_result?: Record<string, unknown> | null;
     import_status: KbItemImportStatus;
     import_error?: string | null;
@@ -647,9 +649,21 @@ export async function upsertKbItemFromWorker(
 
   const warnings: string[] = [...(input.import_warnings ?? [])];
   let markdown = input.markdown ?? null;
-  if (markdown && Buffer.byteLength(markdown, 'utf8') > KB_IMPORT_MAX_MARKDOWN_BYTES) {
-    markdown = markdown.slice(0, KB_IMPORT_MAX_MARKDOWN_BYTES);
-    warnings.push('markdown_truncated');
+  let markdownComplete = true;
+
+  if (input.markdown_s3_key) {
+    const { readStorageText } = await import('../storage/document-content.ts');
+    const fromS3 = await readStorageText(input.markdown_s3_key);
+    if (!fromS3) {
+      throw new Error(`markdown_s3_key not found: ${input.markdown_s3_key}`);
+    }
+    markdown = fromS3;
+    markdownComplete = true;
+  } else if (markdown && Buffer.byteLength(markdown, 'utf8') > KB_IMPORT_MAX_MARKDOWN_BYTES) {
+    throw new Error(
+      `markdown exceeds ${KB_IMPORT_MAX_MARKDOWN_BYTES} bytes; ` +
+        'omit body markdown and pass markdown_s3_key so the server can load from S3',
+    );
   }
 
   let parsingResult = input.parsing_result ?? null;
@@ -670,18 +684,40 @@ export async function upsertKbItemFromWorker(
 
   const channelRows = await allChannelRows();
   const channelPath = input.channel_path ?? buildChannelPath(doc.channelId, channelRows);
+  const documentName = input.document_name ?? doc.name;
+  const pageIndex = (input.page_index ?? null) as Record<string, unknown> | null;
+  const metadata = input.metadata ?? null;
+
+  const { materializeDiscoveryFields } = await import('../pageindex-search/discovery-materialize.ts');
+  const discovery = materializeDiscoveryFields({
+    documentName,
+    channelPath,
+    metadata,
+    pageIndex,
+    parsingResult,
+  });
+
+  if (!metadata || !(typeof metadata.abstract === 'string' && metadata.abstract.trim())) {
+    if (!warnings.includes('abstract_missing')) warnings.push('abstract_missing');
+  }
+
   const now = new Date();
   const importedAt = input.import_status === 'completed' ? now : null;
 
   const existing = await getKbItemByDocumentId(knowledgeBaseId, documentId);
   const values = {
-    documentName: input.document_name ?? doc.name,
+    documentName,
     channelPath,
     originalS3Key: input.original_s3_key ?? doc.s3Key,
-    metadata: input.metadata ?? null,
-    pageIndex: input.page_index ?? null,
+    metadata,
+    pageIndex,
     markdown,
     parsingResult,
+    discoveryText: discovery.discoveryText || null,
+    tocTitles: discovery.tocTitles.length > 0 ? discovery.tocTitles : null,
+    pageCount: discovery.pageCount,
+    pageIndexStrategy: discovery.pageIndexStrategy,
+    markdownComplete,
     importStatus: input.import_status,
     importError: input.import_error ?? null,
     importWarnings: warnings.length > 0 ? warnings : null,

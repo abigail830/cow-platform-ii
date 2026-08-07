@@ -402,6 +402,13 @@ export const appKbItems = pgTable(
     pageIndex: jsonb('page_index').$type<Record<string, unknown> | null>(),
     markdown: text('markdown'),
     parsingResult: jsonb('parsing_result').$type<Record<string, unknown> | null>(),
+    /** Flattened lexical discovery corpus (name/channel/abstract/tags/TOC/summaries). */
+    discoveryText: text('discovery_text'),
+    tocTitles: jsonb('toc_titles').$type<string[] | null>(),
+    pageCount: integer('page_count'),
+    pageIndexStrategy: text('page_index_strategy'),
+    /** false when markdown column is incomplete and S3 remains authoritative. */
+    markdownComplete: boolean('markdown_complete').notNull().default(true),
     importStatus: text('import_status').notNull().default('pending'),
     importError: text('import_error'),
     importWarnings: jsonb('import_warnings').$type<string[] | null>(),
@@ -413,6 +420,7 @@ export const appKbItems = pgTable(
     uniqueIndex('uq_kb_items_kb_document').on(t.knowledgeBaseId, t.documentId),
     index('idx_kb_items_kb').on(t.knowledgeBaseId, t.importedAt),
     index('idx_kb_items_document').on(t.documentId),
+    index('idx_kb_items_channel_path').on(t.channelPath),
   ],
 );
 

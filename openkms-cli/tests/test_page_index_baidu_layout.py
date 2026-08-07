@@ -29,3 +29,15 @@ def test_build_page_index_from_baidu_layouts():
     assert structure[0]["nodes"][0]["title"] == "Section A"
     assert structure[0]["nodes"][1]["title"] == "Section B"
     assert structure[0]["nodes"][1]["page_num"] == 2
+
+
+def test_baidu_layouts_assign_line_num_from_markdown():
+    layouts = [
+        {"layout_id": "p0-t1", "type": "doc_title", "text": "Root", "page_num": 0},
+        {"layout_id": "p0-t2", "type": "paragraph_title", "text": "Section A", "page_num": 0},
+    ]
+    markdown = "# Root\nintro\n\n## Section A\nbody\n"
+    tree = build_page_index_from_baidu_layouts(layouts, doc_name="doc.pdf", markdown=markdown)
+    root = tree["structure"][0]
+    assert root["line_num"] == 1
+    assert root["nodes"][0]["line_num"] == 4
