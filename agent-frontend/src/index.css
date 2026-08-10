@@ -7,6 +7,8 @@
   --brand-orange-hover: #e85c0f;
   --brand-orange-soft: #fff0e7;
   --brand-orange-muted: #ffe8d9;
+  --input-focus-border: #94a3b8;
+  --input-focus-border-subtle: #cbd5e1;
   --brand-green: #17a26b;
   --brand-green-hover: #148f5c;
   --brand-green-soft: rgb(23 162 107 / 0.12);
@@ -2012,8 +2014,8 @@ textarea {
 .form-field textarea:focus,
 .form-field textarea:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
-  box-shadow: 0 0 0 1px var(--brand-orange);
+  border-color: var(--input-focus-border);
+  box-shadow: none;
 }
 
 .roles-layout {
@@ -2258,8 +2260,8 @@ textarea {
   color: #ffffff;
 }
 
-/* Toolbar / filter controls — brand orange focus, not browser default blue */
-.admin-search:focus-within {
+/* Toolbar list search only — nested modal/panel searches stay neutral */
+.admin-toolbar .admin-search:focus-within {
   border-color: var(--brand-orange);
 }
 
@@ -2268,29 +2270,34 @@ textarea {
   outline: none;
 }
 
+.resource-access-panel .admin-search:focus-within,
+.resource-access-search:focus-within {
+  border-color: #e2e8f0;
+}
+
 .session-explorer-select:focus,
 .session-explorer-input:focus,
 .session-explorer-date-range input:focus,
-.hybrid-search-query-wrap:focus-within {
-  outline: none;
-  border-color: var(--brand-orange);
-}
-
 .session-explorer-select:focus-visible,
 .session-explorer-input:focus-visible,
 .session-explorer-date-range input:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
+  border-color: var(--input-focus-border);
+  box-shadow: none;
 }
 
-.hybrid-search-query-input:focus,
-.hybrid-search-query-input:focus-visible {
-  outline: none;
+/* Composite search bar — one outer focus ring; no per-control orange boxes */
+.hybrid-search-query-wrap:focus-within {
+  border-color: #cbd5e1;
 }
 
-.hybrid-search-kb-select-trigger:focus,
-.hybrid-search-kb-select-trigger:focus-visible {
+.hybrid-search-query-wrap .hybrid-search-query-input:focus,
+.hybrid-search-query-wrap .hybrid-search-query-input:focus-visible,
+.hybrid-search-query-wrap .hybrid-search-kb-select-trigger:focus,
+.hybrid-search-query-wrap .hybrid-search-kb-select-trigger:focus-visible {
   outline: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .admin-filter:focus {
@@ -3051,16 +3058,16 @@ textarea {
 .form-field select:focus-visible,
 .form-field textarea:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
-  box-shadow: 0 0 0 1px var(--brand-orange);
+  border-color: var(--input-focus-border);
+  box-shadow: none;
 }
 
 input:not([type='checkbox']):not([type='radio']):focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
-  box-shadow: 0 0 0 1px var(--brand-orange);
+  border-color: var(--input-focus-border);
+  box-shadow: none;
 }
 
 .form-checkbox {
@@ -3455,7 +3462,7 @@ select:focus-visible {
 }
 
 .channel-tree-select:focus-visible {
-  outline: 1px solid var(--brand-orange);
+  outline: 1px solid var(--input-focus-border);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -4276,8 +4283,9 @@ select:focus-visible {
 .document-metadata-textarea:focus-visible,
 .document-metadata-tag-input:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
+  border-color: var(--input-focus-border);
   background: #ffffff;
+  box-shadow: none;
 }
 
 .document-metadata-inline-item .document-metadata-input {
@@ -6317,10 +6325,6 @@ select:focus-visible {
   background: transparent;
 }
 
-.hybrid-search-query-input:focus {
-  outline: none;
-}
-
 .hybrid-search-kb-select {
   position: relative;
   flex-shrink: 0;
@@ -6704,14 +6708,11 @@ select:focus-visible {
   text-align: right;
 }
 
-.hybrid-search-settings-inline-input:focus {
-  outline: none;
-  border-color: var(--brand-orange);
-}
-
+.hybrid-search-settings-inline-input:focus,
 .hybrid-search-settings-inline-input:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
+  border-color: var(--input-focus-border);
+  box-shadow: none;
 }
 
 .hybrid-search-settings-inline-control {
@@ -6733,14 +6734,11 @@ select:focus-visible {
   color: #334155;
 }
 
-.hybrid-search-settings-inline-select:focus {
-  outline: none;
-  border-color: var(--brand-orange);
-}
-
+.hybrid-search-settings-inline-select:focus,
 .hybrid-search-settings-inline-select:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
+  border-color: var(--input-focus-border);
+  box-shadow: none;
 }
 
 .hybrid-search-settings-modal .field-tooltip-trigger:focus {
@@ -6781,20 +6779,6 @@ select:focus-visible {
   flex-shrink: 0;
   margin-top: 1rem;
   padding-top: 1rem;
-}
-
-.hybrid-search-settings-modal .form-field input:focus,
-.hybrid-search-settings-modal .form-field select:focus,
-.hybrid-search-settings-modal .form-field textarea:focus {
-  outline: none;
-  border-color: var(--brand-orange);
-}
-
-.hybrid-search-settings-modal .form-field input:focus-visible,
-.hybrid-search-settings-modal .form-field select:focus-visible,
-.hybrid-search-settings-modal .form-field textarea:focus-visible {
-  outline: none;
-  border-color: var(--brand-orange);
 }
 
 .resource-access-panel {
@@ -7138,14 +7122,11 @@ select:focus-visible {
   color: #334155;
 }
 
-.builtin-agent-binding-select:focus {
-  outline: none;
-  border-color: var(--brand-orange);
-}
-
+.builtin-agent-binding-select:focus,
 .builtin-agent-binding-select:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
+  border-color: var(--input-focus-border);
+  box-shadow: none;
 }
 
 .builtin-agent-binding-field .admin-form-hint {
@@ -7428,7 +7409,8 @@ select:focus-visible {
 .builtin-agent-dashboard-select:focus,
 .builtin-agent-dashboard-select:focus-visible {
   outline: none;
-  border-color: var(--brand-orange);
+  border-color: var(--input-focus-border);
+  box-shadow: none;
 }
 
 .builtin-agent-dashboard-range-filters {
