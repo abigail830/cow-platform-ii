@@ -40,6 +40,7 @@ export function AudioDetailPage() {
   const [transcriptError, setTranscriptError] = useState('');
   const [audioUrlError, setAudioUrlError] = useState('');
   const [runningPipeline, setRunningPipeline] = useState(false);
+  const [transcriptRecoverUntil, setTranscriptRecoverUntil] = useState(0);
 
   const loadDetail = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -98,10 +99,26 @@ export function AudioDetailPage() {
   }, [loadDetail]);
 
   useEffect(() => {
-    if (!audioId || !audio || !isAudioPipelineActive(audio)) return;
+    if (!audio) return;
+    if (resolveEffectiveAudioStatus(audio) === 'completed' && !transcript && !transcriptError) {
+      setTranscriptRecoverUntil((prev) => (prev > Date.now() ? prev : Date.now() + 120_000));
+    }
+  }, [audio, transcript, transcriptError]);
+
+  useEffect(() => {
+    if (!audioId || !audio) return;
+
+    const awaitingTranscript =
+      resolveEffectiveAudioStatus(audio) === 'completed' &&
+      !transcript &&
+      !transcriptError &&
+      transcriptRecoverUntil > Date.now();
+
+    if (!isAudioPipelineActive(audio) && !awaitingTranscript) return;
+
     const intervalId = window.setInterval(() => void loadDetail({ silent: true }), 5000);
     return () => window.clearInterval(intervalId);
-  }, [audio, audioId, loadDetail]);
+  }, [audio, audioId, loadDetail, transcript, transcriptError, transcriptRecoverUntil]);
 
   async function handleRunPipeline() {
     if (!audioId) return;
@@ -131,6 +148,11 @@ export function AudioDetailPage() {
   const effectiveStatus = resolveEffectiveAudioStatus(audio);
   const pipelineBusy = isAudioPipelineBusy(audio) || runningPipeline;
   const pipelineError = displayAudioPipelineError(audio.pipeline_job?.error_message);
+  const awaitingTranscript =
+    effectiveStatus === 'completed' &&
+    !transcript &&
+    !transcriptError &&
+    transcriptRecoverUntil > Date.now();
 
   return (
     <div className="document-detail-page audio-detail-page">
@@ -186,12 +208,19 @@ export function AudioDetailPage() {
             <p className="document-detail-panel-empty">{transcriptError}</p>
           ) : effectiveStatus === 'running' && !transcript ? (
             <PanelLoading label="Transcription in progress…" />
+          ) : awaitingTranscript ? (
+            <PanelLoading label="Loading transcript from storage…" />
           ) : transcript ? (
             <div className="document-markdown-panel">
               <Markdown content={transcript} />
             </div>
           ) : effectiveStatus === 'completed' ? (
-            <p className="document-detail-panel-empty">No transcript artifact found in storage.</p>
+            <div className="document-detail-panel-empty">
+              <p>No transcript artifact found in storage.</p>
+              <button type="button" className="btn-secondary" onClick={() => void loadDetail()}>
+                Retry loading transcript
+              </button>
+            </div>
           ) : effectiveStatus === 'failed' ? (
             <p className="document-detail-panel-empty">
               No transcript was generated. See the error above and retry when ready.

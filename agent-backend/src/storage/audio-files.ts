@@ -198,18 +198,6 @@ export async function headStorageObject(
   }
 }
 
-export async function readStorageText(key: string): Promise<string | null> {
-  const { client, config } = assertStorageClient();
-  try {
-    const response = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }));
-    const body = await response.Body?.transformToByteArray();
-    if (!body) return null;
-    return Buffer.from(body).toString('utf8');
-  } catch {
-    return null;
-  }
-}
-
 export async function deleteAudioStorage(fileHash: string, s3Key: string): Promise<void> {
   const { client, config } = assertStorageClient();
   const keys = new Set<string>([s3Key, transcriptS3Key(fileHash), asrResultS3Key(fileHash)]);

@@ -20,7 +20,6 @@ import {
   guessAudioContentType,
   headStorageObject,
   MAX_AUDIO_BYTES,
-  readStorageText,
   sha256Hex,
   StorageNotConfiguredError,
   storeUploadChunk,
@@ -29,6 +28,7 @@ import {
   validateAudioFilename,
   validateFileHash,
 } from '../storage/audio-files.ts';
+import { readStorageText } from '../storage/document-content.ts';
 import {
   createAudioRecord,
   deleteAudio,

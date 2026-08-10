@@ -14,6 +14,18 @@ function isS3NotFound(error: unknown): boolean {
   return e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404;
 }
 
+function isTransientStorageError(error: unknown): boolean {
+  if (isS3NotFound(error)) return false;
+  const name = (error as { name?: string })?.name ?? '';
+  if (name === 'TimeoutError' || name === 'AbortError') return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout|timed out|ECONNRESET|ENOTFOUND|socket hang up|network/i.test(message);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function readStorageText(key: string): Promise<string | null> {
   const buffer = await readStorageBuffer(key);
   if (!buffer) return null;
@@ -49,19 +61,30 @@ export async function readStorageStream(key: string): Promise<Readable | null> {
   }
 }
 
-export async function readStorageBuffer(key: string): Promise<Buffer | null> {
+export async function readStorageBuffer(key: string, maxAttempts = 3): Promise<Buffer | null> {
   const { client, config } = assertStorageClient();
-  try {
-    const response = await client.send(
-      new GetObjectCommand({
-        Bucket: config.bucket,
-        Key: key,
-      }),
-    );
-    const bytes = await response.Body?.transformToByteArray();
-    return bytes ? Buffer.from(bytes) : null;
-  } catch (error) {
-    if (isS3NotFound(error)) return null;
-    throw error;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await client.send(
+        new GetObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+        }),
+      );
+      const bytes = await response.Body?.transformToByteArray();
+      return bytes ? Buffer.from(bytes) : null;
+    } catch (error) {
+      if (isS3NotFound(error)) return null;
+      lastError = error;
+      if (attempt < maxAttempts && isTransientStorageError(error)) {
+        await delay(attempt * 400);
+        continue;
+      }
+      throw error;
+    }
   }
+
+  throw lastError;
 }
