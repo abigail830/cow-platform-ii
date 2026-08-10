@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
@@ -8,6 +8,7 @@ import {
   type DocumentContentResponse,
   type DocumentRecord,
 } from '../api/documents.ts';
+import { AsyncModuleBoundary } from '../components/AsyncModuleBoundary.tsx';
 import { DocumentMetadataBar } from '../components/DocumentMetadataBar.tsx';
 import { MindmapMetadataPanel, parseMindmapParsingResult } from '../components/MindmapMetadataPanel.tsx';
 import { formatDocumentStatusLabel } from '../components/DocumentPipelineStatus.tsx';
@@ -21,11 +22,16 @@ import {
   rightPanelTabFromView,
   scrollToDocumentTarget,
 } from '../shared/document-deep-link.ts';
+import { lazyWithRetry } from '../shared/lazy-with-retry.ts';
 import { supportsUdocViewer } from '../shared/source-ref.ts';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
 
-const DocumentUdocViewer = lazy(() =>
-  import('../components/DocumentUdocViewer.tsx').then((mod) => ({ default: mod.DocumentUdocViewer })),
+const DocumentUdocViewer = lazyWithRetry(
+  () =>
+    import('../components/DocumentUdocViewer.tsx').then((mod) => ({
+      default: mod.DocumentUdocViewer,
+    })),
+  'DocumentUdocViewer',
 );
 
 type RightPanelTab = 'pageindex' | 'parsed';
@@ -219,20 +225,22 @@ export function DocumentDetailPage() {
             <aside className="document-detail-original" aria-label="Original document">
               <h3 className="document-detail-panel-heading">Original</h3>
               {showOriginalPreview && documentId ? (
-                <Suspense
-                  fallback={
-                    <div className="document-viewer-loading" role="status">
-                      <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
-                      <span>Preparing viewer…</span>
-                    </div>
-                  }
-                >
-                  <DocumentUdocViewer
-                    documentId={documentId}
-                    page={deepLink.page}
-                    searchQuery={deepLink.highlight ? deepLink.heading : null}
-                  />
-                </Suspense>
+                <AsyncModuleBoundary message="Failed to load the document viewer.">
+                  <Suspense
+                    fallback={
+                      <div className="document-viewer-loading" role="status">
+                        <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
+                        <span>Preparing viewer…</span>
+                      </div>
+                    }
+                  >
+                    <DocumentUdocViewer
+                      documentId={documentId}
+                      page={deepLink.page}
+                      searchQuery={deepLink.highlight ? deepLink.heading : null}
+                    />
+                  </Suspense>
+                </AsyncModuleBoundary>
               ) : (
                 <div className="document-detail-panel-empty">
                   <p>Original preview is not available for this file type.</p>
