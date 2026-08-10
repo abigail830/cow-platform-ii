@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Vendor pptx + docx skills from anthropics/skills into content-studio agent catalog.
- * html-slides is maintained in-repo under skills/html-slides/.
+ * Vendor pptx + docx from anthropics/skills into the content-studio agent catalog.
+ * html-slides is maintained in-repo (Ascentium/Inspire brand themes) — not vendored.
  */
 import { execSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
@@ -12,6 +12,15 @@ const scriptDir = resolve(fileURLToPath(import.meta.url), '..');
 const backendRoot = resolve(scriptDir, '..');
 const skillsDest = join(backendRoot, 'agent-assets/skills');
 const tmp = join(backendRoot, '.tmp-skills-vendor');
+
+function vendorSkill(src, dest, name) {
+  if (!existsSync(join(src, 'SKILL.md'))) {
+    throw new Error(`Missing SKILL.md in vendored ${name} skill`);
+  }
+  rmSync(dest, { recursive: true, force: true });
+  cpSync(src, dest, { recursive: true });
+  console.log(`Vendored ${name} → ${dest}`);
+}
 
 rmSync(tmp, { recursive: true, force: true });
 mkdirSync(skillsDest, { recursive: true });
@@ -26,15 +35,9 @@ execSync('git sparse-checkout set skills/pptx skills/docx', {
 });
 
 for (const name of ['pptx', 'docx']) {
-  const src = join(tmp, 'skills', name);
-  const dest = join(skillsDest, name);
-  if (!existsSync(join(src, 'SKILL.md'))) {
-    throw new Error(`Missing SKILL.md in vendored ${name} skill`);
-  }
-  rmSync(dest, { recursive: true, force: true });
-  cpSync(src, dest, { recursive: true });
-  console.log(`Vendored ${name} → ${dest}`);
+  vendorSkill(join(tmp, 'skills', name), join(skillsDest, name), name);
 }
 
 rmSync(tmp, { recursive: true, force: true });
-console.log('Content-studio skills vendored.');
+
+console.log('Content-studio skills vendored (pptx, docx). html-slides skipped — in-repo.');

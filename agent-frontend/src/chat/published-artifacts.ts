@@ -26,17 +26,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function parsePublishArtifactOutput(output: unknown): PublishedArtifact | null {
+function parseToolResultRecord(output: unknown): Record<string, unknown> | null {
   const normalized = normalizeToolPayload(output);
+  if (typeof normalized === 'string') {
+    try {
+      const parsed = JSON.parse(normalized) as unknown;
+      return isRecord(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
   if (!isRecord(normalized)) return null;
+  if (isRecord(normalized.details)) return normalized.details;
+  return normalized;
+}
+
+export function parsePublishArtifactOutput(output: unknown): PublishedArtifact | null {
+  const record = parseToolResultRecord(output);
+  if (!record) return null;
 
   const downloadUrl =
-    typeof normalized.downloadUrl === 'string' ? normalized.downloadUrl.trim() : '';
+    typeof record.downloadUrl === 'string' ? record.downloadUrl.trim() : '';
   if (!downloadUrl) return null;
 
   const filename =
-    typeof normalized.filename === 'string' && normalized.filename.trim()
-      ? normalized.filename.trim()
+    typeof record.filename === 'string' && record.filename.trim()
+      ? record.filename.trim()
       : basenameFromHref(downloadUrl) || 'artifact';
 
   return { filename, downloadUrl };

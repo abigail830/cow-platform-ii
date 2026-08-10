@@ -31,6 +31,7 @@ import { bearerToken, verifyToken } from './auth/jwt.ts';
 import { ensureFlueReady } from './flue-vercel-init.ts';
 import { runWithAgentRequestContext } from './flue/agent-request-context.ts';
 import { agentInstanceStreamRegistry } from './flue/agent-instance-stream-registry.ts';
+import { fixAgentAttachmentResponseHeaders } from './flue/attachment-response-headers.ts';
 import { isAgentLiveSseRequest, parseAgentInstancePath } from './flue/agent-instance-path.ts';
 import { recoverOrphanedPipelineWorkOnStartup, startPipelinePollScheduler } from './services/pipeline-poller.ts';
 import { cleanupExpiredSessionFiles } from './services/session-files-cleanup.ts';
@@ -148,6 +149,7 @@ if (process.env.VERCEL || process.env.OKF_EMBEDDED_FLUE === '1') {
     }
   });
 }
+flueRoutes.use('*', fixAgentAttachmentResponseHeaders);
 flueRoutes.route('/', flue());
 app.route('/api', flueRoutes);
 

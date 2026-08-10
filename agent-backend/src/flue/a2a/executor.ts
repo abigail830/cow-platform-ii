@@ -19,6 +19,7 @@ import {
 } from '@a2a-js/sdk';
 import { extractTextFromA2aMessage } from './extract-text.ts';
 import { invokeFlueAgent } from './invoke-agent.ts';
+import { absolutizePublicApiUrl } from '../../shared/publish-artifact-tools.ts';
 
 const activeAborts = new Map<string, AbortController>();
 
@@ -105,7 +106,7 @@ export function createFlueA2aExecutor(agentName: string): AgentExecutor {
               Part.fromJSON({
                 content: {
                   data: {
-                    downloadUrl: published.downloadUrl,
+                    downloadUrl: absolutizePublicApiUrl(published.downloadUrl),
                     filename: published.filename,
                   },
                 },

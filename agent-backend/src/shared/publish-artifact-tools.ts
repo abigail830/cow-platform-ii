@@ -63,15 +63,32 @@ function readPublicApiUrl(): string {
   ).replace(/\/$/, '');
 }
 
+/** Relative attachment path for in-app download links (browser uses current origin + Vite proxy). */
+export function buildAttachmentDownloadPath(
+  agentName: string,
+  instanceId: string,
+  attachmentId: string,
+): string {
+  const path = `/api/agents/${encodeURIComponent(agentName)}/${encodeURIComponent(instanceId)}/attachments/${encodeURIComponent(attachmentId)}`;
+  const token = signAttachmentAccessToken({ agentName, instanceId, attachmentId });
+  return `${path}?token=${encodeURIComponent(token)}`;
+}
+
+/** Prefix a relative API path with the public backend origin (A2A / external clients). */
+export function absolutizePublicApiUrl(pathOrUrl: string): string {
+  const trimmed = pathOrUrl.trim();
+  if (!trimmed) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const base = readPublicApiUrl();
+  return `${base}${trimmed.startsWith('/') ? trimmed : `/${trimmed}`}`;
+}
+
 function buildAttachmentDownloadUrl(
   agentName: string,
   instanceId: string,
   attachmentId: string,
 ): string {
-  const base = readPublicApiUrl();
-  const path = `/api/agents/${encodeURIComponent(agentName)}/${encodeURIComponent(instanceId)}/attachments/${encodeURIComponent(attachmentId)}`;
-  const token = signAttachmentAccessToken({ agentName, instanceId, attachmentId });
-  return `${base}${path}?token=${encodeURIComponent(token)}`;
+  return buildAttachmentDownloadPath(agentName, instanceId, attachmentId);
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

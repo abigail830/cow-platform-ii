@@ -1,0 +1,225 @@
+/**
+ * Ascentium brand theme for reveal.js
+ * Source: Brand Guidelines Full Version R1.10 (Nov 2025)
+ * Default theme — use unless the user requests inspire or a built-in reveal theme.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Poppins:wght@400;500;600&display=swap');
+
+:root {
+  --ascentium-vibrant-orange: #ff6611;
+  --ascentium-midnight-green: #0f1514;
+  --ascentium-white: #ffffff;
+  --ascentium-orange-1: #fff0e7;
+  --ascentium-orange-2: #ffd1b8;
+  --ascentium-orange-3: #ffa370;
+  --ascentium-orange-4: #ff8541;
+  --ascentium-mg-1: #b7b9b9;
+  --ascentium-mg-2: #878a8a;
+  --ascentium-mg-3: #575b5b;
+  --ascentium-mg-4: #272c2c;
+  --ascentium-teal-green: #077069;
+  --ascentium-sky-blue: #1877f2;
+  --ascentium-error: #dc3545;
+}
+
+.reveal-viewport {
+  background: var(--ascentium-white);
+}
+
+.reveal {
+  font-family: 'Poppins', 'Noto Sans SC', Arial, Helvetica, sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--ascentium-midnight-green);
+}
+
+.reveal h1,
+.reveal h2,
+.reveal h3,
+.reveal h4,
+.reveal h5,
+.reveal h6 {
+  font-family: 'Poppins', 'Noto Sans SC', Arial, Helvetica, sans-serif;
+  font-weight: 600;
+  color: var(--ascentium-midnight-green);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin-bottom: 0.5em;
+  text-transform: none;
+}
+
+.reveal h1 {
+  font-size: 2.4em;
+  line-height: 1.21;
+}
+
+.reveal h2 {
+  font-size: 1.55em;
+  line-height: 1.23;
+}
+
+.reveal h3 {
+  font-size: 1.25em;
+  line-height: 1.3;
+}
+
+.reveal p,
+.reveal li {
+  font-size: 1em;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.reveal strong,
+.reveal b,
+.reveal .emphasis {
+  font-weight: 500;
+}
+
+.reveal a {
+  color: var(--ascentium-vibrant-orange);
+  text-decoration: none;
+}
+
+.reveal a:hover {
+  color: var(--ascentium-orange-4);
+  text-decoration: underline;
+}
+
+.reveal .slides section {
+  text-align: left;
+}
+
+.reveal .slides section.center,
+.reveal .slides section[data-center='true'] {
+  text-align: center;
+}
+
+.reveal .tagline,
+.reveal small,
+.reveal .small-body {
+  font-size: 0.7em;
+  line-height: 1.29;
+  font-weight: 500;
+  color: var(--ascentium-mg-3);
+}
+
+.reveal .cta,
+.reveal .button,
+.reveal button {
+  display: inline-block;
+  background: var(--ascentium-vibrant-orange);
+  color: var(--ascentium-white);
+  font-weight: 500;
+  padding: 0.45em 1.2em;
+  border-radius: 4px;
+  border: none;
+}
+
+.reveal .accent {
+  color: var(--ascentium-vibrant-orange);
+}
+
+.reveal .info {
+  color: var(--ascentium-sky-blue);
+}
+
+.reveal .success {
+  color: var(--ascentium-teal-green);
+}
+
+.reveal .error,
+.reveal .alert {
+  color: var(--ascentium-error);
+}
+
+.reveal blockquote {
+  background: var(--ascentium-orange-1);
+  border-left: 4px solid var(--ascentium-vibrant-orange);
+  padding: 0.75em 1em;
+  color: var(--ascentium-midnight-green);
+  box-shadow: none;
+}
+
+.reveal pre {
+  background: var(--ascentium-midnight-green);
+  color: var(--ascentium-white);
+  border-radius: 6px;
+}
+
+.reveal code {
+  font-family: 'Courier New', Courier, monospace;
+  color: var(--ascentium-orange-4);
+}
+
+.reveal pre code {
+  color: var(--ascentium-white);
+}
+
+.reveal table th {
+  background: var(--ascentium-midnight-green);
+  color: var(--ascentium-white);
+  font-weight: 600;
+}
+
+.reveal table td {
+  border-color: var(--ascentium-mg-1);
+}
+
+.reveal .progress span {
+  background: var(--ascentium-vibrant-orange);
+}
+
+.reveal .controls button {
+  color: var(--ascentium-vibrant-orange);
+}
+
+.reveal .slide-number {
+  color: var(--ascentium-mg-2);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* Title / hero slides */
+.reveal .slides section.ascentium-hero {
+  background: var(--ascentium-midnight-green);
+  color: var(--ascentium-white);
+}
+
+.reveal .slides section.ascentium-hero h1,
+.reveal .slides section.ascentium-hero h2,
+.reveal .slides section.ascentium-hero h3 {
+  color: var(--ascentium-white);
+}
+
+.reveal .slides section.ascentium-hero .accent,
+.reveal .slides section.ascentium-hero strong {
+  color: var(--ascentium-orange-3);
+}
+
+.reveal .slides section.ascentium-soft {
+  background: var(--ascentium-orange-1);
+}
+
+.reveal .slides section.ascentium-soft h1,
+.reveal .slides section.ascentium-soft h2 {
+  color: var(--ascentium-midnight-green);
+}
+
+.reveal .slides section.ascentium-soft .accent {
+  color: var(--ascentium-vibrant-orange);
+}
+
+/* Upward arrow accent — optional brand graphic device */
+.reveal .ascentium-arrow {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.35em;
+  background: var(--ascentium-vibrant-orange);
+  clip-path: polygon(50% 0%, 100% 55%, 72% 55%, 72% 100%, 28% 100%, 28% 55%, 0% 55%);
+  vertical-align: middle;
+}
+
+.reveal .fragment.highlight-current-blue.current-fragment {
+  color: var(--ascentium-vibrant-orange);
+}
