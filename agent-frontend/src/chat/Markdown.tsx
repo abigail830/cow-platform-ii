@@ -6,6 +6,7 @@ import rehypeRaw from 'rehype-raw';
 import { useChatLinkResolve } from './chat-link-resolve-context.ts';
 import { useSourcePreviewHost } from './source-preview-host.tsx';
 import { isExternalHttpUrl, parseSourcePreviewHref } from '../shared/source-preview-href.ts';
+import { isAgentAttachmentDownloadHref, looksLikeBareFilename } from './published-artifacts.ts';
 import { slugifyHeading } from '../components/PageIndexTree.tsx';
 
 type MarkdownProps = {
@@ -38,6 +39,32 @@ function buildMarkdownComponents(
     const label = extractText(children).trim();
     const resolvedHref = href && resolveLinkHref ? resolveLinkHref(href, label || undefined) : href;
 
+    if (resolvedHref && isAgentAttachmentDownloadHref(resolvedHref)) {
+      return (
+        <a
+          href={resolvedHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => {
+            event.preventDefault();
+            window.open(resolvedHref, '_blank', 'noopener,noreferrer');
+          }}
+          {...props}
+        >
+          {children}
+        </a>
+      );
+    }
+
+    if (
+      href &&
+      resolvedHref === href &&
+      looksLikeBareFilename(href) &&
+      !isAgentAttachmentDownloadHref(resolvedHref)
+    ) {
+      return <span className="chat-broken-link">{children}</span>;
+    }
+
     if (resolvedHref && isExternalHttpUrl(resolvedHref)) {
       return (
         <a href={resolvedHref} target="_blank" rel="noopener noreferrer" {...props}>
@@ -65,7 +92,10 @@ function buildMarkdownComponents(
       );
     }
 
-    const internal = resolvedHref?.startsWith('/') ?? false;
+    const internal =
+      resolvedHref?.startsWith('/') &&
+      !resolvedHref.startsWith('/api/') &&
+      !isAgentAttachmentDownloadHref(resolvedHref ?? '');
     return (
       <a
         href={resolvedHref}

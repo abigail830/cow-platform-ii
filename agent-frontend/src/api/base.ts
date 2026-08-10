@@ -7,7 +7,8 @@ export function apiUrl(path: string): string {
   if (!path.startsWith('/')) {
     throw new Error(`apiUrl expects an absolute path starting with / (${path})`);
   }
-  const origin = import.meta.env.VITE_API_ORIGIN?.trim().replace(/\/$/, '') ?? '';
+  const env = import.meta.env as { VITE_API_ORIGIN?: string } | undefined;
+  const origin = env?.VITE_API_ORIGIN?.trim().replace(/\/$/, '') ?? '';
   return origin ? `${origin}${path}` : path;
 }
 

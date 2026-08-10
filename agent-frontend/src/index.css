@@ -1631,6 +1631,12 @@ textarea {
   }
 }
 
+.chat-broken-link {
+  color: #9ca3af;
+  font-size: 13px;
+  text-decoration: line-through;
+}
+
 .empty,
 .typing {
   color: #9ca3af;
@@ -1825,27 +1831,6 @@ textarea {
   max-width: 100%;
   height: auto;
   border-radius: 0.25rem;
-}
-
-.artifact-download-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  width: fit-content;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid #fed7aa;
-  border-radius: 8px;
-  background: #fff7ed;
-  color: #c2410c;
-  font-size: 12px;
-  font-weight: 500;
-  text-decoration: none;
-  line-height: 1.35;
-}
-
-.artifact-download-link:hover {
-  background: #ffedd5;
-  color: #9a3412;
 }
 
 .markdown-body strong {

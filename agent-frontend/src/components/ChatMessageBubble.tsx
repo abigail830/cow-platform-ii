@@ -1,12 +1,10 @@
 import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
 import { useMemo, type ReactNode } from 'react';
-import { ChatLinkResolveContext } from '../chat/chat-link-resolve-context.ts';
 import { getCachedPromptImagePreviews } from '../chat/prompt-image-preview-cache.ts';
 import { isImageMediaType } from '../chat/prompt-images.ts';
 import { parseSessionFilesManifest, stripSessionFilesManifest } from '../chat/session-files.ts';
 import { assistantMessageText, userMessageText } from '../chat/groupMessages.ts';
-import { extractPublishedArtifacts, buildArtifactHrefResolver, normalizeAttachmentDownloadUrl } from '../chat/published-artifacts.ts';
-import { buildKbCitationHrefResolver, extractKbCitations } from '../chat/kb-citations.ts';
+import { normalizeAttachmentDownloadUrl } from '../chat/published-artifacts.ts';
 import { ChatImageChip } from './ChatImageChip.tsx';
 import { SessionFileChip } from './SessionFileChip.tsx';
 import { MessageCopyButton } from './MessageCopyButton.tsx';
@@ -93,18 +91,11 @@ export function AssistantMessageBubble({
   showCopy = true,
 }: AssistantMessageBubbleProps) {
   const text = assistantMessageText(messages);
-  const resolveLinkHref = useMemo(() => {
-    const artifactResolver = buildArtifactHrefResolver(extractPublishedArtifacts(messages));
-    const kbResolver = buildKbCitationHrefResolver(extractKbCitations(messages));
-    return (href: string, label?: string) => kbResolver(artifactResolver(href, label), label);
-  }, [messages]);
 
   return (
-    <ChatLinkResolveContext.Provider value={resolveLinkHref}>
-      <div className="message-stack assistant">
-        <div className="message assistant">{children}</div>
-        {showCopy ? <MessageCopyButton text={text} /> : null}
-      </div>
-    </ChatLinkResolveContext.Provider>
+    <div className="message-stack assistant">
+      <div className="message assistant">{children}</div>
+      {showCopy ? <MessageCopyButton text={text} /> : null}
+    </div>
   );
 }

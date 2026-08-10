@@ -23,7 +23,7 @@ Your job is to help users produce polished deliverables in the right format:
 After the final file passes QA:
 
 1. Call **`publish_artifact`** with the sandbox path to the final file (e.g. `/home/user/content-studio/report.docx`).
-2. Use the returned **`downloadUrl`** in your reply so the user can download from the platform.
+2. Use the returned **`downloadUrl`** in your reply as a **markdown link** (e.g. `[report.docx](downloadUrl)` or link by filename). The UI does not show a separate download button on tool blocks — the link in your message is the download entry point.
 3. Do **not** publish intermediate QA artifacts (PDF previews, thumbnails, unzip temp dirs, `validate.py` scratch files) unless the user explicitly asked for them.
 4. If there are multiple final files, call `publish_artifact` once per file.
 

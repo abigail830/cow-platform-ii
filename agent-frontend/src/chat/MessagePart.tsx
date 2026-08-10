@@ -1,9 +1,9 @@
 import { memo, type ReactNode } from 'react';
 import type { FlueConversationPart } from '@flue/react';
 import { Markdown } from './Markdown.tsx';
+import { usePublishedArtifacts } from './published-artifacts-context.ts';
+import { rewritePublishedArtifactMarkdownLinks } from './published-artifacts.ts';
 import { isPartStreaming, partBodyText, partFoldLabel } from './part-labels.ts';
-import { parsePublishArtifactOutput } from './published-artifacts.ts';
-import { ArtifactDownloadLink } from '../components/ArtifactDownloadLink.tsx';
 
 type DynamicToolPart = Extract<FlueConversationPart, { type: 'dynamic-tool' }>;
 
@@ -64,14 +64,20 @@ function partsEqual(a: FlueConversationPart, b: FlueConversationPart): boolean {
 
 function MessagePartView({ part }: { part: FlueConversationPart }) {
   const streaming = isPartStreaming(part);
+  const publishedArtifacts = usePublishedArtifacts();
 
   switch (part.type) {
-    case 'text':
+    case 'text': {
+      const markdownSource =
+        part.text.length > 0
+          ? rewritePublishedArtifactMarkdownLinks(part.text, publishedArtifacts)
+          : '';
       return (
         <div className={`text-part${streaming ? ' streaming' : ''}`}>
-          {part.text.length > 0 ? <Markdown>{part.text}</Markdown> : null}
+          {markdownSource ? <Markdown>{markdownSource}</Markdown> : null}
         </div>
       );
+    }
 
     case 'reasoning':
       return (
@@ -82,17 +88,10 @@ function MessagePartView({ part }: { part: FlueConversationPart }) {
 
     case 'dynamic-tool': {
       const tool = part as DynamicToolPart;
-      const artifact =
-        tool.toolName === 'publish_artifact' && tool.state === 'output-available'
-          ? parsePublishArtifactOutput(tool.output)
-          : null;
       return (
-        <>
-          {artifact ? <ArtifactDownloadLink artifact={artifact} /> : null}
-          <FoldBlock label={partFoldLabel(part)} streaming={streaming}>
-            <StreamingPre text={partBodyText(tool)} streaming={streaming} />
-          </FoldBlock>
-        </>
+        <FoldBlock label={partFoldLabel(part)} streaming={streaming}>
+          <StreamingPre text={partBodyText(tool)} streaming={streaming} />
+        </FoldBlock>
       );
     }
 

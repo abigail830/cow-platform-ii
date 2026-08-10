@@ -1,4 +1,4 @@
-import { useFlueAgent, useFlueClient } from '@flue/react';
+import { useFlueAgent, useFlueClient, type FlueConversationMessage } from '@flue/react';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { isAgentBusy } from '../chat/agentStatus.ts';
 import { sendMessageWithAdmissionRetry } from '../chat/agent-send-retry.ts';
@@ -24,10 +24,22 @@ import {
   partRenderKey,
   userMessageText,
 } from '../chat/groupMessages.ts';
+import {
+  applyAbortedTurnSnapshots,
+  finalizeMessagesForAbortFreeze,
+  snapshotAbortedAssistantTurn,
+} from '../chat/abort-freeze.ts';
 import { isActiveStreaming, shouldShowThinkingIndicator } from '../chat/typing-indicator.ts';
 import { isLatestAssistantTurn } from '../chat/assistant-turn.ts';
 import { useChatAutoScroll } from '../chat/use-chat-auto-scroll.ts';
 import { useThrottledMessages } from '../chat/use-throttled-messages.ts';
+import { ChatLinkResolveContext } from '../chat/chat-link-resolve-context.ts';
+import {
+  buildArtifactHrefResolver,
+  extractPublishedArtifacts,
+} from '../chat/published-artifacts.ts';
+import { PublishedArtifactsContext } from '../chat/published-artifacts-context.ts';
+import { buildKbCitationHrefResolver, extractKbCitations } from '../chat/kb-citations.ts';
 import { MessagePart } from '../chat/MessagePart.tsx';
 import { toAgentInstanceId } from '../shared/agent-instance-id.ts';
 import { AssistantMessageBubble, UserMessageBubble } from './ChatMessageBubble.tsx';
@@ -81,6 +93,17 @@ export function AgentChatPanel({
   const [abortedSubmissionIds, setAbortedSubmissionIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [abortedTurnSnapshots, setAbortedTurnSnapshots] = useState<
+    Map<string, FlueConversationMessage[]>
+  >(() => new Map());
+  /** Full transcript snapshot when abort fires before submissionId is known. */
+  const [abortMessageOverride, setAbortMessageOverride] = useState<
+    FlueConversationMessage[] | null
+  >(null);
+  /** Immediate UI suppression while Flue settles abort asynchronously. */
+  const [abortUiSuppressed, setAbortUiSuppressed] = useState(false);
+  const initialSentRef = useRef(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   function includedSessionFiles(files: SessionFile[]): SessionFile[] {
     return composerReadySessionFiles(files).filter((file) => file.includedInContext);
@@ -159,36 +182,62 @@ export function AgentChatPanel({
     setPendingSessionFiles([]);
   }
 
+  useEffect(() => {
+    initialSentRef.current = false;
+    setPendingSessionFiles([]);
+    setAbortedSubmissionIds(new Set());
+    setAbortedTurnSnapshots(new Map());
+    setAbortMessageOverride(null);
+    setAbortUiSuppressed(false);
+  }, [conversationId, agentInstanceId]);
+
+  const displayMessages = useMemo(
+    () =>
+      abortMessageOverride ??
+      applyAbortedTurnSnapshots(agent.messages, abortedTurnSnapshots),
+    [abortMessageOverride, agent.messages, abortedTurnSnapshots],
+  );
+
   const busy = isAgentBusy(agent.status);
-  const activeStreaming = isActiveStreaming(agent.messages);
-  const renderMessages = useThrottledMessages(agent.messages, activeStreaming);
+  const displayBusy = busy && !abortUiSuppressed;
+  const activeStreaming = isActiveStreaming(displayMessages);
+  const renderMessages = useThrottledMessages(displayMessages, displayBusy && activeStreaming);
   const rows = useMemo(() => groupConsecutiveMessages(renderMessages), [renderMessages]);
-  const showThinking = shouldShowThinkingIndicator(agent.status, agent.messages);
-  const initialSentRef = useRef(false);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const showThinking =
+    !abortUiSuppressed && shouldShowThinkingIndicator(agent.status, displayMessages);
+
+  const publishedArtifacts = useMemo(
+    () => extractPublishedArtifacts(displayMessages),
+    [displayMessages],
+  );
+
+  const resolveLinkHref = useMemo(() => {
+    const artifactResolver = buildArtifactHrefResolver(publishedArtifacts);
+    const kbResolver = buildKbCitationHrefResolver(extractKbCitations(displayMessages));
+    return (href: string, label?: string) => kbResolver(artifactResolver(href, label), label);
+  }, [publishedArtifacts, displayMessages]);
 
   useChatAutoScroll(
     messagesContainerRef,
     [renderMessages, showThinking, agent.error],
-    busy,
+    displayBusy,
   );
 
   useEffect(() => {
-    onBusyChange?.(busy);
-  }, [busy, onBusyChange]);
+    onBusyChange?.(displayBusy);
+  }, [displayBusy, onBusyChange]);
 
   useEffect(() => {
-    if (!busy) setCanceling(false);
+    if (!displayBusy) setCanceling(false);
+  }, [displayBusy]);
+
+  useEffect(() => {
+    if (!busy) setAbortUiSuppressed(false);
   }, [busy]);
 
   useEffect(() => {
     bindPendingPromptImageCache(agent.messages);
   }, [agent.messages]);
-
-  useEffect(() => {
-    initialSentRef.current = false;
-    setPendingSessionFiles([]);
-  }, [conversationId, agentInstanceId]);
 
   useEffect(() => {
     const images = initialImages ?? [];
@@ -218,7 +267,9 @@ export function AgentChatPanel({
 
   async function onSend(payload: { text: string; images: AgentPromptImage[] }) {
     const message = buildModelMessage(payload.text, pendingSessionFiles, payload.images.length);
-    if ((!message && payload.images.length === 0) || busy || !agent.historyReady) return;
+    if ((!message && payload.images.length === 0) || displayBusy || !agent.historyReady) return;
+    setAbortUiSuppressed(false);
+    setAbortMessageOverride(null);
     onInputChange('');
     const sendOptions = payload.images.length > 0 ? { images: payload.images } : undefined;
     if (payload.images.length > 0) stagePromptImagesForNextSend(payload.images);
@@ -239,14 +290,32 @@ export function AgentChatPanel({
   async function onCancel() {
     if (!busy || canceling) return;
     const submissionId = lastUserMessage(agent.messages)?.submissionId;
+    setAbortUiSuppressed(true);
+    setAbortMessageOverride(finalizeMessagesForAbortFreeze(agent.messages));
+    if (submissionId) {
+      const frozenTurn = snapshotAbortedAssistantTurn(agent.messages, submissionId);
+      setAbortedTurnSnapshots((previous) => new Map(previous).set(submissionId, frozenTurn));
+      setAbortedSubmissionIds((previous) => new Set(previous).add(submissionId));
+    }
     setCanceling(true);
     try {
-      const result = await client.agents.abort(agentName, agentInstanceId);
-      if (result.aborted && submissionId) {
-        setAbortedSubmissionIds((previous) => new Set(previous).add(submissionId));
-      }
+      await client.agents.abort(agentName, agentInstanceId);
     } catch (err) {
       console.error('[chat] abort failed', err);
+      setAbortUiSuppressed(false);
+      setAbortMessageOverride(null);
+      if (submissionId) {
+        setAbortedSubmissionIds((previous) => {
+          const next = new Set(previous);
+          next.delete(submissionId);
+          return next;
+        });
+        setAbortedTurnSnapshots((previous) => {
+          const next = new Map(previous);
+          next.delete(submissionId);
+          return next;
+        });
+      }
     }
   }
 
@@ -260,6 +329,8 @@ export function AgentChatPanel({
   return (
     <>
       <div className="chat-messages" ref={messagesContainerRef}>
+        <ChatLinkResolveContext.Provider value={resolveLinkHref}>
+        <PublishedArtifactsContext.Provider value={publishedArtifacts}>
         <div className="chat-column">
           {!agent.historyReady && agent.messages.length === 0 && (
             <p className="empty">Loading conversation…</p>
@@ -283,7 +354,7 @@ export function AgentChatPanel({
             const parts = filterRenderableParts(mergeAssistantParts(row.messages));
             const submissionId = assistantTurnSubmissionId(row.messages);
             const showAborted = submissionId ? abortedSubmissionIds.has(submissionId) : false;
-            const showCopy = !(busy && isLatestAssistantTurn(row.messages, agent.messages));
+            const showCopy = !(displayBusy && isLatestAssistantTurn(row.messages, displayMessages));
             return (
               <AssistantMessageBubble
                 key={row.messages.map((message) => message.id).join(':') || 'assistant'}
@@ -307,6 +378,8 @@ export function AgentChatPanel({
           {agent.error && <p className="error inline">{agent.error.message}</p>}
           <div ref={messagesEndRef} />
         </div>
+        </PublishedArtifactsContext.Provider>
+        </ChatLinkResolveContext.Provider>
       </div>
 
       <ChatComposer
@@ -315,7 +388,7 @@ export function AgentChatPanel({
         onSend={(payload) => void onSend(payload)}
         onCancel={() => void onCancel()}
         disabled={!agent.historyReady}
-        busy={busy}
+        busy={displayBusy}
         canceling={canceling}
         sessionFiles={{
           files: pendingSessionFiles,
