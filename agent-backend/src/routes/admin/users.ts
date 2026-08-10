@@ -113,10 +113,19 @@ users.patch('/:id/roles', requireResourcePermission('admin', ADMIN_RESOURCES.USE
     await db.insert(appUserRoles).values(roleIds.map((roleId) => ({ userId: id, roleId })));
   }
 
-  const hasAdmin = roleIds.length > 0;
+  let legacyRole: 'admin' | 'user' = 'user';
+  if (roleIds.length > 0) {
+    const assignedRoles = await db
+      .select({ key: appRoles.key })
+      .from(appRoles)
+      .where(inArray(appRoles.id, roleIds));
+    if (assignedRoles.some((role) => role.key === 'admin')) {
+      legacyRole = 'admin';
+    }
+  }
   await db
     .update(appUsers)
-    .set({ role: hasAdmin ? 'admin' : 'user' })
+    .set({ role: legacyRole })
     .where(eq(appUsers.id, id));
 
   return c.json({ ok: true });

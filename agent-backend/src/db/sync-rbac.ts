@@ -34,6 +34,13 @@ const KNOWLEDGE_MANAGER_ROLE = {
   isSystem: true,
 };
 
+const READ_ONLY_ROLE = {
+  key: 'read-only',
+  label: 'Read only',
+  description: 'Agent playground and read-only access to knowledge management features.',
+  isSystem: true,
+};
+
 /** Permission keys granted to each system role (admin gets the full catalog separately). */
 const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
   'agent-player': [
@@ -54,6 +61,14 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
     'platform-basic:storage:read',
     'platform-basic:storage:write',
     'platform-basic:models:read',
+    'knowledge-management:hybrid-search',
+    'knowledge-management:pageindex-search',
+  ],
+  'read-only': [
+    'agent:playground',
+    'knowledge-management:audio:read',
+    'knowledge-management:documents:read',
+    'knowledge-management:knowledge-bases:read',
     'knowledge-management:hybrid-search',
     'knowledge-management:pageindex-search',
   ],
@@ -207,20 +222,18 @@ export async function syncRbac(): Promise<{ permissionCount: number }> {
   await migrateLegacyHybridSearchGrants(permissions);
   await removeObsoletePermissions();
 
-  let adminRole = await upsertSystemRole(ADMIN_ROLE);
-  const agentPlayerRole = await upsertSystemRole(AGENT_PLAYER_ROLE);
-  const knowledgeManagerRole = await upsertSystemRole(KNOWLEDGE_MANAGER_ROLE);
+  const adminRole = await upsertSystemRole(ADMIN_ROLE);
+  const systemRolesByKey = {
+    'agent-player': await upsertSystemRole(AGENT_PLAYER_ROLE),
+    'knowledge-manager': await upsertSystemRole(KNOWLEDGE_MANAGER_ROLE),
+    'read-only': await upsertSystemRole(READ_ONLY_ROLE),
+  };
 
   const allPermissionKeys = new Set(permissions.map((permission) => permission.key));
   await grantRolePermissionKeys(adminRole.id, allPermissionKeys, permissions);
 
   for (const [roleKey, permissionKeys] of Object.entries(SYSTEM_ROLE_PERMISSION_KEYS)) {
-    const role =
-      roleKey === 'agent-player'
-        ? agentPlayerRole
-        : roleKey === 'knowledge-manager'
-          ? knowledgeManagerRole
-          : null;
+    const role = systemRolesByKey[roleKey as keyof typeof systemRolesByKey];
     if (!role) continue;
     await grantRolePermissionKeys(role.id, new Set(permissionKeys), permissions);
   }
