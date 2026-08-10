@@ -4,7 +4,8 @@ description: Generate Word documents, PowerPoint decks, and HTML reveal.js prese
 icon: Presentation
 
 model:
-  configName: gpt-5.4
+  # configName: gpt-5.4
+  configName: deepSeek-V4-Flash
   profile: glm-4.7-flash
 
 prompt: ./prompt.md
