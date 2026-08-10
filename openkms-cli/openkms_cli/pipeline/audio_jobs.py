@@ -20,6 +20,7 @@ from openkms_cli.providers.aliyun.asr import (
     AliyunAsrError,
     format_transcript_markdown,
     query_transcription_task,
+    resolve_asr_transcription_payload,
     submit_file_transcription,
     upload_transcript_artifacts,
     wait_for_transcription,
@@ -185,9 +186,10 @@ def finalize_audio_job(
 
     audio = ctx["audio"]
     file_name = str(audio.get("name") or "audio")
+    transcription_payload = resolve_asr_transcription_payload(asr_result)
     transcript_md = format_transcript_markdown(
         filename=file_name,
-        asr_result=asr_result,
+        asr_result=transcription_payload,
         model=asr_runtime.model,
     )
 
@@ -204,7 +206,7 @@ def finalize_audio_job(
         bucket=bucket,
         s3_prefix=s3_prefix,
         transcript_md=transcript_md,
-        asr_result=asr_result,
+        asr_result=transcription_payload,
     )
 
     patch_audio_job(api, job_id, stage="done")

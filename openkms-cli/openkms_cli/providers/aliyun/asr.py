@@ -110,6 +110,67 @@ def wait_for_transcription(
     raise AliyunAsrError(f"ASR task timed out after {max_wait_seconds}s (task_id={task_id})")
 
 
+def resolve_asr_transcription_payload(task_response: dict[str, Any]) -> dict[str, Any]:
+    """Return transcript payload with `transcripts[]`, downloading URL-backed results when needed."""
+    if not isinstance(task_response, dict):
+        return {}
+
+    if isinstance(task_response.get("transcripts"), list):
+        return task_response
+
+    output = task_response.get("output")
+    if isinstance(output, dict) and isinstance(output.get("transcripts"), list):
+        return output
+
+    urls = _collect_transcription_urls(task_response)
+    if not urls:
+        return task_response
+
+    payloads = [_download_transcription_json(url) for url in urls]
+    if len(payloads) == 1:
+        return payloads[0]
+
+    merged: list[dict[str, Any]] = []
+    for payload in payloads:
+        tracks = payload.get("transcripts")
+        if isinstance(tracks, list):
+            merged.extend(item for item in tracks if isinstance(item, dict))
+    if merged:
+        return {"transcripts": merged}
+    return payloads[0] if payloads else task_response
+
+
+def _collect_transcription_urls(task_response: dict[str, Any]) -> list[str]:
+    urls: list[str] = []
+    output = task_response.get("output")
+    if not isinstance(output, dict):
+        return urls
+
+    result = output.get("result")
+    if isinstance(result, dict):
+        url = result.get("transcription_url")
+        if isinstance(url, str) and url.strip():
+            urls.append(url.strip())
+
+    results = output.get("results")
+    if isinstance(results, list):
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            url = item.get("transcription_url")
+            if isinstance(url, str) and url.strip():
+                urls.append(url.strip())
+    return urls
+
+
+def _download_transcription_json(url: str) -> dict[str, Any]:
+    try:
+        response = requests.get(url, timeout=120)
+    except requests.RequestException as e:
+        raise AliyunAsrError(f"ASR transcription download failed: {e}") from e
+    return _parse_json_response(response, "ASR transcription download")
+
+
 def _parse_json_response(response: requests.Response, label: str) -> dict[str, Any]:
     try:
         data = response.json()
@@ -194,6 +255,18 @@ def format_transcript_markdown(
 
 
 def _extract_sentences(output: dict[str, Any]) -> list[dict[str, Any]]:
+    transcripts = output.get("transcripts")
+    if isinstance(transcripts, list):
+        merged: list[dict[str, Any]] = []
+        for track in transcripts:
+            if not isinstance(track, dict):
+                continue
+            sentences = track.get("sentences")
+            if isinstance(sentences, list):
+                merged.extend(item for item in sentences if isinstance(item, dict))
+        if merged:
+            return merged
+
     for key in ("sentences", "segments", "utterances", "results"):
         value = output.get(key)
         if isinstance(value, list) and value:
@@ -222,6 +295,18 @@ def _extract_sentences(output: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _extract_plain_text(output: dict[str, Any]) -> str:
+    transcripts = output.get("transcripts")
+    if isinstance(transcripts, list):
+        parts: list[str] = []
+        for track in transcripts:
+            if not isinstance(track, dict):
+                continue
+            text = track.get("text")
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+        if parts:
+            return "\n\n".join(parts)
+
     for key in ("text", "transcript"):
         value = output.get(key)
         if isinstance(value, str) and value.strip():
@@ -240,6 +325,21 @@ def _extract_language(output: dict[str, Any]) -> str | None:
         value = output.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
+
+    transcripts = output.get("transcripts")
+    if isinstance(transcripts, list):
+        for track in transcripts:
+            if not isinstance(track, dict):
+                continue
+            sentences = track.get("sentences")
+            if not isinstance(sentences, list):
+                continue
+            for sentence in sentences:
+                if not isinstance(sentence, dict):
+                    continue
+                lang = sentence.get("language")
+                if isinstance(lang, str) and lang.strip():
+                    return lang.strip()
     return None
 
 
