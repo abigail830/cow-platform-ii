@@ -106,6 +106,9 @@ def collect_model_names(config: dict[str, Any]) -> list[str]:
     asr = config.get("asr")
     if isinstance(asr, dict):
         add(asr.get("model_name"))
+    post = config.get("post_process")
+    if isinstance(post, dict):
+        add(post.get("model_name"))
     return names
 
 

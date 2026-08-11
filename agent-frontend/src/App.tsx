@@ -18,7 +18,8 @@ import { BuiltinAgentEditPage } from './pages/BuiltinAgentEditPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
 import { AudioLayout } from './pages/AudioLayout.tsx';
 import { AudioDetailPage } from './pages/AudioDetailPage.tsx';
-import { AudioListPage } from './pages/AudioListPage.tsx';
+import { AudioCaptureListPage } from './pages/AudioCaptureListPage.tsx';
+import { AudioCaptureDetailPage } from './pages/AudioCaptureDetailPage.tsx';
 import { DocumentsLayout } from './pages/DocumentsLayout.tsx';
 import { DocumentDetailPage } from './pages/DocumentDetailPage.tsx';
 import { DocumentsListPage } from './pages/DocumentsListPage.tsx';
@@ -61,8 +62,9 @@ export default function App() {
           <Route path="/knowledge/knowledge-bases" element={<KnowledgeBasesListPage />} />
           <Route path="/knowledge/knowledge-bases/:knowledgeBaseId" element={<KnowledgeBaseDetailRouter />} />
           <Route path="/knowledge/audio" element={<AudioLayout />}>
-            <Route index element={<AudioListPage />} />
-            <Route path=":audioId" element={<AudioDetailPage />} />
+            <Route index element={<AudioCaptureListPage />} />
+            <Route path="captures/:captureId" element={<AudioCaptureDetailPage />} />
+            <Route path="segments/:audioId" element={<AudioDetailPage />} />
           </Route>
           <Route path="/knowledge/documents" element={<DocumentsLayout />}>
             <Route index element={<DocumentsListPage />} />

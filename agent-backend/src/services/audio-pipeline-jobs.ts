@@ -202,10 +202,23 @@ export async function markAudioForJobStage(
   stage: AudioPipelineJobStage,
 ): Promise<void> {
   if (stage === 'done') {
+    const [audio] = await db
+      .select({ captureId: appAudios.captureId })
+      .from(appAudios)
+      .where(eq(appAudios.id, audioId))
+      .limit(1);
+
     await db
       .update(appAudios)
       .set({ status: 'completed', updatedAt: new Date() })
       .where(eq(appAudios.id, audioId));
+
+    if (audio?.captureId) {
+      const { maybeStartCapturePostProcess } = await import('./capture-post-process-trigger.ts');
+      void maybeStartCapturePostProcess(audio.captureId);
+      const { syncCaptureStatus } = await import('./capture-status.ts');
+      void syncCaptureStatus(audio.captureId);
+    }
     return;
   }
   if (stage === 'failed') {

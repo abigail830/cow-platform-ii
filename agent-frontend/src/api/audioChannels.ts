@@ -1,6 +1,6 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
-import { formatApiError } from './http.ts';
+import { readApiErrorMessage } from './http.ts';
 import type { ResourcePermissionFlags } from './resourceAccess.ts';
 
 export type AudioChannel = {
@@ -10,6 +10,7 @@ export type AudioChannel = {
   parent_id: string | null;
   sort_order: number;
   pipeline_id: string | null;
+  post_process_pipeline_id: string | null;
   auto_start_pipeline: boolean;
   created_at: string;
   updated_at: string;
@@ -17,21 +18,27 @@ export type AudioChannel = {
   children: AudioChannel[];
 };
 
-export type ChannelProcessingOptions = {
-  pipelines: Array<{ id: string; name: string; pipelineName: string }>;
+export type AudioChannelProcessingOptions = {
+  transcriptionPipelines: Array<{ id: string; name: string; pipelineName: string }>;
+  postProcessPipelines: Array<{ id: string; name: string; pipelineName: string }>;
 };
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
-  });
-  const text = await res.text();
-  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  if (!res.ok) throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
-  return data;
+  let res: Response;
+  try {
+    res = await fetch(apiUrl(path), {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Network error';
+    throw new Error(message === 'Failed to fetch' ? 'Network error — is the backend running?' : message);
+  }
+  if (!res.ok) throw new Error(await readApiErrorMessage(res));
+  if (res.status === 204) return {};
+  return res.json() as Promise<Record<string, unknown>>;
 }
 
 export async function listAudioChannels(): Promise<AudioChannel[]> {
@@ -39,9 +46,14 @@ export async function listAudioChannels(): Promise<AudioChannel[]> {
   return (data.channels as AudioChannel[]) ?? [];
 }
 
-export async function fetchAudioChannelProcessingOptions(): Promise<ChannelProcessingOptions> {
+export async function fetchAudioChannelProcessingOptions(): Promise<AudioChannelProcessingOptions> {
   const data = await authFetch('/api/audio-channels/processing-options');
-  return data as ChannelProcessingOptions;
+  return {
+    transcriptionPipelines:
+      (data.transcription_pipelines as AudioChannelProcessingOptions['transcriptionPipelines']) ?? [],
+    postProcessPipelines:
+      (data.post_process_pipelines as AudioChannelProcessingOptions['postProcessPipelines']) ?? [],
+  };
 }
 
 export async function createAudioChannel(input: {
@@ -68,6 +80,7 @@ export async function updateAudioChannel(
     description?: string | null;
     parentId?: string | null;
     pipelineId?: string | null;
+    postProcessPipelineId?: string | null;
     autoStartPipeline?: boolean;
   },
 ): Promise<AudioChannel> {
@@ -79,6 +92,7 @@ export async function updateAudioChannel(
       description: input.description,
       parent_id: input.parentId,
       pipeline_id: input.pipelineId,
+      post_process_pipeline_id: input.postProcessPipelineId,
       auto_start_pipeline: input.autoStartPipeline,
     }),
   });

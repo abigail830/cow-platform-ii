@@ -26,21 +26,40 @@ channels.get(
   '/processing-options',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'read'),
   async (c) => {
-    const { listPipelineConfigs } = await import('../shared/pipeline-config-store.ts');
-    const { isAudioAsyncPipelineName } = await import('../services/audio-pipeline-jobs.ts');
+    try {
+      const { listPipelineConfigs } = await import('../shared/pipeline-config-store.ts');
+      const { isAudioAsyncPipelineName } = await import('../services/audio-pipeline-names.ts');
+      const { isCapturePostProcessPipelineName } = await import(
+        '../services/capture-post-process-pipeline-names.ts'
+      );
 
-    const { pipelines } = await listPipelineConfigs({ enabledOnly: true, limit: 100 });
-    const audioPipelines = pipelines.filter((pipeline) =>
-      isAudioAsyncPipelineName(pipeline.pipelineName),
-    );
+      const { pipelines } = await listPipelineConfigs({ enabledOnly: true, limit: 100 });
+      const transcriptionPipelines = pipelines.filter((pipeline) =>
+        isAudioAsyncPipelineName(pipeline.pipelineName),
+      );
+      const postProcessPipelines = pipelines.filter((pipeline) =>
+        isCapturePostProcessPipelineName(pipeline.pipelineName),
+      );
 
-    return c.json({
-      pipelines: audioPipelines.map((pipeline) => ({
-        id: pipeline.id,
-        name: pipeline.name,
-        pipelineName: pipeline.pipelineName,
-      })),
-    });
+      return c.json({
+        transcription_pipelines: transcriptionPipelines.map((pipeline) => ({
+          id: pipeline.id,
+          name: pipeline.name,
+          pipelineName: pipeline.pipelineName,
+        })),
+        post_process_pipelines: postProcessPipelines.map((pipeline) => ({
+          id: pipeline.id,
+          name: pipeline.name,
+          pipelineName: pipeline.pipelineName,
+        })),
+      });
+    } catch (error) {
+      console.error('Failed to load audio channel processing options', error);
+      return c.json(
+        { error: error instanceof Error ? error.message : 'Failed to load processing options' },
+        500,
+      );
+    }
   },
 );
 
@@ -104,6 +123,7 @@ channels.get(
       parent_id: row.parentId,
       sort_order: row.sortOrder,
       pipeline_id: row.pipelineId,
+      post_process_pipeline_id: row.postProcessPipelineId,
       auto_start_pipeline: row.autoStartPipeline,
       created_by: row.createdBy,
       created_at: row.createdAt.toISOString(),
@@ -154,12 +174,18 @@ channels.put(
       description?: string | null;
       parent_id?: string | null;
       pipeline_id?: string | null;
+      post_process_pipeline_id?: string | null;
       auto_start_pipeline?: boolean;
     }>();
 
     try {
       const pipelineId =
         body.pipeline_id === undefined ? undefined : body.pipeline_id?.trim() || null;
+
+      const postProcessPipelineId =
+        body.post_process_pipeline_id === undefined
+          ? undefined
+          : body.post_process_pipeline_id?.trim() || null;
 
       const autoStartPipeline =
         body.auto_start_pipeline === undefined ? undefined : Boolean(body.auto_start_pipeline);
@@ -169,6 +195,7 @@ channels.put(
         description: body.description,
         parentId: body.parent_id,
         pipelineId,
+        postProcessPipelineId,
         autoStartPipeline,
       });
       return c.json(channel);

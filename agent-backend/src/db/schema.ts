@@ -286,12 +286,69 @@ export const appAudioChannels = pgTable(
     parentId: uuid('parent_id'),
     sortOrder: integer('sort_order').notNull().default(0),
     pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
+    postProcessPipelineId: uuid('post_process_pipeline_id').references(() => appPipelineConfigs.id, {
+      onDelete: 'set null',
+    }),
     autoStartPipeline: boolean('auto_start_pipeline').notNull().default(false),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index('idx_audio_channels_parent').on(t.parentId, t.sortOrder)],
+);
+
+export const AUDIO_CAPTURE_STATUSES = [
+  'draft',
+  'transcribing',
+  'ready',
+  'post_processing',
+  'done',
+  'failed',
+] as const;
+export type AudioCaptureStatus = (typeof AUDIO_CAPTURE_STATUSES)[number];
+
+export const AUDIO_CAPTURE_RECORDING_MODES = [
+  'multi_party_discussion',
+  'structured_interview',
+  'presentation_qa',
+  'site_field_capture',
+  'solo_voice_note',
+  'general',
+] as const;
+export type AudioCaptureRecordingMode = (typeof AUDIO_CAPTURE_RECORDING_MODES)[number];
+
+export const AUDIO_CAPTURE_AUDIENCES = ['external_client', 'internal_team', 'mixed', 'unknown'] as const;
+export type AudioCaptureAudience = (typeof AUDIO_CAPTURE_AUDIENCES)[number];
+
+export const CAPTURE_PIPELINE_JOB_STAGES = [
+  'submitted',
+  'structuring',
+  'classifying',
+  'extracting',
+  'done',
+  'failed',
+] as const;
+export type CapturePipelineJobStage = (typeof CAPTURE_PIPELINE_JOB_STAGES)[number];
+
+export const appAudioCaptures = pgTable(
+  'app_audio_captures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => appAudioChannels.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    brief: text('brief'),
+    participantsHint: text('participants_hint'),
+    recordingMode: text('recording_mode').$type<AudioCaptureRecordingMode | null>(),
+    audience: text('audience').$type<AudioCaptureAudience>().notNull().default('unknown'),
+    status: text('status').$type<AudioCaptureStatus>().notNull().default('draft'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_audio_captures_channel').on(t.channelId, t.updatedAt)],
 );
 
 export const appAudios = pgTable(
@@ -301,6 +358,9 @@ export const appAudios = pgTable(
     channelId: uuid('channel_id')
       .notNull()
       .references(() => appAudioChannels.id, { onDelete: 'cascade' }),
+    captureId: uuid('capture_id').references(() => appAudioCaptures.id, { onDelete: 'cascade' }),
+    segmentIndex: integer('segment_index'),
+    segmentLabel: text('segment_label'),
     name: text('name').notNull(),
     fileType: text('file_type').notNull(),
     sizeBytes: integer('size_bytes').notNull().default(0),
@@ -316,11 +376,29 @@ export const appAudios = pgTable(
   (t) => [
     index('idx_audios_channel').on(t.channelId, t.updatedAt),
     index('idx_audios_hash').on(t.fileHash),
+    index('idx_audios_capture').on(t.captureId, t.segmentIndex),
   ],
 );
 
 export const AUDIO_PIPELINE_JOB_STAGES = ['submitted', 'transcribing', 'done', 'failed'] as const;
 export type AudioPipelineJobStage = (typeof AUDIO_PIPELINE_JOB_STAGES)[number];
+
+export const appAudioCapturePipelineJobs = pgTable(
+  'app_audio_capture_pipeline_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    captureId: uuid('capture_id')
+      .notNull()
+      .references(() => appAudioCaptures.id, { onDelete: 'cascade' }),
+    pipelineName: text('pipeline_name').notNull(),
+    stage: text('stage').$type<CapturePipelineJobStage>().notNull().default('submitted'),
+    configYaml: text('config_yaml'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_audio_capture_pipeline_jobs_capture').on(t.captureId, t.createdAt)],
+);
 
 export const appAudioPipelineJobs = pgTable(
   'app_audio_pipeline_jobs',

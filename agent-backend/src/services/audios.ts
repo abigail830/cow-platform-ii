@@ -9,6 +9,10 @@ import {
 } from './audio-pipeline-jobs.ts';
 import { reconcileStaleAudioPipelineJobs } from './audio-pipeline-reconcile.ts';
 import { isAudioAsyncPipelineName, ASYNC_AUDIO_PIPELINE_NAMES } from './audio-pipeline-names.ts';
+import {
+  isCapturePostProcessPipelineName,
+  CAPTURE_POST_PROCESS_PIPELINE_NAMES,
+} from './capture-post-process-pipeline-names.ts';
 
 export type AudioChannelRow = typeof appAudioChannels.$inferSelect;
 export type AudioRow = typeof appAudios.$inferSelect;
@@ -20,6 +24,7 @@ export type AudioChannelNode = {
   parent_id: string | null;
   sort_order: number;
   pipeline_id: string | null;
+  post_process_pipeline_id: string | null;
   auto_start_pipeline: boolean;
   created_at: string;
   updated_at: string;
@@ -34,6 +39,7 @@ function toChannelPublic(row: AudioChannelRow) {
     parent_id: row.parentId,
     sort_order: row.sortOrder,
     pipeline_id: row.pipelineId,
+    post_process_pipeline_id: row.postProcessPipelineId,
     auto_start_pipeline: row.autoStartPipeline,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
@@ -47,6 +53,9 @@ function toAudioPublic(
   return {
     id: row.id,
     channel_id: row.channelId,
+    capture_id: row.captureId,
+    segment_index: row.segmentIndex,
+    segment_label: row.segmentLabel,
     name: row.name,
     file_type: row.fileType,
     size_bytes: row.sizeBytes,
@@ -110,6 +119,7 @@ export async function createAudioChannel(input: {
       parentId: input.parentId ?? null,
       sortOrder: maxSort + 1,
       pipelineId: parent?.pipelineId ?? null,
+      postProcessPipelineId: parent?.postProcessPipelineId ?? null,
       autoStartPipeline: parent?.pipelineId ? parent.autoStartPipeline : false,
       createdBy: input.createdBy ?? null,
     })
@@ -125,6 +135,7 @@ export async function updateAudioChannel(
     description?: string | null;
     parentId?: string | null;
     pipelineId?: string | null;
+    postProcessPipelineId?: string | null;
     autoStartPipeline?: boolean;
   },
 ): Promise<ReturnType<typeof toChannelPublic>> {
@@ -137,8 +148,20 @@ export async function updateAudioChannel(
     if (!pipeline.isEnabled) throw new Error('Pipeline is disabled');
     if (!isAudioAsyncPipelineName(pipeline.pipelineName)) {
       throw new Error(
-        `Channel pipeline must be an async audio transcribe pipeline ` +
+        `Channel transcription pipeline must be an async audio transcribe pipeline ` +
           `(${[...ASYNC_AUDIO_PIPELINE_NAMES].join(', ')}). Got: ${pipeline.pipelineName}`,
+      );
+    }
+  }
+
+  if (input.postProcessPipelineId !== undefined && input.postProcessPipelineId !== null) {
+    const pipeline = await getPipelineConfigById(input.postProcessPipelineId);
+    if (!pipeline) throw new Error('Post-process pipeline not found');
+    if (!pipeline.isEnabled) throw new Error('Post-process pipeline is disabled');
+    if (!isCapturePostProcessPipelineName(pipeline.pipelineName)) {
+      throw new Error(
+        `Channel post-process pipeline must be a capture post-process pipeline ` +
+          `(${[...CAPTURE_POST_PROCESS_PIPELINE_NAMES].join(', ')}). Got: ${pipeline.pipelineName}`,
       );
     }
   }
@@ -170,6 +193,9 @@ export async function updateAudioChannel(
       ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
       ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
       ...(input.pipelineId !== undefined ? { pipelineId: input.pipelineId } : {}),
+      ...(input.postProcessPipelineId !== undefined
+        ? { postProcessPipelineId: input.postProcessPipelineId }
+        : {}),
       ...(input.autoStartPipeline !== undefined ? { autoStartPipeline: input.autoStartPipeline } : {}),
       updatedAt: new Date(),
     })

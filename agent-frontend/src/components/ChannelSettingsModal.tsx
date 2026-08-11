@@ -3,6 +3,7 @@ import {
   fetchChannelProcessingOptions,
   type ChannelProcessingOptions,
 } from '../api/documentChannels.ts';
+import type { AudioChannelProcessingOptions } from '../api/audioChannels.ts';
 import { ResourceAccessPanel, type ResourceAccessPanelHandle } from './ResourceAccessPanel.tsx';
 import type { ResourceType } from '../api/resourceAccess.ts';
 
@@ -11,41 +12,57 @@ type ChannelSettingsModalProps = {
   initialName: string;
   initialDescription: string;
   initialPipelineId: string | null;
+  initialPostProcessPipelineId?: string | null;
   initialAutoStartPipeline: boolean;
   onCancel: () => void;
   onSubmit: (input: {
     name: string;
     description: string;
     pipelineId: string | null;
+    postProcessPipelineId?: string | null;
     autoStartPipeline: boolean;
   }) => Promise<void>;
   resourceType?: ResourceType;
-  fetchProcessingOptions?: () => Promise<ChannelProcessingOptions>;
+  fetchProcessingOptions?: () => Promise<ChannelProcessingOptions | AudioChannelProcessingOptions>;
   pipelineHint?: string;
+  postProcessPipelineHint?: string;
+  audioPipelineMode?: boolean;
   sharingInheritHint?: string;
 };
 
 type SettingsTab = 'general' | 'pipeline' | 'sharing';
+
+function isAudioProcessingOptions(
+  options: ChannelProcessingOptions | AudioChannelProcessingOptions,
+): options is AudioChannelProcessingOptions {
+  return 'transcriptionPipelines' in options;
+}
 
 export function ChannelSettingsModal({
   channelId,
   initialName,
   initialDescription,
   initialPipelineId,
+  initialPostProcessPipelineId = null,
   initialAutoStartPipeline,
   onCancel,
   onSubmit,
   resourceType = 'document_channel',
   fetchProcessingOptions = fetchChannelProcessingOptions,
   pipelineHint = 'When set, documents in this channel run this parse pipeline (CLI worker + Config YAML, including metadata extract).',
+  postProcessPipelineHint = 'Runs after all segments are transcribed (merge → structure → classify → extract).',
+  audioPipelineMode = false,
   sharingInheritHint = 'Documents inherit access rules from their channel. Sub-channels inherit parent channel rules.',
 }: ChannelSettingsModalProps) {
   const [tab, setTab] = useState<SettingsTab>('general');
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [pipelineId, setPipelineId] = useState(initialPipelineId ?? '');
+  const [postProcessPipelineId, setPostProcessPipelineId] = useState(initialPostProcessPipelineId ?? '');
   const [autoStartPipeline, setAutoStartPipeline] = useState(initialAutoStartPipeline);
-  const [options, setOptions] = useState<ChannelProcessingOptions | null>(null);
+  const [options, setOptions] = useState<ChannelProcessingOptions | AudioChannelProcessingOptions | null>(
+    null,
+  );
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [optionsError, setOptionsError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -57,11 +74,18 @@ export function ChannelSettingsModal({
     setName(initialName);
     setDescription(initialDescription);
     setPipelineId(initialPipelineId ?? '');
+    setPostProcessPipelineId(initialPostProcessPipelineId ?? '');
     setAutoStartPipeline(initialAutoStartPipeline);
     setError('');
     setTab('general');
     setSharingCanManage(false);
-  }, [initialAutoStartPipeline, initialDescription, initialName, initialPipelineId]);
+  }, [
+    initialAutoStartPipeline,
+    initialDescription,
+    initialName,
+    initialPipelineId,
+    initialPostProcessPipelineId,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,12 +108,26 @@ export function ChannelSettingsModal({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fetchProcessingOptions]);
 
-  const selectedPipelineLabel =
-    pipelineId && options
-      ? (options.pipelines.find((pipeline) => pipeline.id === pipelineId)?.name ?? null)
+  const documentPipelines =
+    options && !isAudioProcessingOptions(options) ? options.pipelines : [];
+  const transcriptionPipelines =
+    options && isAudioProcessingOptions(options) ? options.transcriptionPipelines : [];
+  const postProcessPipelines =
+    options && isAudioProcessingOptions(options) ? options.postProcessPipelines : [];
+
+  const selectedPipelineLabel = audioPipelineMode
+    ? (pipelineId
+        ? (transcriptionPipelines.find((pipeline) => pipeline.id === pipelineId)?.name ?? null)
+        : null)
+    : pipelineId
+      ? (documentPipelines.find((pipeline) => pipeline.id === pipelineId)?.name ?? null)
       : null;
+
+  const selectedPostProcessLabel = postProcessPipelineId
+    ? (postProcessPipelines.find((pipeline) => pipeline.id === postProcessPipelineId)?.name ?? null)
+    : null;
 
   async function handleFormSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -106,6 +144,9 @@ export function ChannelSettingsModal({
         name: name.trim(),
         description: description.trim(),
         pipelineId: pipelineId || null,
+        ...(audioPipelineMode
+          ? { postProcessPipelineId: postProcessPipelineId || null }
+          : {}),
         autoStartPipeline: pipelineId ? autoStartPipeline : false,
       });
     } catch (err) {
@@ -179,6 +220,68 @@ export function ChannelSettingsModal({
                   <p className="admin-form-hint form-field-wide">Loading options…</p>
                 ) : optionsError ? (
                   <p className="error form-field-wide">{optionsError}</p>
+                ) : audioPipelineMode ? (
+                  <>
+                    <div className="channel-transcription-section">
+                      <label className="form-field">
+                        <span>Transcription pipeline</span>
+                        <select
+                          value={pipelineId}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setPipelineId(value);
+                            if (!value) setAutoStartPipeline(false);
+                          }}
+                        >
+                          <option value="">— None —</option>
+                          {transcriptionPipelines.map((pipeline) => (
+                            <option key={pipeline.id} value={pipeline.id}>
+                              {pipeline.name}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="admin-form-hint">
+                          {pipelineHint}
+                          {selectedPipelineLabel
+                            ? ` Selected: ${selectedPipelineLabel}.`
+                            : ' No transcription pipeline selected.'}
+                        </span>
+                      </label>
+                      {pipelineId ? (
+                        <label className="channel-auto-start-field">
+                          <span className="checkbox-row">
+                            <input
+                              type="checkbox"
+                              className="brand-checkbox"
+                              checked={autoStartPipeline}
+                              onChange={(event) => setAutoStartPipeline(event.target.checked)}
+                            />
+                            Auto-start transcription after segment upload
+                          </span>
+                        </label>
+                      ) : null}
+                    </div>
+                    <label className="form-field form-field-wide">
+                      <span>Post-process pipeline</span>
+                      <select
+                        value={postProcessPipelineId}
+                        onChange={(event) => setPostProcessPipelineId(event.target.value)}
+                      >
+                        <option value="">— System default —</option>
+                        {postProcessPipelines.map((pipeline) => (
+                          <option key={pipeline.id} value={pipeline.id}>
+                            {pipeline.name}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="admin-form-hint">
+                        {postProcessPipelineHint}
+                        {selectedPostProcessLabel
+                          ? ` Selected: ${selectedPostProcessLabel}.`
+                          : ' Uses the enabled system default when unset.'}
+                      </span>
+                    </label>
+                  </>
                 ) : (
                   <>
                     <label className="form-field form-field-wide">
@@ -192,7 +295,7 @@ export function ChannelSettingsModal({
                         }}
                       >
                         <option value="">— None —</option>
-                        {options?.pipelines.map((pipeline) => (
+                        {documentPipelines.map((pipeline) => (
                           <option key={pipeline.id} value={pipeline.id}>
                             {pipeline.name}
                           </option>
@@ -205,7 +308,7 @@ export function ChannelSettingsModal({
                           : ' No pipeline selected.'}
                       </span>
                     </label>
-                    {pipelineId && (
+                    {pipelineId ? (
                       <label className="form-field form-field-wide channel-auto-start-field">
                         <span className="checkbox-row">
                           <input
@@ -217,7 +320,7 @@ export function ChannelSettingsModal({
                           Auto-start pipeline after upload
                         </span>
                       </label>
-                    )}
+                    ) : null}
                   </>
                 )}
               </div>

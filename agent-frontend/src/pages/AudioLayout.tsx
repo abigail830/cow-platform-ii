@@ -77,6 +77,7 @@ export function AudioLayout() {
     name: string;
     description: string;
     pipelineId: string | null;
+    postProcessPipelineId?: string | null;
     autoStartPipeline: boolean;
   }) {
     if (!channelModal || channelModal.mode !== 'settings') return;
@@ -84,6 +85,7 @@ export function AudioLayout() {
       name: input.name,
       description: input.description || null,
       pipelineId: input.pipelineId,
+      postProcessPipelineId: input.postProcessPipelineId,
       autoStartPipeline: input.autoStartPipeline,
     });
     setChannelModal(null);
@@ -126,7 +128,7 @@ export function AudioLayout() {
         <header className="admin-header">
           <AdminPageTitle main={PAGE.titleMain} accent={PAGE.titleAccent} />
           <AdminPageDescription>
-            Upload meeting recordings, run Qwen-Audio transcription pipelines, and review raw transcripts.
+            Upload meeting recordings as multi-segment captures, run ASR per segment, then post-process into structured knowledge.
           </AdminPageDescription>
         </header>
 
@@ -178,10 +180,13 @@ export function AudioLayout() {
           initialName={channelModal.channel.name}
           initialDescription={channelModal.channel.description ?? ''}
           initialPipelineId={channelModal.channel.pipeline_id}
+          initialPostProcessPipelineId={channelModal.channel.post_process_pipeline_id}
           initialAutoStartPipeline={channelModal.channel.auto_start_pipeline}
           resourceType="audio_channel"
+          audioPipelineMode
           fetchProcessingOptions={fetchAudioChannelProcessingOptions}
-          pipelineHint="When set, audio files in this channel run this transcription pipeline via openkms-cli."
+          pipelineHint="Per-segment ASR via openkms-cli."
+          postProcessPipelineHint="Produces structured_transcript.json, recording_context.json, and extraction.json."
           sharingInheritHint="Audio files inherit access rules from their channel. Sub-channels inherit parent channel rules."
           onCancel={() => setChannelModal(null)}
           onSubmit={handleUpdateChannel}

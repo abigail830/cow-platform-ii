@@ -52,7 +52,7 @@ Run `npx tsc --noEmit` locally before deploy to catch type errors.
 
 Do **not** set `PIPELINE_WORKER=spawn` on Vercel.
 
-Document parse jobs dispatch **`openkms-pipeline.yml`** (Actions name: **OpenKMS Document Parse**). Audio transcription uses a separate workflow **`openkms-audio-transcribe.yml`** (Actions name: **OpenKMS Audio Transcribe**), linked from the system `aliyun-qwen-audio-transcribe` pipeline row (`workflow_file`).
+Document parse jobs dispatch **`openkms-pipeline.yml`** (Actions name: **OpenKMS Document Parse**). Audio transcription uses a separate workflow **`openkms-audio-transcribe.yml`** (Actions name: **OpenKMS Audio Transcribe**), linked from the system `aliyun-qwen-audio-transcribe` pipeline row (`workflow_file`). Audio capture post-process uses **`openkms-audio-capture-post-process.yml`** (override via `GITHUB_AUDIO_CAPTURE_PIPELINE_WORKFLOW`), linked from `audio-capture-post-process`.
 
 ## KB PageIndex import (isolated from document parse)
 

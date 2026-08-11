@@ -1,0 +1,119 @@
+# Default worker config for audio-capture-post-process pipeline.
+# model_name = Models list bold name (app_model_configs.name), api_type=chat-completions.
+# Credentials via GET /internal-api/models/cli-params?model_name=…
+#
+# segment_topics / classify / extract default to mode: llm (prompts below).
+# Set mode: rules only for offline/debug without model access.
+
+model_name: "deepSeek-V4-Flash"
+temperature: 0.2
+
+post_process:
+  enable_merge_turns: true
+
+  segment_topics:
+    enabled: true
+    mode: llm
+    window_minutes: 12
+    llm:
+      system_prompt: |
+        You segment a meeting transcript into coherent topics for knowledge extraction.
+        Each topic must use only turn_id values from the input.
+        Titles: concise (<= 12 words). Summaries: 1-2 sentences capturing the gist, not verbatim quotes.
+        Prefer fewer, broader topics over many tiny fragments.
+      user_prompt_template: |
+        Capture: {title}
+        Brief: {brief}
+
+        Turn window ({window_index}/{window_count}):
+        {turns_json}
+
+        Return JSON only:
+        {"topics":[{"title":"...","summary":"...","turn_ids":["s0_t001"]}]}
+
+  chapters:
+    enabled: true
+    mode: one_per_topic
+
+  classify:
+    mode: llm
+    confidence_threshold: 0.7
+    recording_modes:
+      - multi_party_discussion
+      - structured_interview
+      - presentation_qa
+      - site_field_capture
+      - solo_voice_note
+      - general
+    content_facets:
+      - solution_design
+      - progress_status
+      - commercial_terms
+      - risk_issue
+      - decision_action
+      - general_discussion
+    llm:
+      system_prompt: |
+        You classify a meeting/audio capture for downstream knowledge extraction.
+        Pick exactly one recording_mode from the allowed list.
+        Respect the user-selected recording_mode hint when plausible.
+        For each topic, assign one or more content_facets from the allowed list.
+        Set needs_review=true when confidence < confidence_threshold.
+      user_prompt_template: |
+        Capture title: {title}
+        Brief: {brief}
+        Participants hint: {participants_hint}
+        User-selected recording_mode hint: {recording_mode_hint}
+        Audience metadata: {audience}
+        Confidence threshold: {confidence_threshold}
+
+        Allowed recording_mode values:
+        {recording_modes}
+
+        Allowed content_facets (multi-select per topic):
+        {content_facets}
+
+        Topics (summaries):
+        {topics_json}
+
+        Return JSON only:
+        {
+          "recording_mode": "...",
+          "audience": "{audience}",
+          "confidence": 0.0,
+          "needs_review": false,
+          "content_facets_by_topic": [
+            {"topic_id": "topic_01", "content_facets": ["general_discussion"]}
+          ]
+        }
+
+  extract:
+    mode: llm
+    llm:
+      system_prompt: |
+        You extract structured knowledge from one topic in a meeting/audio capture.
+        Write concise factual bullets — NEVER paste long verbatim transcript spans.
+        key_points: 3-6 distilled insights (decisions, facts, conclusions).
+        action_items: explicit commitments only; include owner if stated.
+        open_questions: unresolved questions explicitly raised.
+        Use the same language as the source (Chinese or English).
+      user_prompt_template: |
+        Capture: {title}
+        Recording mode: {recording_mode}
+        Audience: {audience}
+
+        Topic: {topic_title}
+        Topic summary: {topic_summary}
+        Relevant turns:
+        {turns_text}
+
+        Return JSON only:
+        {
+          "key_points": ["..."],
+          "action_items": ["..."],
+          "open_questions": ["..."]
+        }
+
+  enable_segment_topics: true
+  enable_chapters: true
+  enable_llm_structure: true

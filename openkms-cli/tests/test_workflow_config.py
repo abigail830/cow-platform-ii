@@ -142,3 +142,11 @@ def test_audio_transcribe_default_collects_model_name():
     cfg = load_packaged_default("aliyun-qwen-audio-transcribe")
     assert collect_model_names(cfg) == ["qwen-audio-3.0-asr-flash-filetrans"]
     assert cfg["asr"]["enable_diarization"] is False
+
+
+def test_audio_capture_post_process_default_collects_model_name():
+    cfg = load_packaged_default("audio-capture-post-process")
+    assert collect_model_names(cfg) == ["deepSeek-V4-Flash"]
+    assert cfg["post_process"]["enable_merge_turns"] is True
+    assert cfg["post_process"]["classify"]["mode"] == "llm"
+    assert cfg["post_process"]["extract"]["mode"] == "llm"
