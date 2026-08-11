@@ -203,9 +203,19 @@ export async function getCapturePublicById(id: string) {
   return toCapturePublic(row, job ?? undefined, countRow?.count ?? 0);
 }
 
-export async function getCaptureWithSegments(id: string) {
-  const { syncCaptureStatus } = await import('./capture-status.ts');
-  await syncCaptureStatus(id);
+export async function getCaptureChannelMeta(
+  id: string,
+): Promise<{ channel_id: string } | null> {
+  const row = await getAudioCaptureById(id);
+  if (!row) return null;
+  return { channel_id: row.channelId };
+}
+
+export async function getCaptureWithSegments(id: string, options?: { sync?: boolean }) {
+  if (options?.sync !== false) {
+    const { syncCaptureStatus } = await import('./capture-status.ts');
+    await syncCaptureStatus(id);
+  }
 
   const capture = await getCapturePublicById(id);
   if (!capture) return null;

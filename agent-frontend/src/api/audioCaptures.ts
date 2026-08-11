@@ -222,8 +222,12 @@ export async function createAudioCapture(input: {
   }) as Promise<AudioCaptureRecord>;
 }
 
-export async function getAudioCapture(id: string): Promise<AudioCaptureDetail> {
-  return authFetch(`/api/audio-captures/${id}`) as Promise<AudioCaptureDetail>;
+export async function getAudioCapture(
+  id: string,
+  options?: { sync?: boolean },
+): Promise<AudioCaptureDetail> {
+  const query = options?.sync === false ? '?sync=false' : '';
+  return authFetch(`/api/audio-captures/${id}${query}`) as Promise<AudioCaptureDetail>;
 }
 
 export async function uploadCaptureSegment(captureId: string, file: File, segmentLabel?: string): Promise<AudioCaptureDetail> {
@@ -251,6 +255,20 @@ export async function reorderCaptureSegments(
 export async function runCapturePipeline(captureId: string): Promise<AudioCaptureDetail> {
   const data = await authFetch(`/api/audio-captures/${captureId}/run-pipeline`, { method: 'POST' });
   return (data as { capture: AudioCaptureDetail }).capture;
+}
+
+export async function getCapturePostProcessArtifacts(captureId: string): Promise<{
+  structured_transcript: unknown | null;
+  recording_context: unknown | null;
+  extraction: unknown | null;
+  missing: Array<'structured_transcript' | 'recording_context' | 'extraction'>;
+}> {
+  return authFetch(`/api/audio-captures/${captureId}/post-process-artifacts`) as Promise<{
+    structured_transcript: unknown | null;
+    recording_context: unknown | null;
+    extraction: unknown | null;
+    missing: Array<'structured_transcript' | 'recording_context' | 'extraction'>;
+  }>;
 }
 
 export async function getCaptureArtifact<T = unknown>(

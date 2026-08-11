@@ -21,6 +21,7 @@ import {
 } from '../storage/audio-files.ts';
 import {
   captureArtifactS3Key,
+  readCapturePostProcessArtifactBundle,
   type CaptureArtifactName,
 } from '../storage/audio-capture-files.ts';
 import { readStorageText } from '../storage/document-content.ts';
@@ -29,6 +30,7 @@ import {
   createAudioCapture,
   deleteAudioCapture,
   detachCaptureSegment,
+  getCaptureChannelMeta,
   getCaptureWithSegments,
   listAudioCaptures,
   reorderCaptureSegments,
@@ -171,7 +173,8 @@ audioCaptures.get(
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Capture id is required' }, 400);
 
-    const capture = await getCaptureWithSegments(id);
+    const sync = c.req.query('sync') !== 'false';
+    const capture = await getCaptureWithSegments(id, { sync });
     if (!capture) return c.json({ error: 'Capture not found' }, 404);
 
     const denied = await denyUnlessAudioChannelAccess(c, capture.channel_id, 'read');
@@ -402,6 +405,36 @@ audioCaptures.post(
 );
 
 audioCaptures.get(
+  '/:id/post-process-artifacts',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Capture id is required' }, 400);
+
+    const meta = await getCaptureChannelMeta(id);
+    if (!meta) return c.json({ error: 'Capture not found' }, 404);
+
+    const denied = await denyUnlessAudioChannelAccess(c, meta.channel_id, 'read');
+    if (denied) return denied;
+
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    try {
+      const bundle = await readCapturePostProcessArtifactBundle(id);
+      if (bundle.missing.length === 3) {
+        return c.json({ error: 'Post-process artifacts not found in storage' }, 404);
+      }
+      return c.json(bundle);
+    } catch (error) {
+      return c.json(
+        { error: error instanceof Error ? error.message : 'Failed to load artifacts' },
+        500,
+      );
+    }
+  },
+);
+
+audioCaptures.get(
   '/:id/artifacts/:artifact',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'read'),
   async (c) => {
@@ -412,10 +445,10 @@ audioCaptures.get(
       return c.json({ error: 'Unknown artifact' }, 400);
     }
 
-    const capture = await getCaptureWithSegments(id);
-    if (!capture) return c.json({ error: 'Capture not found' }, 404);
+    const meta = await getCaptureChannelMeta(id);
+    if (!meta) return c.json({ error: 'Capture not found' }, 404);
 
-    const denied = await denyUnlessAudioChannelAccess(c, capture.channel_id, 'read');
+    const denied = await denyUnlessAudioChannelAccess(c, meta.channel_id, 'read');
     if (denied) return denied;
 
     if (!isStorageEnabled()) return storageUnavailable(c);
