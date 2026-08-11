@@ -8363,6 +8363,11 @@ select:focus-visible {
   flex-shrink: 0;
 }
 
+.asset-market-agent-header {
+  border-bottom: none;
+  padding-bottom: 0.15rem;
+}
+
 .asset-market-detail-header h2 {
   margin: 0;
   font-size: 0.875rem;
@@ -8374,6 +8379,87 @@ select:focus-visible {
 .asset-market-detail-panel > .admin-error,
 .asset-market-detail-panel > .admin-muted {
   margin: 0.75rem;
+}
+
+.asset-market-agent-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  padding: 0 0.75rem 0.75rem;
+  gap: 0.5rem;
+}
+
+.asset-market-agent-body > .modal-tabs {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.asset-market-agent-tab-panels {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-market-agent-general {
+  overflow-y: auto;
+}
+
+.asset-market-agent-meta {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-market-agent-meta > div {
+  display: grid;
+  grid-template-columns: 6.75rem minmax(0, 1fr);
+  gap: 0.5rem 0.85rem;
+  align-items: start;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.asset-market-agent-meta > div:last-child {
+  border-bottom: none;
+}
+
+.asset-market-agent-meta dt {
+  margin: 0;
+  padding-top: 0.1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.asset-market-agent-meta dd {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #0f172a;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.asset-market-agent-meta dd .admin-muted {
+  margin: 0;
+}
+
+.asset-market-agent-meta .asset-market-tool-chips {
+  margin: 0;
+}
+
+.asset-market-agent-prompt.studio-agent-tab-panel {
+  overflow: hidden;
+  height: 100%;
+}
+
+.asset-market-agent-prompt-editor.asset-market-skill-codemirror {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .asset-market-skill-split {

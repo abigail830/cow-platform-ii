@@ -21,6 +21,7 @@ import {
   deleteStudioAgent,
   deleteUserDatasource,
   getPlatformAgentCopyDraft,
+  getPlatformAgentDetail,
   getPlatformMcpDetail,
   getSkillFile,
   getSkillTree,
@@ -72,6 +73,15 @@ type AgentRow =
   | { kind: 'platform'; id: string; name: string; slug: string; description: string }
   | { kind: 'studio'; agent: StudioAgent };
 
+type ViewingAgent =
+  | { kind: 'platform'; id: string }
+  | { kind: 'studio'; id: string };
+
+function viewingAgentKey(view: ViewingAgent | null): string | null {
+  if (!view) return null;
+  return `${view.kind}:${view.id}`;
+}
+
 export function AssetMarketPage() {
   const { user, refreshAgents } = useAppOutletContext();
   const canWrite = useMemo(() => hasPermission(user, 'agent:asset-market', 'write'), [user]);
@@ -84,10 +94,15 @@ export function AssetMarketPage() {
   const [editing, setEditing] = useState<StudioAgent | 'new' | null>(null);
   const [duplicateFrom, setDuplicateFrom] = useState<StudioAgentDraft | null>(null);
   const [mcpKeyFor, setMcpKeyFor] = useState<string | null>(null);
+  const [viewingAgent, setViewingAgent] = useState<ViewingAgent | null>(null);
   const [viewingSkillId, setViewingSkillId] = useState<string | null>(null);
   const [viewingMcpId, setViewingMcpId] = useState<string | null>(null);
   const [copyBusyId, setCopyBusyId] = useState<string | null>(null);
 
+  const agentsBrowseSplit = useResizableSplit('asset-market-agents-browse-split', 38, {
+    minPct: 24,
+    maxPct: 72,
+  });
   const skillsBrowseSplit = useResizableSplit('asset-market-skills-browse-split', 38, {
     minPct: 24,
     maxPct: 72,
@@ -146,6 +161,7 @@ export function AssetMarketPage() {
     setEditing(null);
     setDuplicateFrom(null);
     setMcpKeyFor(null);
+    setViewingAgent(null);
     setViewingSkillId(null);
     setViewingMcpId(null);
     setTab(next);
@@ -217,10 +233,10 @@ export function AssetMarketPage() {
           ))}
         </div>
         <div className="admin-page-tabs-actions">
-          {canWrite && tab === 'agents' ? (
+          {canWrite ? (
             <button
               type="button"
-              className="btn-primary"
+              className={`btn-primary${tab !== 'agents' ? ' is-tab-hidden' : ''}`}
               onClick={() => {
                 setDuplicateFrom(null);
                 setEditing('new');
@@ -241,18 +257,59 @@ export function AssetMarketPage() {
       {loading ? (
         <p className="admin-muted">Loading…</p>
       ) : tab === 'agents' ? (
-        <AgentsTable
-          rows={agentRows}
-          canWrite={canWrite}
-          copyBusyId={copyBusyId}
-          onEdit={(agent) => {
-            setDuplicateFrom(null);
-            setEditing(agent);
-          }}
-          onCopyStudio={(agent) => void handleCopyStudio(agent)}
-          onCopyPlatform={(id) => void handleCopyPlatform(id)}
-          onDelete={handleDelete}
-        />
+        viewingAgent ? (
+          <div
+            ref={agentsBrowseSplit.containerRef}
+            className="asset-market-browse has-detail"
+            style={
+              {
+                ['--asset-market-browse-left-pct' as string]: `${agentsBrowseSplit.leftPct}%`,
+              }
+            }
+          >
+            <div className="asset-market-browse-list">
+              <AgentsTable
+                rows={agentRows}
+                canWrite={canWrite}
+                copyBusyId={copyBusyId}
+                selectedKey={viewingAgentKey(viewingAgent)}
+                onView={setViewingAgent}
+                onEdit={(agent) => {
+                  setDuplicateFrom(null);
+                  setEditing(agent);
+                }}
+                onCopyStudio={(agent) => void handleCopyStudio(agent)}
+                onCopyPlatform={(id) => void handleCopyPlatform(id)}
+                onDelete={handleDelete}
+              />
+            </div>
+            <div
+              className="asset-market-split-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize agents list and preview"
+              onMouseDown={agentsBrowseSplit.onHandleMouseDown}
+            />
+            <AgentConfigPanel
+              viewing={viewingAgent}
+              onClose={() => setViewingAgent(null)}
+            />
+          </div>
+        ) : (
+          <AgentsTable
+            rows={agentRows}
+            canWrite={canWrite}
+            copyBusyId={copyBusyId}
+            onView={setViewingAgent}
+            onEdit={(agent) => {
+              setDuplicateFrom(null);
+              setEditing(agent);
+            }}
+            onCopyStudio={(agent) => void handleCopyStudio(agent)}
+            onCopyPlatform={(id) => void handleCopyPlatform(id)}
+            onDelete={handleDelete}
+          />
+        )
       ) : tab === 'skills' ? (
         viewingSkillId ? (
           <div
@@ -365,6 +422,8 @@ function AgentsTable({
   rows,
   canWrite,
   copyBusyId,
+  selectedKey,
+  onView,
   onEdit,
   onCopyStudio,
   onCopyPlatform,
@@ -373,6 +432,8 @@ function AgentsTable({
   rows: AgentRow[];
   canWrite: boolean;
   copyBusyId: string | null;
+  selectedKey?: string | null;
+  onView: (view: ViewingAgent) => void;
   onEdit: (agent: StudioAgent) => void;
   onCopyStudio: (agent: StudioAgent) => void;
   onCopyPlatform: (platformId: string) => void;
@@ -400,8 +461,12 @@ function AgentsTable({
             rows.map((row) => {
               if (row.kind === 'platform') {
                 const busy = copyBusyId === `platform:${row.id}`;
+                const key = `platform:${row.id}`;
                 return (
-                  <tr key={`platform:${row.id}`}>
+                  <tr
+                    key={key}
+                    className={selectedKey === key ? 'asset-market-row selected' : undefined}
+                  >
                     <td>
                       <strong>{row.name}</strong>
                       <span className="admin-badge">System</span>
@@ -410,6 +475,14 @@ function AgentsTable({
                     <td className="admin-muted">{row.description || '—'}</td>
                     <td>
                       <div className="row-actions">
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="View configuration"
+                          onClick={() => onView({ kind: 'platform', id: row.id })}
+                        >
+                          <Eye {...iconProps()} aria-hidden />
+                        </button>
                         <Link
                           className="icon-btn"
                           to={AGENT_PLAYGROUND_PATH}
@@ -435,8 +508,12 @@ function AgentsTable({
               }
               const agent = row.agent;
               const busy = copyBusyId === agent.id;
+              const key = `studio:${agent.id}`;
               return (
-                <tr key={agent.id}>
+                <tr
+                  key={agent.id}
+                  className={selectedKey === key ? 'asset-market-row selected' : undefined}
+                >
                   <td>
                     <strong>{agent.displayName}</strong>
                   </td>
@@ -444,6 +521,14 @@ function AgentsTable({
                   <td className="admin-muted">{agent.description || '—'}</td>
                   <td>
                     <div className="row-actions">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="View configuration"
+                        onClick={() => onView({ kind: 'studio', id: agent.id })}
+                      >
+                        <Eye {...iconProps()} aria-hidden />
+                      </button>
                       <Link
                         className="icon-btn"
                         to={AGENT_PLAYGROUND_PATH}
@@ -553,6 +638,218 @@ function AssetTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+type AgentViewTab = 'general' | 'prompt';
+
+type AgentViewConfig = {
+  title: string;
+  slug: string;
+  description: string;
+  instructions: string;
+  modelLabel: string;
+  skillLabels: string[];
+  mcpLabels: string[];
+  datasourceLabels: string[];
+};
+
+function AgentConfigPanel({
+  viewing,
+  onClose,
+}: {
+  viewing: ViewingAgent;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<AgentViewTab>('general');
+  const [config, setConfig] = useState<AgentViewConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setTab('general');
+  }, [viewing.kind, viewing.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    setConfig(null);
+
+    void (async () => {
+      try {
+        const [models, skills, mcps, datasources] = await Promise.all([
+          listModelConfigs({ apiType: 'chat-completions', limit: 100 }),
+          listStudioAssets('skill'),
+          listStudioAssets('mcp'),
+          listUserDatasources(),
+        ]);
+        if (cancelled) return;
+
+        const skillTitle = new Map(skills.map((s) => [s.id, s.title]));
+        const mcpTitle = new Map(mcps.map((m) => [m.id, m.title]));
+        const modelName = new Map((models.models ?? []).map((m) => [m.id, m.name]));
+        const dsLabel = new Map(
+          datasources.map((d) => [d.id, d.displayTitle || d.name]),
+        );
+
+        if (viewing.kind === 'platform') {
+          const detail = await getPlatformAgentDetail(viewing.id);
+          if (cancelled) return;
+          const modelLabel =
+            (detail.modelConfigId && modelName.get(detail.modelConfigId)) ||
+            detail.modelConfigName ||
+            '—';
+          setConfig({
+            title: detail.displayName,
+            slug: detail.slug,
+            description: detail.description,
+            instructions: detail.instructions || '',
+            modelLabel,
+            skillLabels: detail.skillIds.map((id) => skillTitle.get(id) || id),
+            mcpLabels: detail.platformMcpIds.map((id) => mcpTitle.get(id) || id),
+            datasourceLabels: detail.datasourceNames,
+          });
+        } else {
+          const detail = await getStudioAgent(viewing.id);
+          if (cancelled) return;
+          const modelLabel =
+            (detail.modelConfigId && modelName.get(detail.modelConfigId)) || '—';
+          setConfig({
+            title: detail.displayName,
+            slug: detail.slug,
+            description: detail.description,
+            instructions: detail.instructions || '',
+            modelLabel,
+            skillLabels: (detail.skillIds ?? []).map((id) => skillTitle.get(id) || id),
+            mcpLabels: (detail.platformMcpIds ?? []).map((id) => mcpTitle.get(id) || id),
+            datasourceLabels: (detail.datasourceIds ?? []).map(
+              (id) => dsLabel.get(id) || id,
+            ),
+          });
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewing.kind, viewing.id]);
+
+  return (
+    <aside className="asset-market-detail-panel" aria-label={`Agent ${viewing.id}`}>
+      <header className="asset-market-detail-header asset-market-agent-header">
+        <h2>{config?.title || viewing.id}</h2>
+        <button type="button" className="icon-btn" title="Close" onClick={onClose}>
+          <X {...iconProps()} aria-hidden />
+        </button>
+      </header>
+      {error ? (
+        <p className="admin-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {loading ? (
+        <p className="admin-muted">Loading…</p>
+      ) : config ? (
+        <div className="asset-market-agent-body">
+          <div className="modal-tabs" role="tablist" aria-label="Agent configuration">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'general'}
+              className={`modal-tab${tab === 'general' ? ' active' : ''}`}
+              onClick={() => setTab('general')}
+            >
+              General
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'prompt'}
+              className={`modal-tab${tab === 'prompt' ? ' active' : ''}`}
+              onClick={() => setTab('prompt')}
+            >
+              Prompt
+            </button>
+          </div>
+
+          <div className="asset-market-agent-tab-panels">
+            {tab === 'general' ? (
+              <div className="studio-agent-tab-panel asset-market-agent-general">
+                <dl className="asset-market-agent-meta">
+                  <div>
+                    <dt>Slug</dt>
+                    <dd className="mono-cell">{config.slug}</dd>
+                  </div>
+                  <div>
+                    <dt>Name</dt>
+                    <dd>{config.title}</dd>
+                  </div>
+                  <div>
+                    <dt>Description</dt>
+                    <dd>{config.description || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Model</dt>
+                    <dd>{config.modelLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Skills</dt>
+                    <dd>
+                      <AgentChipList items={config.skillLabels} empty="None" />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Platform MCP</dt>
+                    <dd>
+                      <AgentChipList items={config.mcpLabels} empty="None" />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Data sources</dt>
+                    <dd>
+                      <AgentChipList items={config.datasourceLabels} empty="None" />
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
+
+            {tab === 'prompt' ? (
+              <div className="studio-agent-tab-panel studio-agent-prompt-tab asset-market-agent-prompt">
+                {config.instructions ? (
+                  <ReadOnlyCodeEditor
+                    className="asset-market-skill-codemirror asset-market-agent-prompt-editor"
+                    value={config.instructions}
+                    language="markdown"
+                  />
+                ) : (
+                  <p className="admin-muted">No prompt configured.</p>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </aside>
+  );
+}
+
+function AgentChipList({ items, empty }: { items: string[]; empty: string }) {
+  if (items.length === 0) {
+    return <span className="admin-muted">{empty}</span>;
+  }
+  return (
+    <ul className="asset-market-tool-chips">
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
   );
 }
 

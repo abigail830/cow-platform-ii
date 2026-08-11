@@ -14,7 +14,18 @@ async function authFetch(path: string, init?: RequestInit) {
     },
   });
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  let data: Record<string, unknown> = {};
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      throw new Error(
+        res.ok
+          ? `Invalid JSON from ${path}`
+          : `HTTP ${res.status}: ${text.slice(0, 120).trim() || res.statusText}`,
+      );
+    }
+  }
   if (!res.ok) throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
   return data;
 }
@@ -164,6 +175,27 @@ export type StudioAgentDraft = {
   datasourceIds?: string[];
   sandbox?: Record<string, unknown>;
 };
+
+/** Read-only view of a platform (system) agent for Asset Market. */
+export type PlatformAgentDetail = {
+  id: string;
+  slug: string;
+  displayName: string;
+  description: string;
+  instructions: string;
+  modelConfigId: string | null;
+  modelConfigName: string | null;
+  skillIds: string[];
+  platformMcpIds: string[];
+  datasourceNames: string[];
+  sandbox: Record<string, unknown>;
+  source: 'platform';
+};
+
+export async function getPlatformAgentDetail(id: string): Promise<PlatformAgentDetail> {
+  const data = await authFetch(`/api/studio/assets/agents/${encodeURIComponent(id)}`);
+  return data.agent as PlatformAgentDetail;
+}
 
 export async function getPlatformAgentCopyDraft(id: string): Promise<StudioAgentDraft> {
   const data = await authFetch(`/api/studio/assets/agents/${encodeURIComponent(id)}/copy-draft`);

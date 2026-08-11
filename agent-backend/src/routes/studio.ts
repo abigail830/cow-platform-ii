@@ -147,40 +147,75 @@ studio.get(
   },
 );
 
+async function loadPlatformAgentStudioView(id: string) {
+  const dir = listPlatformAgentDirs().find((path) => path.split(/[/\\]/).pop() === id);
+  if (!dir) return null;
+  const spec = loadAgentSpec(dir);
+  const configName = spec.model.configName?.trim() || null;
+  let modelConfigId: string | null = null;
+  if (configName) {
+    const [model] = await db
+      .select({ id: appModelConfigs.id })
+      .from(appModelConfigs)
+      .where(eq(appModelConfigs.name, configName))
+      .limit(1);
+    modelConfigId = model?.id ?? null;
+  }
+  const skillIds = spec.skills.map((skillPath) => {
+    const parts = skillPath.replace(/\\/g, '/').split('/').filter(Boolean);
+    return parts[parts.length - 1]!;
+  });
+  return {
+    id: spec.id,
+    slug: spec.id,
+    displayName: spec.displayName,
+    description: spec.description,
+    instructions: spec.instructions,
+    modelConfigId,
+    modelConfigName: configName,
+    skillIds,
+    platformMcpIds: spec.mcp.map((server) => server.name),
+    datasourceNames: spec.datasourceNames ?? [],
+    sandbox: spec.sandbox ?? { provider: 'none' },
+    source: 'platform' as const,
+  };
+}
+
+studio.get(
+  '/assets/agents/:id',
+  requireAuth,
+  requireResourcePermission('agent', 'asset-market', 'read'),
+  async (c) => {
+    const id = c.req.param('id');
+    try {
+      const agent = await loadPlatformAgentStudioView(id);
+      if (!agent) return c.json({ error: 'Unknown platform agent' }, 404);
+      return c.json({ agent });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to load agent' }, 500);
+    }
+  },
+);
+
 studio.get(
   '/assets/agents/:id/copy-draft',
   requireAuth,
   requireResourcePermission('agent', 'asset-market', 'read'),
   async (c) => {
     const id = c.req.param('id');
-    const dir = listPlatformAgentDirs().find((path) => path.split(/[/\\]/).pop() === id);
-    if (!dir) return c.json({ error: 'Unknown platform agent' }, 404);
     try {
-      const spec = loadAgentSpec(dir);
-      const configName = spec.model.configName?.trim();
-      let modelConfigId: string | null = null;
-      if (configName) {
-        const [model] = await db
-          .select({ id: appModelConfigs.id })
-          .from(appModelConfigs)
-          .where(eq(appModelConfigs.name, configName))
-          .limit(1);
-        modelConfigId = model?.id ?? null;
-      }
-      const skillIds = spec.skills.map((skillPath) => {
-        const parts = skillPath.replace(/\\/g, '/').split('/').filter(Boolean);
-        return parts[parts.length - 1]!;
-      });
+      const agent = await loadPlatformAgentStudioView(id);
+      if (!agent) return c.json({ error: 'Unknown platform agent' }, 404);
       return c.json({
         draft: {
-          slug: `${spec.id}-copy`,
-          displayName: `Copy of ${spec.displayName}`,
-          description: spec.description,
-          instructions: spec.instructions,
-          modelConfigId,
-          skillIds,
-          platformMcpIds: spec.mcp.map((server) => server.name),
-          sandbox: spec.sandbox ?? { provider: 'none' },
+          slug: `${agent.slug}-copy`,
+          displayName: `Copy of ${agent.displayName}`,
+          description: agent.description,
+          instructions: agent.instructions,
+          modelConfigId: agent.modelConfigId,
+          skillIds: agent.skillIds,
+          platformMcpIds: agent.platformMcpIds,
+          sandbox: agent.sandbox,
         },
       });
     } catch (err) {
