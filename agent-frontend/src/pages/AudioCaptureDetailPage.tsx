@@ -73,8 +73,17 @@ const CAPTURE_ARTIFACT_TABS: Array<{ id: CaptureArtifactTab; label: string }> = 
   { id: 'extraction', label: 'Extraction JSON' },
 ];
 
-const ARTIFACT_POLL_MAX_AFTER_FINISH = 12;
-const ARTIFACT_POLL_INTERVAL_MS = 2000;
+const ARTIFACT_POLL_MAX_AFTER_FINISH = 15;
+const ARTIFACT_POLL_INTERVAL_MS = 3000;
+
+function shouldDeferArtifactErrors(
+  capture: Pick<AudioCaptureDetail, 'status' | 'pipeline_job'>,
+  pollExhausted: boolean,
+): boolean {
+  if (pollExhausted) return false;
+  if (capture.status === 'failed') return false;
+  return capture.pipeline_job?.stage === 'done';
+}
 
 function formatArtifactLoadError(err: unknown): string {
   const message = err instanceof Error ? err.message : 'Failed to load artifacts';
@@ -254,18 +263,39 @@ export function AudioCaptureDetailPage() {
     async (options?: { silent?: boolean; force?: boolean; deferErrors?: boolean }) => {
       if (!captureId) return 0;
       if (postProcessActiveRef.current && !options?.force) return 0;
-      const showLoading = !options?.silent || options.deferErrors;
+      const showLoading = !options?.silent || Boolean(options?.deferErrors);
       if (showLoading) setLoadingArtifacts(true);
+
+      const registerFailedAttempt = (err?: unknown) => {
+        if (!options?.deferErrors) return;
+        const nextAttempt = artifactPollAttemptsRef.current + 1;
+        artifactPollAttemptsRef.current = nextAttempt;
+        if (nextAttempt >= ARTIFACT_POLL_MAX_AFTER_FINISH) {
+          setArtifactPollExhausted(true);
+          if (err) {
+            setArtifactLoadError(formatArtifactLoadError(err));
+          } else {
+            setArtifactLoadError('Post-process artifacts not found in storage');
+          }
+        }
+      };
 
       try {
         const bundle = await getCapturePostProcessArtifacts(captureId);
         const loadedCount = applyArtifactBundle(bundle, { deferErrors: options?.deferErrors });
+        if (loadedCount > 0) {
+          artifactPollAttemptsRef.current = 0;
+        } else if (options?.deferErrors) {
+          registerFailedAttempt();
+        }
         if (loadedCount === 3) {
           void loadCapture({ silent: true, sync: true });
         }
         return loadedCount;
       } catch (err) {
-        if (!options?.deferErrors) {
+        if (options?.deferErrors) {
+          registerFailedAttempt(err);
+        } else {
           setArtifactLoadError(formatArtifactLoadError(err));
         }
         return 0;
@@ -357,11 +387,7 @@ export function AudioCaptureDetailPage() {
   useEffect(() => {
     if (!capture || !captureExpectsPostProcessArtifacts(capture)) return;
     if (isCapturePostProcessFailed(capture) || isCapturePipelineActive(capture) || runningPipeline) return;
-    const deferErrors =
-      postProcessJustFinishedRef.current &&
-      capture.pipeline_job?.stage === 'done' &&
-      capture.status !== 'failed' &&
-      !artifactPollExhausted;
+    const deferErrors = shouldDeferArtifactErrors(capture, artifactPollExhausted);
     void loadArtifacts({ silent: true, deferErrors });
   }, [
     artifactPollExhausted,
@@ -375,7 +401,7 @@ export function AudioCaptureDetailPage() {
   useEffect(() => {
     if (!capture || capture.pipeline_job?.stage !== 'done') return;
     if (isCapturePipelineActive(capture) || runningPipeline) return;
-    const deferErrors = postProcessJustFinishedRef.current && !artifactPollExhausted;
+    const deferErrors = shouldDeferArtifactErrors(capture, artifactPollExhausted);
     void loadArtifacts({ silent: true, force: true, deferErrors });
   }, [
     artifactPollExhausted,
@@ -393,7 +419,6 @@ export function AudioCaptureDetailPage() {
     const postProcessActiveNow =
       isCapturePipelineActive(capture) || runningPipeline;
     const shouldPollArtifacts =
-      postProcessJustFinishedRef.current &&
       !postProcessActiveNow &&
       jobStage === 'done' &&
       capture.status !== 'failed' &&
@@ -413,21 +438,9 @@ export function AudioCaptureDetailPage() {
 
     const intervalId = window.setInterval(() => {
       void loadCapture({ silent: true });
-      if (
-        !postProcessJustFinishedRef.current ||
-        postProcessActiveRef.current ||
-        artifactPollAttemptsRef.current >= ARTIFACT_POLL_MAX_AFTER_FINISH
-      ) {
-        return;
-      }
-      const nextAttempt = artifactPollAttemptsRef.current + 1;
-      artifactPollAttemptsRef.current = nextAttempt;
-      const deferErrors = nextAttempt < ARTIFACT_POLL_MAX_AFTER_FINISH;
+      if (postProcessActiveRef.current || !shouldPollArtifacts) return;
+      const deferErrors = artifactPollAttemptsRef.current + 1 < ARTIFACT_POLL_MAX_AFTER_FINISH;
       void loadArtifacts({ silent: true, force: true, deferErrors });
-      if (nextAttempt >= ARTIFACT_POLL_MAX_AFTER_FINISH) {
-        setArtifactPollExhausted(true);
-        void loadArtifacts({ silent: true, force: true, deferErrors: false });
-      }
     }, ARTIFACT_POLL_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
@@ -608,14 +621,14 @@ export function AudioCaptureDetailPage() {
     !postProcessFailed &&
     !postProcessActive &&
     !allArtifactsLoaded &&
-    !artifactPollExhausted &&
-    postProcessJustFinishedRef.current;
+    !artifactPollExhausted;
   const awaitingArtifacts =
     (captureExpectsPostProcessArtifacts(capture) || postProcessDoneWithoutArtifacts) &&
     !showArtifactData &&
     !postProcessFailed &&
     !postProcessActive &&
-    !awaitingS3Artifacts;
+    !awaitingS3Artifacts &&
+    !loadingArtifacts;
   const showPipelineStepper =
     postProcessActive ||
     postProcessFailed ||
@@ -650,7 +663,8 @@ export function AudioCaptureDetailPage() {
     showArtifactData ||
     postProcessFailed ||
     postProcessDoneWithoutArtifacts ||
-    awaitingS3Artifacts;
+    awaitingS3Artifacts ||
+    loadingArtifacts;
 
   return (
     <div className="document-detail-page audio-detail-page">
@@ -921,7 +935,7 @@ export function AudioCaptureDetailPage() {
               ) : null}
               {postProcessActive ? (
                 <PanelLoading label="Post-processing in progress…" />
-              ) : postProcessFailed ? null : awaitingS3Artifacts && !artifactLoadedForTab(artifactTab) ? (
+              ) : postProcessFailed ? null : awaitingS3Artifacts ? (
                 <PanelLoading
                   label={
                     loadingArtifacts
