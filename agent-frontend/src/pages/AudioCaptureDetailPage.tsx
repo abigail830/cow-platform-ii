@@ -286,6 +286,12 @@ export function AudioCaptureDetailPage() {
   }, [capture?.status, capture?.pipeline_job?.stage, capture, loadArtifacts, runningPipeline]);
 
   useEffect(() => {
+    if (!capture || capture.pipeline_job?.stage !== 'done') return;
+    if (isCapturePipelineActive(capture) || runningPipeline) return;
+    void loadArtifacts({ silent: true, force: true });
+  }, [capture?.pipeline_job?.id, capture?.pipeline_job?.stage, capture, loadArtifacts, runningPipeline]);
+
+  useEffect(() => {
     if (!capture) return;
 
     const jobStage = capture.pipeline_job?.stage;
@@ -315,7 +321,7 @@ export function AudioCaptureDetailPage() {
       void loadCapture({ silent: true });
       if (!postProcessActiveRef.current && postProcessFinished) {
         artifactPollAttemptsRef.current += 1;
-        void loadArtifacts({ silent: true });
+        void loadArtifacts({ silent: true, force: true });
       }
     }, 3000);
 
@@ -474,14 +480,19 @@ export function AudioCaptureDetailPage() {
     contextArtifact != null ||
     extractionArtifact != null ||
     Boolean(extractionPreview);
+  const postProcessJobDone = capture.pipeline_job?.stage === 'done';
+  const postProcessSucceeded = postProcessJobDone && capture.status === 'done';
+  const postProcessDoneWithoutArtifacts =
+    postProcessJobDone && !postProcessSucceeded && !postProcessFailed;
   const showArtifactData = hasArtifactContent && !postProcessFailed;
   const postProcessActive = isCapturePipelineActive(capture) || runningPipeline;
   const awaitingArtifacts =
-    captureExpectsPostProcessArtifacts(capture) &&
+    (captureExpectsPostProcessArtifacts(capture) || postProcessDoneWithoutArtifacts) &&
     !showArtifactData &&
     !postProcessFailed &&
     !postProcessActive;
-  const showPipelineStepper = postProcessActive || postProcessFailed;
+  const showPipelineStepper =
+    postProcessActive || postProcessFailed || postProcessDoneWithoutArtifacts;
 
   function artifactTabAvailable(tab: CaptureArtifactTab): boolean {
     if (postProcessActive || postProcessFailed || !showArtifactData) return false;
@@ -503,7 +514,8 @@ export function AudioCaptureDetailPage() {
     captureExpectsPostProcessArtifacts(capture) ||
     runningPipeline ||
     showArtifactData ||
-    postProcessFailed;
+    postProcessFailed ||
+    postProcessDoneWithoutArtifacts;
 
   return (
     <div className="document-detail-page audio-detail-page">
@@ -787,8 +799,26 @@ export function AudioCaptureDetailPage() {
                 </div>
               ) : awaitingArtifacts && !loadingArtifacts ? (
                 <p className="document-detail-panel-empty">
-                  Post-process finished but artifacts are missing. Use <strong>Run post-process</strong> to
-                  regenerate them.
+                  {artifactLoadError
+                    ? artifactLoadError
+                    : postProcessDoneWithoutArtifacts
+                      ? 'Post-process finished but artifact files were not found in storage. Run post-process again to regenerate them.'
+                      : 'Post-process finished but artifacts are missing. Use '}
+                  {!artifactLoadError && !postProcessDoneWithoutArtifacts ? (
+                    <>
+                      <strong>Run post-process</strong> to regenerate them.
+                    </>
+                  ) : null}
+                  {artifactLoadError ? (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ marginTop: '0.5rem' }}
+                      onClick={() => void loadArtifacts({ force: true })}
+                    >
+                      Retry loading artifacts
+                    </button>
+                  ) : null}
                 </p>
               ) : artifactTab === 'summary' ? (
                 extractionPreview && showArtifactData ? (

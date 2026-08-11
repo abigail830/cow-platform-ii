@@ -69,6 +69,17 @@ def _needs_llm(pp_cfg: dict[str, Any]) -> bool:
     return False
 
 
+def _artifact_keys_present(s3_client: Any, bucket: str, artifact_keys: dict[str, str]) -> bool:
+    for key in artifact_keys.values():
+        if not key:
+            return False
+        try:
+            s3_client.head_object(Bucket=bucket, Key=key)
+        except Exception:
+            return False
+    return True
+
+
 def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
     cfg = get_cli_settings()
     api = (api_url or cfg.openkms_api_url).rstrip("/")
@@ -80,9 +91,26 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
         raise SystemExit(1) from e
 
     stage = str(ctx.get("stage") or "")
+    artifact_keys = ctx.get("artifact_keys") or {}
+    bucket = str(ctx.get("bucket") or "")
+
     if stage == "done":
-        console.print(f"[dim]Capture job {job_id} already done[/dim]")
-        return
+        if bucket and artifact_keys and _artifact_keys_present(
+            get_s3_client(
+                cfg.aws_endpoint_url or None,
+                cfg.aws_access_key_id,
+                cfg.aws_secret_access_key,
+                cfg.aws_region,
+            ),
+            bucket,
+            artifact_keys,
+        ):
+            console.print(f"[dim]Capture job {job_id} already done[/dim]")
+            return
+        console.print(
+            f"[yellow]Capture job {job_id} marked done but artifacts are missing — re-running post-process[/yellow]"
+        )
+        patch_capture_job(api, job_id, stage="structuring")
     if stage == "failed":
         console.print(f"[red]Capture job {job_id} is failed[/red]")
         raise SystemExit(1)

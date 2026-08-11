@@ -1,5 +1,7 @@
 import { and, asc, eq, isNotNull } from 'drizzle-orm';
 import { appAudioCaptures, appAudios, type AudioCaptureStatus, db } from '../db/index.ts';
+import { capturePostProcessArtifactsExist } from '../storage/audio-capture-files.ts';
+import { isStorageEnabled } from '../storage/s3-config.ts';
 import { getLatestCapturePipelineJob } from './audio-capture-pipeline-jobs.ts';
 import { getLatestAudioPipelineJobsForAudios } from './audio-pipeline-jobs.ts';
 import {
@@ -38,10 +40,24 @@ export async function syncCaptureStatus(captureId: string): Promise<AudioCapture
   }));
 
   const captureJob = await getLatestCapturePipelineJob(captureId);
-  const nextStatus = resolveCaptureStatusFromSegments(
+  let nextStatus = resolveCaptureStatusFromSegments(
     segments,
     captureJob ? { stage: captureJob.stage } : null,
   );
+
+  if (nextStatus === 'done' && captureJob?.stage === 'done' && isStorageEnabled()) {
+    try {
+      const artifactsExist = await capturePostProcessArtifactsExist(captureId);
+      if (!artifactsExist) {
+        nextStatus = 'ready';
+      }
+    } catch (error) {
+      console.warn(
+        `[capture-status] could not verify post-process artifacts for ${captureId}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
 
   if (capture.status !== nextStatus) {
     await db
