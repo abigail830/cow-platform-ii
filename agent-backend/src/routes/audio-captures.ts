@@ -21,8 +21,10 @@ import {
 } from '../storage/audio-files.ts';
 import {
   captureArtifactS3Key,
+  presignCapturePostProcessArtifacts,
   readCapturePostProcessArtifactBundle,
   type CaptureArtifactName,
+  type CapturePostProcessArtifactKind,
 } from '../storage/audio-capture-files.ts';
 import { readStorageText } from '../storage/document-content.ts';
 import {
@@ -102,6 +104,13 @@ const ARTIFACT_NAMES = new Set<CaptureArtifactName>([
   'structured_transcript',
   'recording_context',
   'extraction',
+]);
+
+const POST_PROCESS_ARTIFACT_KINDS = new Set<CapturePostProcessArtifactKind>([
+  'structured_transcript',
+  'recording_context',
+  'extraction',
+  'summary',
 ]);
 
 audioCaptures.get(
@@ -443,6 +452,48 @@ audioCaptures.get(
         },
         storageTimeout ? 503 : 500,
       );
+    }
+  },
+);
+
+audioCaptures.post(
+  '/:id/post-process-artifacts-presign',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Capture id is required' }, 400);
+
+    const meta = await getCaptureChannelMeta(id);
+    if (!meta) return c.json({ error: 'Capture not found' }, 404);
+
+    const denied = await denyUnlessAudioChannelAccess(c, meta.channel_id, 'read');
+    if (denied) return denied;
+
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const body = await c.req.json<{ artifacts?: string[] }>().catch((): { artifacts?: string[] } => ({}));
+    const requested = Array.isArray(body.artifacts) ? body.artifacts : [...POST_PROCESS_ARTIFACT_KINDS];
+    if (requested.length === 0) {
+      return c.json({ error: 'artifacts array is required' }, 400);
+    }
+    if (requested.length > POST_PROCESS_ARTIFACT_KINDS.size) {
+      return c.json({ error: 'Too many artifacts requested' }, 400);
+    }
+
+    const artifacts: CapturePostProcessArtifactKind[] = [];
+    for (const raw of requested) {
+      if (!POST_PROCESS_ARTIFACT_KINDS.has(raw as CapturePostProcessArtifactKind)) {
+        return c.json({ error: `Unknown artifact: ${raw}` }, 400);
+      }
+      artifacts.push(raw as CapturePostProcessArtifactKind);
+    }
+
+    try {
+      const files = await presignCapturePostProcessArtifacts(id, artifacts);
+      return c.json({ files });
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: formatStorageError(error) }, 400);
     }
   },
 );

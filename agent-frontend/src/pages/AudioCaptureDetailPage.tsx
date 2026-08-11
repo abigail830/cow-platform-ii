@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowDown,
@@ -13,9 +13,9 @@ import {
   captureAwaitingTranscription,
   captureCanRunPostProcess,
   captureStatusBadgeClass,
+  fetchCapturePostProcessArtifactText,
   formatCaptureStatusLabel,
   getAudioCapture,
-  getCapturePostProcessArtifacts,
   isCapturePipelineActive,
   isCapturePostProcessFailed,
   reorderCaptureSegments,
@@ -24,6 +24,7 @@ import {
   updateAudioCapture,
   uploadCaptureSegment,
   type AudioCaptureDetail,
+  type CapturePostProcessArtifactKind,
 } from '../api/audioCaptures.ts';
 import { formatAudioBytes, isAudioPipelineActive, resolveEffectiveAudioStatus, runAudioPipeline } from '../api/audios.ts';
 import { IconView } from '../components/AdminActionIcons.tsx';
@@ -153,6 +154,40 @@ function handleArtifactPreviewWheel(event: React.WheelEvent<HTMLPreElement>) {
   }
 }
 
+function captureArtifactTabKind(tab: CaptureArtifactTab): CapturePostProcessArtifactKind {
+  return tab;
+}
+
+function isArtifactTabLoaded(
+  tab: CaptureArtifactTab,
+  summaryMarkdown: string | null,
+  structuredArtifact: unknown | null,
+  contextArtifact: RecordingContextArtifact | null,
+  extractionArtifact: ExtractionArtifact | null,
+): boolean {
+  switch (tab) {
+    case 'structured_transcript':
+      return structuredArtifact != null;
+    case 'recording_context':
+      return contextArtifact != null;
+    case 'extraction':
+      return extractionArtifact != null;
+    case 'summary':
+      return Boolean(summaryMarkdown);
+    default:
+      return false;
+  }
+}
+
+function parseArtifactJson<T>(text: string | null): T | null {
+  if (!text?.trim()) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 export function AudioCaptureDetailPage() {
   const { captureId } = useParams<{ captureId: string }>();
   const { setSelectedChannelId, canWrite } = useAudioOutletContext();
@@ -171,8 +206,12 @@ export function AudioCaptureDetailPage() {
   const [structuredArtifact, setStructuredArtifact] = useState<unknown | null>(null);
   const [contextArtifact, setContextArtifact] = useState<RecordingContextArtifact | null>(null);
   const [extractionArtifact, setExtractionArtifact] = useState<ExtractionArtifact | null>(null);
-  const [loadingArtifacts, setLoadingArtifacts] = useState(false);
-  const [artifactLoadError, setArtifactLoadError] = useState('');
+  const [loadingArtifactTabs, setLoadingArtifactTabs] = useState<Set<CaptureArtifactTab>>(
+    () => new Set(),
+  );
+  const [artifactTabErrors, setArtifactTabErrors] = useState<Partial<Record<CaptureArtifactTab, string>>>(
+    {},
+  );
   const [artifactPollExhausted, setArtifactPollExhausted] = useState(false);
   const artifactPollAttemptsRef = useRef(0);
   const postProcessActiveRef = useRef(false);
@@ -206,65 +245,50 @@ export function AudioCaptureDetailPage() {
     [captureId, setSelectedChannelId],
   );
 
+  const setArtifactTabLoading = useCallback((tab: CaptureArtifactTab, loading: boolean) => {
+    setLoadingArtifactTabs((current) => {
+      const next = new Set(current);
+      if (loading) next.add(tab);
+      else next.delete(tab);
+      return next;
+    });
+  }, []);
+
   const clearArtifactState = useCallback(() => {
     setStructuredArtifact(null);
     setContextArtifact(null);
     setExtractionArtifact(null);
     setSummaryMarkdown(null);
-    setArtifactLoadError('');
+    setArtifactTabErrors({});
+    setLoadingArtifactTabs(new Set());
     setNeedsReview(false);
     setArtifactPollExhausted(false);
     artifactPollAttemptsRef.current = 0;
   }, []);
 
-  const applyArtifactBundle = useCallback(
-    (
-      bundle: Awaited<ReturnType<typeof getCapturePostProcessArtifacts>>,
-      options?: { deferErrors?: boolean },
-    ) => {
-      const structured = bundle.structured_transcript;
-      const context = bundle.recording_context as RecordingContextArtifact | null;
-      const extraction = bundle.extraction as ExtractionArtifact | null;
-
-      if (structured) setStructuredArtifact(structured);
-      if (context) {
-        setContextArtifact(context);
-        setNeedsReview(Boolean(context.classification?.needs_review));
-      }
-      if (extraction) {
-        setExtractionArtifact(extraction);
-      }
-
-      if (bundle.summary?.trim()) {
-        setSummaryMarkdown(bundle.summary);
-      } else if (extraction) {
-        setSummaryMarkdown(formatExtractionPreview(extraction, context));
-      } else {
-        setSummaryMarkdown(null);
+  const loadArtifactTab = useCallback(
+    async (
+      tab: CaptureArtifactTab,
+      options?: { silent?: boolean; force?: boolean; deferErrors?: boolean },
+    ): Promise<boolean> => {
+      if (!captureId) return false;
+      if (postProcessActiveRef.current && !options?.force) return false;
+      if (
+        !options?.force &&
+        isArtifactTabLoaded(
+          tab,
+          summaryMarkdown,
+          structuredArtifact,
+          contextArtifact,
+          extractionArtifact,
+        )
+      ) {
+        return true;
       }
 
-      const loadedCount = [structured, context, extraction].filter(Boolean).length;
-      if (loadedCount === 0) {
-        if (!options?.deferErrors) {
-          setArtifactLoadError('Post-process artifacts not found in storage');
-        }
-      } else if (bundle.missing.length > 0 && !options?.deferErrors) {
-        setArtifactLoadError(`Missing artifacts: ${bundle.missing.join(', ')}`);
-      } else {
-        setArtifactLoadError('');
-      }
-
-      return loadedCount;
-    },
-    [],
-  );
-
-  const loadArtifacts = useCallback(
-    async (options?: { silent?: boolean; force?: boolean; deferErrors?: boolean }) => {
-      if (!captureId) return 0;
-      if (postProcessActiveRef.current && !options?.force) return 0;
+      const artifact = captureArtifactTabKind(tab);
       const showLoading = !options?.silent || Boolean(options?.deferErrors);
-      if (showLoading) setLoadingArtifacts(true);
+      if (showLoading) setArtifactTabLoading(tab, true);
 
       const registerFailedAttempt = (err?: unknown) => {
         if (!options?.deferErrors) return;
@@ -272,39 +296,116 @@ export function AudioCaptureDetailPage() {
         artifactPollAttemptsRef.current = nextAttempt;
         if (nextAttempt >= ARTIFACT_POLL_MAX_AFTER_FINISH) {
           setArtifactPollExhausted(true);
-          if (err) {
-            setArtifactLoadError(formatArtifactLoadError(err));
-          } else {
-            setArtifactLoadError('Post-process artifacts not found in storage');
-          }
+          const message = err
+            ? formatArtifactLoadError(err)
+            : 'Post-process artifacts not found in storage';
+          setArtifactTabErrors((current) => ({ ...current, [tab]: message }));
         }
       };
 
       try {
-        const bundle = await getCapturePostProcessArtifacts(captureId);
-        const loadedCount = applyArtifactBundle(bundle, { deferErrors: options?.deferErrors });
-        if (loadedCount > 0) {
+        let loaded = false;
+
+        if (artifact === 'summary') {
+          const summaryText = await fetchCapturePostProcessArtifactText(captureId, 'summary');
+          if (summaryText?.trim()) {
+            setSummaryMarkdown(summaryText.trim());
+            loaded = true;
+          } else {
+            let extraction = extractionArtifact;
+            let context = contextArtifact;
+            if (!extraction) {
+              const extractionText = await fetchCapturePostProcessArtifactText(captureId, 'extraction');
+              const parsed = parseArtifactJson<ExtractionArtifact>(extractionText);
+              if (parsed) {
+                extraction = parsed;
+                setExtractionArtifact(parsed);
+              }
+            }
+            if (!context) {
+              const contextText = await fetchCapturePostProcessArtifactText(captureId, 'recording_context');
+              const parsed = parseArtifactJson<RecordingContextArtifact>(contextText);
+              if (parsed) {
+                context = parsed;
+                setContextArtifact(parsed);
+                setNeedsReview(Boolean(parsed.classification?.needs_review));
+              }
+            }
+            if (extraction) {
+              setSummaryMarkdown(formatExtractionPreview(extraction, context));
+              loaded = true;
+            }
+          }
+        } else {
+          const text = await fetchCapturePostProcessArtifactText(captureId, artifact);
+          if (artifact === 'structured_transcript') {
+            const parsed = parseArtifactJson<unknown>(text);
+            if (parsed != null) {
+              setStructuredArtifact(parsed);
+              loaded = true;
+            }
+          } else if (artifact === 'recording_context') {
+            const parsed = parseArtifactJson<RecordingContextArtifact>(text);
+            if (parsed) {
+              setContextArtifact(parsed);
+              setNeedsReview(Boolean(parsed.classification?.needs_review));
+              loaded = true;
+            }
+          } else if (artifact === 'extraction') {
+            const parsed = parseArtifactJson<ExtractionArtifact>(text);
+            if (parsed) {
+              setExtractionArtifact(parsed);
+              loaded = true;
+            }
+          }
+        }
+
+        if (loaded) {
           artifactPollAttemptsRef.current = 0;
+          setArtifactTabErrors((current) => {
+            const next = { ...current };
+            delete next[tab];
+            return next;
+          });
         } else if (options?.deferErrors) {
           registerFailedAttempt();
+        } else if (!loaded) {
+          setArtifactTabErrors((current) => ({
+            ...current,
+            [tab]: 'Post-process artifact not found in storage',
+          }));
         }
-        if (loadedCount === 3) {
-          void loadCapture({ silent: true, sync: true });
-        }
-        return loadedCount;
+
+        return loaded;
       } catch (err) {
         if (options?.deferErrors) {
           registerFailedAttempt(err);
         } else {
-          setArtifactLoadError(formatArtifactLoadError(err));
+          setArtifactTabErrors((current) => ({
+            ...current,
+            [tab]: formatArtifactLoadError(err),
+          }));
         }
-        return 0;
+        return false;
       } finally {
-        if (showLoading) setLoadingArtifacts(false);
+        if (showLoading) setArtifactTabLoading(tab, false);
       }
     },
-    [applyArtifactBundle, captureId, loadCapture],
+    [captureId, contextArtifact, extractionArtifact, setArtifactTabLoading, structuredArtifact, summaryMarkdown],
   );
+
+  const syncCaptureWhenCoreArtifactsReady = useCallback(
+    (structured: unknown | null, context: RecordingContextArtifact | null, extraction: ExtractionArtifact | null) => {
+      if (structured != null && context != null && extraction != null) {
+        void loadCapture({ silent: true, sync: true });
+      }
+    },
+    [loadCapture],
+  );
+
+  useEffect(() => {
+    syncCaptureWhenCoreArtifactsReady(structuredArtifact, contextArtifact, extractionArtifact);
+  }, [structuredArtifact, contextArtifact, extractionArtifact, syncCaptureWhenCoreArtifactsReady]);
 
   useEffect(() => {
     void loadCapture({ sync: false });
@@ -333,7 +434,8 @@ export function AudioCaptureDetailPage() {
     setContextArtifact(null);
     setExtractionArtifact(null);
     setSummaryMarkdown(null);
-    setArtifactLoadError('');
+    setArtifactTabErrors({});
+    setLoadingArtifactTabs(new Set());
     setArtifactPollExhausted(false);
     prevPostProcessActiveRef.current = false;
     prevPipelineJobIdRef.current = null;
@@ -370,7 +472,7 @@ export function AudioCaptureDetailPage() {
       artifactPollAttemptsRef.current = 0;
       setArtifactPollExhausted(false);
       void loadCapture({ silent: true, sync: true });
-      void loadArtifacts({ force: true, deferErrors: true });
+      void loadArtifactTab(artifactTab, { force: true, deferErrors: true });
     }
     if (active && jobStage !== 'done') {
       postProcessJustFinishedRef.current = false;
@@ -379,36 +481,20 @@ export function AudioCaptureDetailPage() {
     prevPostProcessActiveRef.current = active;
     prevPipelineJobIdRef.current = jobId;
     prevJobStageRef.current = jobStage;
-  }, [capture, runningPipeline, clearArtifactState, loadCapture, loadArtifacts]);
-
-  const allArtifactsLoaded =
-    structuredArtifact != null && contextArtifact != null && extractionArtifact != null;
+  }, [artifactTab, capture, runningPipeline, clearArtifactState, loadCapture, loadArtifactTab]);
 
   useEffect(() => {
     if (!capture || !captureExpectsPostProcessArtifacts(capture)) return;
     if (isCapturePostProcessFailed(capture) || isCapturePipelineActive(capture) || runningPipeline) return;
     const deferErrors = shouldDeferArtifactErrors(capture, artifactPollExhausted);
-    void loadArtifacts({ silent: true, deferErrors });
+    void loadArtifactTab(artifactTab, { silent: true, deferErrors });
   }, [
     artifactPollExhausted,
+    artifactTab,
     capture?.status,
     capture?.pipeline_job?.stage,
     capture,
-    loadArtifacts,
-    runningPipeline,
-  ]);
-
-  useEffect(() => {
-    if (!capture || capture.pipeline_job?.stage !== 'done') return;
-    if (isCapturePipelineActive(capture) || runningPipeline) return;
-    const deferErrors = shouldDeferArtifactErrors(capture, artifactPollExhausted);
-    void loadArtifacts({ silent: true, force: true, deferErrors });
-  }, [
-    artifactPollExhausted,
-    capture?.pipeline_job?.id,
-    capture?.pipeline_job?.stage,
-    capture,
-    loadArtifacts,
+    loadArtifactTab,
     runningPipeline,
   ]);
 
@@ -422,7 +508,13 @@ export function AudioCaptureDetailPage() {
       !postProcessActiveNow &&
       jobStage === 'done' &&
       capture.status !== 'failed' &&
-      !allArtifactsLoaded &&
+      !isArtifactTabLoaded(
+        artifactTab,
+        summaryMarkdown,
+        structuredArtifact,
+        contextArtifact,
+        extractionArtifact,
+      ) &&
       !artifactPollExhausted &&
       artifactPollAttemptsRef.current < ARTIFACT_POLL_MAX_AFTER_FINISH;
 
@@ -440,11 +532,22 @@ export function AudioCaptureDetailPage() {
       void loadCapture({ silent: true });
       if (postProcessActiveRef.current || !shouldPollArtifacts) return;
       const deferErrors = artifactPollAttemptsRef.current + 1 < ARTIFACT_POLL_MAX_AFTER_FINISH;
-      void loadArtifacts({ silent: true, force: true, deferErrors });
+      void loadArtifactTab(artifactTab, { silent: true, force: true, deferErrors });
     }, ARTIFACT_POLL_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [allArtifactsLoaded, artifactPollExhausted, capture, loadArtifacts, loadCapture, runningPipeline]);
+  }, [
+    artifactPollExhausted,
+    artifactTab,
+    capture,
+    contextArtifact,
+    extractionArtifact,
+    loadArtifactTab,
+    loadCapture,
+    runningPipeline,
+    structuredArtifact,
+    summaryMarkdown,
+  ]);
 
   const canWriteCapture = canWrite && Boolean(capture);
 
@@ -515,7 +618,7 @@ export function AudioCaptureDetailPage() {
       setCapture(updated);
       await loadCapture({ silent: true });
       if (updated.status === 'done' && !isCapturePipelineActive(updated)) {
-        await loadArtifacts();
+        await loadArtifactTab(artifactTab, { force: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start post-process');
@@ -615,46 +718,114 @@ export function AudioCaptureDetailPage() {
     postProcessJobDone && !postProcessSucceeded && !postProcessFailed;
   const showArtifactData = hasArtifactContent && !postProcessFailed;
   const postProcessActive = isCapturePipelineActive(capture) || runningPipeline;
-  const awaitingS3Artifacts =
-    captureExpectsPostProcessArtifacts(capture) &&
-    postProcessJobDone &&
-    !postProcessFailed &&
-    !postProcessActive &&
-    !allArtifactsLoaded &&
-    !artifactPollExhausted;
+  const activeTabLoading = loadingArtifactTabs.has(artifactTab);
+  const activeTabError = artifactTabErrors[artifactTab];
+  const activeTabLoaded = isArtifactTabLoaded(
+    artifactTab,
+    summaryMarkdown,
+    structuredArtifact,
+    contextArtifact,
+    extractionArtifact,
+  );
+  const canBrowseArtifactTabs =
+    captureExpectsPostProcessArtifacts(capture) && !postProcessActive && !postProcessFailed;
   const awaitingArtifacts =
     (captureExpectsPostProcessArtifacts(capture) || postProcessDoneWithoutArtifacts) &&
-    !showArtifactData &&
+    !hasArtifactContent &&
     !postProcessFailed &&
     !postProcessActive &&
-    !awaitingS3Artifacts &&
-    !loadingArtifacts;
+    artifactPollExhausted;
   const showPipelineStepper =
     postProcessActive ||
     postProcessFailed ||
     (postProcessDoneWithoutArtifacts && artifactPollExhausted);
 
-  function artifactLoadedForTab(tab: CaptureArtifactTab): boolean {
-    switch (tab) {
-      case 'structured_transcript':
-        return structuredArtifact != null;
-      case 'recording_context':
-        return contextArtifact != null;
-      case 'extraction':
-        return extractionArtifact != null;
-      case 'summary':
-        return Boolean(summaryMarkdown);
-      default:
-        return false;
-    }
+  function artifactTabAvailable(_tab: CaptureArtifactTab): boolean {
+    return canBrowseArtifactTabs;
   }
 
-  function artifactTabAvailable(tab: CaptureArtifactTab): boolean {
-    if (postProcessActive || postProcessFailed) return false;
-    if (awaitingS3Artifacts || showArtifactData) {
-      return artifactLoadedForTab(tab);
+  function renderActiveArtifactTabContent(currentCapture: AudioCaptureDetail): ReactNode {
+    if (activeTabLoading) {
+      return (
+        <PanelLoading
+          label={
+            postProcessJobDone
+              ? 'Loading post-process artifact…'
+              : 'Waiting for post-process results from storage…'
+          }
+        />
+      );
     }
-    return false;
+
+    if (activeTabError && !activeTabLoaded) {
+      return (
+        <div className="document-detail-panel-empty">
+          <p className="error inline">{activeTabError}</p>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => void loadArtifactTab(artifactTab, { force: true })}
+          >
+            Retry loading artifact
+          </button>
+        </div>
+      );
+    }
+
+    if (activeTabLoaded) {
+      if (artifactTab === 'summary') {
+        return (
+          <pre
+            className="document-json-preview capture-extraction-preview capture-artifact-preview-scroll"
+            onWheel={handleArtifactPreviewWheel}
+          >
+            {summaryMarkdown}
+          </pre>
+        );
+      }
+
+      return (
+        <pre
+          className="document-json-preview capture-extraction-preview capture-artifact-preview-scroll"
+          onWheel={handleArtifactPreviewWheel}
+        >
+          {JSON.stringify(
+            artifactTab === 'structured_transcript'
+              ? structuredArtifact
+              : artifactTab === 'recording_context'
+                ? contextArtifact
+                : extractionArtifact,
+            null,
+            2,
+          )}
+        </pre>
+      );
+    }
+
+    if (
+      currentCapture.status === 'post_processing' ||
+      currentCapture.pipeline_job?.stage === 'extracting' ||
+      currentCapture.pipeline_job?.stage === 'classifying' ||
+      currentCapture.pipeline_job?.stage === 'synthesizing'
+    ) {
+      return <p className="document-detail-panel-empty">Waiting for this step to finish…</p>;
+    }
+
+    if (awaitingArtifacts) {
+      return (
+        <p className="document-detail-panel-empty">
+          {postProcessDoneWithoutArtifacts
+            ? 'Post-process finished but artifact files were not found in storage. Run post-process again to regenerate them.'
+            : 'Post-process results are not available in storage. Use Run post-process to regenerate them.'}
+        </p>
+      );
+    }
+
+    if (postProcessJobDone && !artifactPollExhausted) {
+      return <PanelLoading label="Waiting for post-process results from storage…" />;
+    }
+
+    return <p className="document-detail-panel-empty">No artifact for this tab yet.</p>;
   }
 
   const showArtifactWorkspace =
@@ -663,8 +834,7 @@ export function AudioCaptureDetailPage() {
     showArtifactData ||
     postProcessFailed ||
     postProcessDoneWithoutArtifacts ||
-    awaitingS3Artifacts ||
-    loadingArtifacts;
+    canBrowseArtifactTabs;
 
   return (
     <div className="document-detail-page audio-detail-page">
@@ -935,93 +1105,8 @@ export function AudioCaptureDetailPage() {
               ) : null}
               {postProcessActive ? (
                 <PanelLoading label="Post-processing in progress…" />
-              ) : postProcessFailed ? null : awaitingS3Artifacts ? (
-                <PanelLoading
-                  label={
-                    loadingArtifacts
-                      ? 'Loading post-process artifacts…'
-                      : 'Waiting for post-process results from storage…'
-                  }
-                />
-              ) : capture.status === 'post_processing' && !showArtifactData && !artifactLoadError ? (
-                <PanelLoading label="Post-processing in progress…" />
-              ) : artifactLoadError && !showArtifactData && !awaitingS3Artifacts ? (
-                <div className="document-detail-panel-empty">
-                  <p className="error inline">{artifactLoadError}</p>
-                  <button type="button" className="btn-secondary" onClick={() => void loadArtifacts()}>
-                    Retry loading artifacts
-                  </button>
-                </div>
-              ) : awaitingArtifacts && !loadingArtifacts ? (
-                <p className="document-detail-panel-empty">
-                  {artifactLoadError
-                    ? artifactLoadError
-                    : postProcessDoneWithoutArtifacts
-                      ? 'Post-process finished but artifact files were not found in storage. Run post-process again to regenerate them.'
-                      : 'Post-process results are not available in storage. '}
-                  {!artifactLoadError && !postProcessDoneWithoutArtifacts ? (
-                    <>
-                      Use <strong>Run post-process</strong> to regenerate them.
-                    </>
-                  ) : null}
-                  {artifactLoadError ? (
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      style={{ marginTop: '0.5rem' }}
-                      onClick={() => void loadArtifacts({ force: true })}
-                    >
-                      Retry loading artifacts
-                    </button>
-                  ) : null}
-                </p>
-              ) : artifactTab === 'summary' ? (
-                summaryMarkdown && showArtifactData ? (
-                  <pre
-                    className="document-json-preview capture-extraction-preview capture-artifact-preview-scroll"
-                    onWheel={handleArtifactPreviewWheel}
-                  >
-                    {summaryMarkdown}
-                  </pre>
-                ) : awaitingS3Artifacts ? (
-                  <PanelLoading
-                    label={
-                      loadingArtifacts
-                        ? 'Loading post-process artifacts…'
-                        : 'Waiting for post-process results from storage…'
-                    }
-                  />
-                ) : (
-                  <p className="document-detail-panel-empty">
-                    {capture.status === 'post_processing' ||
-                    capture.pipeline_job?.stage === 'extracting' ||
-                    capture.pipeline_job?.stage === 'classifying' ||
-                    capture.pipeline_job?.stage === 'synthesizing'
-                      ? 'Summary will appear after classify and extract complete.'
-                      : 'No summary yet.'}
-                  </p>
-                )
-              ) : artifactTabAvailable(artifactTab) ? (
-                <pre
-                  className="document-json-preview capture-extraction-preview capture-artifact-preview-scroll"
-                  onWheel={handleArtifactPreviewWheel}
-                >
-                  {JSON.stringify(
-                    artifactTab === 'structured_transcript'
-                      ? structuredArtifact
-                      : artifactTab === 'recording_context'
-                        ? contextArtifact
-                        : extractionArtifact,
-                    null,
-                    2,
-                  )}
-                </pre>
-              ) : (
-                <p className="document-detail-panel-empty">
-                  {capture.status === 'post_processing'
-                    ? 'Waiting for this step to finish…'
-                    : 'No artifact for this tab yet.'}
-                </p>
+              ) : postProcessFailed ? null : (
+                renderActiveArtifactTabContent(capture)
               )}
             </>
           ) : capture.status !== 'ready' && capture.status !== 'done' ? (

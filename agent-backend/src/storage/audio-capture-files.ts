@@ -1,5 +1,5 @@
 import { validateKey } from './prefix-utils.ts';
-import { headStorageObject } from './audio-files.ts';
+import { getStorageReadUrl, headStorageObject } from './audio-files.ts';
 import { readStorageText } from './document-content.ts';
 
 export const CAPTURE_PREFIX = 'captures/';
@@ -78,13 +78,63 @@ export async function capturePostProcessArtifactsExist(captureId: string): Promi
   return heads.every((head) => head.exists);
 }
 
+export type CapturePostProcessArtifactKind =
+  | 'structured_transcript'
+  | 'recording_context'
+  | 'extraction'
+  | 'summary';
+
+export type CapturePostProcessArtifactPresign = {
+  artifact: CapturePostProcessArtifactKind;
+  url: string;
+};
+
 export type CapturePostProcessArtifactBundle = {
   structured_transcript: unknown | null;
   recording_context: unknown | null;
   extraction: unknown | null;
   summary: string | null;
-  missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'>;
+  missing: CapturePostProcessArtifactKind[];
 };
+
+const POST_PROCESS_ARTIFACT_KINDS: CapturePostProcessArtifactKind[] = [
+  'structured_transcript',
+  'recording_context',
+  'extraction',
+  'summary',
+];
+
+function capturePostProcessArtifactKey(
+  captureId: string,
+  artifact: CapturePostProcessArtifactKind,
+): string {
+  switch (artifact) {
+    case 'structured_transcript':
+      return structuredTranscriptS3Key(captureId);
+    case 'recording_context':
+      return recordingContextS3Key(captureId);
+    case 'extraction':
+      return extractionS3Key(captureId);
+    case 'summary':
+      return summaryS3Key(captureId);
+    default:
+      throw new Error(`Unknown capture post-process artifact: ${artifact}`);
+  }
+}
+
+/** Presigned GET URLs only — signing is local; browser fetches OSS directly (avoids Vercel→OSS). */
+export async function presignCapturePostProcessArtifacts(
+  captureId: string,
+  artifacts: CapturePostProcessArtifactKind[] = POST_PROCESS_ARTIFACT_KINDS,
+): Promise<CapturePostProcessArtifactPresign[]> {
+  const unique = [...new Set(artifacts)];
+  return Promise.all(
+    unique.map(async (artifact) => ({
+      artifact,
+      url: await getStorageReadUrl(capturePostProcessArtifactKey(captureId, artifact)),
+    })),
+  );
+}
 
 function parseStorageJson(text: string | null): unknown | null {
   if (!text) return null;

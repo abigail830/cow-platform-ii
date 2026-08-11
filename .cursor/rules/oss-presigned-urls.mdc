@@ -1,0 +1,42 @@
+---
+description: Object storage reads/writes must use presigned URLs — browser talks to OSS directly
+alwaysApply: true
+---
+
+# Object storage — Presigned URLs (no Vercel→OSS proxy)
+
+API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object bytes through serverless handlers** for user-facing upload/download — cross-border latency and timeouts are expected.
+
+## Pattern
+
+1. **Server**: authenticate + authorize (RBAC), then mint a **presigned URL** with `getStorageReadUrl` / `getStorageUploadUrl` (signing is local HMAC — no OSS round-trip).
+2. **Browser**: `fetch(presignedUrl)` directly against OSS (PUT for upload, GET for read).
+3. **Server** (upload only): optional `upload-complete` / HEAD verify + DB write after object exists.
+
+## Do
+
+- Follow existing references:
+  - **Read**: `getDocumentContentManifest`, `presignDocumentBundlePaths`, `presignCapturePostProcessArtifacts`
+  - **Upload**: `/api/audios/upload-init` → browser PUT → `upload-complete`
+  - **Frontend helper**: `fetchPresignedStorageText` in `agent-frontend/src/api/storage-fetch.ts`
+- Presign **per file** when objects are large or tabs load independently; batch-presign only when all URLs are needed at once.
+- Ensure OSS bucket **CORS** allows the frontend origin for GET/PUT as needed.
+
+## Don't
+
+- Add routes that `readStorageText` / `uploadAudioObject` full bodies for **browser-initiated** flows
+- Block UI on a single bundle request that waits for every artifact when partial/progressive load is possible
+- Proxy OSS through Vercel to “simplify” the frontend — it reintroduces the timeout class
+
+## Exceptions (server may touch OSS directly)
+
+- **Workers** (GitHub Actions, `openkms-cli`) running outside Vercel
+- **Small internal/admin** tools where latency is acceptable
+- **HEAD/existence checks** for status sync — keep off hot paths; prefer `sync:false` defaults
+
+## New feature checklist
+
+- [ ] Upload: presigned PUT + complete callback?
+- [ ] Download/read: presigned GET manifest?
+- [ ] Frontend fetches OSS directly?
+- [ ] CORS documented or already on bucket?

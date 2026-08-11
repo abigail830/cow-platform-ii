@@ -1,6 +1,7 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { readApiErrorMessage } from './http.ts';
+import { fetchPresignedStorageText } from './storage-fetch.ts';
 import { resolveEffectiveAudioStatus } from './audios.ts';
 
 export type CapturePipelineJob = {
@@ -258,6 +259,37 @@ export async function runCapturePipeline(captureId: string): Promise<AudioCaptur
   return (data as { capture: AudioCaptureDetail }).capture;
 }
 
+export type CapturePostProcessArtifactKind =
+  | 'structured_transcript'
+  | 'recording_context'
+  | 'extraction'
+  | 'summary';
+
+export async function presignCapturePostProcessArtifacts(
+  captureId: string,
+  artifacts: CapturePostProcessArtifactKind[],
+): Promise<Array<{ artifact: CapturePostProcessArtifactKind; url: string }>> {
+  const data = await authFetch(`/api/audio-captures/${captureId}/post-process-artifacts-presign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ artifacts }),
+  });
+  return (data as { files: Array<{ artifact: CapturePostProcessArtifactKind; url: string }> }).files;
+}
+
+/** Presign via API (local signing), then read object text directly from OSS in the browser. */
+export async function fetchCapturePostProcessArtifactText(
+  captureId: string,
+  artifact: CapturePostProcessArtifactKind,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const files = await presignCapturePostProcessArtifacts(captureId, [artifact]);
+  const match = files.find((file) => file.artifact === artifact);
+  if (!match?.url) return null;
+  return fetchPresignedStorageText(match.url, signal);
+}
+
+/** @deprecated Prefer presign + browser fetch to avoid Vercel→OSS proxy reads. */
 export async function getCapturePostProcessArtifacts(captureId: string): Promise<{
   structured_transcript: unknown | null;
   recording_context: unknown | null;

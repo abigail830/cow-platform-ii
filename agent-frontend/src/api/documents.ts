@@ -2,6 +2,7 @@ import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { extractPathsFromParseResult } from './document-bundle-paths.ts';
 import { formatApiError } from './http.ts';
+import { fetchPresignedStorageText } from './storage-fetch.ts';
 import {
   collectRelativeMarkdownImagePaths,
   markdownImagePathCandidates,
@@ -94,15 +95,6 @@ function parseJsonRecord(raw: string | null): Record<string, unknown> | null {
   return null;
 }
 
-async function fetchStorageText(url: string, signal?: AbortSignal): Promise<string | null> {
-  const res = await fetch(url, { signal });
-  if (res.status === 404 || res.status === 403) return null;
-  if (!res.ok) {
-    throw new Error(`Object storage read failed (${res.status})`);
-  }
-  return res.text();
-}
-
 export async function getDocument(id: string): Promise<DocumentRecord> {
   const data = await authFetch(`/api/documents/${id}`);
   return data as DocumentRecord;
@@ -123,10 +115,10 @@ export async function fetchDocumentContent(
   )) as DocumentContentManifest;
 
   const [markdownRaw, pageIndexRaw, resultRaw] = await Promise.all([
-    fetchStorageText(manifest.sources.markdown_url, signal),
-    fetchStorageText(manifest.sources.page_index_url, signal),
+    fetchPresignedStorageText(manifest.sources.markdown_url, signal),
+    fetchPresignedStorageText(manifest.sources.page_index_url, signal),
     manifest.sources.parsing_result_url
-      ? fetchStorageText(manifest.sources.parsing_result_url, signal)
+      ? fetchPresignedStorageText(manifest.sources.parsing_result_url, signal)
       : Promise.resolve(null),
   ]);
 
