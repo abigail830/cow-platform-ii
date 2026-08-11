@@ -23,7 +23,7 @@ import {
   uploadCaptureSegment,
   type AudioCaptureDetail,
 } from '../api/audioCaptures.ts';
-import { formatAudioBytes, isAudioPipelineActive, runAudioPipeline } from '../api/audios.ts';
+import { formatAudioBytes, isAudioPipelineActive, resolveEffectiveAudioStatus, runAudioPipeline } from '../api/audios.ts';
 import { IconView } from '../components/AdminActionIcons.tsx';
 import { AudioPipelineStatus } from '../components/AudioPipelineStatus.tsx';
 import { AudioSegmentDrawer } from '../components/AudioSegmentDrawer.tsx';
@@ -73,10 +73,10 @@ const CAPTURE_ARTIFACT_TABS: Array<{ id: CaptureArtifactTab; label: string }> = 
 
 function formatExtractionPreview(
   extraction: ExtractionArtifact,
-  context: RecordingContextArtifact,
+  context?: RecordingContextArtifact | null,
 ): string {
   const lines: string[] = [];
-  const classification = context.classification;
+  const classification = context?.classification;
   if (classification?.recording_mode) {
     lines.push(
       `Recording mode: ${classification.recording_mode} · Audience: ${classification.audience ?? 'unknown'}` +
@@ -100,6 +100,22 @@ function formatExtractionPreview(
   }
 
   return lines.join('\n').trim();
+}
+
+const POST_PROCESS_ARTIFACT_STAGES = new Set([
+  'structuring',
+  'classifying',
+  'extracting',
+  'done',
+  'failed',
+]);
+
+function captureExpectsPostProcessArtifacts(
+  capture: Pick<AudioCaptureDetail, 'status' | 'pipeline_job'>,
+): boolean {
+  const jobStage = capture.pipeline_job?.stage;
+  if (capture.status === 'post_processing' || capture.status === 'done') return true;
+  return jobStage != null && POST_PROCESS_ARTIFACT_STAGES.has(jobStage);
 }
 
 function handleArtifactPreviewWheel(event: React.WheelEvent<HTMLPreElement>) {
@@ -133,8 +149,11 @@ export function AudioCaptureDetailPage() {
   const [contextArtifact, setContextArtifact] = useState<RecordingContextArtifact | null>(null);
   const [extractionArtifact, setExtractionArtifact] = useState<ExtractionArtifact | null>(null);
   const [loadingArtifacts, setLoadingArtifacts] = useState(false);
+  const [artifactLoadError, setArtifactLoadError] = useState('');
+  const artifactPollAttemptsRef = useRef(0);
   const [openSegmentId, setOpenSegmentId] = useState<string | null>(null);
   const [openSegmentLabel, setOpenSegmentLabel] = useState<string | null>(null);
+  const [transcribingSegmentIds, setTranscribingSegmentIds] = useState<Set<string>>(new Set());
 
   const loadCapture = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -163,10 +182,14 @@ export function AudioCaptureDetailPage() {
       const id = captureId;
       if (!options?.silent) setLoadingArtifacts(true);
 
+      const errors: string[] = [];
+
       async function loadOne<T>(artifact: 'structured_transcript' | 'recording_context' | 'extraction') {
         try {
           return await getCaptureArtifact<T>(id, artifact);
-        } catch {
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to load artifact';
+          errors.push(message);
           return null;
         }
       }
@@ -183,9 +206,16 @@ export function AudioCaptureDetailPage() {
           setContextArtifact(context);
           setNeedsReview(Boolean(context.classification?.needs_review));
         }
-        if (extraction) setExtractionArtifact(extraction);
-        if (extraction && context) {
+        if (extraction) {
+          setExtractionArtifact(extraction);
           setExtractionPreview(formatExtractionPreview(extraction, context));
+        }
+
+        const loadedCount = [structured, context, extraction].filter(Boolean).length;
+        if (loadedCount === 0 && errors.length > 0) {
+          setArtifactLoadError(errors[0] ?? 'Artifacts are not available yet');
+        } else {
+          setArtifactLoadError('');
         }
       } finally {
         if (!options?.silent) setLoadingArtifacts(false);
@@ -199,36 +229,58 @@ export function AudioCaptureDetailPage() {
   }, [loadCapture]);
 
   useEffect(() => {
-    if (
-      capture?.status === 'done' ||
-      capture?.status === 'post_processing' ||
-      capture?.status === 'ready'
-    ) {
-      void loadArtifacts({ silent: true });
-    }
-  }, [capture?.status, loadArtifacts]);
+    artifactPollAttemptsRef.current = 0;
+    setStructuredArtifact(null);
+    setContextArtifact(null);
+    setExtractionArtifact(null);
+    setExtractionPreview(null);
+    setArtifactLoadError('');
+  }, [captureId]);
+
+  const allArtifactsLoaded =
+    structuredArtifact != null && contextArtifact != null && extractionArtifact != null;
+
+  useEffect(() => {
+    if (!capture || !captureExpectsPostProcessArtifacts(capture)) return;
+    void loadArtifacts({ silent: true });
+  }, [capture?.status, capture?.pipeline_job?.stage, capture, loadArtifacts]);
 
   useEffect(() => {
     if (!capture) return;
+
+    const jobStage = capture.pipeline_job?.stage;
+    const postProcessActive =
+      capture.status === 'post_processing' ||
+      jobStage === 'structuring' ||
+      jobStage === 'classifying' ||
+      jobStage === 'extracting';
+    const postProcessFinished =
+      capture.status === 'done' || jobStage === 'done' || jobStage === 'failed';
+    const shouldRetryArtifacts =
+      postProcessFinished &&
+      !allArtifactsLoaded &&
+      artifactPollAttemptsRef.current < 20;
+
     const shouldPoll =
       capture.segments.length > 0 &&
-      (capture.status === 'post_processing' ||
-        capture.status === 'transcribing' ||
+      (capture.status === 'transcribing' ||
+        capture.status === 'draft' ||
         capture.status === 'ready' ||
-        capture.status === 'draft');
+        postProcessActive ||
+        shouldRetryArtifacts);
+
     if (!shouldPoll) return;
+
     const intervalId = window.setInterval(() => {
       void loadCapture({ silent: true });
-      if (
-        capture.status === 'post_processing' ||
-        capture.status === 'done' ||
-        capture.status === 'ready'
-      ) {
+      if (postProcessActive || postProcessFinished) {
+        artifactPollAttemptsRef.current += 1;
         void loadArtifacts({ silent: true });
       }
     }, 3000);
+
     return () => window.clearInterval(intervalId);
-  }, [capture, loadArtifacts, loadCapture]);
+  }, [allArtifactsLoaded, capture, loadArtifacts, loadCapture]);
 
   const canWriteCapture = canWrite && Boolean(capture);
 
@@ -253,6 +305,23 @@ export function AudioCaptureDetailPage() {
     setError('');
     const updated = await updateAudioCapture(captureId, input);
     setCapture(updated);
+  }
+
+  async function handleTranscribeSegment(segmentId: string) {
+    setTranscribingSegmentIds((current) => new Set(current).add(segmentId));
+    setError('');
+    try {
+      await runAudioPipeline(segmentId);
+      await loadCapture({ silent: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start transcription');
+    } finally {
+      setTranscribingSegmentIds((current) => {
+        const next = new Set(current);
+        next.delete(segmentId);
+        return next;
+      });
+    }
   }
 
   async function handleTranscribeAll() {
@@ -358,9 +427,17 @@ export function AudioCaptureDetailPage() {
   );
   const awaitingTranscription = captureAwaitingTranscription(capture, capture.segments);
   const canRunPostProcess = captureCanRunPostProcess(capture);
-  const showPipelineProgress = capture.status === 'post_processing' || runningPipeline;
   const postProcessFailed =
     capture.pipeline_job?.stage === 'failed' && Boolean(capture.pipeline_job.error_message);
+  const hasArtifactContent =
+    structuredArtifact != null ||
+    contextArtifact != null ||
+    extractionArtifact != null ||
+    Boolean(extractionPreview);
+  const awaitingArtifacts =
+    captureExpectsPostProcessArtifacts(capture) && !hasArtifactContent && !postProcessFailed;
+  const showPipelineProgress =
+    capture.status === 'post_processing' || runningPipeline || awaitingArtifacts;
 
   function artifactTabAvailable(tab: CaptureArtifactTab): boolean {
     switch (tab) {
@@ -371,20 +448,14 @@ export function AudioCaptureDetailPage() {
       case 'extraction':
         return extractionArtifact != null;
       case 'summary':
-        return Boolean(extractionPreview);
+        return extractionArtifact != null || Boolean(extractionPreview);
       default:
         return false;
     }
   }
 
-  const hasArtifactContent =
-    structuredArtifact != null ||
-    contextArtifact != null ||
-    extractionArtifact != null ||
-    Boolean(extractionPreview);
   const showArtifactWorkspace =
-    capture.status === 'post_processing' ||
-    capture.status === 'done' ||
+    captureExpectsPostProcessArtifacts(capture) ||
     runningPipeline ||
     hasArtifactContent;
 
@@ -543,6 +614,32 @@ export function AudioCaptureDetailPage() {
                           </button>
                           {canWriteCapture ? (
                             <>
+                              {segmentNeedsTranscription(segment) ||
+                              resolveEffectiveAudioStatus({
+                                status: segment.status,
+                                pipeline_job: segment.pipeline_job,
+                              }) === 'failed' ? (
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  title="Transcribe segment"
+                                  aria-label={`Transcribe ${segment.name}`}
+                                  disabled={
+                                    transcribingSegmentIds.has(segment.id) ||
+                                    isAudioPipelineActive({
+                                      status: segment.status,
+                                      pipeline_job: segment.pipeline_job,
+                                    })
+                                  }
+                                  onClick={() => void handleTranscribeSegment(segment.id)}
+                                >
+                                  {transcribingSegmentIds.has(segment.id) ? (
+                                    <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                                  ) : (
+                                    <Mic {...iconProps()} />
+                                  )}
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 className="icon-btn"
@@ -632,8 +729,17 @@ export function AudioCaptureDetailPage() {
                   );
                 })}
               </div>
-              {capture.status === 'post_processing' && !hasArtifactContent && loadingArtifacts ? (
+              {awaitingArtifacts && loadingArtifacts && !hasArtifactContent ? (
+                <PanelLoading label="Loading post-process artifacts…" />
+              ) : capture.status === 'post_processing' && !hasArtifactContent && !artifactLoadError ? (
                 <PanelLoading label="Post-processing in progress…" />
+              ) : artifactLoadError && !hasArtifactContent ? (
+                <div className="document-detail-panel-empty">
+                  <p className="error inline">{artifactLoadError}</p>
+                  <button type="button" className="btn-secondary" onClick={() => void loadArtifacts()}>
+                    Retry loading artifacts
+                  </button>
+                </div>
               ) : artifactTab === 'summary' ? (
                 extractionPreview ? (
                   <pre
@@ -644,7 +750,9 @@ export function AudioCaptureDetailPage() {
                   </pre>
                 ) : (
                   <p className="document-detail-panel-empty">
-                    {capture.status === 'post_processing'
+                    {capture.status === 'post_processing' ||
+                    capture.pipeline_job?.stage === 'extracting' ||
+                    capture.pipeline_job?.stage === 'classifying'
                       ? 'Summary will appear after classify and extract complete.'
                       : 'No summary yet.'}
                   </p>
@@ -685,7 +793,6 @@ export function AudioCaptureDetailPage() {
         audioId={openSegmentId}
         segmentLabel={openSegmentLabel}
         onClose={closeSegmentDrawer}
-        canRunPipeline={canWriteCapture}
       />
     </div>
   );

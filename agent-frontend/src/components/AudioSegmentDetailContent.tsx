@@ -6,12 +6,9 @@ import {
   getAudioDownloadUrl,
   getAudioTranscript,
   isAudioPipelineActive,
-  isAudioPipelineBusy,
   resolveEffectiveAudioStatus,
-  runAudioPipeline,
   type AudioRecord,
 } from '../api/audios.ts';
-import { formatDocumentStatusLabel } from './DocumentPipelineStatus.tsx';
 import { iconProps } from './icons/icon-props.ts';
 import { Markdown } from '../chat/Markdown.tsx';
 
@@ -26,28 +23,23 @@ function PanelLoading({ label }: { label: string }) {
 
 type AudioSegmentDetailContentProps = {
   audioId: string;
-  canRunPipeline?: boolean;
   onAudioLoaded?: (audio: AudioRecord) => void;
 };
 
-export function AudioSegmentDetailContent({
-  audioId,
-  canRunPipeline = false,
-  onAudioLoaded,
-}: AudioSegmentDetailContentProps) {
+export function AudioSegmentDetailContent({ audioId, onAudioLoaded }: AudioSegmentDetailContentProps) {
   const [audio, setAudio] = useState<AudioRecord | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
-  const [loadingTranscript, setLoadingTranscript] = useState(true);
+  const [loadingTranscript, setLoadingTranscript] = useState(false);
   const [loadingAudioUrl, setLoadingAudioUrl] = useState(true);
   const [metaError, setMetaError] = useState('');
   const [transcriptError, setTranscriptError] = useState('');
   const [audioUrlError, setAudioUrlError] = useState('');
-  const [runningPipeline, setRunningPipeline] = useState(false);
-  const [transcriptRecoverUntil, setTranscriptRecoverUntil] = useState(0);
   const onAudioLoadedRef = useRef(onAudioLoaded);
   const audioUrlLoadedRef = useRef(false);
+  const transcriptLoadedRef = useRef(false);
+  const transcriptRetryRef = useRef(0);
 
   useEffect(() => {
     onAudioLoadedRef.current = onAudioLoaded;
@@ -55,8 +47,44 @@ export function AudioSegmentDetailContent({
 
   useEffect(() => {
     audioUrlLoadedRef.current = false;
+    transcriptLoadedRef.current = false;
+    transcriptRetryRef.current = 0;
+    setAudio(null);
+    setTranscript(null);
     setAudioUrl(null);
+    setMetaError('');
+    setTranscriptError('');
+    setAudioUrlError('');
+    setLoadingMeta(true);
+    setLoadingTranscript(false);
+    setLoadingAudioUrl(true);
   }, [audioId]);
+
+  const loadTranscript = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!audioId) return;
+      if (transcriptLoadedRef.current && options?.silent) return;
+
+      if (!options?.silent) setLoadingTranscript(true);
+      try {
+        const result = await getAudioTranscript(audioId);
+        if (result.transcript) {
+          transcriptLoadedRef.current = true;
+          setTranscript(result.transcript);
+          setTranscriptError('');
+        } else if (!options?.silent) {
+          setTranscript(null);
+        } else {
+          transcriptRetryRef.current += 1;
+        }
+      } catch (err) {
+        setTranscriptError(err instanceof Error ? err.message : 'Failed to load transcript');
+      } finally {
+        setLoadingTranscript(false);
+      }
+    },
+    [audioId],
+  );
 
   const loadDetail = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -65,51 +93,55 @@ export function AudioSegmentDetailContent({
 
       if (!silent) {
         setLoadingMeta(true);
-        setLoadingTranscript(true);
-        if (!audioUrlLoadedRef.current) setLoadingAudioUrl(true);
         setMetaError('');
-        setTranscriptError('');
-        if (!audioUrlLoadedRef.current) setAudioUrlError('');
       }
 
-      const metaTask = getAudio(audioId)
-        .then((record) => {
-          setAudio(record);
-          onAudioLoadedRef.current?.(record);
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : 'Failed to load audio';
-          setMetaError(message);
-          setAudio(null);
-        })
-        .finally(() => setLoadingMeta(false));
+      let record: AudioRecord;
+      try {
+        record = await getAudio(audioId);
+        setAudio(record);
+        onAudioLoadedRef.current?.(record);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load audio';
+        setMetaError(message);
+        setAudio(null);
+        if (!silent) {
+          setLoadingMeta(false);
+          setLoadingTranscript(false);
+          setLoadingAudioUrl(false);
+        }
+        return;
+      } finally {
+        if (!silent) setLoadingMeta(false);
+      }
 
-      const transcriptTask = getAudioTranscript(audioId)
-        .then((result) => {
-          setTranscript(result.transcript);
-        })
-        .catch((err) => {
-          setTranscriptError(err instanceof Error ? err.message : 'Failed to load transcript');
-        })
-        .finally(() => setLoadingTranscript(false));
+      const effectiveStatus = resolveEffectiveAudioStatus(record);
+      const shouldLoadTranscript = effectiveStatus === 'completed';
 
-      const downloadTask =
-        audioUrlLoadedRef.current || silent
-          ? Promise.resolve()
-          : getAudioDownloadUrl(audioId)
-              .then((download) => {
-                audioUrlLoadedRef.current = true;
-                setAudioUrl(download.url);
-              })
-              .catch((err) => {
-                setAudioUrlError(err instanceof Error ? err.message : 'Failed to load audio playback');
-                setAudioUrl(null);
-              })
-              .finally(() => setLoadingAudioUrl(false));
+      if (shouldLoadTranscript) {
+        await loadTranscript({ silent });
+      } else if (!silent) {
+        setLoadingTranscript(false);
+        setTranscript(null);
+        setTranscriptError('');
+      }
 
-      await Promise.allSettled([metaTask, transcriptTask, downloadTask]);
+      if (!audioUrlLoadedRef.current) {
+        if (!silent) setLoadingAudioUrl(true);
+        try {
+          const download = await getAudioDownloadUrl(audioId);
+          audioUrlLoadedRef.current = true;
+          setAudioUrl(download.url);
+          setAudioUrlError('');
+        } catch (err) {
+          setAudioUrlError(err instanceof Error ? err.message : 'Failed to load audio playback');
+          setAudioUrl(null);
+        } finally {
+          if (!silent) setLoadingAudioUrl(false);
+        }
+      }
     },
-    [audioId],
+    [audioId, loadTranscript],
   );
 
   useEffect(() => {
@@ -117,39 +149,24 @@ export function AudioSegmentDetailContent({
   }, [loadDetail]);
 
   useEffect(() => {
-    if (!audio) return;
-    if (resolveEffectiveAudioStatus(audio) === 'completed' && !transcript && !transcriptError) {
-      setTranscriptRecoverUntil((prev) => (prev > Date.now() ? prev : Date.now() + 120_000));
-    }
-  }, [audio, transcript, transcriptError]);
+    if (!audio || !audioId) return;
 
-  useEffect(() => {
-    if (!audioId || !audio) return;
+    const effectiveStatus = resolveEffectiveAudioStatus(audio);
+    const shouldPoll =
+      isAudioPipelineActive(audio) ||
+      (effectiveStatus === 'completed' &&
+        !transcript &&
+        !transcriptError &&
+        transcriptRetryRef.current < 12);
 
-    const awaitingTranscript =
-      resolveEffectiveAudioStatus(audio) === 'completed' &&
-      !transcript &&
-      !transcriptError &&
-      transcriptRecoverUntil > Date.now();
+    if (!shouldPoll) return;
 
-    if (!isAudioPipelineActive(audio) && !awaitingTranscript) return;
+    const intervalId = window.setInterval(() => {
+      void loadDetail({ silent: true });
+    }, 5000);
 
-    const intervalId = window.setInterval(() => void loadDetail({ silent: true }), 5000);
     return () => window.clearInterval(intervalId);
-  }, [audio, audioId, loadDetail, transcript, transcriptError, transcriptRecoverUntil]);
-
-  async function handleRunPipeline() {
-    if (!audioId) return;
-    setRunningPipeline(true);
-    try {
-      await runAudioPipeline(audioId);
-      await loadDetail({ silent: true });
-    } catch (err) {
-      setMetaError(err instanceof Error ? err.message : 'Failed to start pipeline');
-    } finally {
-      setRunningPipeline(false);
-    }
-  }
+  }, [audio, audioId, loadDetail, transcript, transcriptError]);
 
   if (loadingMeta && !audio) {
     return <PanelLoading label="Loading audio…" />;
@@ -160,32 +177,10 @@ export function AudioSegmentDetailContent({
   }
 
   const effectiveStatus = resolveEffectiveAudioStatus(audio);
-  const pipelineBusy = isAudioPipelineBusy(audio) || runningPipeline;
   const pipelineError = displayAudioPipelineError(audio.pipeline_job?.error_message);
-  const awaitingTranscript =
-    effectiveStatus === 'completed' &&
-    !transcript &&
-    !transcriptError &&
-    transcriptRecoverUntil > Date.now();
 
   return (
     <div className="audio-segment-detail-content">
-      <div className="audio-segment-detail-meta">
-        <span className={`document-status-badge status-${effectiveStatus}`}>
-          {formatDocumentStatusLabel(effectiveStatus)}
-        </span>
-        {canRunPipeline && !pipelineBusy && effectiveStatus !== 'running' ? (
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={runningPipeline}
-            onClick={() => void handleRunPipeline()}
-          >
-            {runningPipeline ? 'Starting…' : 'Run transcription'}
-          </button>
-        ) : null}
-      </div>
-
       {metaError ? <p className="error inline">{metaError}</p> : null}
 
       {pipelineError && effectiveStatus === 'failed' ? (
@@ -212,11 +207,14 @@ export function AudioSegmentDetailContent({
           {loadingTranscript ? (
             <PanelLoading label="Loading transcript…" />
           ) : transcriptError ? (
-            <p className="document-detail-panel-empty">{transcriptError}</p>
-          ) : effectiveStatus === 'running' && !transcript ? (
+            <div className="document-detail-panel-empty">
+              <p>{transcriptError}</p>
+              <button type="button" className="btn-secondary" onClick={() => void loadTranscript()}>
+                Retry loading transcript
+              </button>
+            </div>
+          ) : effectiveStatus === 'running' ? (
             <PanelLoading label="Transcription in progress…" />
-          ) : awaitingTranscript ? (
-            <PanelLoading label="Loading transcript from storage…" />
           ) : transcript ? (
             <div className="document-markdown-panel">
               <Markdown content={transcript} />
@@ -224,7 +222,7 @@ export function AudioSegmentDetailContent({
           ) : effectiveStatus === 'completed' ? (
             <div className="document-detail-panel-empty">
               <p>No transcript artifact found in storage.</p>
-              <button type="button" className="btn-secondary" onClick={() => void loadDetail()}>
+              <button type="button" className="btn-secondary" onClick={() => void loadTranscript()}>
                 Retry loading transcript
               </button>
             </div>
@@ -234,7 +232,7 @@ export function AudioSegmentDetailContent({
             </p>
           ) : (
             <p className="document-detail-panel-empty">
-              Run the transcription pipeline to generate a transcript.
+              Transcribe this segment from the list to generate a transcript.
             </p>
           )}
         </section>

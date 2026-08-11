@@ -11,9 +11,10 @@ import {
   type ModelConfig,
   type ModelConfigDetail,
 } from '../api/models.ts';
-import { Bot, Copy, Pencil, Search, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Search, Trash2 } from 'lucide-react';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { ModelConfigForm } from '../components/ModelConfigForm.tsx';
+import { NavPageIcon } from '../components/icons/NavIcons.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
@@ -200,7 +201,7 @@ export function ModelsConfigPage() {
                     <td>
                       <div className="model-cell">
                         <span className="model-cell-icon" aria-hidden>
-                          <Bot {...iconProps()} />
+                          <NavPageIcon name="models" />
                         </span>
                         <div>
                           <div className="model-cell-name">{model.name}</div>

@@ -23,7 +23,6 @@ export function AudioDetailPage() {
 
       <AudioSegmentDetailContent
         audioId={audioId}
-        canRunPipeline
         onAudioLoaded={(audio) => setSelectedChannelId(audio.channel_id)}
       />
     </div>

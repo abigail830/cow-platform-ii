@@ -2926,7 +2926,7 @@ textarea {
   gap: 0.75rem;
 }
 
-.audio-segment-detail-meta {
+.audio-segment-drawer-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
