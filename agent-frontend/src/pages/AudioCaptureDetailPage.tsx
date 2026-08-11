@@ -152,6 +152,9 @@ export function AudioCaptureDetailPage() {
   const [loadingArtifacts, setLoadingArtifacts] = useState(false);
   const [artifactLoadError, setArtifactLoadError] = useState('');
   const artifactPollAttemptsRef = useRef(0);
+  const postProcessActiveRef = useRef(false);
+  const prevPostProcessActiveRef = useRef(false);
+  const prevPipelineJobIdRef = useRef<string | null>(null);
   const [openSegmentId, setOpenSegmentId] = useState<string | null>(null);
   const [openSegmentLabel, setOpenSegmentLabel] = useState<string | null>(null);
   const [transcribingSegmentIds, setTranscribingSegmentIds] = useState<Set<string>>(new Set());
@@ -177,9 +180,20 @@ export function AudioCaptureDetailPage() {
     [captureId, setSelectedChannelId],
   );
 
+  const clearArtifactState = useCallback(() => {
+    setStructuredArtifact(null);
+    setContextArtifact(null);
+    setExtractionArtifact(null);
+    setExtractionPreview(null);
+    setArtifactLoadError('');
+    setNeedsReview(false);
+    artifactPollAttemptsRef.current = 0;
+  }, []);
+
   const loadArtifacts = useCallback(
-    async (options?: { silent?: boolean }) => {
+    async (options?: { silent?: boolean; force?: boolean }) => {
       if (!captureId) return;
+      if (postProcessActiveRef.current && !options?.force) return;
       const id = captureId;
       if (!options?.silent) setLoadingArtifacts(true);
 
@@ -236,29 +250,51 @@ export function AudioCaptureDetailPage() {
     setExtractionArtifact(null);
     setExtractionPreview(null);
     setArtifactLoadError('');
+    prevPostProcessActiveRef.current = false;
+    prevPipelineJobIdRef.current = null;
   }, [captureId]);
+
+  useEffect(() => {
+    if (!capture) {
+      postProcessActiveRef.current = runningPipeline;
+      return;
+    }
+
+    const active = isCapturePipelineActive(capture) || runningPipeline;
+    postProcessActiveRef.current = active;
+
+    const jobId = capture.pipeline_job?.id ?? null;
+    const becameActive = active && !prevPostProcessActiveRef.current;
+    const jobChanged = active && jobId != null && jobId !== prevPipelineJobIdRef.current;
+
+    if (becameActive || jobChanged) {
+      clearArtifactState();
+    }
+
+    prevPostProcessActiveRef.current = active;
+    prevPipelineJobIdRef.current = jobId;
+  }, [capture, runningPipeline, clearArtifactState]);
 
   const allArtifactsLoaded =
     structuredArtifact != null && contextArtifact != null && extractionArtifact != null;
 
   useEffect(() => {
     if (!capture || !captureExpectsPostProcessArtifacts(capture)) return;
+    if (isCapturePipelineActive(capture) || runningPipeline) return;
     void loadArtifacts({ silent: true });
-  }, [capture?.status, capture?.pipeline_job?.stage, capture, loadArtifacts]);
+  }, [capture?.status, capture?.pipeline_job?.stage, capture, loadArtifacts, runningPipeline]);
 
   useEffect(() => {
     if (!capture) return;
 
     const jobStage = capture.pipeline_job?.stage;
-    const postProcessActive =
-      capture.status === 'post_processing' ||
-      jobStage === 'structuring' ||
-      jobStage === 'classifying' ||
-      jobStage === 'extracting';
+    const postProcessActiveNow =
+      isCapturePipelineActive(capture) || runningPipeline;
     const postProcessFinished =
       capture.status === 'done' || jobStage === 'done' || jobStage === 'failed';
     const shouldRetryArtifacts =
       postProcessFinished &&
+      !postProcessActiveNow &&
       !allArtifactsLoaded &&
       artifactPollAttemptsRef.current < 20;
 
@@ -267,21 +303,21 @@ export function AudioCaptureDetailPage() {
       (capture.status === 'transcribing' ||
         capture.status === 'draft' ||
         capture.status === 'ready' ||
-        postProcessActive ||
+        postProcessActiveNow ||
         shouldRetryArtifacts);
 
     if (!shouldPoll) return;
 
     const intervalId = window.setInterval(() => {
       void loadCapture({ silent: true });
-      if (postProcessActive || postProcessFinished) {
+      if (!postProcessActiveRef.current && postProcessFinished) {
         artifactPollAttemptsRef.current += 1;
         void loadArtifacts({ silent: true });
       }
     }, 3000);
 
     return () => window.clearInterval(intervalId);
-  }, [allArtifactsLoaded, capture, loadArtifacts, loadCapture]);
+  }, [allArtifactsLoaded, capture, loadArtifacts, loadCapture, runningPipeline]);
 
   const canWriteCapture = canWrite && Boolean(capture);
 
@@ -344,13 +380,14 @@ export function AudioCaptureDetailPage() {
 
   async function handleRunPipeline() {
     if (!captureId) return;
+    clearArtifactState();
     setRunningPipeline(true);
     setError('');
     try {
       const updated = await runCapturePipeline(captureId);
       setCapture(updated);
       await loadCapture({ silent: true });
-      if (updated.status === 'done') {
+      if (updated.status === 'done' && !isCapturePipelineActive(updated)) {
         await loadArtifacts();
       }
     } catch (err) {
@@ -444,6 +481,7 @@ export function AudioCaptureDetailPage() {
   const showPipelineStepper = postProcessActive;
 
   function artifactTabAvailable(tab: CaptureArtifactTab): boolean {
+    if (postProcessActive) return false;
     switch (tab) {
       case 'structured_transcript':
         return structuredArtifact != null;
@@ -681,12 +719,17 @@ export function AudioCaptureDetailPage() {
           <div className="document-detail-content-header capture-extraction-header">
             <div className="capture-extraction-header-top">
               <h3 className="document-detail-panel-heading">Extraction preview</h3>
+              {showPipelineStepper ? (
+                <div className="capture-extraction-pipeline-inline" aria-label="Post-process progress">
+                  <CapturePipelineStatus capture={capture} />
+                </div>
+              ) : null}
               {canWriteCapture ? (
                 <div className="document-detail-toolbar-actions">
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={runningPipeline || !canRunPostProcess || postProcessActive}
+                    disabled={postProcessActive || !canRunPostProcess}
                     title={
                       !canRunPostProcess && awaitingTranscription
                         ? 'Transcribe all segments first'
@@ -696,7 +739,7 @@ export function AudioCaptureDetailPage() {
                     }
                     onClick={() => void handleRunPipeline()}
                   >
-                    {runningPipeline ? (
+                    {postProcessActive ? (
                       <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
                     ) : (
                       <Upload {...iconProps()} aria-hidden />
@@ -706,36 +749,35 @@ export function AudioCaptureDetailPage() {
                 </div>
               ) : null}
             </div>
-            {showPipelineStepper ? (
-              <div className="capture-extraction-pipeline-row" aria-label="Post-process progress">
-                <CapturePipelineStatus capture={capture} />
-              </div>
-            ) : null}
           </div>
           {showArtifactWorkspace ? (
             <>
-              <div className="capture-artifact-tabs" role="tablist" aria-label="Post-process artifacts">
-                {CAPTURE_ARTIFACT_TABS.map((tab) => {
-                  const available = artifactTabAvailable(tab.id);
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={artifactTab === tab.id}
-                      aria-disabled={!available}
-                      className={`capture-artifact-tab${artifactTab === tab.id ? ' active' : ''}${
-                        !available ? ' is-disabled' : ''
-                      }`}
-                      disabled={!available}
-                      onClick={() => setArtifactTab(tab.id)}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-              {awaitingArtifacts && loadingArtifacts && !hasArtifactContent ? (
+              {!postProcessActive ? (
+                <div className="capture-artifact-tabs" role="tablist" aria-label="Post-process artifacts">
+                  {CAPTURE_ARTIFACT_TABS.map((tab) => {
+                    const available = artifactTabAvailable(tab.id);
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={artifactTab === tab.id}
+                        aria-disabled={!available}
+                        className={`capture-artifact-tab${artifactTab === tab.id ? ' active' : ''}${
+                          !available ? ' is-disabled' : ''
+                        }`}
+                        disabled={!available}
+                        onClick={() => setArtifactTab(tab.id)}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {postProcessActive ? (
+                <PanelLoading label="Post-processing in progress…" />
+              ) : awaitingArtifacts && loadingArtifacts && !hasArtifactContent ? (
                 <PanelLoading label="Loading post-process artifacts…" />
               ) : capture.status === 'post_processing' && !hasArtifactContent && !artifactLoadError ? (
                 <PanelLoading label="Post-processing in progress…" />
