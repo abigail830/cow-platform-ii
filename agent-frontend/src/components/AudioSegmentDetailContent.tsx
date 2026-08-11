@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import {
   displayAudioPipelineError,
   getAudio,
@@ -9,6 +9,7 @@ import {
   resolveEffectiveAudioStatus,
   type AudioRecord,
 } from '../api/audios.ts';
+import { downloadTextFile, withDownloadExtension } from '../shared/download-text.ts';
 import { iconProps } from './icons/icon-props.ts';
 import { Markdown } from '../chat/Markdown.tsx';
 
@@ -213,7 +214,27 @@ export function AudioSegmentDetailContent({
         ) : null}
 
         <section className="audio-detail-panel audio-detail-transcript" aria-label="Transcript">
-          <h3 className="document-detail-panel-heading">Transcript</h3>
+          <div className="document-detail-content-header">
+            <h3 className="document-detail-panel-heading">Transcript</h3>
+            {transcript ? (
+              <div className="document-detail-toolbar-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  title="Download transcript as plain text"
+                  onClick={() =>
+                    downloadTextFile(
+                      transcript,
+                      withDownloadExtension(audio.name, 'txt'),
+                    )
+                  }
+                >
+                  <Download {...iconProps()} aria-hidden />
+                  Download .txt
+                </button>
+              </div>
+            ) : null}
+          </div>
           {loadingTranscript ? (
             <PanelLoading label="Loading transcript…" />
           ) : transcriptError ? (

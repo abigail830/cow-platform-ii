@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  Download,
   Loader2,
   Mic,
   Plus,
@@ -31,6 +32,7 @@ import {
   type CapturePostProcessArtifactKind,
 } from '../api/audioCaptures.ts';
 import { formatAudioBytes, isAudioPipelineActive, resolveEffectiveAudioStatus, runAudioPipeline } from '../api/audios.ts';
+import { downloadTextFile, withDownloadExtension } from '../shared/download-text.ts';
 import { IconView } from '../components/AdminActionIcons.tsx';
 import { AudioPipelineStatus } from '../components/AudioPipelineStatus.tsx';
 import { AudioSegmentDrawer } from '../components/AudioSegmentDrawer.tsx';
@@ -1104,26 +1106,47 @@ export function AudioCaptureDetailPage() {
           {showArtifactWorkspace ? (
             <>
               {!postProcessActive && !postProcessFailed ? (
-                <div className="capture-artifact-tabs" role="tablist" aria-label="Post-process artifacts">
-                  {CAPTURE_ARTIFACT_TABS.map((tab) => {
-                    const available = artifactTabAvailable(tab.id);
-                    return (
+                <div className="capture-artifact-tabs-row">
+                  <div className="capture-artifact-tabs" role="tablist" aria-label="Post-process artifacts">
+                    {CAPTURE_ARTIFACT_TABS.map((tab) => {
+                      const available = artifactTabAvailable(tab.id);
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={artifactTab === tab.id}
+                          aria-disabled={!available}
+                          className={`capture-artifact-tab${artifactTab === tab.id ? ' active' : ''}${
+                            !available ? ' is-disabled' : ''
+                          }`}
+                          disabled={!available}
+                          onClick={() => setArtifactTab(tab.id)}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {artifactTab === 'summary' && summaryMarkdown?.trim() ? (
+                    <div className="document-detail-toolbar-actions">
                       <button
-                        key={tab.id}
                         type="button"
-                        role="tab"
-                        aria-selected={artifactTab === tab.id}
-                        aria-disabled={!available}
-                        className={`capture-artifact-tab${artifactTab === tab.id ? ' active' : ''}${
-                          !available ? ' is-disabled' : ''
-                        }`}
-                        disabled={!available}
-                        onClick={() => setArtifactTab(tab.id)}
+                        className="btn-secondary"
+                        title="Download summary as Markdown"
+                        onClick={() =>
+                          downloadTextFile(
+                            summaryMarkdown,
+                            withDownloadExtension(`${capture.title}-summary`, 'md'),
+                            'text/markdown;charset=utf-8',
+                          )
+                        }
                       >
-                        {tab.label}
+                        <Download {...iconProps()} aria-hidden />
+                        .md
                       </button>
-                    );
-                  })}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {postProcessActive ? (
