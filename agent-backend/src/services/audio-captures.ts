@@ -5,6 +5,7 @@ import {
   db,
   type AudioCaptureAudience,
   type AudioCaptureRecordingMode,
+  type AudioCaptureInputMode,
 } from '../db/index.ts';
 import {
   capturePipelineJobToPublic,
@@ -32,6 +33,7 @@ function toCapturePublic(
     participants_hint: row.participantsHint,
     recording_mode: row.recordingMode,
     audience: row.audience,
+    input_mode: row.inputMode,
     status: row.status,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
     segment_count: segmentCount,
@@ -60,6 +62,7 @@ function toSegmentPublic(
     file_hash: row.fileHash,
     status: row.status,
     duration_sec: row.durationSec,
+    metadata: (row.metadata as Record<string, unknown>) ?? {},
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
     pipeline_job: job ? audioPipelineJobToPublic(job) : null,
@@ -73,6 +76,7 @@ export async function createAudioCapture(input: {
   participantsHint?: string | null;
   recordingMode?: AudioCaptureRecordingMode | null;
   audience?: AudioCaptureAudience;
+  inputMode?: AudioCaptureInputMode;
   createdBy?: string | null;
 }): Promise<ReturnType<typeof toCapturePublic>> {
   const [row] = await db
@@ -84,6 +88,7 @@ export async function createAudioCapture(input: {
       participantsHint: input.participantsHint?.trim() || null,
       recordingMode: input.recordingMode ?? null,
       audience: input.audience ?? 'unknown',
+      inputMode: input.inputMode ?? 'audio',
       status: 'draft',
       createdBy: input.createdBy ?? null,
     })

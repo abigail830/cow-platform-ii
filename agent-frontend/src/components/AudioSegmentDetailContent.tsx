@@ -23,10 +23,15 @@ function PanelLoading({ label }: { label: string }) {
 
 type AudioSegmentDetailContentProps = {
   audioId: string;
+  transcriptOnly?: boolean;
   onAudioLoaded?: (audio: AudioRecord) => void;
 };
 
-export function AudioSegmentDetailContent({ audioId, onAudioLoaded }: AudioSegmentDetailContentProps) {
+export function AudioSegmentDetailContent({
+  audioId,
+  transcriptOnly = false,
+  onAudioLoaded,
+}: AudioSegmentDetailContentProps) {
   const [audio, setAudio] = useState<AudioRecord | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -116,7 +121,9 @@ export function AudioSegmentDetailContent({ audioId, onAudioLoaded }: AudioSegme
       }
 
       const effectiveStatus = resolveEffectiveAudioStatus(record);
-      const shouldLoadTranscript = effectiveStatus === 'completed';
+      const isTranscriptOnly =
+        transcriptOnly || record.metadata?.source_kind === 'transcript';
+      const shouldLoadTranscript = isTranscriptOnly || effectiveStatus === 'completed';
 
       if (shouldLoadTranscript) {
         await loadTranscript({ silent });
@@ -126,7 +133,7 @@ export function AudioSegmentDetailContent({ audioId, onAudioLoaded }: AudioSegme
         setTranscriptError('');
       }
 
-      if (!audioUrlLoadedRef.current) {
+      if (!isTranscriptOnly && !audioUrlLoadedRef.current) {
         if (!silent) setLoadingAudioUrl(true);
         try {
           const download = await getAudioDownloadUrl(audioId);
@@ -141,7 +148,7 @@ export function AudioSegmentDetailContent({ audioId, onAudioLoaded }: AudioSegme
         }
       }
     },
-    [audioId, loadTranscript],
+    [audioId, loadTranscript, transcriptOnly],
   );
 
   useEffect(() => {
@@ -178,12 +185,13 @@ export function AudioSegmentDetailContent({ audioId, onAudioLoaded }: AudioSegme
 
   const effectiveStatus = resolveEffectiveAudioStatus(audio);
   const pipelineError = displayAudioPipelineError(audio.pipeline_job?.error_message);
+  const isTranscriptOnly = transcriptOnly || audio.metadata?.source_kind === 'transcript';
 
   return (
     <div className="audio-segment-detail-content">
       {metaError ? <p className="error inline">{metaError}</p> : null}
 
-      {pipelineError && effectiveStatus === 'failed' ? (
+      {!isTranscriptOnly && pipelineError && effectiveStatus === 'failed' ? (
         <div className="audio-pipeline-failure-banner" role="alert">
           <strong>Transcription failed</strong>
           <p>{pipelineError}</p>
@@ -191,16 +199,18 @@ export function AudioSegmentDetailContent({ audioId, onAudioLoaded }: AudioSegme
       ) : null}
 
       <div className="audio-detail-layout audio-segment-detail-layout">
-        <section className="audio-detail-panel" aria-label="Audio playback">
-          <h3 className="document-detail-panel-heading">Audio</h3>
-          {loadingAudioUrl ? (
-            <PanelLoading label="Preparing playback…" />
-          ) : audioUrl ? (
-            <audio controls preload="metadata" src={audioUrl} className="audio-player" />
-          ) : (
-            <p className="document-detail-panel-empty">{audioUrlError || 'Playback is unavailable.'}</p>
-          )}
-        </section>
+        {!isTranscriptOnly ? (
+          <section className="audio-detail-panel" aria-label="Audio playback">
+            <h3 className="document-detail-panel-heading">Audio</h3>
+            {loadingAudioUrl ? (
+              <PanelLoading label="Preparing playback…" />
+            ) : audioUrl ? (
+              <audio controls preload="metadata" src={audioUrl} className="audio-player" />
+            ) : (
+              <p className="document-detail-panel-empty">{audioUrlError || 'Playback is unavailable.'}</p>
+            )}
+          </section>
+        ) : null}
 
         <section className="audio-detail-panel audio-detail-transcript" aria-label="Transcript">
           <h3 className="document-detail-panel-heading">Transcript</h3>
@@ -226,6 +236,8 @@ export function AudioSegmentDetailContent({ audioId, onAudioLoaded }: AudioSegme
                 Retry loading transcript
               </button>
             </div>
+          ) : isTranscriptOnly ? (
+            <p className="document-detail-panel-empty">No transcript content found.</p>
           ) : effectiveStatus === 'failed' ? (
             <p className="document-detail-panel-empty">
               No transcript was generated. See the error above and retry when ready.

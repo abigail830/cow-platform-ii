@@ -9,6 +9,7 @@ type AudioSegmentDrawerProps = {
   audioId: string | null;
   segmentLabel?: string | null;
   open: boolean;
+  transcriptOnly?: boolean;
   onClose: () => void;
 };
 
@@ -16,6 +17,7 @@ export function AudioSegmentDrawer({
   audioId,
   segmentLabel,
   open,
+  transcriptOnly = false,
   onClose,
 }: AudioSegmentDrawerProps) {
   const [audioTitle, setAudioTitle] = useState<string | null>(null);
@@ -63,7 +65,12 @@ export function AudioSegmentDrawer({
           </button>
         </header>
         <div className="admin-drawer-body audio-segment-drawer-body">
-          <AudioSegmentDetailContent key={audioId} audioId={audioId} onAudioLoaded={handleAudioLoaded} />
+          <AudioSegmentDetailContent
+            key={audioId}
+            audioId={audioId}
+            transcriptOnly={transcriptOnly}
+            onAudioLoaded={handleAudioLoaded}
+          />
         </div>
       </aside>
     </div>

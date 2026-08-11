@@ -320,6 +320,9 @@ export type AudioCaptureRecordingMode = (typeof AUDIO_CAPTURE_RECORDING_MODES)[n
 export const AUDIO_CAPTURE_AUDIENCES = ['external_client', 'internal_team', 'mixed', 'unknown'] as const;
 export type AudioCaptureAudience = (typeof AUDIO_CAPTURE_AUDIENCES)[number];
 
+export const AUDIO_CAPTURE_INPUT_MODES = ['audio', 'transcript'] as const;
+export type AudioCaptureInputMode = (typeof AUDIO_CAPTURE_INPUT_MODES)[number];
+
 export const CAPTURE_PIPELINE_JOB_STAGES = [
   'submitted',
   'structuring',
@@ -343,6 +346,7 @@ export const appAudioCaptures = pgTable(
     participantsHint: text('participants_hint'),
     recordingMode: text('recording_mode').$type<AudioCaptureRecordingMode | null>(),
     audience: text('audience').$type<AudioCaptureAudience>().notNull().default('unknown'),
+    inputMode: text('input_mode').$type<AudioCaptureInputMode>().notNull().default('audio'),
     status: text('status').$type<AudioCaptureStatus>().notNull().default('draft'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),

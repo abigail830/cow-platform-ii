@@ -2,15 +2,19 @@ import { useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import {
   AUDIENCE_LABELS,
+  CAPTURE_INPUT_MODE_LABELS,
   RECORDING_MODE_LABELS,
 } from '../api/audioCaptures.ts';
 import { ICON_SIZE_LG, iconProps } from './icons/icon-props.ts';
 
-const ACCEPTED_TYPES = '.m4a,.mp3,.wav,.flac,.aac,.amr,.ogg,.opus,.webm';
+const AUDIO_ACCEPTED_TYPES = '.m4a,.mp3,.wav,.flac,.aac,.amr,.ogg,.opus,.webm';
+const TRANSCRIPT_ACCEPTED_TYPES = '.md,.markdown,.docx';
 
 function fileKey(file: File): string {
   return `${file.name}-${file.size}-${file.lastModified}`;
 }
+
+type CaptureInputMode = 'audio' | 'transcript';
 
 type AudioCaptureCreateModalProps = {
   channelName: string;
@@ -21,6 +25,7 @@ type AudioCaptureCreateModalProps = {
     participantsHint?: string;
     recordingMode?: string;
     audience?: string;
+    inputMode: CaptureInputMode;
     files: File[];
   }) => Promise<void>;
 };
@@ -32,10 +37,13 @@ export function AudioCaptureCreateModal({ channelName, onCancel, onSubmit }: Aud
   const [participantsHint, setParticipantsHint] = useState('');
   const [recordingMode, setRecordingMode] = useState('general');
   const [audience, setAudience] = useState('unknown');
+  const [inputMode, setInputMode] = useState<CaptureInputMode>('audio');
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
+
+  const acceptedTypes = inputMode === 'transcript' ? TRANSCRIPT_ACCEPTED_TYPES : AUDIO_ACCEPTED_TYPES;
 
   function addFiles(fileList: FileList | null) {
     if (!fileList?.length) return;
@@ -59,6 +67,13 @@ export function AudioCaptureCreateModal({ channelName, onCancel, onSubmit }: Aud
     setError('');
   }
 
+  function handleInputModeChange(nextMode: CaptureInputMode) {
+    setInputMode(nextMode);
+    setFiles([]);
+    setError('');
+    if (inputRef.current) inputRef.current.value = '';
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!title.trim()) {
@@ -66,7 +81,11 @@ export function AudioCaptureCreateModal({ channelName, onCancel, onSubmit }: Aud
       return;
     }
     if (files.length === 0) {
-      setError('Add at least one audio segment');
+      setError(
+        inputMode === 'transcript'
+          ? 'Add at least one transcript segment'
+          : 'Add at least one audio segment',
+      );
       return;
     }
     setBusy(true);
@@ -78,6 +97,7 @@ export function AudioCaptureCreateModal({ channelName, onCancel, onSubmit }: Aud
         participantsHint: participantsHint.trim() || undefined,
         recordingMode: recordingMode || undefined,
         audience,
+        inputMode,
         files,
       });
     } catch (err) {
@@ -100,6 +120,21 @@ export function AudioCaptureCreateModal({ channelName, onCancel, onSubmit }: Aud
 
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div className="form-grid">
+            <label className="form-field form-field-wide">
+              <span>Input type</span>
+              <select
+                value={inputMode}
+                onChange={(event) => handleInputModeChange(event.target.value as CaptureInputMode)}
+                disabled={busy}
+              >
+                {Object.entries(CAPTURE_INPUT_MODE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label className="form-field form-field-wide">
               <span>Title</span>
               <input
@@ -177,10 +212,14 @@ export function AudioCaptureCreateModal({ channelName, onCancel, onSubmit }: Aud
             onClick={() => inputRef.current?.click()}
           >
             <p className="document-upload-dropzone-title">
-              Drag and drop audio segments here, or click to browse (multiple files supported).
+              {inputMode === 'transcript'
+                ? 'Drag and drop transcript files here, or click to browse (multiple files supported).'
+                : 'Drag and drop audio segments here, or click to browse (multiple files supported).'}
             </p>
             <p className="document-upload-dropzone-hint">
-              M4A, MP3, WAV, FLAC, AAC, and more. Each file becomes one segment in order.
+              {inputMode === 'transcript'
+                ? 'Markdown (.md) or Word (.docx). Each file becomes one segment in order. Structured markdown with speaker timestamps works best.'
+                : 'M4A, MP3, WAV, FLAC, AAC, and more. Each file becomes one segment in order.'}
             </p>
             <div className="document-upload-plus-box" aria-hidden>
               <Plus {...iconProps({ size: ICON_SIZE_LG })} />
@@ -188,7 +227,7 @@ export function AudioCaptureCreateModal({ channelName, onCancel, onSubmit }: Aud
             <input
               ref={inputRef}
               type="file"
-              accept={ACCEPTED_TYPES}
+              accept={acceptedTypes}
               multiple
               hidden
               onChange={(event) => addFiles(event.target.files)}

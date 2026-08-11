@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { flattenAudioChannels } from '../api/audioChannels.ts';
 import {
+  CAPTURE_INPUT_MODE_LABELS,
   createAudioCapture,
   deleteAudioCapture,
   isCapturePipelineActive,
   listAudioCaptures,
   RECORDING_MODE_LABELS,
   uploadCaptureSegment,
+  uploadCaptureTranscriptSegment,
   type AudioCaptureRecord,
 } from '../api/audioCaptures.ts';
 import { IconDelete, IconView } from '../components/AdminActionIcons.tsx';
@@ -68,6 +70,7 @@ export function AudioCaptureListPage() {
     participantsHint?: string;
     recordingMode?: string;
     audience?: string;
+    inputMode: 'audio' | 'transcript';
     files: File[];
   }) {
     if (!selectedChannelId) throw new Error('Select a channel first');
@@ -78,9 +81,12 @@ export function AudioCaptureListPage() {
       participantsHint: input.participantsHint,
       recordingMode: input.recordingMode,
       audience: input.audience,
+      inputMode: input.inputMode,
     });
+    const uploadSegment =
+      input.inputMode === 'transcript' ? uploadCaptureTranscriptSegment : uploadCaptureSegment;
     for (const file of input.files) {
-      await uploadCaptureSegment(capture.id, file);
+      await uploadSegment(capture.id, file);
     }
     setCreateOpen(false);
     await loadCaptures();
@@ -152,7 +158,8 @@ export function AudioCaptureListPage() {
           <thead>
             <tr>
               <th>Title</th>
-              <th>Mode</th>
+              <th>Input</th>
+              <th>Recording mode</th>
               <th>Segments</th>
               <th className="documents-status-col">Status</th>
               <th>Updated</th>
@@ -162,26 +169,28 @@ export function AudioCaptureListPage() {
           <tbody>
             {!selectedChannelId ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={7} className="admin-table-empty">
                   Select or create a channel to manage audio captures.
                 </td>
               </tr>
             ) : loadingChannels || loading ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={7} className="admin-table-empty">
                   <Loader2 {...iconProps({ className: 'document-detail-loading-icon' })} aria-hidden />
                   {' '}Loading…
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={7} className="admin-table-empty">
                   No captures in this channel yet.
                 </td>
               </tr>
             ) : (
               items.map((capture) => {
                 const isDeleting = deletingIds.has(capture.id);
+                const inputLabel =
+                  CAPTURE_INPUT_MODE_LABELS[capture.input_mode ?? 'audio'] ?? capture.input_mode;
                 const modeLabel = capture.recording_mode
                   ? RECORDING_MODE_LABELS[capture.recording_mode] ?? capture.recording_mode
                   : '—';
@@ -199,6 +208,7 @@ export function AudioCaptureListPage() {
                         <div className="documents-table-meta">{capture.brief}</div>
                       ) : null}
                     </td>
+                    <td className="documents-table-meta">{inputLabel}</td>
                     <td className="documents-table-meta">{modeLabel}</td>
                     <td className="documents-table-meta">{capture.segment_count}</td>
                     <td className="documents-status-col">

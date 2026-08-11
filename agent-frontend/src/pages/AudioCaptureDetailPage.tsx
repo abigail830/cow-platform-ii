@@ -13,16 +13,20 @@ import {
   captureAwaitingTranscription,
   captureCanRunPostProcess,
   captureStatusBadgeClass,
+  CAPTURE_INPUT_MODE_LABELS,
   fetchCapturePostProcessArtifactText,
   formatCaptureStatusLabel,
   getAudioCapture,
   isCapturePipelineActive,
   isCapturePostProcessFailed,
+  isTranscriptCapture,
+  isTranscriptSegment,
   reorderCaptureSegments,
   runCapturePipeline,
   segmentNeedsTranscription,
   updateAudioCapture,
   uploadCaptureSegment,
+  uploadCaptureTranscriptSegment,
   type AudioCaptureDetail,
   type CapturePostProcessArtifactKind,
 } from '../api/audioCaptures.ts';
@@ -628,11 +632,13 @@ export function AudioCaptureDetailPage() {
   }
 
   async function handleUploadSegment(file: File) {
-    if (!captureId) return;
+    if (!captureId || !capture) return;
     setUploading(true);
     setError('');
     try {
-      const updated = await uploadCaptureSegment(captureId, file);
+      const upload =
+        isTranscriptCapture(capture) ? uploadCaptureTranscriptSegment : uploadCaptureSegment;
+      const updated = await upload(captureId, file);
       setCapture(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload segment');
@@ -698,6 +704,10 @@ export function AudioCaptureDetailPage() {
   }
 
   const badgeClass = captureStatusBadgeClass(capture.status);
+  const transcriptCapture = isTranscriptCapture(capture);
+  const segmentAcceptTypes = transcriptCapture
+    ? '.md,.markdown,.docx'
+    : '.m4a,.mp3,.wav,.flac,.aac,.amr,.ogg,.opus,.webm';
   const segmentsTranscribing = capture.segments.some((segment) =>
     isAudioPipelineActive({ status: segment.status, pipeline_job: segment.pipeline_job }),
   );
@@ -849,6 +859,9 @@ export function AudioCaptureDetailPage() {
           <span className={`document-status-badge ${badgeClass}`.trim()}>
             {formatCaptureStatusLabel(capture.status)}
           </span>
+          <span className="document-status-badge capture-input-mode-badge">
+            {CAPTURE_INPUT_MODE_LABELS[capture.input_mode ?? 'audio']}
+          </span>
         </div>
       </div>
 
@@ -883,7 +896,7 @@ export function AudioCaptureDetailPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".m4a,.mp3,.wav,.flac,.aac,.amr,.ogg,.opus,.webm"
+                  accept={segmentAcceptTypes}
                   hidden
                   onChange={(event) => {
                     const file = event.target.files?.[0];
@@ -903,24 +916,30 @@ export function AudioCaptureDetailPage() {
                   )}
                   Add segment
                 </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  disabled={uploading || runningTranscription || segmentsNeedingTranscription.length === 0}
-                  onClick={() => void handleTranscribeAll()}
-                >
-                  {runningTranscription ? (
-                    <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
-                  ) : (
-                    <Mic {...iconProps()} aria-hidden />
-                  )}
-                  Transcribe all
-                </button>
+                {!transcriptCapture ? (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={uploading || runningTranscription || segmentsNeedingTranscription.length === 0}
+                    onClick={() => void handleTranscribeAll()}
+                  >
+                    {runningTranscription ? (
+                      <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                    ) : (
+                      <Mic {...iconProps()} aria-hidden />
+                    )}
+                    Transcribe all
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
           {capture.segments.length === 0 ? (
-            <p className="document-detail-panel-empty">No segments yet. Add audio files to start transcription.</p>
+            <p className="document-detail-panel-empty">
+              {transcriptCapture
+                ? 'No segments yet. Add transcript files (.md or .docx) to continue.'
+                : 'No segments yet. Add audio files to start transcription.'}
+            </p>
           ) : (
             <div className="admin-table-wrap">
               <table className="admin-table">
@@ -929,7 +948,7 @@ export function AudioCaptureDetailPage() {
                     <th>#</th>
                     <th>Name</th>
                     <th>Size</th>
-                    <th className="documents-status-col">ASR</th>
+                    <th className="documents-status-col">{transcriptCapture ? 'Source' : 'ASR'}</th>
                     <th className="admin-table-actions-col">Actions</th>
                   </tr>
                 </thead>
@@ -950,24 +969,28 @@ export function AudioCaptureDetailPage() {
                       </td>
                       <td className="documents-table-meta">{formatAudioBytes(segment.size_bytes)}</td>
                       <td className="documents-status-col">
-                        <AudioPipelineStatus
-                          audio={{
-                            id: segment.id,
-                            channel_id: segment.channel_id,
-                            name: segment.name,
-                            file_type: segment.file_type,
-                            size_bytes: segment.size_bytes,
-                            file_hash: '',
-                            s3_key: '',
-                            status: segment.status,
-                            duration_sec: null,
-                            metadata: {},
-                            uploaded_by: null,
-                            created_at: segment.created_at,
-                            updated_at: segment.updated_at,
-                            pipeline_job: segment.pipeline_job,
-                          }}
-                        />
+                        {transcriptCapture || isTranscriptSegment(segment) ? (
+                          <span className="document-status-badge">Imported</span>
+                        ) : (
+                          <AudioPipelineStatus
+                            audio={{
+                              id: segment.id,
+                              channel_id: segment.channel_id,
+                              name: segment.name,
+                              file_type: segment.file_type,
+                              size_bytes: segment.size_bytes,
+                              file_hash: '',
+                              s3_key: '',
+                              status: segment.status,
+                              duration_sec: null,
+                              metadata: segment.metadata ?? {},
+                              uploaded_by: null,
+                              created_at: segment.created_at,
+                              updated_at: segment.updated_at,
+                              pipeline_job: segment.pipeline_job,
+                            }}
+                          />
+                        )}
                       </td>
                       <td>
                         <div className="row-actions">
@@ -982,7 +1005,7 @@ export function AudioCaptureDetailPage() {
                           >
                             <IconView />
                           </button>
-                          {canWriteCapture ? (
+                          {canWriteCapture && !transcriptCapture ? (
                             <>
                               {segmentNeedsTranscription(segment) ||
                               resolveEffectiveAudioStatus({
@@ -1121,6 +1144,7 @@ export function AudioCaptureDetailPage() {
         open={openSegmentId != null}
         audioId={openSegmentId}
         segmentLabel={openSegmentLabel}
+        transcriptOnly={transcriptCapture}
         onClose={closeSegmentDrawer}
       />
     </div>

@@ -43,8 +43,14 @@ import { autoStartAudioPipelineAfterUpload } from '../services/auto-audio-pipeli
 import { startCapturePostProcess } from '../services/audio-capture-pipeline-runner.ts';
 import {
   AUDIO_CAPTURE_AUDIENCES,
+  AUDIO_CAPTURE_INPUT_MODES,
   AUDIO_CAPTURE_RECORDING_MODES,
 } from '../db/schema.ts';
+import {
+  completeTranscriptSegmentUpload,
+  createAndAttachTranscriptSegment,
+  initTranscriptSegmentUpload,
+} from '../services/capture-transcript-upload.ts';
 
 const audioCaptures = new Hono();
 
@@ -144,6 +150,7 @@ audioCaptures.post(
       participants_hint?: string;
       recording_mode?: string;
       audience?: string;
+      input_mode?: string;
     }>();
 
     if (!body.channel_id || !body.title?.trim()) {
@@ -159,6 +166,9 @@ audioCaptures.post(
     if (body.audience && !AUDIO_CAPTURE_AUDIENCES.includes(body.audience as never)) {
       return c.json({ error: 'Invalid audience' }, 400);
     }
+    if (body.input_mode && !AUDIO_CAPTURE_INPUT_MODES.includes(body.input_mode as never)) {
+      return c.json({ error: 'Invalid input_mode' }, 400);
+    }
 
     const user = getUser(c);
     const capture = await createAudioCapture({
@@ -168,6 +178,7 @@ audioCaptures.post(
       participantsHint: body.participants_hint,
       recordingMode: (body.recording_mode as never) ?? null,
       audience: (body.audience as never) ?? 'unknown',
+      inputMode: (body.input_mode as never) ?? 'audio',
       createdBy: user.id,
     });
 
@@ -253,6 +264,43 @@ audioCaptures.delete(
 );
 
 audioCaptures.post(
+  '/:id/segments/transcript-upload-init',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Capture id is required' }, 400);
+
+    const capture = await getCaptureWithSegments(id, { sync: false });
+    if (!capture) return c.json({ error: 'Capture not found' }, 404);
+    if (capture.input_mode !== 'transcript') {
+      return c.json({ error: 'Capture is not in transcript input mode' }, 400);
+    }
+
+    const denied = await denyUnlessAudioChannelAccess(c, capture.channel_id, 'write');
+    if (denied) return denied;
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const body = await c.req.json<{
+      filename?: string;
+      size_bytes?: number;
+      file_hash?: string;
+    }>();
+
+    try {
+      const result = await initTranscriptSegmentUpload({
+        captureId: id,
+        filename: body.filename ?? '',
+        sizeBytes: Number(body.size_bytes),
+      });
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: formatStorageError(error) }, 400);
+    }
+  },
+);
+
+audioCaptures.post(
   '/:id/segments',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'write'),
   async (c) => {
@@ -271,6 +319,8 @@ audioCaptures.post(
     const contentType = c.req.header('content-type') ?? '';
 
     try {
+      const inputMode = capture.input_mode ?? 'audio';
+
       if (contentType.includes('multipart/form-data')) {
         const form = await c.req.parseBody();
         const file = fileFromFormValue(form.file);
@@ -278,6 +328,20 @@ audioCaptures.post(
         const segmentLabel =
           typeof form.segment_label === 'string' ? form.segment_label : undefined;
         const buffer = Buffer.from(await file.arrayBuffer());
+
+        if (inputMode === 'transcript') {
+          const segment = await createAndAttachTranscriptSegment({
+            channelId: capture.channel_id,
+            captureId: id,
+            filename: file.name,
+            buffer,
+            uploadedBy: user.id,
+            segmentLabel,
+          });
+          const refreshed = await getCaptureWithSegments(id);
+          return c.json({ audio_id: segment.id, capture: refreshed }, 201);
+        }
+
         const audio = await persistSegmentUpload({
           channelId: capture.channel_id,
           captureId: id,
@@ -293,14 +357,39 @@ audioCaptures.post(
 
       const body = await c.req.json<{
         filename: string;
-        file_hash: string;
-        s3_key: string;
-        size_bytes: number;
+        file_hash?: string;
+        s3_key?: string;
+        size_bytes?: number;
         segment_label?: string;
+        upload_id?: string;
+        staging_s3_key?: string;
       }>();
 
+      if (inputMode === 'transcript') {
+        if (!body.upload_id || !body.staging_s3_key || !body.filename) {
+          return c.json({ error: 'upload_id, staging_s3_key, and filename are required' }, 400);
+        }
+        const sizeBytes = Number(body.size_bytes);
+        if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
+          return c.json({ error: 'size_bytes is required' }, 400);
+        }
+
+        const segment = await completeTranscriptSegmentUpload({
+          channelId: capture.channel_id,
+          captureId: id,
+          uploadId: body.upload_id,
+          filename: body.filename,
+          stagingS3Key: body.staging_s3_key,
+          sizeBytes,
+          uploadedBy: user.id,
+          segmentLabel: body.segment_label,
+        });
+        const refreshed = await getCaptureWithSegments(id);
+        return c.json({ audio_id: segment.id, capture: refreshed }, 201);
+      }
+
       const filename = validateAudioFilename(body.filename);
-      const fileHash = validateFileHash(body.file_hash);
+      const fileHash = validateFileHash(body.file_hash ?? '');
       const ext = extensionFromFilename(filename);
       const expectedKey = buildAudioS3Key(fileHash, ext);
       if (body.s3_key !== expectedKey) {

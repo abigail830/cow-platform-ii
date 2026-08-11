@@ -330,6 +330,13 @@
       "when": 1785203000000,
       "tag": "0046_audio_channel_post_process_pipeline",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1785204000000,
+      "tag": "0047_audio_capture_input_mode",
+      "breakpoints": true
     }
   ]
 }

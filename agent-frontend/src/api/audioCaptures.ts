@@ -22,6 +22,7 @@ export type CaptureSegment = {
   file_type: string;
   size_bytes: number;
   status: string;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   pipeline_job: {
@@ -42,6 +43,7 @@ export type AudioCaptureRecord = {
   participants_hint: string | null;
   recording_mode: string | null;
   audience: string;
+  input_mode: 'audio' | 'transcript';
   status: string;
   metadata: Record<string, unknown>;
   segment_count: number;
@@ -70,6 +72,23 @@ export const AUDIENCE_LABELS: Record<string, string> = {
   mixed: 'Mixed',
   unknown: 'Unknown',
 };
+
+export const CAPTURE_INPUT_MODE_LABELS: Record<'audio' | 'transcript', string> = {
+  audio: 'Audio',
+  transcript: 'Transcript',
+};
+
+export function isTranscriptCapture(
+  capture: Pick<AudioCaptureRecord, 'input_mode'>,
+): boolean {
+  return capture.input_mode === 'transcript';
+}
+
+export function isTranscriptSegment(
+  segment: Pick<CaptureSegment, 'metadata'>,
+): boolean {
+  return segment.metadata?.source_kind === 'transcript';
+}
 
 export function isCapturePipelineActive(
   capture: Pick<AudioCaptureRecord, 'status' | 'pipeline_job'>,
@@ -147,8 +166,9 @@ export function captureStatusBadgeClass(status: string): string {
 }
 
 export function segmentNeedsTranscription(
-  segment: Pick<CaptureSegment, 'status' | 'pipeline_job'>,
+  segment: Pick<CaptureSegment, 'status' | 'pipeline_job' | 'metadata'>,
 ): boolean {
+  if (isTranscriptSegment(segment)) return false;
   const status = resolveEffectiveAudioStatus({
     status: segment.status,
     pipeline_job: segment.pipeline_job,
@@ -165,9 +185,10 @@ export function captureCanRunPostProcess(
 }
 
 export function captureAwaitingTranscription(
-  _capture: Pick<AudioCaptureRecord, 'status'>,
+  capture: Pick<AudioCaptureRecord, 'status' | 'input_mode'>,
   segments: CaptureSegment[],
 ): boolean {
+  if (isTranscriptCapture(capture)) return false;
   if (segments.length === 0) return false;
   return segments.some((segment) => segmentNeedsTranscription(segment));
 }
@@ -209,6 +230,7 @@ export async function createAudioCapture(input: {
   participantsHint?: string;
   recordingMode?: string;
   audience?: string;
+  inputMode?: 'audio' | 'transcript';
 }): Promise<AudioCaptureRecord> {
   return authFetch('/api/audio-captures', {
     method: 'POST',
@@ -220,6 +242,7 @@ export async function createAudioCapture(input: {
       participants_hint: input.participantsHint,
       recording_mode: input.recordingMode,
       audience: input.audience,
+      input_mode: input.inputMode ?? 'audio',
     }),
   }) as Promise<AudioCaptureRecord>;
 }
@@ -239,6 +262,63 @@ export async function uploadCaptureSegment(captureId: string, file: File, segmen
   const data = await authFetch(`/api/audio-captures/${captureId}/segments`, {
     method: 'POST',
     body: form,
+  });
+  return (data as { capture: AudioCaptureDetail }).capture;
+}
+
+export async function uploadCaptureTranscriptSegment(
+  captureId: string,
+  file: File,
+  segmentLabel?: string,
+): Promise<AudioCaptureDetail> {
+  const init = (await authFetch(`/api/audio-captures/${captureId}/segments/transcript-upload-init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: file.name,
+      size_bytes: file.size,
+    }),
+  })) as {
+    upload_id: string;
+    staging_s3_key: string;
+    upload_url?: string;
+    skip_upload?: boolean;
+    headers?: Record<string, string>;
+  };
+
+  if (!init.skip_upload) {
+    const uploadUrl = init.upload_url;
+    if (!uploadUrl) throw new Error('Server did not return an upload URL');
+    let putRes: Response;
+    try {
+      putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: init.headers ?? {},
+        body: file,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Direct storage upload failed';
+      throw new Error(
+        message === 'Failed to fetch'
+          ? 'Direct storage upload failed (network/CORS). In Aliyun OSS CORS, allow PUT from your frontend origin.'
+          : message,
+      );
+    }
+    if (!putRes.ok) {
+      throw new Error(`Direct storage upload failed (HTTP ${putRes.status})`);
+    }
+  }
+
+  const data = await authFetch(`/api/audio-captures/${captureId}/segments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: file.name,
+      upload_id: init.upload_id,
+      staging_s3_key: init.staging_s3_key,
+      size_bytes: file.size,
+      segment_label: segmentLabel?.trim() || undefined,
+    }),
   });
   return (data as { capture: AudioCaptureDetail }).capture;
 }
