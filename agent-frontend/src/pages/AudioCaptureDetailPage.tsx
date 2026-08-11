@@ -16,6 +16,7 @@ import {
   formatCaptureStatusLabel,
   getAudioCapture,
   getCaptureArtifact,
+  isCapturePipelineActive,
   reorderCaptureSegments,
   runCapturePipeline,
   segmentNeedsTranscription,
@@ -434,10 +435,13 @@ export function AudioCaptureDetailPage() {
     contextArtifact != null ||
     extractionArtifact != null ||
     Boolean(extractionPreview);
+  const postProcessActive = isCapturePipelineActive(capture) || runningPipeline;
   const awaitingArtifacts =
-    captureExpectsPostProcessArtifacts(capture) && !hasArtifactContent && !postProcessFailed;
-  const showPipelineProgress =
-    capture.status === 'post_processing' || runningPipeline || awaitingArtifacts;
+    captureExpectsPostProcessArtifacts(capture) &&
+    !hasArtifactContent &&
+    !postProcessFailed &&
+    !postProcessActive;
+  const showPipelineStepper = postProcessActive;
 
   function artifactTabAvailable(tab: CaptureArtifactTab): boolean {
     switch (tab) {
@@ -682,11 +686,13 @@ export function AudioCaptureDetailPage() {
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={runningPipeline || !canRunPostProcess || showPipelineProgress}
+                    disabled={runningPipeline || !canRunPostProcess || postProcessActive}
                     title={
                       !canRunPostProcess && awaitingTranscription
                         ? 'Transcribe all segments first'
-                        : undefined
+                        : awaitingArtifacts
+                          ? 'Re-run post-process to regenerate artifacts'
+                          : undefined
                     }
                     onClick={() => void handleRunPipeline()}
                   >
@@ -700,7 +706,7 @@ export function AudioCaptureDetailPage() {
                 </div>
               ) : null}
             </div>
-            {showPipelineProgress ? (
+            {showPipelineStepper ? (
               <div className="capture-extraction-pipeline-row" aria-label="Post-process progress">
                 <CapturePipelineStatus capture={capture} />
               </div>
@@ -740,6 +746,11 @@ export function AudioCaptureDetailPage() {
                     Retry loading artifacts
                   </button>
                 </div>
+              ) : awaitingArtifacts && !loadingArtifacts ? (
+                <p className="document-detail-panel-empty">
+                  Post-process finished but artifacts are missing. Use <strong>Run post-process</strong> to
+                  regenerate them.
+                </p>
               ) : artifactTab === 'summary' ? (
                 extractionPreview ? (
                   <pre
