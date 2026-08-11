@@ -34,6 +34,12 @@ export function extractionS3Key(captureId: string): string {
   return key;
 }
 
+export function summaryS3Key(captureId: string): string {
+  const key = `${captureStoragePrefix(captureId)}summary.md`;
+  validateKey(key);
+  return key;
+}
+
 export type CaptureArtifactName =
   | 'capture'
   | 'structured_transcript'
@@ -66,18 +72,18 @@ const POST_PROCESS_ARTIFACT_KEYS = [
 
 /** True when all three post-process JSON artifacts exist in object storage. */
 export async function capturePostProcessArtifactsExist(captureId: string): Promise<boolean> {
-  for (const keyFn of POST_PROCESS_ARTIFACT_KEYS) {
-    const head = await headStorageObject(keyFn(captureId));
-    if (!head.exists) return false;
-  }
-  return true;
+  const heads = await Promise.all(
+    POST_PROCESS_ARTIFACT_KEYS.map((keyFn) => headStorageObject(keyFn(captureId))),
+  );
+  return heads.every((head) => head.exists);
 }
 
 export type CapturePostProcessArtifactBundle = {
   structured_transcript: unknown | null;
   recording_context: unknown | null;
   extraction: unknown | null;
-  missing: Array<'structured_transcript' | 'recording_context' | 'extraction'>;
+  summary: string | null;
+  missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'>;
 };
 
 function parseStorageJson(text: string | null): unknown | null {
@@ -99,20 +105,23 @@ export async function readCapturePostProcessArtifactBundle(
     extraction: extractionS3Key(captureId),
   } as const;
 
-  const [structuredText, contextText, extractionText] = await Promise.all([
+  const [structuredText, contextText, extractionText, summaryText] = await Promise.all([
     readStorageText(keys.structured_transcript),
     readStorageText(keys.recording_context),
     readStorageText(keys.extraction),
+    readStorageText(summaryS3Key(captureId)),
   ]);
 
   const structured_transcript = parseStorageJson(structuredText);
   const recording_context = parseStorageJson(contextText);
   const extraction = parseStorageJson(extractionText);
+  const summary = summaryText?.trim() ? summaryText : null;
 
   const missing: CapturePostProcessArtifactBundle['missing'] = [];
   if (structured_transcript == null) missing.push('structured_transcript');
   if (recording_context == null) missing.push('recording_context');
   if (extraction == null) missing.push('extraction');
+  if (summary == null) missing.push('summary');
 
-  return { structured_transcript, recording_context, extraction, missing };
+  return { structured_transcript, recording_context, extraction, summary, missing };
 }

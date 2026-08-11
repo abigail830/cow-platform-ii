@@ -424,6 +424,11 @@ audioCaptures.get(
       if (bundle.missing.length === 3) {
         return c.json({ error: 'Post-process artifacts not found in storage' }, 404);
       }
+      const coreMissing = bundle.missing.filter((name) => name !== 'summary');
+      if (coreMissing.length === 0) {
+        const { syncCaptureStatus } = await import('../services/capture-status.ts');
+        void syncCaptureStatus(id);
+      }
       return c.json(bundle);
     } catch (error) {
       return c.json(

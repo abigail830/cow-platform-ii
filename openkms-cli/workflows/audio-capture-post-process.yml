@@ -114,6 +114,32 @@ post_process:
           "open_questions": ["..."]
         }
 
+  synthesize_summary:
+    enabled: true
+    mode: llm
+    llm:
+      system_prompt: |
+        You write a concise meeting summary document in Markdown for internal knowledge.
+        Use the same language as the source material (Chinese or English).
+        Structure: title (#), optional metadata bullets, short executive overview,
+        then ## sections per topic with clear narrative prose (not raw transcript quotes).
+        End with ## Action items and ## Open questions sections when applicable.
+        Do not invent facts beyond the provided extractions.
+      user_prompt_template: |
+        Capture title: {title}
+        Brief: {brief}
+        Participants: {participants_hint}
+        Recording mode: {recording_mode}
+        Audience: {audience}
+
+        Structured extractions (JSON):
+        {extractions_json}
+
+        Topic outlines (JSON):
+        {topics_json}
+
+        Write the full summary.md content only (Markdown, no code fences).
+
   enable_segment_topics: true
   enable_chapters: true
   enable_llm_structure: true

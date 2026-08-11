@@ -259,6 +259,48 @@ def chat_json(
     return _parse_json_object(raw)
 
 
+def chat_text(
+    model_params: dict[str, Any],
+    *,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float,
+) -> str:
+    import requests
+
+    url = _chat_completions_url(str(model_params.get("base_url") or ""))
+    body: dict[str, Any] = {
+        "model": model_params["model_name"],
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature,
+    }
+    if model_params.get("max_completion_tokens"):
+        body["max_completion_tokens"] = int(model_params["max_completion_tokens"])
+    elif model_params.get("max_tokens"):
+        body["max_tokens"] = int(model_params["max_tokens"])
+
+    resp = requests.post(
+        url,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {model_params['api_key']}",
+        },
+        json=body,
+        timeout=180,
+    )
+    if not resp.ok:
+        raise RuntimeError(f"chat {resp.status_code} {resp.text[:300]}")
+    data = resp.json()
+    message = (data.get("choices") or [{}])[0].get("message") or {}
+    raw = _message_text(message)
+    if not raw:
+        raise RuntimeError("LLM returned empty content")
+    return raw
+
+
 def llm_build_topics(
     *,
     turns: list[dict[str, Any]],

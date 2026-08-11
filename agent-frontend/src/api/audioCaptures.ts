@@ -82,7 +82,8 @@ export function isCapturePipelineActive(
       stage === 'submitted' ||
       stage === 'structuring' ||
       stage === 'classifying' ||
-      stage === 'extracting');
+      stage === 'extracting' ||
+      stage === 'synthesizing');
   if (postProcessActive) return true;
   if (capture.status === 'transcribing') return true;
   if (!segments?.length) return false;
@@ -261,13 +262,15 @@ export async function getCapturePostProcessArtifacts(captureId: string): Promise
   structured_transcript: unknown | null;
   recording_context: unknown | null;
   extraction: unknown | null;
-  missing: Array<'structured_transcript' | 'recording_context' | 'extraction'>;
+  summary: string | null;
+  missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'>;
 }> {
   return authFetch(`/api/audio-captures/${captureId}/post-process-artifacts`) as Promise<{
     structured_transcript: unknown | null;
     recording_context: unknown | null;
     extraction: unknown | null;
-    missing: Array<'structured_transcript' | 'recording_context' | 'extraction'>;
+    summary: string | null;
+    missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'>;
   }>;
 }
 

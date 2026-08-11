@@ -99,6 +99,27 @@ Return JSON only:
   "open_questions": ["..."]
 }}"""
 
+DEFAULT_SYNTHESIZE_LLM_SYSTEM = """You write a concise meeting summary document in Markdown for internal knowledge.
+Use the same language as the source material (Chinese or English).
+Structure: title (#), optional metadata bullets, short executive overview,
+then ## sections per topic with clear narrative prose (not raw transcript quotes).
+End with ## Action items and ## Open questions sections when applicable.
+Do not invent facts beyond the provided extractions."""
+
+DEFAULT_SYNTHESIZE_LLM_USER = """Capture title: {title}
+Brief: {brief}
+Participants: {participants_hint}
+Recording mode: {recording_mode}
+Audience: {audience}
+
+Structured extractions (JSON):
+{extractions_json}
+
+Topic outlines (JSON):
+{topics_json}
+
+Write the full summary.md content only (Markdown, no code fences)."""
+
 DEFAULTS: dict[str, Any] = {
     "enable_merge_turns": True,
     "segment_topics": {
@@ -143,6 +164,14 @@ DEFAULTS: dict[str, Any] = {
             "user_prompt_template": DEFAULT_EXTRACT_LLM_USER,
         },
     },
+    "synthesize_summary": {
+        "enabled": True,
+        "mode": "llm",
+        "llm": {
+            "system_prompt": DEFAULT_SYNTHESIZE_LLM_SYSTEM,
+            "user_prompt_template": DEFAULT_SYNTHESIZE_LLM_USER,
+        },
+    },
 }
 
 
@@ -165,7 +194,7 @@ def _coerce_post_process(raw: dict[str, Any]) -> dict[str, Any]:
     if "enable_chapters" in raw:
         merged["chapters"]["enabled"] = bool(raw.get("enable_chapters"))
     if raw.get("enable_llm_structure") is True:
-        for step in ("segment_topics", "classify", "extract"):
+        for step in ("segment_topics", "classify", "extract", "synthesize_summary"):
             if step in merged and isinstance(merged[step], dict):
                 if str(merged[step].get("mode") or "llm") == "rules":
                     merged[step]["mode"] = "llm"

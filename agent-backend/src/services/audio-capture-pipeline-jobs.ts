@@ -12,6 +12,7 @@ import {
   structuredTranscriptS3Key,
   recordingContextS3Key,
   extractionS3Key,
+  summaryS3Key,
 } from '../storage/audio-capture-files.ts';
 import { transcriptS3Key, asrResultS3Key } from '../storage/audio-files.ts';
 import { snapshotConfigYaml } from './audio-pipeline-jobs.ts';
@@ -52,6 +53,7 @@ export type CapturePipelineJobContext = {
     structured_transcript: string;
     recording_context: string;
     extraction: string;
+    summary: string;
   };
 };
 
@@ -202,6 +204,7 @@ export async function buildCapturePipelineJobContext(
       structured_transcript: structuredTranscriptS3Key(capture.id),
       recording_context: recordingContextS3Key(capture.id),
       extraction: extractionS3Key(capture.id),
+      summary: summaryS3Key(capture.id),
     },
   };
 }

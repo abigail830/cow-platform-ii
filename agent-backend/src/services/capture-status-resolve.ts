@@ -7,7 +7,13 @@ export type CaptureStatusSegment = {
   pipeline_job?: { stage: string } | null;
 };
 
-const POST_PROCESS_ACTIVE_STAGES = new Set(['submitted', 'structuring', 'classifying', 'extracting']);
+const POST_PROCESS_ACTIVE_STAGES = new Set([
+  'submitted',
+  'structuring',
+  'classifying',
+  'extracting',
+  'synthesizing',
+]);
 
 export function segmentAsrState(segment: CaptureStatusSegment): SegmentAsrState {
   const jobStage = segment.pipeline_job?.stage;

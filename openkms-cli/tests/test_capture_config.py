@@ -7,6 +7,7 @@ def test_resolve_post_process_config_defaults_to_llm():
     assert cfg["segment_topics"]["mode"] == "llm"
     assert cfg["classify"]["mode"] == "llm"
     assert cfg["extract"]["mode"] == "llm"
+    assert cfg["synthesize_summary"]["mode"] == "llm"
 
 
 def test_resolve_post_process_config_merges_defaults():

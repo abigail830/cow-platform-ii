@@ -1,4 +1,4 @@
-"""Capture post-process pipeline: merge → structure → classify → extract."""
+"""Capture post-process pipeline: merge → structure → classify → extract → synthesize."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from openkms_cli.pipeline.capture_structure import (
     llm_classify_capture,
     llm_extract_knowledge,
 )
+from openkms_cli.pipeline.capture_summarize import synthesize_summary
 from openkms_cli.pipeline.storage import get_s3_client
 
 console = Console(stderr=True)
@@ -57,6 +58,22 @@ def _put_json(s3_client: Any, bucket: str, key: str, payload: dict[str, Any]) ->
     )
 
 
+def _put_text(
+    s3_client: Any,
+    bucket: str,
+    key: str,
+    text: str,
+    *,
+    content_type: str = "text/markdown; charset=utf-8",
+) -> None:
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=text.encode("utf-8"),
+        ContentType=content_type,
+    )
+
+
 def _step_mode(step_cfg: dict[str, Any]) -> str:
     return str(step_cfg.get("mode") or "rules").strip().lower()
 
@@ -66,13 +83,35 @@ def _needs_llm(pp_cfg: dict[str, Any]) -> bool:
         step = pp_cfg.get(step_key)
         if isinstance(step, dict) and _step_mode(step) == "llm":
             return True
+    synth = pp_cfg.get("synthesize_summary")
+    if isinstance(synth, dict) and synth.get("enabled", True):
+        mode = str(synth.get("mode") or "llm").strip().lower()
+        if mode == "llm":
+            return True
     return False
 
 
-def _artifact_keys_present(s3_client: Any, bucket: str, artifact_keys: dict[str, str]) -> bool:
-    for key in artifact_keys.values():
-        if not key:
-            return False
+def _synthesize_enabled(pp_cfg: dict[str, Any]) -> bool:
+    synth = pp_cfg.get("synthesize_summary")
+    if not isinstance(synth, dict):
+        return True
+    return bool(synth.get("enabled", True))
+
+
+def _required_artifact_keys(artifact_keys: dict[str, str], pp_cfg: dict[str, Any]) -> dict[str, str]:
+    keys = {key: value for key, value in artifact_keys.items() if value}
+    if not _synthesize_enabled(pp_cfg):
+        keys.pop("summary", None)
+    return keys
+
+
+def _artifact_keys_present(
+    s3_client: Any,
+    bucket: str,
+    artifact_keys: dict[str, str],
+    pp_cfg: dict[str, Any],
+) -> bool:
+    for key in _required_artifact_keys(artifact_keys, pp_cfg).values():
         try:
             s3_client.head_object(Bucket=bucket, Key=key)
         except Exception:
@@ -93,6 +132,9 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
     stage = str(ctx.get("stage") or "")
     artifact_keys = ctx.get("artifact_keys") or {}
     bucket = str(ctx.get("bucket") or "")
+    workflow = _load_workflow(ctx)
+    pp_cfg = resolve_post_process_config(workflow)
+    temperature = workflow_temperature(workflow)
 
     if stage == "done":
         if bucket and artifact_keys and _artifact_keys_present(
@@ -104,6 +146,7 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
             ),
             bucket,
             artifact_keys,
+            pp_cfg,
         ):
             console.print(f"[dim]Capture job {job_id} already done[/dim]")
             return
@@ -137,14 +180,13 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
         cfg.aws_region,
     )
 
-    workflow = _load_workflow(ctx)
-    pp_cfg = resolve_post_process_config(workflow)
-    temperature = workflow_temperature(workflow)
-
     segment_cfg = pp_cfg.get("segment_topics") if isinstance(pp_cfg.get("segment_topics"), dict) else {}
     chapters_cfg = pp_cfg.get("chapters") if isinstance(pp_cfg.get("chapters"), dict) else {}
     classify_cfg = pp_cfg.get("classify") if isinstance(pp_cfg.get("classify"), dict) else {}
     extract_cfg = pp_cfg.get("extract") if isinstance(pp_cfg.get("extract"), dict) else {}
+    synthesize_cfg = (
+        pp_cfg.get("synthesize_summary") if isinstance(pp_cfg.get("synthesize_summary"), dict) else {}
+    )
 
     llm_model = None
     if _needs_llm(pp_cfg) or workflow_llm_model_name(workflow):
@@ -204,6 +246,9 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
                 "chapters": _step_mode(chapters_cfg),
                 "classify": _step_mode(classify_cfg),
                 "extract": _step_mode(extract_cfg),
+                "synthesize_summary": str(synthesize_cfg.get("mode") or "llm")
+                if _synthesize_enabled(pp_cfg)
+                else "disabled",
             },
         }
         if llm_model:
@@ -270,6 +315,22 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
             )
 
         _put_json(client, bucket, artifact_keys["extraction"], extraction)
+
+        if _synthesize_enabled(pp_cfg):
+            patch_capture_job(api, job_id, stage="synthesizing")
+            summary_key = artifact_keys.get("summary")
+            if not summary_key:
+                raise RuntimeError("artifact_keys.summary is required when synthesize_summary is enabled")
+            summary_md = synthesize_summary(
+                capture=capture,
+                recording_context=recording_context,
+                extraction=extraction,
+                structured_topics=topics,
+                synthesize_cfg=synthesize_cfg,
+                model_params=llm_model,
+                temperature=temperature,
+            )
+            _put_text(client, bucket, summary_key, summary_md)
 
         patch_capture_job(api, job_id, stage="done")
         console.print(f"[green]Capture job {job_id} done — artifacts uploaded[/green]")

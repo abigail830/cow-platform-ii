@@ -8,10 +8,11 @@ const POST_PROCESS_STEPS = [
   { key: 'structuring', label: 'Structure' },
   { key: 'classifying', label: 'Classify' },
   { key: 'extracting', label: 'Extract' },
+  { key: 'synthesizing', label: 'Summarize' },
   { key: 'done', label: 'Done' },
 ] as const;
 
-const ACTIVE_STAGES = new Set(['submitted', 'structuring', 'classifying', 'extracting']);
+const ACTIVE_STAGES = new Set(['submitted', 'structuring', 'classifying', 'extracting', 'synthesizing']);
 
 type CaptureJob = NonNullable<AudioCaptureRecord['pipeline_job']>;
 
@@ -24,8 +25,10 @@ function pipelineStageProgressIndex(stage: string): number {
       return 1;
     case 'extracting':
       return 2;
-    case 'done':
+    case 'synthesizing':
       return 3;
+    case 'done':
+      return 4;
     default:
       return -1;
   }
@@ -34,6 +37,7 @@ function pipelineStageProgressIndex(stage: string): number {
 function inferFailedStepIndex(job: CaptureJob): number {
   const message = (job.error_message ?? '').toLowerCase();
   if (message.includes('extract')) return 2;
+  if (message.includes('synth') || message.includes('summar')) return 3;
   if (message.includes('classif')) return 1;
   if (message.includes('structur') || message.includes('segment') || message.includes('merge')) return 0;
   if (message.includes('github actions worker failed')) return 2;

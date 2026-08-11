@@ -56,8 +56,7 @@ export async function syncCaptureStatus(captureId: string): Promise<AudioCapture
         `[capture-status] could not verify post-process artifacts for ${captureId}:`,
         error instanceof Error ? error.message : error,
       );
-      // Storage unreachable or misconfigured — do not keep a stale "done" badge.
-      nextStatus = 'ready';
+      // Keep the current DB status when storage is temporarily unreachable.
     }
   }
 

@@ -325,6 +325,7 @@ export const CAPTURE_PIPELINE_JOB_STAGES = [
   'structuring',
   'classifying',
   'extracting',
+  'synthesizing',
   'done',
   'failed',
 ] as const;
