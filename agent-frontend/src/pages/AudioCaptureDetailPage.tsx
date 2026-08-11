@@ -76,6 +76,14 @@ const CAPTURE_ARTIFACT_TABS: Array<{ id: CaptureArtifactTab; label: string }> = 
 const ARTIFACT_POLL_MAX_AFTER_FINISH = 12;
 const ARTIFACT_POLL_INTERVAL_MS = 2000;
 
+function formatArtifactLoadError(err: unknown): string {
+  const message = err instanceof Error ? err.message : 'Failed to load artifacts';
+  if (/ETIMEDOUT|ECONNRESET|ENOTFOUND|timeout|timed out|socket hang up/i.test(message)) {
+    return 'Object storage connection timed out. Check OSS/network settings and retry.';
+  }
+  return message;
+}
+
 function formatExtractionPreview(
   extraction: ExtractionArtifact,
   context?: RecordingContextArtifact | null,
@@ -258,7 +266,7 @@ export function AudioCaptureDetailPage() {
         return loadedCount;
       } catch (err) {
         if (!options?.deferErrors) {
-          setArtifactLoadError(err instanceof Error ? err.message : 'Failed to load artifacts');
+          setArtifactLoadError(formatArtifactLoadError(err));
         }
         return 0;
       } finally {
@@ -269,53 +277,25 @@ export function AudioCaptureDetailPage() {
   );
 
   useEffect(() => {
+    void loadCapture({ sync: false });
+  }, [loadCapture]);
+
+  useEffect(() => {
     if (!captureId) return;
 
     let cancelled = false;
-    setLoading(true);
-    setError('');
-
-    void (async () => {
-      const [captureResult, artifactResult] = await Promise.allSettled([
-        getAudioCapture(captureId, { sync: false }),
-        getCapturePostProcessArtifacts(captureId),
-      ]);
-
-      if (cancelled) return;
-
-      if (captureResult.status === 'fulfilled') {
-        setCapture(captureResult.value);
-        setSelectedChannelId(captureResult.value.channel_id);
-      } else {
-        const reason = captureResult.reason;
-        setError(reason instanceof Error ? reason.message : 'Failed to load capture');
-        setCapture(null);
-      }
-
-      if (artifactResult.status === 'fulfilled') {
-        applyArtifactBundle(artifactResult.value);
-      } else if (captureResult.status === 'fulfilled') {
-        const jobStage = captureResult.value.pipeline_job?.stage;
-        if (jobStage === 'done' || captureResult.value.status === 'done') {
-          setArtifactLoadError('Post-process artifacts not found in storage');
-        }
-      }
-
-      setLoading(false);
-
-      void getAudioCapture(captureId, { sync: true })
-        .then((data) => {
-          if (!cancelled) setCapture(data);
-        })
-        .catch(() => {
-          // Keep the fast capture payload when background sync fails.
-        });
-    })();
+    void getAudioCapture(captureId, { sync: true })
+      .then((data) => {
+        if (!cancelled) setCapture(data);
+      })
+      .catch(() => {
+        // Keep the fast capture payload when background status sync fails.
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [applyArtifactBundle, captureId, setSelectedChannelId]);
+  }, [captureId]);
 
   useEffect(() => {
     artifactPollAttemptsRef.current = 0;
@@ -572,12 +552,19 @@ export function AudioCaptureDetailPage() {
 
   if (loading && !capture) {
     return (
-      <div className="document-detail-page audio-detail-page audio-detail-page--initial-loading">
-        <Link to="/knowledge/audio" className="document-detail-back">
-          <ArrowLeft {...iconProps({ size: 16 })} aria-hidden />
-          Back to captures
-        </Link>
-        <PanelLoading label="Loading capture…" />
+      <div className="document-detail-page audio-detail-page">
+        <div className="document-detail-toolbar">
+          <Link to="/knowledge/audio" className="document-detail-back">
+            <ArrowLeft {...iconProps({ size: 16 })} aria-hidden />
+            Back to captures
+          </Link>
+        </div>
+        <div className="audio-detail-initial-loading-body">
+          <p className="document-detail-loading" role="status" aria-live="polite">
+            <Loader2 {...iconProps({ size: 18, className: 'document-detail-loading-icon' })} aria-hidden />
+            Loading capture…
+          </p>
+        </div>
       </div>
     );
   }

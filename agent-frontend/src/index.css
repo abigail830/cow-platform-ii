@@ -4489,12 +4489,12 @@ select:focus-visible {
   overflow: auto;
 }
 
-.audio-detail-page--initial-loading {
+.audio-detail-initial-loading-body {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
-  flex: 1;
-  min-height: 0;
+  min-height: 12rem;
 }
 
 .audio-detail-panel-loading {

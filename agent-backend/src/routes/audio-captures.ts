@@ -431,9 +431,17 @@ audioCaptures.get(
       }
       return c.json(bundle);
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load artifacts';
+      const storageTimeout = /ETIMEDOUT|ECONNRESET|ENOTFOUND|timeout|timed out|socket hang up/i.test(
+        message,
+      );
       return c.json(
-        { error: error instanceof Error ? error.message : 'Failed to load artifacts' },
-        500,
+        {
+          error: storageTimeout
+            ? 'Object storage connection timed out'
+            : message,
+        },
+        storageTimeout ? 503 : 500,
       );
     }
   },
