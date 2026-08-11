@@ -74,16 +74,17 @@ export function isCapturePipelineActive(
   capture: Pick<AudioCaptureRecord, 'status' | 'pipeline_job'>,
   segments?: CaptureSegment[],
 ): boolean {
-  if (capture.status === 'transcribing' || capture.status === 'post_processing') return true;
   const stage = capture.pipeline_job?.stage;
-  if (
-    stage === 'submitted' ||
-    stage === 'structuring' ||
-    stage === 'classifying' ||
-    stage === 'extracting'
-  ) {
-    return true;
-  }
+  const postProcessActive =
+    stage !== 'failed' &&
+    stage !== 'done' &&
+    (capture.status === 'post_processing' ||
+      stage === 'submitted' ||
+      stage === 'structuring' ||
+      stage === 'classifying' ||
+      stage === 'extracting');
+  if (postProcessActive) return true;
+  if (capture.status === 'transcribing') return true;
   if (!segments?.length) return false;
   return segments.some((segment) => {
     const jobStage = segment.pipeline_job?.stage;
@@ -93,6 +94,20 @@ export function isCapturePipelineActive(
       jobStage === 'transcribing'
     );
   });
+}
+
+export function isCapturePostProcessFailed(
+  capture: Pick<AudioCaptureRecord, 'status' | 'pipeline_job'>,
+): boolean {
+  return capture.status === 'failed' || capture.pipeline_job?.stage === 'failed';
+}
+
+export const GENERIC_CAPTURE_GHA_FAILURE_MESSAGE =
+  'GitHub Actions worker failed before capture post-process completed';
+
+export function displayCapturePipelineError(message: string | null | undefined): string | null {
+  const trimmed = message?.trim();
+  return trimmed ? trimmed : null;
 }
 
 export function formatCaptureStatusLabel(status: string): string {
@@ -144,7 +159,7 @@ export function captureCanRunPostProcess(
 ): boolean {
   if (!capture.segments.length) return false;
   if (capture.status === 'post_processing' || capture.status === 'transcribing') return false;
-  return capture.status === 'ready' || capture.status === 'done';
+  return capture.status === 'ready' || capture.status === 'done' || capture.status === 'failed';
 }
 
 export function captureAwaitingTranscription(

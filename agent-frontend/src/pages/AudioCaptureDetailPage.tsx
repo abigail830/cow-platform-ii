@@ -17,6 +17,7 @@ import {
   getAudioCapture,
   getCaptureArtifact,
   isCapturePipelineActive,
+  isCapturePostProcessFailed,
   reorderCaptureSegments,
   runCapturePipeline,
   segmentNeedsTranscription,
@@ -280,7 +281,7 @@ export function AudioCaptureDetailPage() {
 
   useEffect(() => {
     if (!capture || !captureExpectsPostProcessArtifacts(capture)) return;
-    if (isCapturePipelineActive(capture) || runningPipeline) return;
+    if (isCapturePostProcessFailed(capture) || isCapturePipelineActive(capture) || runningPipeline) return;
     void loadArtifacts({ silent: true });
   }, [capture?.status, capture?.pipeline_job?.stage, capture, loadArtifacts, runningPipeline]);
 
@@ -295,6 +296,8 @@ export function AudioCaptureDetailPage() {
     const shouldRetryArtifacts =
       postProcessFinished &&
       !postProcessActiveNow &&
+      jobStage !== 'failed' &&
+      capture.status !== 'failed' &&
       !allArtifactsLoaded &&
       artifactPollAttemptsRef.current < 20;
 
@@ -465,23 +468,23 @@ export function AudioCaptureDetailPage() {
   );
   const awaitingTranscription = captureAwaitingTranscription(capture, capture.segments);
   const canRunPostProcess = captureCanRunPostProcess(capture);
-  const postProcessFailed =
-    capture.pipeline_job?.stage === 'failed' && Boolean(capture.pipeline_job.error_message);
+  const postProcessFailed = isCapturePostProcessFailed(capture);
   const hasArtifactContent =
     structuredArtifact != null ||
     contextArtifact != null ||
     extractionArtifact != null ||
     Boolean(extractionPreview);
+  const showArtifactData = hasArtifactContent && !postProcessFailed;
   const postProcessActive = isCapturePipelineActive(capture) || runningPipeline;
   const awaitingArtifacts =
     captureExpectsPostProcessArtifacts(capture) &&
-    !hasArtifactContent &&
+    !showArtifactData &&
     !postProcessFailed &&
     !postProcessActive;
-  const showPipelineStepper = postProcessActive;
+  const showPipelineStepper = postProcessActive || postProcessFailed;
 
   function artifactTabAvailable(tab: CaptureArtifactTab): boolean {
-    if (postProcessActive) return false;
+    if (postProcessActive || postProcessFailed || !showArtifactData) return false;
     switch (tab) {
       case 'structured_transcript':
         return structuredArtifact != null;
@@ -499,7 +502,8 @@ export function AudioCaptureDetailPage() {
   const showArtifactWorkspace =
     captureExpectsPostProcessArtifacts(capture) ||
     runningPipeline ||
-    hasArtifactContent;
+    showArtifactData ||
+    postProcessFailed;
 
   return (
     <div className="document-detail-page audio-detail-page">
@@ -518,13 +522,6 @@ export function AudioCaptureDetailPage() {
       </div>
 
       {error && <p className="error inline">{error}</p>}
-
-      {postProcessFailed ? (
-        <div className="audio-pipeline-failure-banner" role="alert">
-          <strong>Post-process failed</strong>
-          <p>{capture.pipeline_job?.error_message}</p>
-        </div>
-      ) : null}
 
       <div className="audio-detail-layout">
         <CaptureDetailsPanel
@@ -719,11 +716,6 @@ export function AudioCaptureDetailPage() {
           <div className="document-detail-content-header capture-extraction-header">
             <div className="capture-extraction-header-top">
               <h3 className="document-detail-panel-heading">Extraction preview</h3>
-              {showPipelineStepper ? (
-                <div className="capture-extraction-pipeline-inline" aria-label="Post-process progress">
-                  <CapturePipelineStatus capture={capture} />
-                </div>
-              ) : null}
               {canWriteCapture ? (
                 <div className="document-detail-toolbar-actions">
                   <button
@@ -749,10 +741,15 @@ export function AudioCaptureDetailPage() {
                 </div>
               ) : null}
             </div>
+            {showPipelineStepper ? (
+              <div className="capture-extraction-pipeline-bar" aria-label="Post-process progress">
+                <CapturePipelineStatus capture={capture} errorLayout="inline" />
+              </div>
+            ) : null}
           </div>
           {showArtifactWorkspace ? (
             <>
-              {!postProcessActive ? (
+              {!postProcessActive && !postProcessFailed ? (
                 <div className="capture-artifact-tabs" role="tablist" aria-label="Post-process artifacts">
                   {CAPTURE_ARTIFACT_TABS.map((tab) => {
                     const available = artifactTabAvailable(tab.id);
@@ -777,11 +774,11 @@ export function AudioCaptureDetailPage() {
               ) : null}
               {postProcessActive ? (
                 <PanelLoading label="Post-processing in progress…" />
-              ) : awaitingArtifacts && loadingArtifacts && !hasArtifactContent ? (
+              ) : postProcessFailed ? null : awaitingArtifacts && loadingArtifacts && !showArtifactData ? (
                 <PanelLoading label="Loading post-process artifacts…" />
-              ) : capture.status === 'post_processing' && !hasArtifactContent && !artifactLoadError ? (
+              ) : capture.status === 'post_processing' && !showArtifactData && !artifactLoadError ? (
                 <PanelLoading label="Post-processing in progress…" />
-              ) : artifactLoadError && !hasArtifactContent ? (
+              ) : artifactLoadError && !showArtifactData ? (
                 <div className="document-detail-panel-empty">
                   <p className="error inline">{artifactLoadError}</p>
                   <button type="button" className="btn-secondary" onClick={() => void loadArtifacts()}>
@@ -794,7 +791,7 @@ export function AudioCaptureDetailPage() {
                   regenerate them.
                 </p>
               ) : artifactTab === 'summary' ? (
-                extractionPreview ? (
+                extractionPreview && showArtifactData ? (
                   <pre
                     className="document-json-preview capture-extraction-preview capture-artifact-preview-scroll"
                     onWheel={handleArtifactPreviewWheel}
