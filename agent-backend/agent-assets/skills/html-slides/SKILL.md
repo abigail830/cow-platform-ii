@@ -85,6 +85,7 @@ Theme references and brand PNGs live in the sandbox (preinstalled in Content Stu
 - Use **only** class names defined in the reference Part 1–2 blocks you copied.
 - Do not invent semantic classes (`eyebrow`, `stat-card`, …) unless you add matching CSS in the same `<style>`.
 - All CSS must be **inlined** — published HTML has no sibling assets.
+- **Brand `<img>`:** use `object-fit: contain`, native `aspect-ratio` from the reference, and **only one** of `width` / `height` as fixed — never stretch PNGs.
 
 ## reveal.js quick reference
 

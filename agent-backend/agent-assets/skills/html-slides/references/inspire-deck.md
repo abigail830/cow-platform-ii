@@ -99,6 +99,7 @@ Copy Part 1 into every deliverable; pick slide patterns from Part 2 — do not i
 .reveal .slides section img.inspire-logo,
 .reveal .slides section img.inspire-corner-cover {
   margin: 0; border: none; box-shadow: none; background: transparent;
+  object-fit: contain; /* never stretch — set width OR height, not both fixed */
 }
 .reveal h1, .reveal h2 { font-weight: 600; color: var(--starry); text-transform: none; }
 .reveal h3, .reveal h4 { font-weight: 500; color: var(--starry); }
@@ -137,8 +138,8 @@ Preinstalled in Content Studio at:
 
 | File | Slide | Placement |
 |------|-------|-----------|
-| `inspire_logo_white.png` | **Cover / dark separator** | Top-left logo (`INSPIRE AI`) |
-| `inspire_right_bottom_cover.png` | **Cover / dark separator** | Bottom-right corner graphic — bleeds off right/bottom edge |
+| `inspire_logo_white.png` | **Cover / dark separator** | Top-left — **466×145** native ratio (`aspect-ratio: 466/145`), ~180px wide |
+| `inspire_right_bottom_cover.png` | **Cover / dark separator** | Bottom-right bleed — **629×662** native ratio (`aspect-ratio: 629/662`) |
 
 **Embed workflow** — use a small Node build script (same pattern as Ascentium §5) with placeholders `__INSPIRE_LOGO__` / `__INSPIRE_CORNER__`. Inspire PNGs are small enough for one-liners if preferred:
 
@@ -169,8 +170,11 @@ Starry Blues (`--starry`) full-bleed dark slide matching brand deck cover: **whi
   position: absolute;
   top: 44px;
   left: var(--slide-px);
-  width: 196px;
+  width: 180px;
   height: auto;
+  aspect-ratio: 466 / 145;
+  object-fit: contain;
+  object-position: left top;
   pointer-events: none;
   z-index: 2;
 }
@@ -178,8 +182,11 @@ Starry Blues (`--starry`) full-bleed dark slide matching brand deck cover: **whi
   position: absolute;
   right: -8px;
   bottom: -12px;
-  width: min(44vw, 380px);
+  width: min(36vw, 320px);
   height: auto;
+  aspect-ratio: 629 / 662;
+  object-fit: contain;
+  object-position: right bottom;
   pointer-events: none;
   z-index: 0;
 }

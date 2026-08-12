@@ -109,6 +109,7 @@ Use variables — **never hardcode hex in pattern CSS** except inside `:root`.
 .reveal .slides section img.brand-corner-content,
 .reveal .slides section img.brand-logo {
   margin: 0; border: none; box-shadow: none; background: transparent;
+  object-fit: contain; /* never stretch brand PNGs */
 }
 .reveal h1, .reveal h2, .reveal h3 {
   font-weight: 600;
@@ -134,14 +135,21 @@ Use variables — **never hardcode hex in pattern CSS** except inside `:root`.
 .emphasis { font-weight: 500; }
 
 /* === Brand chrome (cover + content slides) — include when using §5 assets === */
+/* Content corner bottom ≈ slide-title baseline (kicker + title block). Logo ~⅔ prior width. */
 .reveal .slides section.s-branded { padding-bottom: calc(var(--slide-py) + 56px); }
 .reveal .slides section.s-branded .brand-corner-content {
   position: absolute; top: 0; right: 0;
-  width: 172px; height: auto; pointer-events: none; z-index: 0;
+  width: 120px; height: auto;
+  aspect-ratio: 1 / 1; /* asc_content_right-top-corner.png is 458×458 */
+  object-fit: contain; object-position: top right;
+  pointer-events: none; z-index: 0;
 }
 .reveal .slides section.s-branded .brand-logo {
   position: absolute; left: var(--slide-px); bottom: 28px;
-  width: 140px; height: auto; pointer-events: none; z-index: 2;
+  width: 93px; height: auto;
+  aspect-ratio: 512 / 78; /* asc_logo_black.png */
+  object-fit: contain;
+  pointer-events: none; z-index: 2;
 }
 .reveal .slides section.s-branded > :not(.brand-corner-content):not(.brand-logo) {
   position: relative; z-index: 1;
@@ -159,8 +167,8 @@ Preinstalled in Content Studio at:
 | File | Slide | Placement |
 |------|-------|-----------|
 | `asc_cover_right_top_corner.png` | **Cover** | Top-right, **inset** (~48px top, 64px right) — large corner mark (~250 KB, pre-optimized) |
-| `asc_content_right-top-corner.png` | **Content** | Top-right, **flush** to slide edge — small orange corner |
-| `asc_logo_black.png` | White / light slides | Bottom-left logo |
+| `asc_content_right-top-corner.png` | **Content** | Top-right **flush** — **120×120px** max (square); bottom aligns with slide-title row |
+| `asc_logo_black.png` | White / light slides | Bottom-left logo — **~93px** wide (⅔ prior), `aspect-ratio: 512/78` |
 | `asc_logo_white.png` | Orange or midnight-green cover | Bottom-left logo |
 
 **Do not** pipe large PNGs through `node -e` into the terminal — stdout truncates and base64 will be incomplete. Use a **build script** instead:

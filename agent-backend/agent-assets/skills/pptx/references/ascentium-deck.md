@@ -26,8 +26,9 @@ Source: *Brand Guidelines Full Version R1.10 (Nov 2025)*.
 | `PAD.x` | 0.5 |
 | `PAD.y` | 0.375 |
 | Body max Y (above logo) | ~4.85 |
-| Content logo | `y: 5.15`, `w: 1.09`, `h: 0.17` |
-| Cover logo | `y: 5.05`, `w: 1.31`, `h: 0.20` |
+| Content corner | flush top-right `x:8.9, y:0, w:1.1, h:1.1` (square; bottom ≈ title row) |
+| Content logo | `x:0.5, y:5.15, w:0.73, h:0.111` (⅔ prior; 512×78 ratio) |
+| Cover logo | `y:5.05, w:0.87, h:0.133` (⅔ prior cover size) |
 
 ### 3. Palette (`ASCENTIUM`)
 
@@ -89,12 +90,14 @@ const TABLE_OPTS = { fontSize: 14, color: ASCENTIUM.mg4, margin: 0 }; // no font
 
 ### 5. Brand assets & chrome rules
 
-| File | Use | Placement |
-|------|-----|-----------|
-| `asc_cover_right_top_corner.png` | Cover only | Inset top-right `x:6.55, y:0.375, w:2.97` |
-| `asc_content_right-top-corner.png` | Every **content** slide | Flush top-right `x:8.66, y:0, w:1.34` |
-| `asc_logo_black.png` | White / light slides | Bottom-left on content slides |
-| `asc_logo_white.png` | Orange / midnight **cover** | Bottom-left on cover |
+| File | Use | Placement (inches, LAYOUT_16x9) |
+|------|-----|--------------------------------|
+| `asc_cover_right_top_corner.png` | Cover only | Inset top-right `x:6.55, y:0.375, w:2.97, h:2.96` (760×757) |
+| `asc_content_right-top-corner.png` | Every **content** slide | Flush top-right `x:8.9, y:0, w:1.1, h:1.1` (458×458; bottom ≈ title) |
+| `asc_logo_black.png` | White / light slides | Bottom-left `x:PAD.x, y:5.15, w:0.73, h:0.111` (512×78) |
+| `asc_logo_white.png` | Orange / midnight **cover** | Bottom-left `x:PAD.x, y:5.05, w:0.87, h:0.133` |
+
+**Aspect ratio rule:** always set `w` and `h` from the PNG pixel ratio — never reuse another logo’s ratio. Or use `sizing: { type: 'contain', w, h }` per **`pptxgenjs.md` § Images**.
 
 **Chrome rule:** content slides → small corner + black logo. Cover → large corner + logo (black on white cover, white on orange/midnight).
 
@@ -108,16 +111,16 @@ function asset(file) {
 }
 
 function addCoverChrome(slide, { whiteLogo = false } = {}) {
-  slide.addImage({ path: asset('asc_cover_right_top_corner.png'), x: 6.55, y: 0.375, w: 2.97, h: 2.97 });
+  slide.addImage({ path: asset('asc_cover_right_top_corner.png'), x: 6.55, y: 0.375, w: 2.97, h: 2.96 });
   slide.addImage({
     path: asset(whiteLogo ? 'asc_logo_white.png' : 'asc_logo_black.png'),
-    x: PAD.x, y: 5.05, w: 1.31, h: 0.2,
+    x: PAD.x, y: 5.05, w: 0.87, h: 0.133,
   });
 }
 
 function addContentChrome(slide) {
-  slide.addImage({ path: asset('asc_content_right-top-corner.png'), x: 8.66, y: 0, w: 1.34, h: 1.34 });
-  slide.addImage({ path: asset('asc_logo_black.png'), x: PAD.x, y: 5.15, w: 1.09, h: 0.17 });
+  slide.addImage({ path: asset('asc_content_right-top-corner.png'), x: 8.9, y: 0, w: 1.1, h: 1.1 });
+  slide.addImage({ path: asset('asc_logo_black.png'), x: PAD.x, y: 5.15, w: 0.73, h: 0.111 });
 }
 
 function addKicker(slide, text, y = PAD.y) {

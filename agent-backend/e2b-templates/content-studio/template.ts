@@ -12,7 +12,7 @@ export const CONTENT_STUDIO_TEMPLATE_NAME =
   process.env.E2B_CONTENT_STUDIO_TEMPLATE?.trim() || 'okf-content-studio';
 
 export const CONTENT_STUDIO_TEMPLATE_TAG =
-  process.env.E2B_CONTENT_STUDIO_TEMPLATE_TAG?.trim() || '1.13';
+  process.env.E2B_CONTENT_STUDIO_TEMPLATE_TAG?.trim() || '1.14';
 
 export function defineContentStudioTemplate(options?: { fileContextPath?: string }) {
   const builder = options?.fileContextPath

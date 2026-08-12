@@ -222,6 +222,19 @@ slide.addImage({
 ### Calculate Dimensions (preserve aspect ratio)
 
 ```javascript
+// Brand PNGs — derive h from w using native pixel ratio (never guess h)
+const logoW = 1.45;
+slide.addImage({ path: 'inspire_logo_white.png', x: 0.5, y: 0.35, w: logoW, h: logoW * (145 / 466) });
+
+// Or use contain sizing inside a bounding box
+slide.addImage({
+  path: 'asc_logo_black.png',
+  x: 0.5, y: 5.15,
+  sizing: { type: 'contain', w: 0.73, h: 0.2 },
+});
+```
+
+```javascript
 const origWidth = 1978, origHeight = 923, maxHeight = 3.0;
 const calcWidth = maxHeight * (origWidth / origHeight);
 const centerX = (10 - calcWidth) / 2;
@@ -479,6 +492,8 @@ slide.addChart("bar", chartData, {
 11. **Strictly positive `w` and `h` (inches) on every `addText` / `addShape` / `addTable` / `addImage`** — OOXML requires **non-negative** extents in EMU. A **negative or zero `h`** on a text box (e.g. `slideH - y` miscalc) becomes **`cy < 0`** in the package → PowerPoint **repair** / **online preview failure**. Use **literal positive** dimensions; if you derive height from “remaining slide”, **clamp** to at least **~0.25″** and ensure **`y + h ≤ 7.5`** (slide height). Exception: a **`"line"`** shape may use **`h: 0`**; do **not** use **`h: 0`** for body **`addText`**.
 
 12. **CJK + `fontFace` on tables** — Latin-only or missing fonts (Poppins, Arial, Georgia, MiSans if not installed) on `addTable` / cell `options` → Chinese **□** in cells. Omit `fontFace` in table cells or use a theme `fontCjk` / widely installed CJK face on every cell.
+
+13. **Brand PNG aspect ratio** — `addImage` with wrong `w:h` **stretches** the asset (common on Inspire logo/corner). Compute `h = w * (imgHeight / imgWidth)` from the PNG’s pixel dimensions, or use `sizing: { type: 'contain', w, h }`. HTML: `width` + `height: auto` + `object-fit: contain` — never fix both width and height unless the ratio matches.
 
 ---
 

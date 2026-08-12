@@ -73,10 +73,12 @@ const TABLE_OPTS = { fontSize: 14, color: INSPIRE.text, margin: 0 }; // no fontF
 
 ### 4. Brand assets & chrome rules
 
-| File | Use | Placement |
-|------|-----|-----------|
-| `inspire_logo_white.png` | Cover / dark separator | Top-left `x:PAD.x, y:0.35, w:1.53` |
-| `inspire_right_bottom_cover.png` | Cover / dark separator | Bottom-right bleed `x:7.2, y:3.6, w:3.2` |
+| File | Use | Placement (inches; native PNG ratio) |
+|------|-----|--------------------------------------|
+| `inspire_logo_white.png` | Cover / dark separator | Top-left `x:PAD.x, y:0.35, w:1.45, h:0.451` (466×145) |
+| `inspire_right_bottom_cover.png` | Cover / dark separator | Bottom-right bleed `x:7.05, y:2.52, w:2.95, h:3.11` (629×662) |
+
+**Aspect ratio rule:** Inspire logo is **not** the same ratio as Ascentium — never copy `w/h` from another theme. Corner is ~square (629×662), not wide landscape.
 
 **Chrome rule:** dark cover/chapter → both PNGs + footer. Light content slides → **footer text only** (no corner PNG).
 
@@ -90,8 +92,16 @@ function asset(file) {
 }
 
 function addDarkCoverChrome(slide) {
-  slide.addImage({ path: asset('inspire_logo_white.png'), x: PAD.x, y: 0.35, w: 1.53, h: 0.25 });
-  slide.addImage({ path: asset('inspire_right_bottom_cover.png'), x: 7.2, y: 3.6, w: 3.2, h: 2.2 });
+  const logoW = 1.45;
+  const cornerW = 2.95;
+  slide.addImage({ path: asset('inspire_logo_white.png'), x: PAD.x, y: 0.35, w: logoW, h: logoW * (145 / 466) });
+  slide.addImage({
+    path: asset('inspire_right_bottom_cover.png'),
+    x: 10 - cornerW + 0.05,
+    y: 5.625 - cornerW * (662 / 629) + 0.12,
+    w: cornerW,
+    h: cornerW * (662 / 629),
+  });
 }
 
 function addInspireFooter(slide) {
