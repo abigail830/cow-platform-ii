@@ -24,7 +24,7 @@ test('local session file upload list read search and delete', async () => {
   try {
     const record = await uploadSessionFile({
       instanceId,
-      agentName: 'kb-qa',
+      agentName: 'content-studio',
       filename: 'report.csv',
       bytes: Buffer.from('region,Q2\nAPAC,42\nEMEA,17', 'utf8'),
     });

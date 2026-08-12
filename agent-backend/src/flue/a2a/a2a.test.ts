@@ -34,13 +34,14 @@ describe('buildAgentCardForSpec', () => {
 
 describe('buildAgentA2aPublicInfo', () => {
   it('exposes channel URLs and configured skills for enabled agents', () => {
-    const spec = loadAgentSpec(join(agentCatalogRoot(), 'kb-qa'));
+    const spec = loadAgentSpec(join(agentCatalogRoot(), 'content-studio'));
     const info = buildAgentA2aPublicInfo(spec);
     assert.ok(info);
-    assert.equal(info.channelName, 'kb-qa-a2a');
-    assert.match(info.endpointUrl, /\/api\/channels\/kb-qa-a2a\/v1\/message:send$/);
-    assert.match(info.agentCardUrl, /\/api\/channels\/kb-qa-a2a\/\.well-known\/agent-card\.json$/);
+    assert.equal(info.channelName, 'content-studio-a2a');
+    assert.match(info.endpointUrl, /\/api\/channels\/content-studio-a2a\/v1\/message:send$/);
+    assert.match(info.agentCardUrl, /\/api\/channels\/content-studio-a2a\/\.well-known\/agent-card\.json$/);
     assert.equal(info.skills.length, spec.a2a!.skills.length);
+    assert.ok(info.skills.length >= 2);
     assert.deepEqual(info.skills[0]?.tags, spec.a2a!.skills[0]!.tags);
   });
 });

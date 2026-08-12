@@ -19,5 +19,6 @@ test('parsePublishArtifactOutput reads downloadUrl from content-array tool outpu
   assert.deepEqual(artifact, {
     downloadUrl: '/api/agents/a/b/attachments/att-1?token=t',
     filename: 'index-20241011-144011-001.html',
+    sizeBytes: 42,
   });
 });

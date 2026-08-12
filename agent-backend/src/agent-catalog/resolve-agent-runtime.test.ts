@@ -23,8 +23,8 @@ test('product-analytics needs per-user runtime cache for datasource MCP', () => 
   assert.notEqual(keyA, keyB);
 });
 
-test('kb-qa uses shared runtime cache', () => {
-  const kb = loadAgentSpec(`${agentCatalogRoot()}/kb-qa`);
-  assert.equal(agentRuntimeNeedsUserScope(kb), false);
-  assert.equal(agentRuntimeCacheKey(kb), 'kb-qa::shared');
+test('content-studio uses shared runtime cache', () => {
+  const studio = loadAgentSpec(`${agentCatalogRoot()}/content-studio`);
+  assert.equal(agentRuntimeNeedsUserScope(studio), false);
+  assert.equal(agentRuntimeCacheKey(studio), 'content-studio::shared');
 });

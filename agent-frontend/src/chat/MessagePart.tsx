@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import type { FlueConversationPart } from '@flue/react';
 import { Markdown } from './Markdown.tsx';
+import { PublishArtifactCard } from './PublishArtifactCard.tsx';
 import { usePublishedArtifacts } from './published-artifacts-context.ts';
 import { rewritePublishedArtifactMarkdownLinks } from './published-artifacts.ts';
 import { isPartStreaming, partBodyText, partFoldLabel } from './part-labels.ts';
@@ -88,6 +89,9 @@ function MessagePartView({ part }: { part: FlueConversationPart }) {
 
     case 'dynamic-tool': {
       const tool = part as DynamicToolPart;
+      if (tool.toolName === 'publish_artifact') {
+        return <PublishArtifactCard tool={tool} />;
+      }
       return (
         <FoldBlock label={partFoldLabel(part)} streaming={streaming}>
           <StreamingPre text={partBodyText(tool)} streaming={streaming} />

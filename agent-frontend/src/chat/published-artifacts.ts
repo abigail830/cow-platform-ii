@@ -5,6 +5,7 @@ import { normalizeToolPayload } from './tool-payload.ts';
 export type PublishedArtifact = {
   filename: string;
   downloadUrl: string;
+  sizeBytes?: number;
 };
 
 type DynamicToolPart = Extract<
@@ -71,7 +72,9 @@ export function parsePublishArtifactOutput(output: unknown): PublishedArtifact |
       ? record.filename.trim()
       : basenameFromHref(downloadUrl) || 'artifact';
 
-  return { filename, downloadUrl };
+  const sizeBytes = typeof record.size === 'number' && Number.isFinite(record.size) ? record.size : undefined;
+
+  return { filename, downloadUrl, ...(sizeBytes !== undefined ? { sizeBytes } : {}) };
 }
 
 function toolHasPublishOutput(tool: DynamicToolPart): boolean {
@@ -143,6 +146,28 @@ export function looksLikeBareFilename(href: string): boolean {
   return /\.[a-z0-9]{2,8}$/i.test(trimmed);
 }
 
+/** Agent sometimes links to SPA root or bare filenames instead of publish_artifact downloadUrl. */
+export function isBrokenPublishArtifactHref(href: string): boolean {
+  const trimmed = href.trim();
+  if (!trimmed) return true;
+  if (looksLikeBareFilename(trimmed)) return true;
+  if (isAgentAttachmentDownloadHref(trimmed)) return false;
+
+  if (trimmed === '/' || trimmed === './') return true;
+
+  try {
+    const parsed = /^https?:\/\//i.test(trimmed)
+      ? new URL(trimmed)
+      : new URL(trimmed, 'http://local');
+    if (parsed.pathname === '/' && !parsed.search.includes('token=')) return true;
+    if (parsed.pathname.includes('/attachments/')) return false;
+    if (parsed.pathname.startsWith('/api/')) return false;
+    return /^https?:\/\//i.test(trimmed);
+  } catch {
+    return false;
+  }
+}
+
 function filenameKey(name: string): string {
   try {
     return decodeURIComponent(name.trim());
@@ -172,6 +197,7 @@ export function buildArtifactHrefResolver(artifacts: PublishedArtifact[]): (href
     }
 
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      if (isBrokenPublishArtifactHref(trimmed) && soleArtifactUrl) return soleArtifactUrl;
       return normalizeAttachmentDownloadUrl(trimmed);
     }
 
@@ -190,6 +216,7 @@ export function buildArtifactHrefResolver(artifacts: PublishedArtifact[]): (href
     if (resolved) return resolved;
 
     if (looksLikeBareFilename(trimmed) && soleArtifactUrl) return soleArtifactUrl;
+    if (isBrokenPublishArtifactHref(trimmed) && soleArtifactUrl) return soleArtifactUrl;
 
     return href;
   };

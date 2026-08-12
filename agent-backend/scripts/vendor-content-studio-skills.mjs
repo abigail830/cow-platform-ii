@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Vendor pptx + docx from anthropics/skills into the content-studio agent catalog.
- * html-slides is maintained in-repo (Ascentium/Inspire brand themes) — not vendored.
+ * html-slides is maintained in-repo (references/ascentium-deck.md, inspire-deck.md) — not vendored.
  */
 import { execSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';

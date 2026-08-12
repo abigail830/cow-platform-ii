@@ -13,6 +13,9 @@ import {
   partRenderKey,
 } from '../chat/groupMessages.ts';
 import { MessagePart } from '../chat/MessagePart.tsx';
+import { extractPublishedArtifacts, buildArtifactHrefResolver } from '../chat/published-artifacts.ts';
+import { PublishedArtifactsContext } from '../chat/published-artifacts-context.ts';
+import { ChatLinkResolveContext } from '../chat/chat-link-resolve-context.ts';
 import { AssistantMessageBubble, UserMessageBubble } from '../components/ChatMessageBubble.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -167,6 +170,16 @@ export function SessionExplorerPage() {
   const detailRows = useMemo(
     () => groupConsecutiveMessages(detailMessages),
     [detailMessages],
+  );
+
+  const detailPublishedArtifacts = useMemo(
+    () => extractPublishedArtifacts(detailMessages),
+    [detailMessages],
+  );
+
+  const detailResolveLinkHref = useMemo(
+    () => buildArtifactHrefResolver(detailPublishedArtifacts),
+    [detailPublishedArtifacts],
   );
 
   const selectedSession = useMemo(
@@ -365,8 +378,10 @@ export function SessionExplorerPage() {
                 {detailLoading ? (
                   <LoadingState label="Loading conversation…" />
                 ) : (
-                  <div className="chat-column">
-                    {detailRows.map((row) => {
+                  <ChatLinkResolveContext.Provider value={detailResolveLinkHref}>
+                  <PublishedArtifactsContext.Provider value={detailPublishedArtifacts}>
+                    <div className="chat-column">
+                      {detailRows.map((row) => {
                       if (row.kind === 'user') {
                         return <UserMessageBubble key={row.message.id} message={row.message} />;
                       }
@@ -382,8 +397,10 @@ export function SessionExplorerPage() {
                           ))}
                         </AssistantMessageBubble>
                       );
-                    })}
-                  </div>
+                      })}
+                    </div>
+                  </PublishedArtifactsContext.Provider>
+                  </ChatLinkResolveContext.Provider>
                 )}
               </div>
             </aside>

@@ -3,8 +3,14 @@ import { useMemo, type ReactNode } from 'react';
 import { getCachedPromptImagePreviews } from '../chat/prompt-image-preview-cache.ts';
 import { isImageMediaType } from '../chat/prompt-images.ts';
 import { parseSessionFilesManifest, stripSessionFilesManifest } from '../chat/session-files.ts';
+import { ChatLinkResolveContext, useChatLinkResolve } from '../chat/chat-link-resolve-context.ts';
+import { usePublishedArtifacts } from '../chat/published-artifacts-context.ts';
 import { assistantMessageText, userMessageText } from '../chat/groupMessages.ts';
-import { normalizeAttachmentDownloadUrl } from '../chat/published-artifacts.ts';
+import {
+  buildArtifactHrefResolver,
+  extractPublishedArtifacts,
+  normalizeAttachmentDownloadUrl,
+} from '../chat/published-artifacts.ts';
 import { ChatImageChip } from './ChatImageChip.tsx';
 import { SessionFileChip } from './SessionFileChip.tsx';
 import { MessageCopyButton } from './MessageCopyButton.tsx';
@@ -91,11 +97,24 @@ export function AssistantMessageBubble({
   showCopy = true,
 }: AssistantMessageBubbleProps) {
   const text = assistantMessageText(messages);
+  const parentResolveLinkHref = useChatLinkResolve();
+  const contextArtifacts = usePublishedArtifacts();
+  const resolveLinkHref = useMemo(() => {
+    const rowArtifacts = extractPublishedArtifacts(messages);
+    const artifacts = contextArtifacts.length > 0 ? contextArtifacts : rowArtifacts;
+    const artifactResolver = buildArtifactHrefResolver(artifacts);
+    return (href: string, label?: string) => {
+      const resolved = artifactResolver(href, label);
+      return parentResolveLinkHref ? parentResolveLinkHref(resolved, label) : resolved;
+    };
+  }, [messages, contextArtifacts, parentResolveLinkHref]);
 
   return (
-    <div className="message-stack assistant">
-      <div className="message assistant">{children}</div>
-      {showCopy ? <MessageCopyButton text={text} /> : null}
-    </div>
+    <ChatLinkResolveContext.Provider value={resolveLinkHref}>
+      <div className="message-stack assistant">
+        <div className="message assistant">{children}</div>
+        {showCopy ? <MessageCopyButton text={text} /> : null}
+      </div>
+    </ChatLinkResolveContext.Provider>
   );
 }

@@ -1,12 +1,17 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { useChatLinkResolve } from './chat-link-resolve-context.ts';
+import { usePublishedArtifacts } from './published-artifacts-context.ts';
 import { useSourcePreviewHost } from './source-preview-host.tsx';
 import { isExternalHttpUrl, parseSourcePreviewHref } from '../shared/source-preview-href.ts';
-import { isAgentAttachmentDownloadHref, looksLikeBareFilename } from './published-artifacts.ts';
+import {
+  buildArtifactHrefResolver,
+  isAgentAttachmentDownloadHref,
+  looksLikeBareFilename,
+} from './published-artifacts.ts';
 import { slugifyHeading } from '../components/PageIndexTree.tsx';
 
 type MarkdownProps = {
@@ -180,6 +185,22 @@ function buildMarkdownComponents(
 export function Markdown({ children, content, headingIds = false }: MarkdownProps) {
   const source = content ?? children ?? '';
   const resolveLinkHref = useChatLinkResolve();
+  const publishedArtifacts = usePublishedArtifacts();
+  const artifactFallback = useMemo(
+    () => buildArtifactHrefResolver(publishedArtifacts),
+    [publishedArtifacts],
+  );
+  const effectiveResolveLinkHref = useMemo(() => {
+    return (href: string, label?: string) => {
+      const fromContext = resolveLinkHref ? resolveLinkHref(href, label) : href;
+      if (fromContext !== href) return fromContext;
+      if (looksLikeBareFilename(href) || href.includes('/attachments/')) {
+        const fallback = artifactFallback(href, label);
+        if (fallback !== href) return fallback;
+      }
+      return fromContext;
+    };
+  }, [resolveLinkHref, artifactFallback]);
   const previewHost = useSourcePreviewHost();
   const openSourcePreview = previewHost?.open;
 
@@ -188,7 +209,7 @@ export function Markdown({ children, content, headingIds = false }: MarkdownProp
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={headingIds ? [rehypeRaw] : []}
-        components={buildMarkdownComponents(headingIds, resolveLinkHref, openSourcePreview)}
+        components={buildMarkdownComponents(headingIds, effectiveResolveLinkHref, openSourcePreview)}
       >
         {source}
       </ReactMarkdown>

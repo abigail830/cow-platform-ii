@@ -1627,10 +1627,80 @@ textarea {
   100% {
     opacity: 1;
   }
-
   50% {
     opacity: 0;
   }
+}
+
+.publish-artifact-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 22rem;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid #e8ecf1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.publish-artifact-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  background: #fff4ed;
+  color: var(--brand-orange);
+}
+
+.publish-artifact-card-loading .publish-artifact-card-icon {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.publish-artifact-card-error .publish-artifact-card-icon {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.publish-artifact-card-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.publish-artifact-card-title {
+  margin: 0;
+  font-family: var(--font-chat-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.publish-artifact-card-meta {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-chat-sans);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.publish-artifact-card-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  padding: 0.4rem 0.75rem;
+}
+
+.publish-artifact-card-error .publish-artifact-card-meta {
+  color: #b91c1c;
 }
 
 .chat-broken-link {

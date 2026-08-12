@@ -6,6 +6,17 @@ import { resolveCatalogPath } from './paths.ts';
 import type { LoadedAgentSpec } from './schema.ts';
 
 const SKILL_FILE = 'SKILL.md';
+/** Sandbox-only binaries (E2B copy); skip UTF-8 packaging in defineSkill. */
+const PACKAGED_SKILL_SKIP_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.ico',
+  '.woff',
+  '.woff2',
+]);
 const SENSITIVE_NAMES = new Set([
   '.env',
   '.env.local',
@@ -39,6 +50,8 @@ function collectSkillFiles(skillDir: string): Record<string, string> {
       }
       const rel = relative(skillDir, full).replace(/\\/g, '/');
       if (rel === SKILL_FILE || SENSITIVE_NAMES.has(name)) continue;
+      const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
+      if (PACKAGED_SKILL_SKIP_EXTENSIONS.has(ext)) continue;
       files[rel] = readFileSync(full, 'utf-8');
     }
   };

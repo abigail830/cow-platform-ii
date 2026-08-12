@@ -12,7 +12,7 @@ export const CONTENT_STUDIO_TEMPLATE_NAME =
   process.env.E2B_CONTENT_STUDIO_TEMPLATE?.trim() || 'okf-content-studio';
 
 export const CONTENT_STUDIO_TEMPLATE_TAG =
-  process.env.E2B_CONTENT_STUDIO_TEMPLATE_TAG?.trim() || '1.2';
+  process.env.E2B_CONTENT_STUDIO_TEMPLATE_TAG?.trim() || '1.9';
 
 export function defineContentStudioTemplate(options?: { fileContextPath?: string }) {
   const builder = options?.fileContextPath
@@ -46,7 +46,7 @@ export function defineContentStudioTemplate(options?: { fileContextPath?: string
         user: 'root',
       })
       .npmInstall(['pptxgenjs', 'docx', 'react', 'react-dom', 'react-icons', 'sharp'], { g: true })
-      .runCmd('mkdir -p /home/user/content-studio/skills/docx /home/user/content-studio/skills/pptx', {
+      .runCmd('mkdir -p /home/user/content-studio/skills/docx /home/user/content-studio/skills/pptx /home/user/content-studio/skills/html-slides', {
         user: 'user',
       })
       .runCmd(
@@ -60,6 +60,14 @@ export function defineContentStudioTemplate(options?: { fileContextPath?: string
       .copy(
         'agent-assets/skills/pptx/scripts',
         '/home/user/content-studio/skills/pptx/scripts',
+      )
+      .copy(
+        'agent-assets/skills/html-slides/references',
+        '/home/user/content-studio/skills/html-slides/references',
+      )
+      .copy(
+        'agent-assets/skills/html-slides/assets',
+        '/home/user/content-studio/skills/html-slides/assets',
       )
       .setWorkdir('/home/user')
   );

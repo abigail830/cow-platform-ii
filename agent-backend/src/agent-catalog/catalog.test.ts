@@ -16,17 +16,19 @@ test('discovers platform agents under agent-assets/agents', () => {
 });
 
 test('shared skill paths resolve from backend root', () => {
-  const agentDir = `${agentCatalogRoot()}/kb-qa`;
+  const agentDir = `${agentCatalogRoot()}/content-studio`;
   const skillPath = resolveCatalogPath('/agent-assets/skills/kb-qa', agentDir);
   assert.ok(skillPath.includes('agent-assets/skills/kb-qa'));
   assert.ok(skillPath.startsWith(agentAssetsRoot().replace(/\/$/, '')) || skillPath.includes('agent-assets'));
 });
 
-test('kb-qa and content-studio prompts load', () => {
-  const kb = loadAgentSpec(`${agentCatalogRoot()}/kb-qa`);
-  assert.match(kb.instructions, /knowledge|search|answer/i);
+test('content-studio prompt covers knowledge Q&A and content generation', () => {
   const studio = loadAgentSpec(`${agentCatalogRoot()}/content-studio`);
+  assert.match(studio.instructions, /knowledge|search|answer/i);
   assert.match(studio.instructions, /document|slide|powerpoint|word/i);
+  assert.ok(studio.skills.some((s) => s.includes('kb-qa')));
+  assert.ok(studio.skills.some((s) => s.includes('docx')));
+  assert.equal(studio.mcp.length, 2);
 });
 
 test('product-analytics prompt and datasource binding load', () => {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildArtifactHrefResolver,
   isAgentAttachmentDownloadHref,
+  isBrokenPublishArtifactHref,
   rewritePublishedArtifactMarkdownLinks,
 } from './published-artifacts.ts';
 
@@ -37,6 +38,15 @@ test('buildArtifactHrefResolver uses sole artifact for any bare filename', () =>
     { filename: 'deck.html', downloadUrl: attachmentPath },
   ]);
   assert.equal(resolve('anything.html'), attachmentPath);
+});
+
+test('buildArtifactHrefResolver maps SPA root links to sole publish_artifact URL', () => {
+  const attachmentPath = '/api/agents/a/b/attachments/only?token=x';
+  const resolve = buildArtifactHrefResolver([
+    { filename: 'deck.html', downloadUrl: attachmentPath },
+  ]);
+  assert.equal(resolve('http://127.0.0.1:5180/'), attachmentPath);
+  assert.equal(resolve('/'), attachmentPath);
 });
 
 test('rewritePublishedArtifactMarkdownLinks rewrites markdown file links to attachment URLs', () => {

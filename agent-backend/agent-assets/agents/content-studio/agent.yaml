@@ -1,26 +1,48 @@
 id: content-studio
 displayName: Content Studio
-description: Generate Word documents, PowerPoint decks, and HTML reveal.js presentations.
+description: Answer questions from knowledge bases (with web search when needed) and generate Word documents, PowerPoint decks, and HTML reveal.js presentations.
 icon: Presentation
 
 model:
   # configName: gpt-5.4
-  configName: deepSeek-V4-Flash
+  # configName: deepSeek-V4-Flash
+  configName: deepSeek-V4-Flash-thinking
   profile: glm-4.7-flash
 
 prompt: ./prompt.md
 
 skills:
+  - /agent-assets/skills/kb-qa
   - /agent-assets/skills/html-slides
   - /agent-assets/skills/pptx
   - /agent-assets/skills/docx
 
-mcp: []
+mcp:
+  - name: hybrid-search
+    urlEnv: HYBRID_SEARCH_MCP_URL
+    transport: streamable-http
+    headersEnv:
+      Authorization: HYBRID_SEARCH_MCP_API_KEY
+    useAgentRequestHeaders: true
+    allowTools:
+      - mcp__hybrid-search__list_knowledge_bases
+      - mcp__hybrid-search__hybrid_search
+  - name: zhipu-web-search
+    urlEnv: ZHIPU_WEB_SEARCH_MCP_URL
+    transport: streamable-http
+    headersEnv:
+      Authorization: ZHIPU_API_KEY
+    allowTools:
+      - mcp__zhipu-web-search__web_search_prime
 
 sandbox:
   provider: e2b
-  templateId: okf-content-studio:1.2
+  templateId: okf-content-studio:1.9
   cwd: /home/user/content-studio
+
+context:
+  temporal: true
+  timezone: Asia/Shanghai
 
 access:
   defaultForRoles:
@@ -41,3 +63,13 @@ a2a:
       examples:
         - Create a 10-slide investor pitch deck as PPTX.
         - Generate a Word proposal document from these bullet points.
+    - id: kb-qa
+      name: Knowledge Q&A
+      description: Answer questions using hybrid search over accessible knowledge bases, with web search when needed.
+      tags:
+        - product:kb-qa
+        - retrieval:hybrid-search
+        - retrieval:web-search
+      examples:
+        - What does our documentation say about deployment?
+        - Search the FAQ knowledge base for refund policy.

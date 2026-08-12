@@ -10,7 +10,7 @@ import { OPENKMS_API_KEY_HEADER } from './openkms-headers.ts';
 describe('openkms-instance-env', () => {
   it('stores api key per instance for later submissions', () => {
     resetOpenKmsInstanceEnvForTests();
-    const request = new Request('https://app.example/agents/kb-qa/user--conv', {
+    const request = new Request('https://app.example/agents/content-studio/user--conv', {
       headers: { [OPENKMS_API_KEY_HEADER]: 'okf_test_instance_key_1234567890' },
     });
     rememberOpenKmsApiKeyForInstance('user--conv', request);
