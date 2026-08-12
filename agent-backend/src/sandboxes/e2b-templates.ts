@@ -7,7 +7,7 @@ export const E2B_PLATFORM_TEMPLATES = {
 export type E2bPlatformTemplateId =
   (typeof E2B_PLATFORM_TEMPLATES)[keyof typeof E2B_PLATFORM_TEMPLATES];
 
-const DEFAULT_CONTENT_STUDIO_TAG = '1.11';
+const DEFAULT_CONTENT_STUDIO_TAG = '1.13';
 
 export function readContentStudioTemplateAlias(): string {
   return process.env.E2B_CONTENT_STUDIO_TEMPLATE?.trim() || E2B_PLATFORM_TEMPLATES.contentStudio;
@@ -24,7 +24,7 @@ export function contentStudioTemplateRef(): string {
 
 /**
  * E2B resolves bare aliases to tag `default`. Our templates are published with an explicit tag
- * (default `1.11`), so bare ids like `okf-content-studio` must be expanded before Sandbox.create.
+ * (default `1.13`), so bare ids like `okf-content-studio` must be expanded before Sandbox.create.
  */
 export function resolveE2bTemplateRef(templateId: string): string {
   const id = templateId.trim();

@@ -306,7 +306,9 @@ slide.background = { data: "image/png;base64,iVBORw0KGgo..." };
 
 ## Tables
 
-**CJK in tables:** avoid `fontFace: "Poppins"` (or other Latin-only fonts) in cells — Chinese may render as □. Either omit `fontFace` in cells (let PowerPoint fall back) or use one CJK-capable face for the whole table (e.g. `"Noto Sans SC"`, `"Microsoft YaHei"`).
+**CJK in tables:** avoid Latin-only or rarely-installed `fontFace` in cells — Chinese may render as □. Examples: **Poppins**, **Arial**, **Georgia**; **MiSans** when the viewer lacks that font. Either omit `fontFace` in cells (let PowerPoint fall back) or use a widely installed CJK face (e.g. `"Microsoft YaHei"`, `"PingFang SC"`, `"Noto Sans SC"`).
+
+**Why only tables break:** pptxgenjs applies `fontFace` to **latin + ea + cs** in the same run. Missing glyphs (Poppins, Georgia, or MiSans not installed) → **□** in `addTable` cells; `addText` on the same slide may still look fine due to viewer substitution.
 
 **Dense slides:** many `addTable` + `addText` siblings on one slide can cause duplicate OOXML ids — split heavy pages or merge side notes into one text frame.
 
@@ -475,6 +477,8 @@ slide.addChart("bar", chartData, {
    ```
 
 11. **Strictly positive `w` and `h` (inches) on every `addText` / `addShape` / `addTable` / `addImage`** — OOXML requires **non-negative** extents in EMU. A **negative or zero `h`** on a text box (e.g. `slideH - y` miscalc) becomes **`cy < 0`** in the package → PowerPoint **repair** / **online preview failure**. Use **literal positive** dimensions; if you derive height from “remaining slide”, **clamp** to at least **~0.25″** and ensure **`y + h ≤ 7.5`** (slide height). Exception: a **`"line"`** shape may use **`h: 0`**; do **not** use **`h: 0`** for body **`addText`**.
+
+12. **CJK + `fontFace` on tables** — Latin-only or missing fonts (Poppins, Arial, Georgia, MiSans if not installed) on `addTable` / cell `options` → Chinese **□** in cells. Omit `fontFace` in table cells or use a theme `fontCjk` / widely installed CJK face on every cell.
 
 ---
 

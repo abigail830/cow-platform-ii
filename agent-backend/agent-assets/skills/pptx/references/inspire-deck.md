@@ -37,6 +37,7 @@ const INSPIRE = {
   fontHeadline: 'MiSans',
   fontBody: 'MiSans',
   fontChapter: 'Georgia',
+  fontCjk: 'Microsoft YaHei', // tables / Chinese when fontFace required; omit in cells if possible
 };
 
 const PAD = { x: 0.5, y: 0.375 };
@@ -57,7 +58,18 @@ Creative Blue ≈ **5–10%** of slide area — subtitles, footer, CTAs only.
 | Body | MiSans | 14–16 | `333333` |
 | Footer | MiSans | 10–11 | `34B3E4` |
 
-Fallback: MiSans → PingFang SC → Microsoft YaHei → Arial.
+Viewer fallback (not automatic in pptxgenjs): MiSans → PingFang SC → Microsoft YaHei → Arial.
+
+**CJK / tables (critical):**
+
+- **MiSans** supports Chinese when installed, but many viewers **do not** have it — same **□ in table cells** as Poppins when `fontFace: INSPIRE.fontBody` is set on `addTable`.
+- **Georgia** (`fontChapter`) is **Latin-only** — never use in table cells with Chinese.
+- **Tables:** omit `fontFace` in every cell (safest) or use `fontCjk` below on all cells. Do **not** copy `fontHeadline` / `fontBody` / `fontChapter` into table options.
+
+```javascript
+const INSPIRE_TABLE_FONT = 'Microsoft YaHei'; // widely available CJK; or omit fontFace entirely
+const TABLE_OPTS = { fontSize: 14, color: INSPIRE.text, margin: 0 }; // no fontFace — preferred
+```
 
 ### 4. Brand assets & chrome rules
 
@@ -108,6 +120,7 @@ function addSlideTitle(slide, text, y) {
     color: INSPIRE.starryBlues, margin: 0,
   });
 }
+```
 
 ### 6. Design constraints
 
@@ -151,6 +164,28 @@ Four `'roundRect'` cards using auxiliary palette tints (`amethys`, `myrtleGreen`
 
 ---
 
+### `data-table`
+
+Dark header (`starryBlues` fill, white text). Syntax → **`pptxgenjs.md` § Tables**.
+
+**CJK:** use `TABLE_OPTS` (no `fontFace`) or `fontFace: INSPIRE.fontCjk` on every cell — never MiSans or Georgia in table cells.
+
+```javascript
+slide.addTable([
+  [
+    { text: '维度', options: { bold: true, color: INSPIRE.white, fill: { color: INSPIRE.starryBlues } } },
+    { text: '说明', options: { bold: true, color: INSPIRE.white, fill: { color: INSPIRE.starryBlues } } },
+  ],
+  [
+    { text: '示例行', options: TABLE_OPTS },
+    { text: '单元格内容', options: TABLE_OPTS },
+  ],
+], { x: PAD.x, y: 1.35, w: 8.8, colW: [3, 5.8], ...TABLE_OPTS });
+addInspireFooter(slide);
+```
+
+---
+
 ### `contact-close`
 
 `starryBlues` + cover chrome. Georgia title, blue subtitle, contact name/email. Footer.
@@ -166,6 +201,7 @@ Four `'roundRect'` cards using auxiliary palette tints (`amethys`, `myrtleGreen`
 | `section-bullets` | Footer | Standard content |
 | `metric-highlight` | Footer | Big number |
 | `aux-cards` | Footer | 4-column cards |
+| `data-table` | Footer | Dark header table |
 | `contact-close` | Full dark chrome | Closing slide |
 
 Charts: `INSPIRE.chartColors` — **`pptxgenjs.md` § Charts**.

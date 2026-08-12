@@ -68,7 +68,24 @@ const ASSETS = '/home/user/content-studio/skills/pptx/assets/ascentium';
 | Subtitle | 15 | 400 | `575B5B` |
 | Footnote | 11–12 | 400 | `878A8A` |
 
-≤4 bullets per slide. Mixed CJK: `fontCjk` for body; tables — see **`pptxgenjs.md` § Tables**.
+≤4 bullets per slide.
+
+**CJK / mixed Chinese (critical):**
+
+- `fontTitle` / `fontBody` = **Poppins** — Latin brand face; **no CJK glyphs**.
+- `fontCjk` = **Noto Sans SC** — use for slide copy that includes Chinese (titles, bullets, labels).
+- **Tables:** **never** set `fontFace: ASCENTIUM.fontBody` or `fontTitle` on `addTable` or in cell `options` — pptxgenjs writes that face to **East Asian (`ea`) runs too**, so Chinese becomes **□**. Either **omit `fontFace` in every cell** (safest) or set `fontFace: ASCENTIUM.fontCjk` on all cells.
+- Viewers may still substitute missing glyphs in plain `addText` boxes but **not** in table cells — that is why only the comparison table breaks while titles/bullets look fine.
+
+```javascript
+const HAS_CJK = /[\u4e00-\u9fff\u3400-\u4dbf]/;
+function fontFor(text) {
+  return HAS_CJK.test(text) ? ASCENTIUM.fontCjk : ASCENTIUM.fontBody;
+}
+// Chinese deck: addSlideTitle(slide, t, y) → fontFace: fontFor(t)
+// Tables: use TABLE_OPTS below — no Poppins anywhere
+const TABLE_OPTS = { fontSize: 14, color: ASCENTIUM.mg4, margin: 0 }; // no fontFace
+```
 
 ### 5. Brand assets & chrome rules
 
@@ -226,14 +243,20 @@ Two `'roundRect'` cards — bad (`FFF5F5` / `FECACA` / `errorRed`) vs good (`F0F
 
 Dark header row (`midnightGreen` fill, white text). Table cell syntax → **`pptxgenjs.md` § Tables**.
 
+**CJK:** header/body cells must **not** use Poppins — use `TABLE_OPTS` (no `fontFace`) or `fontFace: ASCENTIUM.fontCjk` on every cell.
+
 ```javascript
-table.addTable([
+slide.addTable([
   [
     { text: '材料', options: { bold: true, color: ASCENTIUM.white, fill: { color: ASCENTIUM.midnightGreen } } },
     { text: '负责方', options: { bold: true, color: ASCENTIUM.white, fill: { color: ASCENTIUM.midnightGreen } } },
   ],
-  ['审计报告', '财务部'],
-], { x: PAD.x, y: 1.35, w: 8.8, colW: [4, 4.8], fontSize: 14, color: ASCENTIUM.mg4, margin: 0 });
+  [
+    { text: '审计报告', options: TABLE_OPTS },
+    { text: '财务部', options: TABLE_OPTS },
+  ],
+], { x: PAD.x, y: 1.35, w: 8.8, colW: [4, 4.8], ...TABLE_OPTS });
+// ❌ never: fontFace: ASCENTIUM.fontBody on table or cells
 ```
 
 ---

@@ -46,7 +46,7 @@ First build can take several minutes (LibreOffice is large).
 ```yaml
 sandbox:
   provider: e2b
-  templateId: okf-content-studio:1.11   # alias:tag — bare alias also resolves via platform default tag
+  templateId: okf-content-studio:1.13   # alias:tag — bare alias also resolves via platform default tag
   cwd: /home/user/content-studio
 ```
 
@@ -71,6 +71,10 @@ pandoc --version
 3. Re-run the build script.
 4. Update `agent.yaml`, `sandbox/e2b-content-studio.yaml`, and `src/sandboxes/e2b-templates.ts` default tag to match.
 5. Redeploy backend — no code change needed if alias name unchanged.
+
+**1.13** — Inspire `data-table` + CJK table rules (`inspire-deck.md`); MiSans/Georgia table pitfalls in `pptxgenjs.md`.
+
+**1.12** — pptx CJK/table font rules in `ascentium-deck.md` + `pptxgenjs.md` (no Poppins in table cells).
 
 **1.11** — pptx references refresh: `pptxgenjs.md` (API) + brand deck docs split from html-slides.
 
