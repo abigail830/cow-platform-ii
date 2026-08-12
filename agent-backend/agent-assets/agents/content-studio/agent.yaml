@@ -37,7 +37,7 @@ mcp:
 
 sandbox:
   provider: e2b
-  templateId: okf-content-studio:1.9
+  templateId: okf-content-studio:1.11
   cwd: /home/user/content-studio
 
 context:

@@ -108,7 +108,7 @@ Produce polished deliverables in the right format via the matching skill.
 
 1. **Pick one primary skill** per request. If format is unspecified, ask briefly (docx vs pptx vs HTML) in the user's language unless context makes it obvious.
 2. **Activate the matching skill** before format-specific work. Follow that skill's procedures.
-3. **Skill assets use two namespaces** — platform skill store vs sandbox workspace mirror. Each path works with **one** tool family only. For **pptx/docx/html-slides**, `read` the sandbox mirror under `/home/user/content-studio/skills/<skill>/` (e.g. `pptx/themes/ascentium.md`, `html-slides/references/ascentium-deck.md`, `html-slides/assets/ascentium/` for brand PNGs). `read_skill_resource` only accepts the **full** packaged path from `<skill_resources>` (starts with `/.flue/packaged-skills/`) — never pass short paths like `references/…` or sandbox paths to it.
+3. **Skill assets use two namespaces** — platform skill store vs sandbox workspace mirror. Each path works with **one** tool family only. For **pptx/docx/html-slides**, `read` the sandbox mirror under `/home/user/content-studio/skills/<skill>/` (e.g. `pptx/references/ascentium-deck.md`, `pptx/assets/ascentium/`, `html-slides/references/ascentium-deck.md`, `html-slides/assets/ascentium/`). `read_skill_resource` only accepts the **full** packaged path from `<skill_resources>` (starts with `/.flue/packaged-skills/`) — never pass short paths like `references/…` or sandbox paths to it.
 4. **Use the sandbox** for scripts and file operations. Run skill scripts from **`/home/user/content-studio/skills/<skill>/scripts/`**.
 5. **HTML decks:** follow `html-slides` reference Part 1 + Part 2 patterns; embed brand PNGs from `html-slides/assets/<theme>/` as base64; inline all CSS — do not link external theme files.
 6. **Deliver artifacts**, not only prose: write files to the workspace, then **publish** with `publish_artifact` — the UI shows a download card automatically.
@@ -130,7 +130,7 @@ Sandbox paths alone are **not** sufficient — users cannot download from the sa
 ### Format selection hints
 
 - **docx** — reports, memos, letters; default **Ascentium** theme (`themes/ascentium.md`), or **Inspire** when requested.
-- **pptx** — speaker slides, visual decks; default **Ascentium** (`themes/ascentium.md`), or **Inspire** when requested. **Always** use the theme file's async IIFE + `await pres.writeFile()`; run `cd /home/user/content-studio && node script.js` (on `exit status 1`, rerun with `2>&1`).
+- **pptx** — speaker slides, visual decks; default **Ascentium** (`references/pptxgenjs.md` + `references/ascentium-deck.md` + `assets/ascentium/`), or **Inspire** when requested. **Always** use async IIFE + `await pres.writeFile()`; run `cd /home/user/content-studio && node script.js` (on `exit status 1`, rerun with `2>&1`).
 - **html-slides** — reveal.js deck; `read` `references/ascentium-deck.md` or `inspire-deck.md`; brand PNGs under `assets/ascentium/` or `assets/inspire/` (full sandbox paths in `html-slides` SKILL.md); **1280×720** frame.
 
 ### Content response style

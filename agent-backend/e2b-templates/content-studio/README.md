@@ -18,6 +18,8 @@ Also baked into the image:
 |------|----------|
 | `/home/user/content-studio/skills/docx/scripts` | docx skill scripts |
 | `/home/user/content-studio/skills/pptx/scripts` | pptx skill scripts |
+| `/home/user/content-studio/skills/pptx/references` | `pptxgenjs.md`, `ascentium-deck.md`, `inspire-deck.md` |
+| `/home/user/content-studio/skills/pptx/assets` | `ascentium/*.png`, `inspire/*.png` (brand chrome) |
 | `/home/user/content-studio/skills/html-slides/references` | `ascentium-deck.md`, `inspire-deck.md` |
 | `/home/user/content-studio/skills/html-slides/assets` | `ascentium/*.png`, `inspire/*.png` (brand chrome) |
 
@@ -44,7 +46,7 @@ First build can take several minutes (LibreOffice is large).
 ```yaml
 sandbox:
   provider: e2b
-  templateId: okf-content-studio:1.9   # alias:tag — bare alias also resolves via platform default tag
+  templateId: okf-content-studio:1.11   # alias:tag — bare alias also resolves via platform default tag
   cwd: /home/user/content-studio
 ```
 
@@ -69,5 +71,9 @@ pandoc --version
 3. Re-run the build script.
 4. Update `agent.yaml`, `sandbox/e2b-content-studio.yaml`, and `src/sandboxes/e2b-templates.ts` default tag to match.
 5. Redeploy backend — no code change needed if alias name unchanged.
+
+**1.11** — pptx references refresh: `pptxgenjs.md` (API) + brand deck docs split from html-slides.
+
+**1.10** — pptx `references/` + `assets/` mirrored in sandbox.
 
 **1.9** — html-slides reference fix: `position: absolute` on `.reveal .slides section` (reveal.js layout).

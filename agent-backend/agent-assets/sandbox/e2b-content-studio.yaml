@@ -4,5 +4,5 @@ description: >-
   E2B sandbox on Node 22 with LibreOffice, Pandoc, Poppler, Python
   (markitdown/Pillow), and npm pptxgenjs/docx for document generation.
 provider: e2b
-templateId: okf-content-studio:1.9
+templateId: okf-content-studio:1.11
 cwd: /home/user/content-studio

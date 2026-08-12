@@ -9,7 +9,7 @@ test('resolveE2bTemplateRef expands bare content-studio alias with tag', () => {
   delete process.env.E2B_CONTENT_STUDIO_TEMPLATE;
   delete process.env.E2B_CONTENT_STUDIO_TEMPLATE_TAG;
 
-  assert.equal(resolveE2bTemplateRef('okf-content-studio'), 'okf-content-studio:1.9');
+  assert.equal(resolveE2bTemplateRef('okf-content-studio'), 'okf-content-studio:1.11');
   assert.equal(resolveE2bTemplateRef('okf-content-studio:2.0'), 'okf-content-studio:2.0');
 });
 
