@@ -1,6 +1,8 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
+import { put } from '@vercel/blob/client';
+import { shouldUseDirectUpload } from './direct-upload.ts';
 
 export type SessionFileListItem = {
   fileId: string;
@@ -46,17 +48,90 @@ export async function listSessionFiles(
   return (data.files as SessionFileListItem[]) ?? [];
 }
 
-export async function uploadSessionFile(
+function sessionFilesBasePath(agentName: string, instanceId: string): string {
+  return `/api/agents/${encodeURIComponent(agentName)}/${encodeURIComponent(instanceId)}/session-files`;
+}
+
+async function uploadSessionFileMultipart(
   agentName: string,
   instanceId: string,
   file: File,
 ): Promise<SessionFileUploadResult> {
   const body = new FormData();
   body.append('file', file);
-  return (await authFetch(
-    `/api/agents/${encodeURIComponent(agentName)}/${encodeURIComponent(instanceId)}/session-files`,
-    { method: 'POST', body },
-  )) as SessionFileUploadResult;
+  return (await authFetch(sessionFilesBasePath(agentName, instanceId), {
+    method: 'POST',
+    body,
+  })) as SessionFileUploadResult;
+}
+
+async function uploadSessionFileDirect(
+  agentName: string,
+  instanceId: string,
+  file: File,
+): Promise<SessionFileUploadResult> {
+  const init = (await authFetch(`${sessionFilesBasePath(agentName, instanceId)}/upload-init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: file.name,
+      size_bytes: file.size,
+    }),
+  })) as {
+    storage_backend?: string;
+    use_multipart?: boolean;
+    file_id?: string;
+    pathname?: string;
+    client_token?: string;
+  };
+
+  if (init.storage_backend === 'local' || init.use_multipart) {
+    return uploadSessionFileMultipart(agentName, instanceId, file);
+  }
+
+  const fileId = init.file_id;
+  const pathname = init.pathname;
+  const clientToken = init.client_token;
+  if (!fileId || !pathname || !clientToken) {
+    throw new Error('Server did not return blob upload credentials');
+  }
+
+  try {
+    await put(pathname, file, {
+      access: 'public',
+      token: clientToken,
+      multipart: file.size > 5 * 1024 * 1024,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Direct blob upload failed';
+    throw new Error(
+      message === 'Failed to fetch'
+        ? 'Direct blob upload failed (network error). Check Vercel Blob configuration.'
+        : message,
+    );
+  }
+
+  return (await authFetch(`${sessionFilesBasePath(agentName, instanceId)}/upload-complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      file_id: fileId,
+      filename: file.name,
+      pathname,
+      size_bytes: file.size,
+    }),
+  })) as SessionFileUploadResult;
+}
+
+export async function uploadSessionFile(
+  agentName: string,
+  instanceId: string,
+  file: File,
+): Promise<SessionFileUploadResult> {
+  if (shouldUseDirectUpload(file)) {
+    return uploadSessionFileDirect(agentName, instanceId, file);
+  }
+  return uploadSessionFileMultipart(agentName, instanceId, file);
 }
 
 export async function deleteSessionFile(

@@ -1,17 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import assert from 'node:assert/strict';
+import test from 'node:test';
 import { metadataNeedsExtraction } from './document-metadata-extraction.ts';
 
-describe('metadataNeedsExtraction', () => {
-  it('returns true for empty metadata', () => {
-    expect(metadataNeedsExtraction({})).toBe(true);
-    expect(metadataNeedsExtraction(null)).toBe(true);
-  });
+test('returns true for empty metadata', () => {
+  assert.equal(metadataNeedsExtraction({}), true);
+  assert.equal(metadataNeedsExtraction(null), true);
+});
 
-  it('returns true when all values are empty', () => {
-    expect(metadataNeedsExtraction({ title: null, tags: [] })).toBe(true);
-  });
+test('returns true when all values are empty', () => {
+  assert.equal(metadataNeedsExtraction({ title: null, tags: [] }), true);
+});
 
-  it('returns false when any value is present', () => {
-    expect(metadataNeedsExtraction({ title: 'Doc' })).toBe(false);
-  });
+test('returns false when any value is present', () => {
+  assert.equal(metadataNeedsExtraction({ title: 'Doc' }), false);
 });

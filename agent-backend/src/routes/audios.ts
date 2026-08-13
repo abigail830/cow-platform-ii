@@ -28,7 +28,6 @@ import {
   validateAudioFilename,
   validateFileHash,
 } from '../storage/audio-files.ts';
-import { readStorageText } from '../storage/document-content.ts';
 import {
   createAudioRecord,
   deleteAudio,
@@ -205,12 +204,24 @@ audios.get(
     const row = await getAudioById(id);
     if (!row) return c.json({ error: 'Audio not found' }, 404);
 
-    const transcript = await readStorageText(transcriptS3Key(row.fileHash));
+    const key = transcriptS3Key(row.fileHash);
+    const head = await headStorageObject(key);
+    if (!head.exists) {
+      return c.json({
+        id: row.id,
+        status: row.status,
+        has_transcript: false,
+        transcript: null,
+      });
+    }
+
+    const transcriptUrl = await getStorageReadUrl(key);
     return c.json({
       id: row.id,
       status: row.status,
-      has_transcript: Boolean(transcript),
-      transcript: transcript ?? null,
+      has_transcript: true,
+      transcript_url: transcriptUrl,
+      transcript: null,
     });
   },
 );

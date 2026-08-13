@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Object storage — Presigned URLs (no Vercel→OSS proxy)
 
-API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object bytes through serverless handlers** for user-facing upload/download — cross-border latency and timeouts are expected.
+API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object bytes through serverless handlers** for user-facing upload/download — cross-border latency and timeouts are expected. Vercel serverless request bodies are capped at **~4.5 MB** (`413 FUNCTION_PAYLOAD_TOO_LARGE`); large uploads that POST multipart through the API will fail in production even when local dev works.
 
 ## Pattern
 
@@ -17,14 +17,19 @@ API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object
 
 - Follow existing references:
   - **Read**: `getDocumentContentManifest`, `presignDocumentBundlePaths`, `presignCapturePostProcessArtifacts`
-  - **Upload**: `/api/audios/upload-init` → browser PUT → `upload-complete`
-  - **Frontend helper**: `fetchPresignedStorageText` in `agent-frontend/src/api/storage-fetch.ts`
+  - **Upload (audio library)**: `/api/audios/upload-init` → browser PUT → `upload-complete`
+  - **Upload (capture audio segment)**: `/api/audio-captures/:id/segments/upload-init` → browser PUT → JSON `POST /segments` with `s3_key` + `file_hash` (see `uploadCaptureSegment` in `agent-frontend/src/api/audioCaptures.ts`)
+  - **Upload (documents)**: `/api/documents/upload-init` → browser PUT → `upload-complete` (`uploadDocument` in `agent-frontend/src/api/documents.ts`)
+  - **Upload (session files, blob backend)**: `session-files/upload-init` → `@vercel/blob/client` `put` → `upload-complete`
+  - **Read (audio transcript)**: `GET /api/audios/:id/transcript` returns `transcript_url` → `fetchPresignedStorageText`
+  - **Frontend helpers**: `agent-frontend/src/api/direct-upload.ts` (`shouldUseDirectUpload`, `putFileToPresignedUrl`), `fetchPresignedStorageText` in `storage-fetch.ts`
 - Presign **per file** when objects are large or tabs load independently; batch-presign only when all URLs are needed at once.
 - Ensure OSS bucket **CORS** allows the frontend origin for GET/PUT as needed.
 
 ## Don't
 
 - Add routes that `readStorageText` / `uploadAudioObject` full bodies for **browser-initiated** flows
+- Legacy **multipart chunk** uploads must use chunks **≤ 3 MB** (`UPLOAD_CHUNK_SIZE_BYTES` in `direct-upload.ts`) if they still hit the API — prefer presigned full-file PUT instead
 - Block UI on a single bundle request that waits for every artifact when partial/progressive load is possible
 - Proxy OSS through Vercel to “simplify” the frontend — it reintroduces the timeout class
 

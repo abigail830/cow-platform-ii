@@ -1,7 +1,14 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
+import { fetchPresignedStorageText } from './storage-fetch.ts';
 import { sha256HexFromFile } from '../shared/file-hash.ts';
+import {
+  CHUNK_UPLOAD_THRESHOLD_BYTES,
+  putFileToPresignedUrl,
+  shouldUseDirectUpload,
+  UPLOAD_CHUNK_SIZE_BYTES,
+} from './direct-upload.ts';
 
 export type AudioPipelineJob = {
   id: string;
@@ -58,18 +65,9 @@ export function displayAudioPipelineError(message: string | null | undefined): s
   return trimmed ? trimmed : null;
 }
 
-/** Below Vercel serverless body limit (~4.5 MB); use direct OSS upload above this. */
-export const DIRECT_UPLOAD_THRESHOLD_BYTES = 3.5 * 1024 * 1024;
-export const CHUNK_UPLOAD_THRESHOLD_BYTES = 10 * 1024 * 1024;
-export const UPLOAD_CHUNK_SIZE_BYTES = 5 * 1024 * 1024;
-
-function usesRemoteApiOrigin(): boolean {
-  return Boolean(import.meta.env.VITE_API_ORIGIN?.trim());
-}
-
-function shouldUseDirectUpload(file: File): boolean {
-  return usesRemoteApiOrigin() || file.size > DIRECT_UPLOAD_THRESHOLD_BYTES;
-}
+/** @deprecated Import from `./direct-upload.ts` */
+export { DIRECT_UPLOAD_THRESHOLD_BYTES } from './direct-upload.ts';
+export { CHUNK_UPLOAD_THRESHOLD_BYTES, UPLOAD_CHUNK_SIZE_BYTES } from './direct-upload.ts';
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
@@ -136,6 +134,15 @@ export async function getAudioTranscript(id: string): Promise<{
   transcript: string | null;
 }> {
   const data = await authFetch(`/api/audios/${id}/transcript`);
+  const transcriptUrl = data.transcript_url;
+  if (typeof transcriptUrl === 'string' && transcriptUrl.trim()) {
+    const transcript = await fetchPresignedStorageText(transcriptUrl);
+    return {
+      status: String(data.status ?? ''),
+      has_transcript: Boolean(transcript?.trim()),
+      transcript: transcript ?? null,
+    };
+  }
   return data as {
     status: string;
     has_transcript: boolean;
@@ -179,26 +186,7 @@ async function uploadAudioDirect(channelId: string, file: File): Promise<AudioRe
     if (!uploadUrl) throw new Error('Server did not return an upload URL');
 
     const headers = init.headers ?? {};
-    let putRes: Response;
-    try {
-      putRes = await fetch(uploadUrl, {
-        method: init.method ?? 'PUT',
-        body: file,
-        headers,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Direct storage upload failed';
-      if (message === 'Failed to fetch') {
-        throw new Error(
-          'Direct storage upload failed (network/CORS). In Aliyun OSS CORS, allow PUT from your frontend origin.',
-        );
-      }
-      throw error instanceof Error ? error : new Error(message);
-    }
-
-    if (!putRes.ok) {
-      throw new Error(`Direct storage upload failed (HTTP ${putRes.status})`);
-    }
+    await putFileToPresignedUrl(uploadUrl, file, headers, init.method ?? 'PUT');
   }
 
   const data = await authFetch('/api/audios/upload-complete', {

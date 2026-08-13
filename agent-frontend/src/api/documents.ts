@@ -3,6 +3,13 @@ import { getToken } from './auth.ts';
 import { extractPathsFromParseResult } from './document-bundle-paths.ts';
 import { formatApiError } from './http.ts';
 import { fetchPresignedStorageText } from './storage-fetch.ts';
+import { sha256HexFromFile } from '../shared/file-hash.ts';
+import {
+  CHUNK_UPLOAD_THRESHOLD_BYTES,
+  putFileToPresignedUrl,
+  shouldUseDirectUpload,
+  UPLOAD_CHUNK_SIZE_BYTES,
+} from './direct-upload.ts';
 import {
   collectRelativeMarkdownImagePaths,
   markdownImagePathCandidates,
@@ -40,8 +47,7 @@ export type DocumentListResponse = {
   total: number;
 };
 
-export const CHUNK_UPLOAD_THRESHOLD_BYTES = 10 * 1024 * 1024;
-export const UPLOAD_CHUNK_SIZE_BYTES = 5 * 1024 * 1024;
+export { CHUNK_UPLOAD_THRESHOLD_BYTES, UPLOAD_CHUNK_SIZE_BYTES } from './direct-upload.ts';
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
@@ -375,6 +381,47 @@ export async function updateDocumentMetadata(
   return { metadata: data.metadata as Record<string, unknown> };
 }
 
+async function uploadDocumentDirect(channelId: string, file: File): Promise<DocumentRecord> {
+  const fileHash = await sha256HexFromFile(file);
+  const init = (await authFetch('/api/documents/upload-init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel_id: channelId,
+      filename: file.name,
+      file_hash: fileHash,
+      size_bytes: file.size,
+      content_type: file.type || undefined,
+    }),
+  })) as {
+    s3_key: string;
+    file_hash: string;
+    upload_url?: string;
+    method?: string;
+    headers?: Record<string, string>;
+    skip_upload?: boolean;
+  };
+
+  if (!init.skip_upload) {
+    const uploadUrl = init.upload_url;
+    if (!uploadUrl) throw new Error('Server did not return an upload URL');
+    await putFileToPresignedUrl(uploadUrl, file, init.headers ?? {}, init.method ?? 'PUT');
+  }
+
+  const data = await authFetch('/api/documents/upload-complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel_id: channelId,
+      filename: file.name,
+      file_hash: init.file_hash ?? fileHash,
+      s3_key: init.s3_key,
+      size_bytes: file.size,
+    }),
+  });
+  return data as DocumentRecord;
+}
+
 async function uploadSingleFile(channelId: string, file: File): Promise<DocumentRecord> {
   const form = new FormData();
   form.append('channel_id', channelId);
@@ -412,6 +459,9 @@ async function uploadFileInChunks(channelId: string, file: File): Promise<Docume
 }
 
 export async function uploadDocument(channelId: string, file: File): Promise<DocumentRecord> {
+  if (shouldUseDirectUpload(file)) {
+    return uploadDocumentDirect(channelId, file);
+  }
   if (file.size > CHUNK_UPLOAD_THRESHOLD_BYTES) {
     return uploadFileInChunks(channelId, file);
   }

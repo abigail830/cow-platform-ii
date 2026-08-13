@@ -2,6 +2,11 @@ import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { readApiErrorMessage } from './http.ts';
 import { fetchPresignedStorageText } from './storage-fetch.ts';
+import { sha256HexFromFile } from '../shared/file-hash.ts';
+import {
+  putFileToPresignedUrl,
+  shouldUseDirectUpload,
+} from './direct-upload.ts';
 import { resolveEffectiveAudioStatus } from './audios.ts';
 
 export type CapturePipelineJob = {
@@ -255,7 +260,65 @@ export async function getAudioCapture(
   return authFetch(`/api/audio-captures/${id}${query}`) as Promise<AudioCaptureDetail>;
 }
 
-export async function uploadCaptureSegment(captureId: string, file: File, segmentLabel?: string): Promise<AudioCaptureDetail> {
+function shouldUseDirectCaptureSegmentUpload(file: File): boolean {
+  return shouldUseDirectUpload(file);
+}
+
+type CaptureSegmentUploadInitResponse = {
+  s3_key: string;
+  file_hash: string;
+  upload_url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  skip_upload?: boolean;
+};
+
+async function uploadCaptureSegmentDirect(
+  captureId: string,
+  file: File,
+  segmentLabel?: string,
+): Promise<AudioCaptureDetail> {
+  const fileHash = await sha256HexFromFile(file);
+  const init = (await authFetch(`/api/audio-captures/${captureId}/segments/upload-init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: file.name,
+      file_hash: fileHash,
+      size_bytes: file.size,
+      content_type: file.type || undefined,
+    }),
+  })) as CaptureSegmentUploadInitResponse;
+
+  if (!init.skip_upload) {
+    const uploadUrl = init.upload_url;
+    if (!uploadUrl) throw new Error('Server did not return an upload URL');
+    await putFileToPresignedUrl(uploadUrl, file, init.headers ?? {}, init.method ?? 'PUT');
+  }
+
+  const data = await authFetch(`/api/audio-captures/${captureId}/segments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: file.name,
+      file_hash: init.file_hash ?? fileHash,
+      s3_key: init.s3_key,
+      size_bytes: file.size,
+      segment_label: segmentLabel?.trim() || undefined,
+    }),
+  });
+  return (data as { capture: AudioCaptureDetail }).capture;
+}
+
+export async function uploadCaptureSegment(
+  captureId: string,
+  file: File,
+  segmentLabel?: string,
+): Promise<AudioCaptureDetail> {
+  if (shouldUseDirectCaptureSegmentUpload(file)) {
+    return uploadCaptureSegmentDirect(captureId, file, segmentLabel);
+  }
+
   const form = new FormData();
   form.append('file', file);
   if (segmentLabel?.trim()) form.append('segment_label', segmentLabel.trim());
@@ -289,24 +352,7 @@ export async function uploadCaptureTranscriptSegment(
   if (!init.skip_upload) {
     const uploadUrl = init.upload_url;
     if (!uploadUrl) throw new Error('Server did not return an upload URL');
-    let putRes: Response;
-    try {
-      putRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: init.headers ?? {},
-        body: file,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Direct storage upload failed';
-      throw new Error(
-        message === 'Failed to fetch'
-          ? 'Direct storage upload failed (network/CORS). In Aliyun OSS CORS, allow PUT from your frontend origin.'
-          : message,
-      );
-    }
-    if (!putRes.ok) {
-      throw new Error(`Direct storage upload failed (HTTP ${putRes.status})`);
-    }
+    await putFileToPresignedUrl(uploadUrl, file, init.headers ?? {}, 'PUT');
   }
 
   const data = await authFetch(`/api/audio-captures/${captureId}/segments`, {

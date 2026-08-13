@@ -4,6 +4,10 @@ import { getUser, requireAuth } from '../auth/jwt.ts';
 import { ownsConversation } from '../auth/permissions.ts';
 import { conversationIdFromInstanceId } from '../shared/agent-instance-id.ts';
 import {
+  completeSessionFileBlobUpload,
+  initSessionFileUpload,
+} from '../services/session-file-upload.ts';
+import {
   deleteSessionFile,
   listSessionFileItems,
   uploadSessionFile,
@@ -30,6 +34,68 @@ sessionFiles.get(
     const instanceId = c.req.param('instanceId');
     const files = await listSessionFileItems(instanceId);
     return c.json({ files });
+  },
+);
+
+sessionFiles.post(
+  '/:agentName/:instanceId/session-files/upload-init',
+  requireAuth,
+  requireConversationAccess,
+  async (c) => {
+    const agentName = c.req.param('agentName');
+    const instanceId = c.req.param('instanceId');
+    const body = await c.req.json<{ filename?: string; size_bytes?: number }>();
+
+    try {
+      const result = await initSessionFileUpload({
+        instanceId,
+        agentName,
+        filename: body.filename ?? '',
+        sizeBytes: Number(body.size_bytes),
+      });
+      return c.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Upload init failed';
+      return c.json({ error: message }, 400);
+    }
+  },
+);
+
+sessionFiles.post(
+  '/:agentName/:instanceId/session-files/upload-complete',
+  requireAuth,
+  requireConversationAccess,
+  async (c) => {
+    const agentName = c.req.param('agentName');
+    const instanceId = c.req.param('instanceId');
+    const body = await c.req.json<{
+      file_id?: string;
+      filename?: string;
+      pathname?: string;
+      size_bytes?: number;
+    }>();
+
+    try {
+      const record = await completeSessionFileBlobUpload({
+        instanceId,
+        agentName,
+        fileId: body.file_id ?? '',
+        filename: body.filename ?? '',
+        pathname: body.pathname ?? '',
+        sizeBytes: Number(body.size_bytes),
+      });
+      return c.json({
+        fileId: record.id,
+        filename: record.filename,
+        mimeType: record.mimeType,
+        sizeBytes: record.sizeBytes,
+        hasContentCache: Boolean(record.contentCacheKey),
+        createdAt: record.createdAt.toISOString(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Upload complete failed';
+      return c.json({ error: message }, 400);
+    }
   },
 );
 

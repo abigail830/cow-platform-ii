@@ -48,7 +48,7 @@ Run `npx tsc --noEmit` locally before deploy to catch type errors.
 | `MODEL_PROFILE` + provider keys | Agent models |
 | `AWS_*` | OSS document + audio storage |
 
-**OSS CORS (required for document detail and audio upload):** Parsed content (`markdown.md`, `page_index.json`) is fetched by the **browser** via presigned URLs. Audio uploads use **presigned PUT** from the browser directly to OSS (bypasses Vercel's ~4.5 MB request body limit). In Aliyun OSS → bucket → **Cross-Origin Resource Sharing**, allow your frontend origin (e.g. `https://cow-platform.vercel.app`), with methods **`GET`, `PUT`, `HEAD`** and headers `*`. Without GET CORS, the detail page shows storage read errors while the list still works. Without PUT CORS, large audio uploads fail with a network/CORS error.
+**OSS CORS (required for document detail and browser uploads):** Parsed content (`markdown.md`, `page_index.json`) is fetched by the **browser** via presigned URLs. Document, audio, and capture segment uploads use **presigned PUT** from the browser directly to OSS (bypasses Vercel's ~4.5 MB request body limit). In Aliyun OSS → bucket → **Cross-Origin Resource Sharing**, allow your frontend origin (e.g. `https://cow-platform.vercel.app`), with methods **`GET`, `PUT`, `HEAD`** and headers `*`. Without GET CORS, the detail page shows storage read errors while the list still works. Without PUT CORS, large uploads fail with a network/CORS error.
 
 Do **not** set `PIPELINE_WORKER=spawn` on Vercel.
 

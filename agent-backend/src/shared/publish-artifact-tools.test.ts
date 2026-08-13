@@ -1,19 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { InMemoryAttachmentStore, createAttachmentRef } from '@flue/runtime/adapter';
-import {
-  buildAttachmentDownloadPath,
-  absolutizePublicApiUrl,
-} from './publish-artifact-tools.ts';
 import { agentConversationStreamPath } from './agent-instance-id.ts';
 
-test('buildAttachmentDownloadPath returns relative API URL with token', () => {
+process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://test:test@127.0.0.1:5432/test';
+process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-jwt-secret';
+
+test('buildAttachmentDownloadPath returns relative API URL with token', async () => {
+  const { buildAttachmentDownloadPath } = await import('./publish-artifact-tools.ts');
   const path = buildAttachmentDownloadPath('content-studio', 'user--conv-1', 'att-abc');
   assert.match(path, /^\/api\/agents\/content-studio\/user--conv-1\/attachments\/att-abc\?token=/);
   assert.doesNotMatch(path, /^https?:\/\//);
 });
 
-test('absolutizePublicApiUrl prefixes relative attachment paths', () => {
+test('absolutizePublicApiUrl prefixes relative attachment paths', async () => {
+  const { absolutizePublicApiUrl } = await import('./publish-artifact-tools.ts');
   const relative = '/api/agents/a/b/attachments/c?token=t';
   const absolute = absolutizePublicApiUrl(relative);
   assert.match(absolute, /^https?:\/\//);

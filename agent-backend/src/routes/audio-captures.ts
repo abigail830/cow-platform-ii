@@ -46,6 +46,7 @@ import {
   AUDIO_CAPTURE_INPUT_MODES,
   AUDIO_CAPTURE_RECORDING_MODES,
 } from '../db/schema.ts';
+import { initAudioSegmentUpload } from '../services/capture-audio-upload.ts';
 import {
   completeTranscriptSegmentUpload,
   createAndAttachTranscriptSegment,
@@ -260,6 +261,45 @@ audioCaptures.delete(
 
     await deleteAudioCapture(id);
     return c.json({ ok: true });
+  },
+);
+
+audioCaptures.post(
+  '/:id/segments/upload-init',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Capture id is required' }, 400);
+
+    const capture = await getCaptureWithSegments(id, { sync: false });
+    if (!capture) return c.json({ error: 'Capture not found' }, 404);
+    if (capture.input_mode === 'transcript') {
+      return c.json({ error: 'Capture is not in audio input mode' }, 400);
+    }
+
+    const denied = await denyUnlessAudioChannelAccess(c, capture.channel_id, 'write');
+    if (denied) return denied;
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const body = await c.req.json<{
+      filename?: string;
+      file_hash?: string;
+      size_bytes?: number;
+      content_type?: string;
+    }>();
+
+    try {
+      const result = await initAudioSegmentUpload({
+        filename: body.filename ?? '',
+        fileHash: body.file_hash ?? '',
+        sizeBytes: Number(body.size_bytes),
+        contentType: body.content_type,
+      });
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: formatStorageError(error) }, 400);
+    }
   },
 );
 

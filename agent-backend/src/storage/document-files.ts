@@ -6,6 +6,7 @@ import {
   assertStorageClient,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   StorageNotConfiguredError,
@@ -80,6 +81,43 @@ export function validateDocumentFilename(filename: string): string {
     );
   }
   return trimmed;
+}
+
+const FILE_HASH_RE = /^[a-f0-9]{64}$/;
+
+export function validateFileHash(fileHash: string): string {
+  const normalized = fileHash.trim().toLowerCase();
+  if (!FILE_HASH_RE.test(normalized)) {
+    throw new Error('file_hash must be a 64-character SHA-256 hex digest');
+  }
+  return normalized;
+}
+
+export function guessDocumentContentType(ext: string): string {
+  switch (ext.toLowerCase()) {
+    case 'pdf':
+      return 'application/pdf';
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'pptx':
+      return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    case 'xlsx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'epub':
+      return 'application/epub+zip';
+    case 'md':
+    case 'markdown':
+      return 'text/markdown';
+    default:
+      return 'application/octet-stream';
+  }
 }
 
 export function buildDocumentS3Key(fileHash: string, ext: string): string {
@@ -304,6 +342,43 @@ export async function getDocumentDownloadUrl(
     ResponseContentDisposition: `attachment; filename="${safeFilename}"`,
   });
   return getSignedUrl(client, command, { expiresIn });
+}
+
+export async function getStorageUploadUrl(
+  key: string,
+  contentType: string,
+  expiresIn = 3600,
+): Promise<string> {
+  const { client, config } = assertStorageClient();
+  return getSignedUrl(
+    client,
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      ContentType: contentType || 'application/octet-stream',
+    }),
+    { expiresIn },
+  );
+}
+
+export async function headStorageObject(
+  key: string,
+): Promise<{ exists: boolean; size: number; contentType: string | null }> {
+  const { client, config } = assertStorageClient();
+  try {
+    const response = await client.send(
+      new HeadObjectCommand({ Bucket: config.bucket, Key: key }),
+    );
+    return {
+      exists: true,
+      size: Number(response.ContentLength ?? 0),
+      contentType: response.ContentType ?? null,
+    };
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+    if (status === 404) return { exists: false, size: 0, contentType: null };
+    throw error;
+  }
 }
 
 export async function uploadDocumentObject(

@@ -52,6 +52,15 @@ export async function readBlobText(key: string): Promise<string> {
   return bytes.toString('utf8');
 }
 
+export async function headBlobObject(key: string): Promise<{ size: number } | null> {
+  try {
+    const meta = await head(key, { token: requireToken() });
+    return { size: meta.size };
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteBlobKeys(keys: string[]): Promise<void> {
   if (keys.length === 0) return;
   await del(keys, { token: requireToken() });

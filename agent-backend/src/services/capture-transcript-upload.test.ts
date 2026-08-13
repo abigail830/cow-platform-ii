@@ -1,24 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import assert from 'node:assert/strict';
+import test from 'node:test';
 import {
   normalizeTranscriptMarkdown,
   validateTranscriptFilename,
 } from './capture-transcript-normalize.ts';
 
-describe('capture-transcript-upload', () => {
-  it('accepts md and docx filenames', () => {
-    expect(validateTranscriptFilename('notes.md')).toBe('notes.md');
-    expect(validateTranscriptFilename('notes.docx')).toBe('notes.docx');
-    expect(() => validateTranscriptFilename('audio.m4a')).toThrow(/Transcript must be/);
-  });
+test('accepts md and docx filenames', () => {
+  assert.equal(validateTranscriptFilename('notes.md'), 'notes.md');
+  assert.equal(validateTranscriptFilename('notes.docx'), 'notes.docx');
+  assert.throws(() => validateTranscriptFilename('audio.m4a'), /Transcript must be/);
+});
 
-  it('wraps plain text transcripts with a markdown header', () => {
-    const normalized = normalizeTranscriptMarkdown('Hello world', 'notes.md');
-    expect(normalized).toContain('# notes');
-    expect(normalized).toContain('Hello world');
-  });
+test('wraps plain text transcripts with a markdown header', () => {
+  const normalized = normalizeTranscriptMarkdown('Hello world', 'notes.md');
+  assert.ok(normalized.includes('# notes'));
+  assert.ok(normalized.includes('Hello world'));
+});
 
-  it('preserves speaker turn markdown', () => {
-    const source = '## [00:00:12] Speaker 1\nHello';
-    expect(normalizeTranscriptMarkdown(source, 'notes.md')).toBe(source);
-  });
+test('preserves speaker turn markdown', () => {
+  const source = '## [00:00:12] Speaker 1\nHello';
+  assert.equal(normalizeTranscriptMarkdown(source, 'notes.md'), source);
 });

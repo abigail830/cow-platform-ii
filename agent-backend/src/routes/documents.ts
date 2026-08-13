@@ -20,6 +20,7 @@ import {
   fileTypeFromExtension,
   formatStorageError,
   getDocumentDownloadUrl,
+  headStorageObject,
   MAX_DOCUMENT_BYTES,
   presignDocumentBundlePaths,
   sha256Hex,
@@ -27,7 +28,9 @@ import {
   storeUploadChunk,
   uploadDocumentObject,
   validateDocumentFilename,
+  validateFileHash,
 } from '../storage/document-files.ts';
+import { initDocumentUpload } from '../services/document-upload.ts';
 import {
   createDocumentRecord,
   deleteDocument,
@@ -76,6 +79,50 @@ async function persistUploadedFile(input: {
     sizeBytes: input.buffer.length,
     fileHash,
     s3Key,
+    uploadedBy: input.uploadedBy,
+  });
+
+  await autoStartPipelineAfterUpload(document.id, input.channelId);
+
+  const refreshed = await getDocumentPublicById(document.id);
+  return refreshed ?? document;
+}
+
+async function finalizeDocumentRecord(input: {
+  channelId: string;
+  filename: string;
+  fileHash: string;
+  s3Key: string;
+  sizeBytes: number;
+  uploadedBy: string;
+}) {
+  if (input.sizeBytes > MAX_DOCUMENT_BYTES) {
+    throw new Error('File exceeds maximum allowed size');
+  }
+
+  const filename = validateDocumentFilename(input.filename);
+  const fileHash = validateFileHash(input.fileHash);
+  const ext = extensionFromFilename(filename);
+  const expectedKey = buildDocumentS3Key(fileHash, ext);
+  if (input.s3Key !== expectedKey) {
+    throw new Error('s3_key does not match file_hash and filename');
+  }
+
+  const head = await headStorageObject(expectedKey);
+  if (!head.exists) {
+    throw new Error('Uploaded object not found in storage. Complete the direct upload first.');
+  }
+  if (head.size !== input.sizeBytes) {
+    throw new Error(`Uploaded object size mismatch (expected ${input.sizeBytes}, got ${head.size})`);
+  }
+
+  const document = await createDocumentRecord({
+    channelId: input.channelId,
+    name: filename,
+    fileType: fileTypeFromExtension(ext),
+    sizeBytes: input.sizeBytes,
+    fileHash,
+    s3Key: expectedKey,
     uploadedBy: input.uploadedBy,
   });
 
@@ -343,6 +390,96 @@ documents.get(
     const document = await getDocumentPublicById(row.id);
     if (!document) return c.json({ error: 'Document not found' }, 404);
     return c.json(document);
+  },
+);
+
+documents.post(
+  '/upload-init',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const body = await c.req.json<{
+      channel_id?: string;
+      filename?: string;
+      file_hash?: string;
+      size_bytes?: number;
+      content_type?: string;
+    }>();
+
+    const channelId = body.channel_id?.trim() ?? '';
+    const filename = body.filename?.trim() ?? '';
+    const sizeBytes = Number(body.size_bytes);
+
+    if (!channelId || !filename) {
+      return c.json({ error: 'channel_id and filename are required' }, 400);
+    }
+    if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
+      return c.json({ error: 'size_bytes is required' }, 400);
+    }
+
+    const denied = await denyUnlessChannelAccess(c, channelId, 'write');
+    if (denied) return denied;
+
+    try {
+      const result = await initDocumentUpload({
+        filename,
+        fileHash: body.file_hash ?? '',
+        sizeBytes,
+        contentType: body.content_type,
+      });
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: error instanceof Error ? error.message : 'Upload init failed' }, 400);
+    }
+  },
+);
+
+documents.post(
+  '/upload-complete',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const user = getUser(c);
+    const body = await c.req.json<{
+      channel_id?: string;
+      filename?: string;
+      file_hash?: string;
+      s3_key?: string;
+      size_bytes?: number;
+    }>();
+
+    const channelId = body.channel_id?.trim() ?? '';
+    const filename = body.filename?.trim() ?? '';
+    const s3Key = body.s3_key?.trim() ?? '';
+    const sizeBytes = Number(body.size_bytes);
+
+    if (!channelId || !filename || !s3Key) {
+      return c.json({ error: 'channel_id, filename, and s3_key are required' }, 400);
+    }
+    if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
+      return c.json({ error: 'size_bytes is required' }, 400);
+    }
+
+    const denied = await denyUnlessChannelAccess(c, channelId, 'write');
+    if (denied) return denied;
+
+    try {
+      const document = await finalizeDocumentRecord({
+        channelId,
+        filename,
+        fileHash: body.file_hash ?? '',
+        s3Key,
+        sizeBytes,
+        uploadedBy: user.id,
+      });
+      return c.json(document, 201);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: error instanceof Error ? error.message : 'Upload complete failed' }, 400);
+    }
   },
 );
 
