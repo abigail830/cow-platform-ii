@@ -20,7 +20,7 @@ API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object
   - **Upload (audio library)**: `/api/audios/upload-init` → browser PUT → `upload-complete`
   - **Upload (capture audio segment)**: `/api/audio-captures/:id/segments/upload-init` → browser PUT → JSON `POST /segments` with `s3_key` + `file_hash` (see `uploadCaptureSegment` in `agent-frontend/src/api/audioCaptures.ts`)
   - **Upload (documents)**: `/api/documents/upload-init` → browser PUT → `upload-complete` (`uploadDocument` in `agent-frontend/src/api/documents.ts`)
-  - **Upload (session files, blob backend)**: `session-files/upload-init` → `@vercel/blob/client` `put` → `upload-complete`
+  - **Upload (session files, blob backend)**: `session-files/upload-init` → presigned PUT (`issueSignedToken` + `presignUrl`) → `upload-complete`
   - **Read (audio transcript)**: `GET /api/audios/:id/transcript` returns `transcript_url` → `fetchPresignedStorageText`
   - **Frontend helpers**: `agent-frontend/src/api/direct-upload.ts` (`shouldUseDirectUpload`, `putFileToPresignedUrl`), `fetchPresignedStorageText` in `storage-fetch.ts`
 - Presign **per file** when objects are large or tabs load independently; batch-presign only when all URLs are needed at once.

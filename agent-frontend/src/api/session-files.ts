@@ -1,8 +1,7 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
-import { put } from '@vercel/blob/client';
-import { shouldUseDirectUpload } from './direct-upload.ts';
+import { putFileToPresignedUrl, shouldUseDirectUpload } from './direct-upload.ts';
 
 export type SessionFileListItem = {
   fileId: string;
@@ -82,7 +81,9 @@ async function uploadSessionFileDirect(
     use_multipart?: boolean;
     file_id?: string;
     pathname?: string;
-    client_token?: string;
+    upload_url?: string;
+    method?: string;
+    headers?: Record<string, string>;
   };
 
   if (init.storage_backend === 'local' || init.use_multipart) {
@@ -91,25 +92,12 @@ async function uploadSessionFileDirect(
 
   const fileId = init.file_id;
   const pathname = init.pathname;
-  const clientToken = init.client_token;
-  if (!fileId || !pathname || !clientToken) {
+  const uploadUrl = init.upload_url;
+  if (!fileId || !pathname || !uploadUrl) {
     throw new Error('Server did not return blob upload credentials');
   }
 
-  try {
-    await put(pathname, file, {
-      access: 'public',
-      token: clientToken,
-      multipart: file.size > 5 * 1024 * 1024,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Direct blob upload failed';
-    throw new Error(
-      message === 'Failed to fetch'
-        ? 'Direct blob upload failed (network error). Check Vercel Blob configuration.'
-        : message,
-    );
-  }
+  await putFileToPresignedUrl(uploadUrl, file, init.headers ?? {}, init.method ?? 'PUT');
 
   return (await authFetch(`${sessionFilesBasePath(agentName, instanceId)}/upload-complete`, {
     method: 'POST',

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { generateClientTokenFromReadWriteToken } from '@vercel/blob';
+import { issueSignedToken, presignUrl } from '@vercel/blob';
 import {
   SESSION_FILE_DEFAULT_TTL_DAYS,
   SESSION_FILE_MAX_BYTES,
@@ -9,11 +9,14 @@ import {
 } from '../storage/session-files/constants.ts';
 import { resolveBlobReadWriteToken, resolveSessionFilesBackend } from '../storage/session-files/config.ts';
 import { blobOriginalKey, headBlobObject } from '../storage/session-files/blob-store.ts';
-import { countSessionFilesForInstance, insertSessionFile } from '../storage/session-files/repository.ts';
+import {
+  countSessionFilesForInstance,
+  getSessionFile,
+  insertSessionFile,
+} from '../storage/session-files/repository.ts';
 import {
   deleteSessionFile,
   ensureSessionFileContentCached,
-  getSessionFile,
 } from '../storage/session-files/session-file-service.ts';
 import type { SessionFileRecord } from '../storage/session-files/types.ts';
 
@@ -65,19 +68,31 @@ export async function initSessionFileUpload(input: {
   }
 
   const pathname = blobOriginalKey(input.instanceId, fileId, input.filename);
-  const clientToken = await generateClientTokenFromReadWriteToken({
-    pathname,
+  const validUntil = Date.now() + 3600 * 1000;
+  const issued = await issueSignedToken({
     token,
+    pathname,
+    operations: ['put'],
+    validUntil,
     maximumSizeInBytes: SESSION_FILE_MAX_BYTES,
+  });
+  const { presignedUrl } = await presignUrl(issued, {
+    operation: 'put',
+    pathname,
+    access: 'public',
     allowOverwrite: true,
     addRandomSuffix: false,
+    maximumSizeInBytes: SESSION_FILE_MAX_BYTES,
+    validUntil,
   });
 
   return {
     storage_backend: 'blob' as const,
     file_id: fileId,
     pathname,
-    client_token: clientToken,
+    upload_url: presignedUrl,
+    method: 'PUT' as const,
+    headers: { 'Content-Type': mimeType },
     mime_type: mimeType,
     use_multipart: false,
   };
