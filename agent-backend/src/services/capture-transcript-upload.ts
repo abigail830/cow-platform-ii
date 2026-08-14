@@ -161,6 +161,8 @@ export async function completeTranscriptSegmentUpload(input: {
   sizeBytes: number;
   uploadedBy: string;
   segmentLabel?: string | null;
+  /** Markdown body from browser — avoids Vercel→OSS download on complete for .md uploads. */
+  transcriptMarkdown?: string | null;
 }) {
   const filename = validateTranscriptFilename(input.filename);
   const expectedKey = transcriptStagingS3Key(input.uploadId, filename);
@@ -173,9 +175,22 @@ export async function completeTranscriptSegmentUpload(input: {
     throw new Error('Uploaded transcript object not found in storage');
   }
 
-  const buffer = await readStorageBuffer(expectedKey);
-  if (!buffer || buffer.length === 0) {
-    throw new Error('Uploaded transcript object is empty');
+  const ext = extensionFromFilename(filename).toLowerCase();
+  let buffer: Buffer;
+  if (ext === 'md' || ext === 'markdown') {
+    const inline = input.transcriptMarkdown?.trim();
+    if (!inline) {
+      throw new Error('transcript_markdown is required for markdown transcript uploads');
+    }
+    buffer = Buffer.from(inline, 'utf8');
+    if (buffer.length > MAX_TRANSCRIPT_UPLOAD_BYTES) {
+      throw new Error('Transcript file exceeds maximum allowed size');
+    }
+  } else {
+    buffer = await readStorageBuffer(expectedKey);
+    if (!buffer || buffer.length === 0) {
+      throw new Error('Uploaded transcript object is empty');
+    }
   }
 
   return createAndAttachTranscriptSegment({

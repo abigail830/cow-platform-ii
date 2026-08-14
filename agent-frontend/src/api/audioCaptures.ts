@@ -212,7 +212,12 @@ async function authFetch(path: string, init?: RequestInit) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Network error';
-    throw new Error(message === 'Failed to fetch' ? 'Network error — is the backend running?' : message);
+    if (message === 'Failed to fetch') {
+      throw new Error(
+        'Request failed (network or timeout). Large transcript .docx uploads still run on the server after OSS upload and may exceed Vercel limits — try .md or a smaller file.',
+      );
+    }
+    throw new Error(message);
   }
   if (!res.ok) throw new Error(await readApiErrorMessage(res));
   if (res.status === 204) return {};
@@ -334,6 +339,13 @@ export async function uploadCaptureTranscriptSegment(
   file: File,
   segmentLabel?: string,
 ): Promise<AudioCaptureDetail> {
+  const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase() : '';
+  const isMarkdown = ext === 'md' || ext === 'markdown';
+  let transcriptMarkdown: string | undefined;
+  if (isMarkdown) {
+    transcriptMarkdown = await file.text();
+  }
+
   const init = (await authFetch(`/api/audio-captures/${captureId}/segments/transcript-upload-init`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -364,6 +376,7 @@ export async function uploadCaptureTranscriptSegment(
       staging_s3_key: init.staging_s3_key,
       size_bytes: file.size,
       segment_label: segmentLabel?.trim() || undefined,
+      ...(transcriptMarkdown !== undefined ? { transcript_markdown: transcriptMarkdown } : {}),
     }),
   });
   return (data as { capture: AudioCaptureDetail }).capture;

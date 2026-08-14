@@ -403,6 +403,7 @@ audioCaptures.post(
         segment_label?: string;
         upload_id?: string;
         staging_s3_key?: string;
+        transcript_markdown?: string;
       }>();
 
       if (inputMode === 'transcript') {
@@ -423,8 +424,9 @@ audioCaptures.post(
           sizeBytes,
           uploadedBy: user.id,
           segmentLabel: body.segment_label,
+          transcriptMarkdown: body.transcript_markdown,
         });
-        const refreshed = await getCaptureWithSegments(id);
+        const refreshed = await getCaptureWithSegments(id, { sync: false });
         return c.json({ audio_id: segment.id, capture: refreshed }, 201);
       }
 
