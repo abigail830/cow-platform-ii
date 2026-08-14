@@ -21,6 +21,7 @@
     "@uiw/react-codemirror": "^4.25.11",
     "jszip": "^3.10.1",
     "lucide-react": "^1.27.0",
+    "mammoth": "^1.12.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",

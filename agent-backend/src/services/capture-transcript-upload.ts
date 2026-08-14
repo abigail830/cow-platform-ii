@@ -15,6 +15,7 @@ import {
   sha256Hex,
   transcriptS3Key,
   uploadAudioObject,
+  validateFileHash,
 } from '../storage/audio-files.ts';
 import { readStorageBuffer } from '../storage/document-content.ts';
 import { attachAudioToCapture } from './audio-captures.ts';
@@ -120,10 +121,55 @@ export async function createAndAttachTranscriptSegment(input: {
   return row!;
 }
 
+async function attachTranscriptSegmentRecord(input: {
+  channelId: string;
+  captureId: string;
+  filename: string;
+  fileHash: string;
+  transcriptS3Key: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  segmentLabel?: string | null;
+}) {
+  const filename = validateTranscriptFilename(input.filename);
+  const fileHash = validateFileHash(input.fileHash);
+  const expectedKey = transcriptS3Key(fileHash);
+  if (input.transcriptS3Key !== expectedKey) {
+    throw new Error('transcript_s3_key does not match file_hash');
+  }
+
+  const [row] = await db
+    .insert(appAudios)
+    .values({
+      channelId: input.channelId,
+      name: filename,
+      fileType: 'md',
+      sizeBytes: input.sizeBytes,
+      fileHash,
+      s3Key: expectedKey,
+      status: 'completed',
+      metadata: {
+        source_kind: 'transcript',
+        original_filename: filename,
+      },
+      uploadedBy: input.uploadedBy,
+    })
+    .returning();
+
+  await attachAudioToCapture({
+    captureId: input.captureId,
+    audioId: row!.id,
+    segmentLabel: input.segmentLabel,
+  });
+
+  return row!;
+}
+
 export async function initTranscriptSegmentUpload(input: {
   captureId: string;
   filename: string;
   sizeBytes: number;
+  transcriptMarkdown?: string | null;
 }) {
   const filename = validateTranscriptFilename(input.filename);
   if (!Number.isFinite(input.sizeBytes) || input.sizeBytes < 1) {
@@ -133,9 +179,39 @@ export async function initTranscriptSegmentUpload(input: {
     throw new Error('Transcript file exceeds maximum allowed size');
   }
 
+  const ext = extensionFromFilename(filename).toLowerCase();
+  const inlineMarkdown = input.transcriptMarkdown?.trim();
+  const canUseDirectUpload =
+    inlineMarkdown &&
+    (ext === 'md' || ext === 'markdown' || ext === 'docx');
+
+  if (canUseDirectUpload) {
+    const normalized = normalizeTranscriptMarkdown(inlineMarkdown, filename);
+    const fileHash = sha256Hex(Buffer.from(normalized, 'utf8'));
+    const transcriptKey = transcriptS3Key(fileHash);
+    const originalKey = transcriptOriginalS3Key(fileHash, filename);
+    const transcriptContentType = 'text/markdown; charset=utf-8';
+    const originalContentType =
+      ext === 'docx'
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : transcriptContentType;
+
+    return {
+      mode: 'direct' as const,
+      file_hash: fileHash,
+      transcript_s3_key: transcriptKey,
+      original_s3_key: originalKey,
+      normalized_markdown: normalized,
+      transcript_upload_url: await getStorageUploadUrl(transcriptKey, transcriptContentType),
+      original_upload_url: await getStorageUploadUrl(originalKey, originalContentType),
+      method: 'PUT' as const,
+      transcript_headers: { 'Content-Type': transcriptContentType },
+      original_headers: { 'Content-Type': originalContentType },
+    };
+  }
+
   const uploadId = randomUUID();
   const stagingKey = transcriptStagingS3Key(uploadId, filename);
-  const ext = extensionFromFilename(filename).toLowerCase();
   const contentType =
     ext === 'docx'
       ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -143,6 +219,7 @@ export async function initTranscriptSegmentUpload(input: {
 
   const uploadUrl = await getStorageUploadUrl(stagingKey, contentType);
   return {
+    mode: 'staging' as const,
     upload_id: uploadId,
     skip_upload: false,
     staging_s3_key: stagingKey,
@@ -150,6 +227,28 @@ export async function initTranscriptSegmentUpload(input: {
     method: 'PUT' as const,
     headers: { 'Content-Type': contentType },
   };
+}
+
+export async function completeTranscriptSegmentDirectUpload(input: {
+  channelId: string;
+  captureId: string;
+  filename: string;
+  fileHash: string;
+  transcriptS3Key: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  segmentLabel?: string | null;
+}) {
+  return attachTranscriptSegmentRecord({
+    channelId: input.channelId,
+    captureId: input.captureId,
+    filename: input.filename,
+    fileHash: input.fileHash,
+    transcriptS3Key: input.transcriptS3Key,
+    sizeBytes: input.sizeBytes,
+    uploadedBy: input.uploadedBy,
+    segmentLabel: input.segmentLabel,
+  });
 }
 
 export async function completeTranscriptSegmentUpload(input: {

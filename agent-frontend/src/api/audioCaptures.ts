@@ -7,6 +7,7 @@ import {
   putFileToPresignedUrl,
   shouldUseDirectUpload,
 } from './direct-upload.ts';
+import { readTranscriptFileText } from './transcript-file-text.ts';
 import { resolveEffectiveAudioStatus } from './audios.ts';
 
 export type CapturePipelineJob = {
@@ -339,12 +340,7 @@ export async function uploadCaptureTranscriptSegment(
   file: File,
   segmentLabel?: string,
 ): Promise<AudioCaptureDetail> {
-  const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase() : '';
-  const isMarkdown = ext === 'md' || ext === 'markdown';
-  let transcriptMarkdown: string | undefined;
-  if (isMarkdown) {
-    transcriptMarkdown = await file.text();
-  }
+  const transcriptMarkdown = await readTranscriptFileText(file);
 
   const init = (await authFetch(`/api/audio-captures/${captureId}/segments/transcript-upload-init`, {
     method: 'POST',
@@ -352,14 +348,71 @@ export async function uploadCaptureTranscriptSegment(
     body: JSON.stringify({
       filename: file.name,
       size_bytes: file.size,
+      transcript_markdown: transcriptMarkdown,
     }),
   })) as {
-    upload_id: string;
-    staging_s3_key: string;
+    mode?: string;
+    upload_id?: string;
+    staging_s3_key?: string;
     upload_url?: string;
     skip_upload?: boolean;
     headers?: Record<string, string>;
+    transcript_headers?: Record<string, string>;
+    original_headers?: Record<string, string>;
+    file_hash?: string;
+    transcript_s3_key?: string;
+    normalized_markdown?: string;
+    transcript_upload_url?: string;
+    original_upload_url?: string;
   };
+
+  if (init.mode === 'direct') {
+    const transcriptUrl = init.transcript_upload_url;
+    const originalUrl = init.original_upload_url;
+    const normalized = init.normalized_markdown;
+    const fileHash = init.file_hash;
+    const transcriptS3Key = init.transcript_s3_key;
+    if (!transcriptUrl || !originalUrl || !normalized || !fileHash || !transcriptS3Key) {
+      throw new Error('Server did not return direct transcript upload URLs');
+    }
+    const transcriptContentType =
+      init.transcript_headers?.['Content-Type'] ??
+      init.headers?.['Content-Type'] ??
+      'text/markdown; charset=utf-8';
+    const originalContentType =
+      init.original_headers?.['Content-Type'] ??
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    await putFileToPresignedUrl(
+      transcriptUrl,
+      new Blob([normalized], { type: 'text/markdown' }),
+      { 'Content-Type': transcriptContentType },
+      'PUT',
+    );
+    await putFileToPresignedUrl(
+      originalUrl,
+      file,
+      { 'Content-Type': originalContentType },
+      'PUT',
+    );
+
+    const data = await authFetch(`/api/audio-captures/${captureId}/segments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'direct',
+        filename: file.name,
+        file_hash: fileHash,
+        transcript_s3_key: transcriptS3Key,
+        size_bytes: file.size,
+        segment_label: segmentLabel?.trim() || undefined,
+      }),
+    });
+    return (data as { capture: AudioCaptureDetail }).capture;
+  }
+
+  if (!init.upload_id || !init.staging_s3_key) {
+    throw new Error('Server did not return staging upload metadata');
+  }
 
   if (!init.skip_upload) {
     const uploadUrl = init.upload_url;
@@ -376,7 +429,7 @@ export async function uploadCaptureTranscriptSegment(
       staging_s3_key: init.staging_s3_key,
       size_bytes: file.size,
       segment_label: segmentLabel?.trim() || undefined,
-      ...(transcriptMarkdown !== undefined ? { transcript_markdown: transcriptMarkdown } : {}),
+      transcript_markdown: transcriptMarkdown,
     }),
   });
   return (data as { capture: AudioCaptureDetail }).capture;

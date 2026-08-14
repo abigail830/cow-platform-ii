@@ -16,7 +16,7 @@ export function shouldUseDirectUpload(file: File): boolean {
 
 export async function putFileToPresignedUrl(
   uploadUrl: string,
-  file: File,
+  body: Blob | File,
   headers: Record<string, string> = {},
   method = 'PUT',
 ): Promise<void> {
@@ -25,7 +25,7 @@ export async function putFileToPresignedUrl(
     putRes = await fetch(uploadUrl, {
       method,
       headers,
-      body: file,
+      body,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Direct storage upload failed';

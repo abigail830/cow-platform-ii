@@ -48,6 +48,7 @@ import {
 } from '../db/schema.ts';
 import { initAudioSegmentUpload } from '../services/capture-audio-upload.ts';
 import {
+  completeTranscriptSegmentDirectUpload,
   completeTranscriptSegmentUpload,
   createAndAttachTranscriptSegment,
   initTranscriptSegmentUpload,
@@ -324,6 +325,7 @@ audioCaptures.post(
       filename?: string;
       size_bytes?: number;
       file_hash?: string;
+      transcript_markdown?: string;
     }>();
 
     try {
@@ -331,6 +333,7 @@ audioCaptures.post(
         captureId: id,
         filename: body.filename ?? '',
         sizeBytes: Number(body.size_bytes),
+        transcriptMarkdown: body.transcript_markdown,
       });
       return c.json(result);
     } catch (error) {
@@ -404,9 +407,31 @@ audioCaptures.post(
         upload_id?: string;
         staging_s3_key?: string;
         transcript_markdown?: string;
+        mode?: string;
+        transcript_s3_key?: string;
       }>();
 
       if (inputMode === 'transcript') {
+        if (body.mode === 'direct' && body.transcript_s3_key && body.file_hash && body.filename) {
+          const sizeBytes = Number(body.size_bytes);
+          if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
+            return c.json({ error: 'size_bytes is required' }, 400);
+          }
+
+          const segment = await completeTranscriptSegmentDirectUpload({
+            channelId: capture.channel_id,
+            captureId: id,
+            filename: body.filename,
+            fileHash: body.file_hash,
+            transcriptS3Key: body.transcript_s3_key,
+            sizeBytes,
+            uploadedBy: user.id,
+            segmentLabel: body.segment_label,
+          });
+          const refreshed = await getCaptureWithSegments(id, { sync: false });
+          return c.json({ audio_id: segment.id, capture: refreshed }, 201);
+        }
+
         if (!body.upload_id || !body.staging_s3_key || !body.filename) {
           return c.json({ error: 'upload_id, staging_s3_key, and filename are required' }, 400);
         }
