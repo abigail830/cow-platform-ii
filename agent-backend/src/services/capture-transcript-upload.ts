@@ -118,7 +118,16 @@ export async function createAndAttachTranscriptSegment(input: {
     segmentLabel: input.segmentLabel,
   });
 
+  await afterTranscriptSegmentAttached(input.captureId);
+
   return row!;
+}
+
+async function afterTranscriptSegmentAttached(captureId: string): Promise<void> {
+  const { maybeStartCapturePostProcess } = await import('./capture-post-process-trigger.ts');
+  const { syncCaptureStatus } = await import('./capture-status.ts');
+  void maybeStartCapturePostProcess(captureId);
+  void syncCaptureStatus(captureId);
 }
 
 async function attachTranscriptSegmentRecord(input: {
@@ -161,6 +170,8 @@ async function attachTranscriptSegmentRecord(input: {
     audioId: row!.id,
     segmentLabel: input.segmentLabel,
   });
+
+  await afterTranscriptSegmentAttached(input.captureId);
 
   return row!;
 }
