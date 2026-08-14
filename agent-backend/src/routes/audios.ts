@@ -38,6 +38,7 @@ import {
 } from '../services/audios.ts';
 import { autoStartAudioPipelineAfterUpload } from '../services/auto-audio-pipeline.ts';
 import { startAudioPipeline } from '../services/audio-pipeline-runner.ts';
+import { isTranscriptSourceMetadata } from '../services/capture-transcript-upload.ts';
 
 const audios = new Hono();
 
@@ -204,25 +205,23 @@ audios.get(
     const row = await getAudioById(id);
     if (!row) return c.json({ error: 'Audio not found' }, 404);
 
-    const key = transcriptS3Key(row.fileHash);
-    const head = await headStorageObject(key);
-    if (!head.exists) {
+    const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+    const isTranscriptSource = isTranscriptSourceMetadata(metadata);
+    const key =
+      isTranscriptSource && row.s3Key?.trim() ? row.s3Key : transcriptS3Key(row.fileHash);
+
+    try {
+      const transcriptUrl = await getStorageReadUrl(key);
       return c.json({
         id: row.id,
         status: row.status,
-        has_transcript: false,
+        has_transcript: isTranscriptSource,
+        transcript_url: transcriptUrl,
         transcript: null,
       });
+    } catch (error) {
+      return c.json({ error: formatStorageError(error) }, 400);
     }
-
-    const transcriptUrl = await getStorageReadUrl(key);
-    return c.json({
-      id: row.id,
-      status: row.status,
-      has_transcript: true,
-      transcript_url: transcriptUrl,
-      transcript: null,
-    });
   },
 );
 
