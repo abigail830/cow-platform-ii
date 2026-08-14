@@ -3048,6 +3048,10 @@ textarea {
   overscroll-behavior: contain;
 }
 
+.audio-detail-transcript .document-markdown-panel.capture-artifact-preview-scroll {
+  max-height: min(48vh, 28rem);
+}
+
 .audio-segment-drawer-backdrop {
   z-index: 70;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   createAudioChannel,
   deleteAudioChannel,
@@ -19,6 +19,7 @@ import { AudioOutletProvider } from './AudioOutletContext.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 
 const PAGE = getNavPage('/knowledge/audio')!;
+const AUDIO_LIST_PATH = '/knowledge/audio';
 
 type ChannelModalState =
   | { mode: 'create'; parentId: string | null }
@@ -26,6 +27,8 @@ type ChannelModalState =
 
 export function AudioLayout() {
   const { user } = useAppOutletContext();
+  const navigate = useNavigate();
+  const location = useLocation();
   const canWrite = useMemo(() => hasPermission(user, 'knowledge-management:audio', 'write'), [user]);
 
   const [channels, setChannels] = useState<AudioChannel[]>([]);
@@ -99,6 +102,16 @@ export function AudioLayout() {
     await loadChannels();
   }
 
+  const handleSelectChannel = useCallback(
+    (channelId: string) => {
+      setSelectedChannelId(channelId);
+      if (location.pathname.startsWith(`${AUDIO_LIST_PATH}/`)) {
+        navigate(AUDIO_LIST_PATH);
+      }
+    },
+    [location.pathname, navigate],
+  );
+
   if (forbidden) return <Navigate to="/agents/playground" replace />;
 
   const createInheritHint =
@@ -142,7 +155,7 @@ export function AudioLayout() {
             selectedId={selectedChannelId}
             canCreateRoot={canWrite}
             emptyMessage="No channels yet. Create one to organize audio files."
-            onSelect={setSelectedChannelId}
+            onSelect={handleSelectChannel}
             onCreateRoot={() => setChannelModal({ mode: 'create', parentId: null })}
             onCreateChild={(parentId) => setChannelModal({ mode: 'create', parentId })}
             onSettings={(channel) => setChannelModal({ mode: 'settings', channel })}

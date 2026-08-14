@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type WheelEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowDown,
@@ -39,6 +39,7 @@ import { AudioSegmentDrawer } from '../components/AudioSegmentDrawer.tsx';
 import { CaptureDetailsPanel } from '../components/CaptureDetailsPanel.tsx';
 import { CapturePipelineStatus } from '../components/CapturePipelineStatus.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
+import { Markdown } from '../chat/Markdown.tsx';
 import { useAudioOutletContext } from './AudioOutletContext.tsx';
 
 function PanelLoading({ label }: { label: string }) {
@@ -148,7 +149,7 @@ function captureExpectsPostProcessArtifacts(
   return jobStage != null && POST_PROCESS_ARTIFACT_STAGES.has(jobStage);
 }
 
-function handleArtifactPreviewWheel(event: React.WheelEvent<HTMLPreElement>) {
+function handleArtifactPreviewWheel(event: WheelEvent<HTMLElement>) {
   const element = event.currentTarget;
   const canScroll = element.scrollHeight > element.clientHeight;
   if (!canScroll) return;
@@ -198,6 +199,7 @@ export function AudioCaptureDetailPage() {
   const { captureId } = useParams<{ captureId: string }>();
   const { setSelectedChannelId, canWrite } = useAudioOutletContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
 
   const [capture, setCapture] = useState<AudioCaptureDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -239,13 +241,15 @@ export function AudioCaptureDetailPage() {
       try {
         const sync = options?.sync ?? !options?.silent;
         const data = await getAudioCapture(captureId, { sync });
+        if (!mountedRef.current) return;
         setCapture(data);
         setSelectedChannelId(data.channel_id);
       } catch (err) {
+        if (!mountedRef.current) return;
         setError(err instanceof Error ? err.message : 'Failed to load capture');
         setCapture(null);
       } finally {
-        if (!options?.silent) setLoading(false);
+        if (!options?.silent && mountedRef.current) setLoading(false);
       }
     },
     [captureId, setSelectedChannelId],
@@ -412,6 +416,13 @@ export function AudioCaptureDetailPage() {
   useEffect(() => {
     syncCaptureWhenCoreArtifactsReady(structuredArtifact, contextArtifact, extractionArtifact);
   }, [structuredArtifact, contextArtifact, extractionArtifact, syncCaptureWhenCoreArtifactsReady]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     void loadCapture({ sync: false });
@@ -787,12 +798,12 @@ export function AudioCaptureDetailPage() {
     if (activeTabLoaded) {
       if (artifactTab === 'summary') {
         return (
-          <pre
-            className="document-json-preview capture-extraction-preview capture-artifact-preview-scroll"
+          <div
+            className="document-markdown-panel capture-artifact-preview-scroll"
             onWheel={handleArtifactPreviewWheel}
           >
-            {summaryMarkdown}
-          </pre>
+            <Markdown content={summaryMarkdown ?? ''} />
+          </div>
         );
       }
 
