@@ -11,13 +11,11 @@ import {
   audioStoragePrefix,
   extensionFromFilename,
   getStorageUploadUrl,
-  headStorageObject,
   sha256Hex,
   transcriptS3Key,
   uploadAudioObject,
   validateFileHash,
 } from '../storage/audio-files.ts';
-import { readStorageBuffer } from '../storage/document-content.ts';
 import { attachAudioToCapture } from './audio-captures.ts';
 
 export { MAX_TRANSCRIPT_UPLOAD_BYTES, normalizeTranscriptMarkdown, validateTranscriptFilename } from './capture-transcript-normalize.ts';
@@ -280,34 +278,25 @@ export async function completeTranscriptSegmentUpload(input: {
     throw new Error('staging_s3_key does not match upload_id and filename');
   }
 
-  const head = await headStorageObject(expectedKey);
-  if (!head.exists) {
-    throw new Error('Uploaded transcript object not found in storage');
+  const inline = input.transcriptMarkdown?.trim();
+  if (!inline) {
+    throw new Error(
+      'transcript_markdown is required; use direct upload so the browser PUTs to OSS',
+    );
+  }
+  if (Buffer.byteLength(inline, 'utf8') > MAX_TRANSCRIPT_UPLOAD_BYTES) {
+    throw new Error('Transcript file exceeds maximum allowed size');
   }
 
-  const ext = extensionFromFilename(filename).toLowerCase();
-  let buffer: Buffer;
-  if (ext === 'md' || ext === 'markdown') {
-    const inline = input.transcriptMarkdown?.trim();
-    if (!inline) {
-      throw new Error('transcript_markdown is required for markdown transcript uploads');
-    }
-    buffer = Buffer.from(inline, 'utf8');
-    if (buffer.length > MAX_TRANSCRIPT_UPLOAD_BYTES) {
-      throw new Error('Transcript file exceeds maximum allowed size');
-    }
-  } else {
-    buffer = await readStorageBuffer(expectedKey);
-    if (!buffer || buffer.length === 0) {
-      throw new Error('Uploaded transcript object is empty');
-    }
-  }
-
-  return createAndAttachTranscriptSegment({
+  const normalized = normalizeTranscriptMarkdown(inline, filename);
+  const fileHash = sha256Hex(Buffer.from(normalized, 'utf8'));
+  return attachTranscriptSegmentRecord({
     channelId: input.channelId,
     captureId: input.captureId,
     filename,
-    buffer,
+    fileHash,
+    transcriptS3Key: transcriptS3Key(fileHash),
+    sizeBytes: input.sizeBytes,
     uploadedBy: input.uploadedBy,
     segmentLabel: input.segmentLabel,
   });

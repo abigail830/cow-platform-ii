@@ -178,6 +178,7 @@ export async function getStorageUploadUrl(
   );
 }
 
+/** Worker/local only. Do not call from Vercel request handlers (HK→Aliyun HEAD times out). */
 export async function headStorageObject(
   key: string,
 ): Promise<{ exists: boolean; size: number; contentType: string | null }> {

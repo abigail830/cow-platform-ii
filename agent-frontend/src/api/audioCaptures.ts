@@ -410,29 +410,7 @@ export async function uploadCaptureTranscriptSegment(
     return (data as { capture: AudioCaptureDetail }).capture;
   }
 
-  if (!init.upload_id || !init.staging_s3_key) {
-    throw new Error('Server did not return staging upload metadata');
-  }
-
-  if (!init.skip_upload) {
-    const uploadUrl = init.upload_url;
-    if (!uploadUrl) throw new Error('Server did not return an upload URL');
-    await putFileToPresignedUrl(uploadUrl, file, init.headers ?? {}, 'PUT');
-  }
-
-  const data = await authFetch(`/api/audio-captures/${captureId}/segments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      filename: file.name,
-      upload_id: init.upload_id,
-      staging_s3_key: init.staging_s3_key,
-      size_bytes: file.size,
-      segment_label: segmentLabel?.trim() || undefined,
-      transcript_markdown: transcriptMarkdown,
-    }),
-  });
-  return (data as { capture: AudioCaptureDetail }).capture;
+  throw new Error('Server did not return direct transcript upload URLs');
 }
 
 export async function reorderCaptureSegments(
@@ -481,7 +459,7 @@ export async function fetchCapturePostProcessArtifactText(
   return fetchPresignedStorageText(match.url, signal);
 }
 
-/** @deprecated Prefer presign + browser fetch to avoid Vercel→OSS proxy reads. */
+/** Assemble post-process artifacts via presign + browser→OSS (no Vercel proxy). */
 export async function getCapturePostProcessArtifacts(captureId: string): Promise<{
   structured_transcript: unknown | null;
   recording_context: unknown | null;
@@ -489,21 +467,56 @@ export async function getCapturePostProcessArtifacts(captureId: string): Promise
   summary: string | null;
   missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'>;
 }> {
-  return authFetch(`/api/audio-captures/${captureId}/post-process-artifacts`) as Promise<{
-    structured_transcript: unknown | null;
-    recording_context: unknown | null;
-    extraction: unknown | null;
-    summary: string | null;
-    missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'>;
-  }>;
+  const kinds: CapturePostProcessArtifactKind[] = [
+    'structured_transcript',
+    'recording_context',
+    'extraction',
+    'summary',
+  ];
+  const files = await presignCapturePostProcessArtifacts(captureId, kinds);
+  const byKind = new Map(files.map((file) => [file.artifact, file.url]));
+
+  async function readText(kind: CapturePostProcessArtifactKind): Promise<string | null> {
+    const url = byKind.get(kind);
+    if (!url) return null;
+    return fetchPresignedStorageText(url);
+  }
+
+  function parseJson(text: string | null): unknown | null {
+    if (!text) return null;
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return null;
+    }
+  }
+
+  const [structuredText, contextText, extractionText, summaryText] = await Promise.all([
+    readText('structured_transcript'),
+    readText('recording_context'),
+    readText('extraction'),
+    readText('summary'),
+  ]);
+
+  const structured_transcript = parseJson(structuredText);
+  const recording_context = parseJson(contextText);
+  const extraction = parseJson(extractionText);
+  const summary = summaryText?.trim() ? summaryText : null;
+  const missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'> = [];
+  if (structured_transcript == null) missing.push('structured_transcript');
+  if (recording_context == null) missing.push('recording_context');
+  if (extraction == null) missing.push('extraction');
+  if (summary == null) missing.push('summary');
+  return { structured_transcript, recording_context, extraction, summary, missing };
 }
 
 export async function getCaptureArtifact<T = unknown>(
   captureId: string,
   artifact: 'structured_transcript' | 'recording_context' | 'extraction',
 ): Promise<T> {
-  const data = await authFetch(`/api/audio-captures/${captureId}/artifacts/${artifact}`);
-  return (data as { data: T }).data;
+  const text = await fetchCapturePostProcessArtifactText(captureId, artifact);
+  if (!text) throw new Error('Artifact not found');
+  return JSON.parse(text) as T;
 }
 
 export async function updateAudioCapture(

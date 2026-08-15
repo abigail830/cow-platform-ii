@@ -9,6 +9,7 @@ import {
   putFileToPresignedUrl,
   shouldUseDirectUpload,
   UPLOAD_CHUNK_SIZE_BYTES,
+  usesRemoteApiOrigin,
 } from './direct-upload.ts';
 import {
   collectRelativeMarkdownImagePaths,
@@ -340,6 +341,11 @@ export async function downloadDocumentBundle(id: string, suggestedFilename: stri
     await downloadDocumentBundleViaBrowser(id, suggestedFilename);
   } catch (error) {
     if (!isBrowserBundleFailure(error)) throw error;
+    if (import.meta.env.PROD || usesRemoteApiOrigin()) {
+      throw new Error(
+        'Could not download artifacts from object storage (network/CORS). In Aliyun OSS CORS, allow GET from your frontend origin.',
+      );
+    }
     await downloadDocumentBundleViaServer(id, suggestedFilename);
   }
 }

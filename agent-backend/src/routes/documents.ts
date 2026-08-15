@@ -20,7 +20,6 @@ import {
   fileTypeFromExtension,
   formatStorageError,
   getDocumentDownloadUrl,
-  headStorageObject,
   MAX_DOCUMENT_BYTES,
   presignDocumentBundlePaths,
   sha256Hex,
@@ -108,14 +107,8 @@ async function finalizeDocumentRecord(input: {
     throw new Error('s3_key does not match file_hash and filename');
   }
 
-  const head = await headStorageObject(expectedKey);
-  if (!head.exists) {
-    throw new Error('Uploaded object not found in storage. Complete the direct upload first.');
-  }
-  if (head.size !== input.sizeBytes) {
-    throw new Error(`Uploaded object size mismatch (expected ${input.sizeBytes}, got ${head.size})`);
-  }
-
+  // Do not HEAD OSS here: Vercel HK cannot reliably TCP to Aliyun South China.
+  // The browser PUT to the presigned URL is the existence check; workers verify later.
   const document = await createDocumentRecord({
     channelId: input.channelId,
     name: filename,

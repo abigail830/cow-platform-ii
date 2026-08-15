@@ -10,8 +10,8 @@ import {
   extensionFromFilename,
   fileTypeFromExtension,
   formatStorageError,
+  getStorageReadUrl,
   guessAudioContentType,
-  headStorageObject,
   MAX_AUDIO_BYTES,
   sha256Hex,
   StorageNotConfiguredError,
@@ -22,11 +22,9 @@ import {
 import {
   captureArtifactS3Key,
   presignCapturePostProcessArtifacts,
-  readCapturePostProcessArtifactBundle,
   type CaptureArtifactName,
   type CapturePostProcessArtifactKind,
 } from '../storage/audio-capture-files.ts';
-import { readStorageText } from '../storage/document-content.ts';
 import {
   attachAudioToCapture,
   createAudioCapture,
@@ -463,11 +461,6 @@ audioCaptures.post(
         return c.json({ error: 's3_key does not match file_hash and filename' }, 400);
       }
 
-      const head = await headStorageObject(expectedKey);
-      if (!head.exists) {
-        return c.json({ error: 'Uploaded object not found in storage' }, 400);
-      }
-
       const audio = await createAudioRecord({
         channelId: capture.channel_id,
         name: filename,
@@ -585,29 +578,11 @@ audioCaptures.get(
     if (!isStorageEnabled()) return storageUnavailable(c);
 
     try {
-      const bundle = await readCapturePostProcessArtifactBundle(id);
-      if (bundle.missing.length === 3) {
-        return c.json({ error: 'Post-process artifacts not found in storage' }, 404);
-      }
-      const coreMissing = bundle.missing.filter((name) => name !== 'summary');
-      if (coreMissing.length === 0) {
-        const { syncCaptureStatus } = await import('../services/capture-status.ts');
-        void syncCaptureStatus(id);
-      }
-      return c.json(bundle);
+      const files = await presignCapturePostProcessArtifacts(id);
+      return c.json({ files });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load artifacts';
-      const storageTimeout = /ETIMEDOUT|ECONNRESET|ENOTFOUND|timeout|timed out|socket hang up/i.test(
-        message,
-      );
-      return c.json(
-        {
-          error: storageTimeout
-            ? 'Object storage connection timed out'
-            : message,
-        },
-        storageTimeout ? 503 : 500,
-      );
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: formatStorageError(error) }, 400);
     }
   },
 );
@@ -674,13 +649,11 @@ audioCaptures.get(
     if (!isStorageEnabled()) return storageUnavailable(c);
 
     try {
-      const key = captureArtifactS3Key(id, artifact as CaptureArtifactName);
-      const text = await readStorageText(key);
-      if (!text) return c.json({ error: 'Artifact not found' }, 404);
-      const data = JSON.parse(text);
-      return c.json({ artifact, data });
-    } catch {
-      return c.json({ error: 'Artifact not found' }, 404);
+      const url = await getStorageReadUrl(captureArtifactS3Key(id, artifact as CaptureArtifactName));
+      return c.json({ artifact, url });
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: formatStorageError(error) }, 400);
     }
   },
 );

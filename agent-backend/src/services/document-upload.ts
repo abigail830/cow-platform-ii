@@ -3,12 +3,12 @@ import {
   extensionFromFilename,
   getStorageUploadUrl,
   guessDocumentContentType,
-  headStorageObject,
   MAX_DOCUMENT_BYTES,
   validateDocumentFilename,
   validateFileHash,
 } from '../storage/document-files.ts';
 
+/** Mint a presigned PUT URL. Signing is local — do not HEAD OSS here (Vercel HK→Aliyun times out). */
 export async function initDocumentUpload(input: {
   filename: string;
   fileHash: string;
@@ -29,16 +29,6 @@ export async function initDocumentUpload(input: {
   const ext = extensionFromFilename(filename);
   const s3Key = buildDocumentS3Key(fileHash, ext);
   const contentType = input.contentType?.trim() || guessDocumentContentType(ext);
-
-  const head = await headStorageObject(s3Key);
-  if (head.exists && head.size === sizeBytes) {
-    return {
-      s3_key: s3Key,
-      file_hash: fileHash,
-      skip_upload: true,
-    };
-  }
-
   const uploadUrl = await getStorageUploadUrl(s3Key, contentType);
   return {
     s3_key: s3Key,

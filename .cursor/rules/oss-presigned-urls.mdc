@@ -5,13 +5,25 @@ alwaysApply: true
 
 # Object storage — Presigned URLs (no Vercel→OSS proxy)
 
-API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object bytes through serverless handlers** for user-facing upload/download — cross-border latency and timeouts are expected. Vercel serverless request bodies are capped at **~4.5 MB** (`413 FUNCTION_PAYLOAD_TOO_LARGE`); large uploads that POST multipart through the API will fail in production even when local dev works.
+API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object bytes through serverless handlers** for user-facing upload/download — cross-border latency and timeouts are expected (`connect ETIMEDOUT …:443`). Vercel serverless request bodies are capped at **~4.5 MB** (`413 FUNCTION_PAYLOAD_TOO_LARGE`); large uploads that POST multipart through the API will fail in production even when local dev works.
+
+Signing a URL is local HMAC and does **not** open a TCP connection to OSS. `HeadObject` / `GetObject` / `PutObject` **do**. That is the same timeout class as proxying file bytes.
 
 ## Pattern
 
 1. **Server**: authenticate + authorize (RBAC), then mint a **presigned URL** with `getStorageReadUrl` / `getStorageUploadUrl` (signing is local HMAC — no OSS round-trip).
-2. **Browser**: `fetch(presignedUrl)` directly against OSS (PUT for upload, GET for read).
-3. **Server** (upload only): optional `upload-complete` / HEAD verify + DB write after object exists.
+2. **Browser**: `fetch(presignedUrl)` directly against OSS (PUT for upload, GET for read) **in the same user action**.
+3. **Server** (upload only): `upload-complete` validates `s3_key` matches `file_hash` + filename, then writes DB. **Do not HEAD/GET/PUT OSS** on init or complete.
+
+## TTL — remint, do not persist
+
+Presigned URLs are short-lived (today: document GET ~15 min, audio/upload ~1 h). They **expire**; they do not “time out connecting.”
+
+- **Mint per user action** (page load, tab switch, upload click). Fetch OSS immediately. Do not store URLs in DB, localStorage, or long-lived React state.
+- **Expiry ≠ ETIMEDOUT.** An expired signature is OSS **HTTP 403** (AccessDenied). `connect ETIMEDOUT …:443` means Vercel (or the browser) could not TCP to OSS at all.
+- Treat 403 from a just-minted URL as missing/forbidden object; if a **cached** URL 403s, remint and retry once.
+- Upload TTL only matters if the user waits longer than TTL between `upload-init` and PUT. Current flows PUT immediately after init.
+- Do not “fix expiry” by proxying bytes through Vercel or by persisting a URL for hours. Remint.
 
 ## Do
 
@@ -25,10 +37,15 @@ API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object
   - **Frontend helpers**: `agent-frontend/src/api/direct-upload.ts` (`shouldUseDirectUpload`, `putFileToPresignedUrl`), `fetchPresignedStorageText` in `storage-fetch.ts`
 - Presign **per file** when objects are large or tabs load independently; batch-presign only when all URLs are needed at once.
 - Ensure OSS bucket **CORS** allows the frontend origin for GET/PUT as needed.
+- Production frontend (`import.meta.env.PROD` or `VITE_API_ORIGIN`) must use presigned PUT for **every** file size — not only files above the Vercel body limit.
+- Capture status sync from **pipeline job rows in the DB**. Do not HEAD OSS to confirm artifacts exist.
 
 ## Don't
 
-- Add routes that `readStorageText` / `uploadAudioObject` full bodies for **browser-initiated** flows
+- Add routes that `readStorageText` / `readStorageBuffer` / `uploadAudioObject` / `headStorageObject` on **browser-initiated** or page-load request paths
+- Use HEAD to implement `skip_upload`, folder-exists, capture `done` vs `ready`, or size checks on those paths
+- Persist presigned URLs (DB, localStorage, long-lived client state) or reuse one URL across sessions
+- Fall back from a failed browser→OSS fetch to a Vercel proxy of the same bytes (ZIP bundle, artifact JSON, etc.)
 - Legacy **multipart chunk** uploads must use chunks **≤ 3 MB** (`UPLOAD_CHUNK_SIZE_BYTES` in `direct-upload.ts`) if they still hit the API — prefer presigned full-file PUT instead
 - Block UI on a single bundle request that waits for every artifact when partial/progressive load is possible
 - Proxy OSS through Vercel to “simplify” the frontend — it reintroduces the timeout class
@@ -36,12 +53,14 @@ API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object
 ## Exceptions (server may touch OSS directly)
 
 - **Workers** (GitHub Actions, `openkms-cli`) running outside Vercel
-- **Small internal/admin** tools where latency is acceptable
-- **HEAD/existence checks** for status sync — keep off hot paths; prefer `sync:false` defaults
+- **Small internal/admin** tools where latency is acceptable (console storage list/move). Even there, do not HEAD before PUT — overwrite/idempotent writes are enough
+- On serverless, skip OSS fallbacks (`markdown_s3_key` GET, pageindex `readMarkdownFromStorage`) and use the DB/body payload instead
 
 ## New feature checklist
 
-- [ ] Upload: presigned PUT + complete callback?
+- [ ] Upload: presigned PUT + complete callback (no HEAD)?
 - [ ] Download/read: presigned GET manifest?
-- [ ] Frontend fetches OSS directly?
+- [ ] Frontend fetches OSS directly (including small files in production)?
+- [ ] No Vercel HEAD/GET/PUT on the user-facing path?
+- [ ] URL minted for this action only (not cached across reloads)?
 - [ ] CORS documented or already on bucket?

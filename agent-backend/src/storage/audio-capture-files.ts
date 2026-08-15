@@ -1,5 +1,5 @@
 import { validateKey } from './prefix-utils.ts';
-import { getStorageReadUrl, headStorageObject } from './audio-files.ts';
+import { getStorageReadUrl } from './audio-files.ts';
 import { readStorageText } from './document-content.ts';
 
 export const CAPTURE_PREFIX = 'captures/';
@@ -62,20 +62,6 @@ export function captureArtifactS3Key(
     default:
       throw new Error(`Unknown capture artifact: ${artifact}`);
   }
-}
-
-const POST_PROCESS_ARTIFACT_KEYS = [
-  structuredTranscriptS3Key,
-  recordingContextS3Key,
-  extractionS3Key,
-] as const;
-
-/** True when all three post-process JSON artifacts exist in object storage. */
-export async function capturePostProcessArtifactsExist(captureId: string): Promise<boolean> {
-  const heads = await Promise.all(
-    POST_PROCESS_ARTIFACT_KEYS.map((keyFn) => headStorageObject(keyFn(captureId))),
-  );
-  return heads.every((head) => head.exists);
 }
 
 export type CapturePostProcessArtifactKind =
@@ -145,7 +131,7 @@ function parseStorageJson(text: string | null): unknown | null {
   }
 }
 
-/** Read all post-process JSON artifacts in one round-trip to object storage. */
+/** Worker/local only — do not call from Vercel request handlers (GET times out HK→OSS). */
 export async function readCapturePostProcessArtifactBundle(
   captureId: string,
 ): Promise<CapturePostProcessArtifactBundle> {

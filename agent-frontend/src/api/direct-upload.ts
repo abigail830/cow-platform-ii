@@ -10,8 +10,9 @@ export function usesRemoteApiOrigin(): boolean {
   return Boolean(import.meta.env.VITE_API_ORIGIN?.trim());
 }
 
+/** Production and remote API must never proxy object bytes through Vercel. Local dev may for small files. */
 export function shouldUseDirectUpload(file: File): boolean {
-  return usesRemoteApiOrigin() || file.size > DIRECT_UPLOAD_THRESHOLD_BYTES;
+  return import.meta.env.PROD || usesRemoteApiOrigin() || file.size > DIRECT_UPLOAD_THRESHOLD_BYTES;
 }
 
 export async function putFileToPresignedUrl(

@@ -18,7 +18,6 @@ import {
   getStorageReadUrl,
   getStorageUploadUrl,
   guessAudioContentType,
-  headStorageObject,
   MAX_AUDIO_BYTES,
   sha256Hex,
   StorageNotConfiguredError,
@@ -68,14 +67,7 @@ async function finalizeAudioRecord(input: {
     throw new Error('s3_key does not match file_hash and filename');
   }
 
-  const head = await headStorageObject(expectedKey);
-  if (!head.exists) {
-    throw new Error('Uploaded object not found in storage. Complete the direct upload first.');
-  }
-  if (head.size !== input.sizeBytes) {
-    throw new Error(`Uploaded object size mismatch (expected ${input.sizeBytes}, got ${head.size})`);
-  }
-
+  // Do not HEAD OSS here: Vercel HK cannot reliably TCP to Aliyun South China.
   const audio = await createAudioRecord({
     channelId: input.channelId,
     name: filename,
@@ -278,16 +270,6 @@ audios.post(
       const ext = extensionFromFilename(filename);
       const s3Key = buildAudioS3Key(fileHash, ext);
       const contentType = body.content_type?.trim() || guessAudioContentType(ext);
-
-      const head = await headStorageObject(s3Key);
-      if (head.exists && head.size === sizeBytes) {
-        return c.json({
-          s3_key: s3Key,
-          file_hash: fileHash,
-          skip_upload: true,
-        });
-      }
-
       const uploadUrl = await getStorageUploadUrl(s3Key, contentType);
       return c.json({
         s3_key: s3Key,

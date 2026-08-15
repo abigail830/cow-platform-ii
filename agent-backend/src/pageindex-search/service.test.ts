@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createPageIndexSearchService } from './service.ts';
+import { createPageIndexSearchService, defaultReadMarkdownFromStorage } from './service.ts';
 import type { PageIndexItemRecord, PageIndexItemStore } from './ports.ts';
 
 const kbId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -152,5 +152,17 @@ describe('createPageIndexSearchService', () => {
     const structure = await service.getDocumentStructure(kbId, docId, { maxDepth: 2 });
     assert.equal(structure.strategy, 'markdown-headings');
     assert.equal(structure.structure[1]?.summary, 'Protocol Alpha');
+  });
+
+  it('skips OSS markdown fallback on serverless', async () => {
+    const prev = process.env.VERCEL;
+    process.env.VERCEL = '1';
+    try {
+      const text = await defaultReadMarkdownFromStorage('docs/hash/original.pdf');
+      assert.equal(text, null);
+    } finally {
+      if (prev === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = prev;
+    }
   });
 });

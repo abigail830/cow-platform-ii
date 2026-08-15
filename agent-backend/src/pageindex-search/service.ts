@@ -2,6 +2,7 @@ import {
   readStorageText,
   storagePrefixFromS3Key,
 } from '../storage/document-content.ts';
+import { isServerlessRuntime } from '../services/pipeline-worker-mode.ts';
 import {
   DEFAULT_PAGE_SIZE,
   DEFAULT_SECTION_MAX_CHARS,
@@ -38,6 +39,7 @@ function clampOffset(offset?: number): number {
 }
 
 export async function defaultReadMarkdownFromStorage(originalS3Key: string): Promise<string | null> {
+  if (isServerlessRuntime()) return null;
   const prefix = storagePrefixFromS3Key(originalS3Key);
   return readStorageText(`${prefix}/markdown.md`);
 }

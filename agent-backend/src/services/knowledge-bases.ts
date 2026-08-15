@@ -22,6 +22,7 @@ import {
   KB_IMPORT_MAX_PARSING_RESULT_BYTES,
 } from '../shared/kb-import-limits.ts';
 import { resolveDefaultPipelineIdForKbType } from '../shared/kb-pipeline-binding.ts';
+import { isServerlessRuntime } from './pipeline-worker-mode.ts';
 import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../shared/pipeline-config-store.ts';
 import { getModelConfigById } from '../shared/model-config-store.ts';
 import { countIndexedDocuments, countKbChunks } from './kb-chunks.ts';
@@ -652,13 +653,19 @@ export async function upsertKbItemFromWorker(
   let markdownComplete = true;
 
   if (input.markdown_s3_key) {
-    const { readStorageText } = await import('../storage/document-content.ts');
-    const fromS3 = await readStorageText(input.markdown_s3_key);
-    if (!fromS3) {
-      throw new Error(`markdown_s3_key not found: ${input.markdown_s3_key}`);
+    if (isServerlessRuntime()) {
+      markdown = input.markdown ?? null;
+      markdownComplete = Boolean(markdown);
+      if (!markdown) warnings.push('markdown_s3_skipped_serverless');
+    } else {
+      const { readStorageText } = await import('../storage/document-content.ts');
+      const fromS3 = await readStorageText(input.markdown_s3_key);
+      if (!fromS3) {
+        throw new Error(`markdown_s3_key not found: ${input.markdown_s3_key}`);
+      }
+      markdown = fromS3;
+      markdownComplete = true;
     }
-    markdown = fromS3;
-    markdownComplete = true;
   } else if (markdown && Buffer.byteLength(markdown, 'utf8') > KB_IMPORT_MAX_MARKDOWN_BYTES) {
     throw new Error(
       `markdown exceeds ${KB_IMPORT_MAX_MARKDOWN_BYTES} bytes; ` +

@@ -1,7 +1,5 @@
 import { and, asc, eq, isNotNull } from 'drizzle-orm';
 import { appAudioCaptures, appAudios, type AudioCaptureStatus, db } from '../db/index.ts';
-import { capturePostProcessArtifactsExist } from '../storage/audio-capture-files.ts';
-import { isStorageEnabled } from '../storage/s3-config.ts';
 import { getLatestCapturePipelineJob } from './audio-capture-pipeline-jobs.ts';
 import { getLatestAudioPipelineJobsForAudios } from './audio-pipeline-jobs.ts';
 import {
@@ -40,25 +38,11 @@ export async function syncCaptureStatus(captureId: string): Promise<AudioCapture
   }));
 
   const captureJob = await getLatestCapturePipelineJob(captureId);
-  let nextStatus = resolveCaptureStatusFromSegments(
+  // Trust pipeline job stage from DB. Do not HEAD OSS — Vercel HK cannot reach Aliyun.
+  const nextStatus = resolveCaptureStatusFromSegments(
     segments,
     captureJob ? { stage: captureJob.stage } : null,
   );
-
-  if (nextStatus === 'done' && captureJob?.stage === 'done' && isStorageEnabled()) {
-    try {
-      const artifactsExist = await capturePostProcessArtifactsExist(captureId);
-      if (!artifactsExist) {
-        nextStatus = 'ready';
-      }
-    } catch (error) {
-      console.warn(
-        `[capture-status] could not verify post-process artifacts for ${captureId}:`,
-        error instanceof Error ? error.message : error,
-      );
-      // Keep the current DB status when storage is temporarily unreachable.
-    }
-  }
 
   if (capture.status !== nextStatus) {
     await db

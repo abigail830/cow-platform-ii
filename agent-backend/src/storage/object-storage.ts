@@ -2,7 +2,6 @@ import {
   assertStorageClient,
   CopyObjectCommand,
   DeleteObjectCommand,
-  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   StorageNotConfiguredError,
@@ -124,25 +123,6 @@ export async function createStorageFolder(params: {
 
   const parent = normalizePrefix(params.parentPrefix ?? '');
   const folderPrefix = joinPrefix(parent, params.name);
-
-  try {
-    await client.send(
-      new HeadObjectCommand({
-        Bucket: config.bucket,
-        Key: folderPrefix,
-      }),
-    );
-    throw new StorageValidationError('Target folder already exists');
-  } catch (error) {
-    if (error instanceof StorageValidationError) throw error;
-    const httpStatus = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
-    const name = (error as { name?: string }).name;
-    const notFound = httpStatus === 404 || name === 'NotFound' || name === 'NoSuchKey';
-    if (!notFound) {
-      const message = error instanceof Error ? error.message : 'Failed to check folder';
-      throw new Error(message);
-    }
-  }
 
   try {
     await client.send(
