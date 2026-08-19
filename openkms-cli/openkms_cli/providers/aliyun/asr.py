@@ -51,6 +51,7 @@ def submit_file_transcription(
     context_prompt: str | None = None,
     language_hints: list[str] | None = None,
     speaker_count: int | None = None,
+    vocabulary_id: str | None = None,
     timeout: int = 120,
 ) -> str:
     if not api_key.strip():
@@ -67,6 +68,8 @@ def submit_file_transcription(
         hints = [str(h).strip() for h in language_hints if str(h).strip()]
         if hints:
             parameters["language_hints"] = hints[:4] if _is_qwen_filetrans_model(model) else hints[:1]
+    if vocabulary_id and str(vocabulary_id).strip():
+        parameters["vocabulary_id"] = str(vocabulary_id).strip()
 
     payload: dict[str, Any] = {
         "model": model,

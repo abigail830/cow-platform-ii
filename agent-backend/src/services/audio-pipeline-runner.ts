@@ -10,6 +10,7 @@ import {
   pipelineTemplateToCliArgs,
 } from '../shared/pipeline-command-template.ts';
 import { getAudioChannelById } from './audios.ts';
+import { getChannelAsrVocabularyIdForJob } from './asr-hotwords.ts';
 import {
   resolveAudioPipelineGithubConfig,
   triggerAudioPipelineGithubActions,
@@ -197,6 +198,7 @@ async function startAsyncAudioPipelineJob(audioId: string): Promise<{ jobId: str
     pipelineName: pipeline.pipelineName,
     provider,
     configYaml: pipeline.configYaml,
+    asrVocabularyIdSnapshot: await getChannelAsrVocabularyIdForJob(audio.channelId),
   });
 
   await spawnAsyncAudioPipelineWorker(job.id, pipeline.pipelineName, apiUrl);

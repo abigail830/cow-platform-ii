@@ -17,6 +17,7 @@ import {
   listAudioChannelTree,
   updateAudioChannel,
 } from '../services/audios.ts';
+import { listHotwordsForChannel } from '../services/asr-hotwords.ts';
 
 const channels = new Hono();
 
@@ -101,6 +102,29 @@ channels.post(
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Channel id is required' }, 400);
     return handleTransferResourceOwner(c, 'audio_channel', id);
+  },
+);
+
+channels.get(
+  '/:id/hotwords',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Channel id is required' }, 400);
+
+    const denied = await denyUnlessAudioChannelAccess(c, id, 'read');
+    if (denied) return denied;
+
+    const row = await getAudioChannelById(id);
+    if (!row) return c.json({ error: 'Channel not found' }, 404);
+
+    const hotwords = await listHotwordsForChannel(id);
+    return c.json({
+      hotwords,
+      asr_vocabulary_id: row.asrVocabularyId,
+      asr_vocabulary_target_model: row.asrVocabularyTargetModel,
+      asr_vocabulary_synced_at: row.asrVocabularySyncedAt?.toISOString() ?? null,
+    });
   },
 );
 

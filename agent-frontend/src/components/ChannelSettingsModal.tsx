@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   fetchChannelProcessingOptions,
   type ChannelProcessingOptions,
 } from '../api/documentChannels.ts';
 import type { AudioChannelProcessingOptions } from '../api/audioChannels.ts';
+import { fetchChannelAsrHotwords, type ChannelAsrHotwordsResponse } from '../api/audioChannels.ts';
 import { ResourceAccessPanel, type ResourceAccessPanelHandle } from './ResourceAccessPanel.tsx';
 import type { ResourceType } from '../api/resourceAccess.ts';
 
@@ -24,13 +26,11 @@ type ChannelSettingsModalProps = {
   }) => Promise<void>;
   resourceType?: ResourceType;
   fetchProcessingOptions?: () => Promise<ChannelProcessingOptions | AudioChannelProcessingOptions>;
-  pipelineHint?: string;
-  postProcessPipelineHint?: string;
   audioPipelineMode?: boolean;
   sharingInheritHint?: string;
 };
 
-type SettingsTab = 'general' | 'pipeline' | 'sharing';
+type SettingsTab = 'general' | 'pipeline' | 'hotwords' | 'sharing';
 
 function isAudioProcessingOptions(
   options: ChannelProcessingOptions | AudioChannelProcessingOptions,
@@ -49,8 +49,6 @@ export function ChannelSettingsModal({
   onSubmit,
   resourceType = 'document_channel',
   fetchProcessingOptions = fetchChannelProcessingOptions,
-  pipelineHint = 'When set, documents in this channel run this parse pipeline (CLI worker + Config YAML, including metadata extract).',
-  postProcessPipelineHint = 'Runs after all segments are transcribed (merge → structure → classify → extract).',
   audioPipelineMode = false,
   sharingInheritHint = 'Documents inherit access rules from their channel. Sub-channels inherit parent channel rules.',
 }: ChannelSettingsModalProps) {
@@ -69,6 +67,9 @@ export function ChannelSettingsModal({
   const [error, setError] = useState('');
   const [sharingCanManage, setSharingCanManage] = useState(false);
   const sharingRef = useRef<ResourceAccessPanelHandle>(null);
+  const [channelHotwords, setChannelHotwords] = useState<ChannelAsrHotwordsResponse | null>(null);
+  const [channelHotwordsLoading, setChannelHotwordsLoading] = useState(false);
+  const [channelHotwordsError, setChannelHotwordsError] = useState('');
 
   useEffect(() => {
     setName(initialName);
@@ -110,24 +111,34 @@ export function ChannelSettingsModal({
     };
   }, [fetchProcessingOptions]);
 
+  useEffect(() => {
+    if (!audioPipelineMode || tab !== 'hotwords') return;
+    let cancelled = false;
+    setChannelHotwordsLoading(true);
+    setChannelHotwordsError('');
+    void fetchChannelAsrHotwords(channelId)
+      .then((data) => {
+        if (!cancelled) setChannelHotwords(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setChannelHotwordsError(err instanceof Error ? err.message : 'Failed to load hotwords');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setChannelHotwordsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [audioPipelineMode, channelId, tab]);
+
   const documentPipelines =
     options && !isAudioProcessingOptions(options) ? options.pipelines : [];
   const transcriptionPipelines =
     options && isAudioProcessingOptions(options) ? options.transcriptionPipelines : [];
   const postProcessPipelines =
     options && isAudioProcessingOptions(options) ? options.postProcessPipelines : [];
-
-  const selectedPipelineLabel = audioPipelineMode
-    ? (pipelineId
-        ? (transcriptionPipelines.find((pipeline) => pipeline.id === pipelineId)?.name ?? null)
-        : null)
-    : pipelineId
-      ? (documentPipelines.find((pipeline) => pipeline.id === pipelineId)?.name ?? null)
-      : null;
-
-  const selectedPostProcessLabel = postProcessPipelineId
-    ? (postProcessPipelines.find((pipeline) => pipeline.id === postProcessPipelineId)?.name ?? null)
-    : null;
 
   async function handleFormSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -156,7 +167,8 @@ export function ChannelSettingsModal({
     }
   }
 
-  const saveDisabled = busy || (tab === 'sharing' && !sharingCanManage);
+  const saveDisabled =
+    busy || tab === 'hotwords' || (tab === 'sharing' && !sharingCanManage);
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
@@ -184,6 +196,17 @@ export function ChannelSettingsModal({
           >
             Pipeline
           </button>
+          {audioPipelineMode ? (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'hotwords'}
+              className={`modal-tab${tab === 'hotwords' ? ' active' : ''}`}
+              onClick={() => setTab('hotwords')}
+            >
+              Hotwords
+            </button>
+          ) : null}
           <button
             type="button"
             role="tab"
@@ -215,53 +238,32 @@ export function ChannelSettingsModal({
             )}
 
             {tab === 'pipeline' && (
-              <div className="form-grid">
+              <div className="channel-pipeline-tab">
                 {optionsLoading ? (
-                  <p className="admin-form-hint form-field-wide">Loading options…</p>
+                  <p className="admin-form-hint">Loading options…</p>
                 ) : optionsError ? (
-                  <p className="error form-field-wide">{optionsError}</p>
+                  <p className="error">{optionsError}</p>
                 ) : audioPipelineMode ? (
                   <>
-                    <div className="channel-transcription-section">
-                      <label className="form-field">
-                        <span>Transcription pipeline</span>
-                        <select
-                          value={pipelineId}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            setPipelineId(value);
-                            if (!value) setAutoStartPipeline(false);
-                          }}
-                        >
-                          <option value="">— None —</option>
-                          {transcriptionPipelines.map((pipeline) => (
-                            <option key={pipeline.id} value={pipeline.id}>
-                              {pipeline.name}
-                            </option>
-                          ))}
-                        </select>
-                        <span className="admin-form-hint">
-                          {pipelineHint}
-                          {selectedPipelineLabel
-                            ? ` Selected: ${selectedPipelineLabel}.`
-                            : ' No transcription pipeline selected.'}
-                        </span>
-                      </label>
-                      {pipelineId ? (
-                        <label className="channel-auto-start-field">
-                          <span className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              className="brand-checkbox"
-                              checked={autoStartPipeline}
-                              onChange={(event) => setAutoStartPipeline(event.target.checked)}
-                            />
-                            Auto-start transcription after segment upload
-                          </span>
-                        </label>
-                      ) : null}
-                    </div>
-                    <label className="form-field form-field-wide">
+                    <label className="channel-pipeline-row">
+                      <span>Transcription pipeline</span>
+                      <select
+                        value={pipelineId}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setPipelineId(value);
+                          if (!value) setAutoStartPipeline(false);
+                        }}
+                      >
+                        <option value="">— None —</option>
+                        {transcriptionPipelines.map((pipeline) => (
+                          <option key={pipeline.id} value={pipeline.id}>
+                            {pipeline.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="channel-pipeline-row">
                       <span>Post-process pipeline</span>
                       <select
                         value={postProcessPipelineId}
@@ -274,18 +276,22 @@ export function ChannelSettingsModal({
                           </option>
                         ))}
                       </select>
-                      <span className="admin-form-hint">
-                        {postProcessPipelineHint}
-                        {selectedPostProcessLabel
-                          ? ` Selected: ${selectedPostProcessLabel}.`
-                          : ' Uses the enabled system default when unset.'}
-                      </span>
+                    </label>
+                    <label className="channel-pipeline-check">
+                      <span>Auto-start transcription after segment upload</span>
+                      <input
+                        type="checkbox"
+                        className="brand-checkbox"
+                        checked={Boolean(pipelineId) && autoStartPipeline}
+                        disabled={!pipelineId}
+                        onChange={(event) => setAutoStartPipeline(event.target.checked)}
+                      />
                     </label>
                   </>
                 ) : (
                   <>
-                    <label className="form-field form-field-wide">
-                      <span>Pipeline (optional)</span>
+                    <label className="channel-pipeline-row">
+                      <span>Pipeline</span>
                       <select
                         value={pipelineId}
                         onChange={(event) => {
@@ -301,27 +307,59 @@ export function ChannelSettingsModal({
                           </option>
                         ))}
                       </select>
-                      <span className="admin-form-hint">
-                        {pipelineHint}
-                        {selectedPipelineLabel
-                          ? ` Selected: ${selectedPipelineLabel}.`
-                          : ' No pipeline selected.'}
-                      </span>
                     </label>
-                    {pipelineId ? (
-                      <label className="form-field form-field-wide channel-auto-start-field">
-                        <span className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            className="brand-checkbox"
-                            checked={autoStartPipeline}
-                            onChange={(event) => setAutoStartPipeline(event.target.checked)}
-                          />
-                          Auto-start pipeline after upload
-                        </span>
-                      </label>
-                    ) : null}
+                    <label className="channel-pipeline-check">
+                      <span>Auto-start pipeline after upload</span>
+                      <input
+                        type="checkbox"
+                        className="brand-checkbox"
+                        checked={Boolean(pipelineId) && autoStartPipeline}
+                        disabled={!pipelineId}
+                        onChange={(event) => setAutoStartPipeline(event.target.checked)}
+                      />
+                    </label>
                   </>
+                )}
+              </div>
+            )}
+
+            {tab === 'hotwords' && (
+              <div className="channel-hotwords-tab">
+                <p className="admin-form-hint channel-hotwords-tab-intro">
+                  Read-only list of ASR hotwords linked to this channel. Edit associations in{' '}
+                  <Link to="/admin/asr-hotwords" onClick={onCancel}>ASR Hotwords</Link>.
+                </p>
+                {channelHotwordsLoading ? (
+                  <p className="admin-form-hint">Loading hotwords…</p>
+                ) : channelHotwordsError ? (
+                  <p className="error">{channelHotwordsError}</p>
+                ) : channelHotwords && channelHotwords.hotwords.length > 0 ? (
+                  <div className="admin-table-wrap channel-hotwords-table-wrap">
+                    <table className="admin-table channel-hotwords-table">
+                      <thead>
+                        <tr>
+                          <th>Text</th>
+                          <th>Weight</th>
+                          <th>Lang</th>
+                          <th>Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {channelHotwords.hotwords.map((hotword) => (
+                          <tr key={hotword.id}>
+                            <td>{hotword.text}</td>
+                            <td>{hotword.weight}</td>
+                            <td>{hotword.lang ?? '—'}</td>
+                            <td>
+                              <span className="channel-hotwords-note">{hotword.note ?? '—'}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="admin-form-hint">No hotwords linked to this channel.</p>
                 )}
               </div>
             )}
@@ -341,12 +379,22 @@ export function ChannelSettingsModal({
 
           {error && <p className="error">{error}</p>}
           <div className="modal-actions">
+            {tab === 'hotwords' && channelHotwords?.asr_vocabulary_synced_at ? (
+              <p className="admin-form-hint channel-hotwords-sync-meta">
+                Vocabulary synced at {new Date(channelHotwords.asr_vocabulary_synced_at).toLocaleString()}
+                {channelHotwords.asr_vocabulary_target_model
+                  ? ` for ${channelHotwords.asr_vocabulary_target_model}.`
+                  : '.'}
+              </p>
+            ) : null}
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={saveDisabled}>
-              {busy ? 'Saving…' : 'Save changes'}
-            </button>
+            {tab !== 'hotwords' ? (
+              <button type="submit" className="btn-primary" disabled={saveDisabled}>
+                {busy ? 'Saving…' : 'Save changes'}
+              </button>
+            ) : null}
           </div>
         </form>
       </div>

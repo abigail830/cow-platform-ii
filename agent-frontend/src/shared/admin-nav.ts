@@ -3,6 +3,7 @@ export type NavPageIcon =
   | 'pipelines'
   | 'storage'
   | 'builtin-agents'
+  | 'asr-hotwords'
   | 'documents'
   | 'audio'
   | 'knowledge'
@@ -49,6 +50,14 @@ export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
     titleAccent: 'Agents',
     permissionKey: 'platform-basic:builtin-agents',
     icon: 'builtin-agents',
+  },
+  {
+    path: '/admin/asr-hotwords',
+    navLabel: 'ASR Hotwords',
+    titleMain: 'ASR',
+    titleAccent: 'Hotwords',
+    permissionKey: 'platform-basic:asr-hotwords',
+    icon: 'asr-hotwords',
   },
   {
     path: '/admin/storage',

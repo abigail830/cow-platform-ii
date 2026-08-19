@@ -73,6 +73,14 @@ def _asr_options(workflow: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _vocabulary_id_from_ctx(ctx: dict[str, Any]) -> str | None:
+    raw = ctx.get("asr_vocabulary_id_snapshot")
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    return value or None
+
+
 def submit_audio_job(job_id: str, api_url: str | None = None) -> None:
     cfg = get_cli_settings()
     api = (api_url or cfg.openkms_api_url).rstrip("/")
@@ -136,6 +144,7 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
         context_prompt=asr_options["context_prompt"],
         language_hints=asr_options["language_hints"],
         speaker_count=asr_options["speaker_count"],
+        vocabulary_id=_vocabulary_id_from_ctx(ctx),
     )
     patch_audio_job(api_url, job_id, stage="transcribing", external_job_id=task_id)
 

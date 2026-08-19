@@ -186,6 +186,8 @@ export async function updateAudioChannel(
     input.autoStartPipeline = false;
   }
 
+  const previousPipelineId = existing.pipelineId;
+
   const [row] = await db
     .update(appAudioChannels)
     .set({
@@ -201,6 +203,15 @@ export async function updateAudioChannel(
     })
     .where(eq(appAudioChannels.id, id))
     .returning();
+
+  if (input.pipelineId !== undefined) {
+    const { syncChannelAsrVocabularyIfPipelineChanged } = await import('./asr-hotwords.ts');
+    await syncChannelAsrVocabularyIfPipelineChanged(
+      id,
+      previousPipelineId,
+      input.pipelineId ?? null,
+    );
+  }
 
   return toChannelPublic(row!);
 }
@@ -275,9 +286,9 @@ export async function getAudioById(id: string): Promise<AudioRow | null> {
 }
 
 export async function getAudioPublicById(id: string): Promise<ReturnType<typeof toAudioPublic> | null> {
+  await reconcileStaleAudioPipelineJobs([id]);
   const row = await getAudioById(id);
   if (!row) return null;
-  await reconcileStaleAudioPipelineJobs([id]);
   const job = await getLatestAudioPipelineJobForAudio(id);
   return toAudioPublic(row, job);
 }

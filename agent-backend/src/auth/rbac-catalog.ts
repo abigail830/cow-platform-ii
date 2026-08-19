@@ -7,6 +7,7 @@ export const PLATFORM_BASIC_RESOURCES = {
   STORAGE: 'storage',
   PIPELINES: 'pipelines',
   BUILTIN_AGENTS: 'builtin-agents',
+  ASR_HOTWORDS: 'asr-hotwords',
 } as const;
 
 export type PlatformBasicResource = (typeof PLATFORM_BASIC_RESOURCES)[keyof typeof PLATFORM_BASIC_RESOURCES];
@@ -83,6 +84,13 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
       '/api/builtin-agents',
       '/api/builtin-agents/*',
     ],
+  },
+  {
+    resource: PLATFORM_BASIC_RESOURCES.ASR_HOTWORDS,
+    label: 'ASR hotwords',
+    description: 'Manage ASR hotwords and channel associations for transcription pipelines.',
+    routePatterns: ['/admin/asr-hotwords'],
+    apiPatterns: ['/api/admin/asr-hotwords', '/api/admin/asr-hotwords/*'],
   },
 ];
 

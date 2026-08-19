@@ -14,6 +14,7 @@ import { KnowledgeBaseDetailRouter } from './pages/KnowledgeBaseDetailRouter.tsx
 import { KnowledgeBasesListPage } from './pages/KnowledgeBasesListPage.tsx';
 import { ModelsConfigPage } from './pages/ModelsConfigPage.tsx';
 import { BuiltinAgentsPage } from './pages/BuiltinAgentsPage.tsx';
+import { AsrHotwordsPage } from './pages/AsrHotwordsPage.tsx';
 import { BuiltinAgentEditPage } from './pages/BuiltinAgentEditPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
 import { AudioLayout } from './pages/AudioLayout.tsx';
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/admin/builtin-agents/new" element={<BuiltinAgentEditPage />} />
           <Route path="/admin/builtin-agents/:id" element={<BuiltinAgentEditPage />} />
           <Route path="/admin/pipelines" element={<PipelinesConfigPage />} />
+          <Route path="/admin/asr-hotwords" element={<AsrHotwordsPage />} />
           <Route path="/admin/storage" element={<ObjectStoragePage />} />
           <Route path="/knowledge/hybrid-search" element={<HybridSearchPage />} />
           <Route path="/knowledge/knowledge-bases" element={<KnowledgeBasesListPage />} />

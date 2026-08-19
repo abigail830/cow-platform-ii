@@ -35,6 +35,7 @@ export type AudioPipelineJobContext = {
   stage: AudioPipelineJobStage;
   external_job_id: string | null;
   config_yaml: string | null;
+  asr_vocabulary_id_snapshot: string | null;
   error_message: string | null;
   audio: {
     id: string;
@@ -54,6 +55,7 @@ export async function createAudioPipelineJob(input: {
   pipelineName: string;
   provider: string;
   configYaml?: string | null;
+  asrVocabularyIdSnapshot?: string | null;
 }): Promise<typeof appAudioPipelineJobs.$inferSelect> {
   const [row] = await db
     .insert(appAudioPipelineJobs)
@@ -63,6 +65,7 @@ export async function createAudioPipelineJob(input: {
       provider: input.provider,
       stage: 'submitted',
       configYaml: snapshotConfigYaml(input.configYaml),
+      asrVocabularyIdSnapshot: input.asrVocabularyIdSnapshot?.trim() || null,
     })
     .returning();
   return row!;
@@ -182,6 +185,7 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
     stage: job.stage as AudioPipelineJobStage,
     external_job_id: job.externalJobId,
     config_yaml: job.configYaml ?? null,
+    asr_vocabulary_id_snapshot: job.asrVocabularyIdSnapshot ?? null,
     error_message: job.errorMessage,
     audio: {
       id: audio.id,
@@ -215,9 +219,16 @@ export async function markAudioForJobStage(
 
     if (audio?.captureId) {
       const { maybeStartCapturePostProcess } = await import('./capture-post-process-trigger.ts');
-      void maybeStartCapturePostProcess(audio.captureId);
+      try {
+        await maybeStartCapturePostProcess(audio.captureId);
+      } catch (error) {
+        console.error(
+          `[capture-post-process] auto-start failed for capture ${audio.captureId}:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
       const { syncCaptureStatus } = await import('./capture-status.ts');
-      void syncCaptureStatus(audio.captureId);
+      await syncCaptureStatus(audio.captureId);
     }
     return;
   }

@@ -308,11 +308,46 @@ export const appAudioChannels = pgTable(
       onDelete: 'set null',
     }),
     autoStartPipeline: boolean('auto_start_pipeline').notNull().default(false),
+    asrVocabularyId: text('asr_vocabulary_id'),
+    asrVocabularyTargetModel: text('asr_vocabulary_target_model'),
+    asrVocabularySyncedAt: timestamp('asr_vocabulary_synced_at', { withTimezone: true }),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index('idx_audio_channels_parent').on(t.parentId, t.sortOrder)],
+);
+
+export const appAsrHotwords = pgTable(
+  'app_asr_hotwords',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    text: text('text').notNull(),
+    weight: integer('weight').notNull().default(4),
+    lang: text('lang'),
+    note: text('note'),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_asr_hotwords_text').on(t.text)],
+);
+
+export const appAsrHotwordChannels = pgTable(
+  'app_asr_hotword_channels',
+  {
+    hotwordId: uuid('hotword_id')
+      .notNull()
+      .references(() => appAsrHotwords.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => appAudioChannels.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.hotwordId, t.channelId] }),
+    index('idx_asr_hotword_channels_channel').on(t.channelId),
+  ],
 );
 
 export const AUDIO_CAPTURE_STATUSES = [
@@ -435,6 +470,7 @@ export const appAudioPipelineJobs = pgTable(
     stage: text('stage').notNull().default('submitted'),
     externalJobId: text('external_job_id'),
     configYaml: text('config_yaml'),
+    asrVocabularyIdSnapshot: text('asr_vocabulary_id_snapshot'),
     errorMessage: text('error_message'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

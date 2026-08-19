@@ -99,6 +99,32 @@ export async function updateAudioChannel(
   return data as AudioChannel;
 }
 
+export type ChannelAsrHotwordsResponse = {
+  hotwords: Array<{
+    id: string;
+    text: string;
+    weight: number;
+    lang: string | null;
+    note: string | null;
+    channel_ids: string[];
+    created_at: string;
+    updated_at: string;
+  }>;
+  asr_vocabulary_id: string | null;
+  asr_vocabulary_target_model: string | null;
+  asr_vocabulary_synced_at: string | null;
+};
+
+export async function fetchChannelAsrHotwords(channelId: string): Promise<ChannelAsrHotwordsResponse> {
+  const data = await authFetch(`/api/audio-channels/${channelId}/hotwords`);
+  return {
+    hotwords: (data.hotwords as ChannelAsrHotwordsResponse['hotwords']) ?? [],
+    asr_vocabulary_id: (data.asr_vocabulary_id as string | null) ?? null,
+    asr_vocabulary_target_model: (data.asr_vocabulary_target_model as string | null) ?? null,
+    asr_vocabulary_synced_at: (data.asr_vocabulary_synced_at as string | null) ?? null,
+  };
+}
+
 export async function deleteAudioChannel(id: string): Promise<void> {
   await authFetch(`/api/audio-channels/${id}`, { method: 'DELETE' });
 }

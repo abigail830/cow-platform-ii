@@ -198,8 +198,6 @@ export function AudioLayout() {
           resourceType="audio_channel"
           audioPipelineMode
           fetchProcessingOptions={fetchAudioChannelProcessingOptions}
-          pipelineHint="Per-segment ASR via openkms-cli."
-          postProcessPipelineHint="Produces structured_transcript.json, recording_context.json, and extraction.json."
           sharingInheritHint="Audio files inherit access rules from their channel. Sub-channels inherit parent channel rules."
           onCancel={() => setChannelModal(null)}
           onSubmit={handleUpdateChannel}

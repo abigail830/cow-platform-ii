@@ -74,3 +74,20 @@ def test_submit_fun_asr_flash_accepts_prompt():
 
     payload = post.call_args.kwargs["json"]
     assert payload["parameters"]["prompt"] == "Product planning meeting"
+
+
+def test_submit_includes_vocabulary_id():
+    with patch(
+        "openkms_cli.providers.aliyun.asr.requests.post",
+        return_value=_mock_post_response(),
+    ) as post:
+        submit_file_transcription(
+            file_url="https://example.com/audio.m4a",
+            api_key="sk-test",
+            base_url="https://dashscope.aliyuncs.com/api/v1",
+            model="qwen-audio-3.0-asr-flash-filetrans",
+            vocabulary_id="vocab-abc123",
+        )
+
+    payload = post.call_args.kwargs["json"]
+    assert payload["parameters"]["vocabulary_id"] == "vocab-abc123"
