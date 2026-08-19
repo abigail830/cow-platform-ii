@@ -16,6 +16,7 @@ import {
   userHasSkillAccess,
 } from '../../auth/resource-access.ts';
 import { parseSkillZipBuffer } from './parse-skill-zip.ts';
+import { getReservedSkillNames, isUuidSkillId } from './reserved-names.ts';
 import { dispatchSkillImport } from './skill-import.ts';
 import { validateSkillUploadComplete } from './skill-upload.ts';
 import { MAX_SKILL_EXTRACTED_BYTES } from '../../storage/skill-files.ts';
