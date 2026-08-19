@@ -1,3 +1,8 @@
+import {
+  segmentAsrState,
+  type CaptureStatusSegment,
+} from './capture-status-resolve.ts';
+
 export type CaptureReadiness = {
   ready: boolean;
   reason?: string;
@@ -6,15 +11,20 @@ export type CaptureReadiness = {
 };
 
 export function evaluateCaptureReadiness(input: {
-  segmentStatuses: string[];
+  segmentStatuses?: string[];
+  segments?: CaptureStatusSegment[];
   latestJobStage?: string | null;
 }): CaptureReadiness {
-  const segmentCount = input.segmentStatuses.length;
+  const segments = input.segments ?? [];
+  const segmentStatuses = input.segmentStatuses ?? [];
+  const segmentCount = input.segments ? segments.length : segmentStatuses.length;
   if (segmentCount === 0) {
     return { ready: false, reason: 'no_segments', segmentCount: 0, completedCount: 0 };
   }
 
-  const completedCount = input.segmentStatuses.filter((status) => status === 'completed').length;
+  const completedCount = input.segments
+    ? segments.filter((segment) => segmentAsrState(segment) === 'completed').length
+    : segmentStatuses.filter((status) => status === 'completed').length;
   if (completedCount !== segmentCount) {
     return {
       ready: false,

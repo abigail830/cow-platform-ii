@@ -222,8 +222,6 @@ export async function startAudioPipeline(audioId: string): Promise<{ status: str
     );
   }
 
-  if (audio.status === 'running') throw new Error('Pipeline is already running for this audio');
-
   await updateAudioStatus(audioId, 'running');
 
   const { jobId } = await startAsyncAudioPipelineJob(audioId);

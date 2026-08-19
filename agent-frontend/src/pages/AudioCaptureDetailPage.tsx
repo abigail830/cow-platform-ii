@@ -31,7 +31,7 @@ import {
   type AudioCaptureDetail,
   type CapturePostProcessArtifactKind,
 } from '../api/audioCaptures.ts';
-import { formatAudioBytes, isAudioPipelineActive, resolveEffectiveAudioStatus, runAudioPipeline } from '../api/audios.ts';
+import { formatAudioBytes, isAudioPipelineActive, runAudioPipeline } from '../api/audios.ts';
 import { downloadTextFile, withDownloadExtension } from '../shared/download-text.ts';
 import { IconView } from '../components/AdminActionIcons.tsx';
 import { AudioPipelineStatus } from '../components/AudioPipelineStatus.tsx';
@@ -239,15 +239,17 @@ export function AudioCaptureDetailPage() {
         setError('');
       }
       try {
-        const sync = options?.sync ?? !options?.silent;
+        const sync = options?.sync ?? true;
         const data = await getAudioCapture(captureId, { sync });
         if (!mountedRef.current) return;
         setCapture(data);
         setSelectedChannelId(data.channel_id);
       } catch (err) {
         if (!mountedRef.current) return;
-        setError(err instanceof Error ? err.message : 'Failed to load capture');
-        setCapture(null);
+        if (!options?.silent) {
+          setError(err instanceof Error ? err.message : 'Failed to load capture');
+          setCapture(null);
+        }
       } finally {
         if (!options?.silent && mountedRef.current) setLoading(false);
       }
@@ -535,9 +537,14 @@ export function AudioCaptureDetailPage() {
       !artifactPollExhausted &&
       artifactPollAttemptsRef.current < ARTIFACT_POLL_MAX_AFTER_FINISH;
 
+    const segmentsStillTranscribing = capture.segments.some((segment) =>
+      isAudioPipelineActive({ status: segment.status, pipeline_job: segment.pipeline_job }),
+    );
+
     const shouldPollCapture =
       capture.segments.length > 0 &&
-      (capture.status === 'transcribing' ||
+      (segmentsStillTranscribing ||
+        capture.status === 'transcribing' ||
         capture.status === 'draft' ||
         capture.status === 'ready' ||
         postProcessActiveNow ||
@@ -610,13 +617,13 @@ export function AudioCaptureDetailPage() {
 
   async function handleTranscribeAll() {
     if (!capture?.segments.length) return;
-    const pending = capture.segments.filter((segment) => segmentNeedsTranscription(segment));
-    if (!pending.length) return;
+    const targets = capture.segments.filter((segment) => !isTranscriptSegment(segment));
+    if (!targets.length) return;
 
     setRunningTranscription(true);
     setError('');
     try {
-      await Promise.all(pending.map((segment) => runAudioPipeline(segment.id)));
+      await Promise.all(targets.map((segment) => runAudioPipeline(segment.id)));
       await loadCapture({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start transcription');
@@ -933,7 +940,7 @@ export function AudioCaptureDetailPage() {
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={uploading || runningTranscription || segmentsNeedingTranscription.length === 0}
+                    disabled={uploading || runningTranscription || capture.segments.length === 0}
                     onClick={() => void handleTranscribeAll()}
                   >
                     {runningTranscription ? (
@@ -1020,32 +1027,20 @@ export function AudioCaptureDetailPage() {
                           </button>
                           {canWriteCapture && !transcriptCapture ? (
                             <>
-                              {segmentNeedsTranscription(segment) ||
-                              resolveEffectiveAudioStatus({
-                                status: segment.status,
-                                pipeline_job: segment.pipeline_job,
-                              }) === 'failed' ? (
-                                <button
-                                  type="button"
-                                  className="icon-btn"
-                                  title="Transcribe segment"
-                                  aria-label={`Transcribe ${segment.name}`}
-                                  disabled={
-                                    transcribingSegmentIds.has(segment.id) ||
-                                    isAudioPipelineActive({
-                                      status: segment.status,
-                                      pipeline_job: segment.pipeline_job,
-                                    })
-                                  }
-                                  onClick={() => void handleTranscribeSegment(segment.id)}
-                                >
-                                  {transcribingSegmentIds.has(segment.id) ? (
-                                    <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
-                                  ) : (
-                                    <Mic {...iconProps()} />
-                                  )}
-                                </button>
-                              ) : null}
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Transcribe segment"
+                                aria-label={`Transcribe ${segment.name}`}
+                                disabled={transcribingSegmentIds.has(segment.id)}
+                                onClick={() => void handleTranscribeSegment(segment.id)}
+                              >
+                                {transcribingSegmentIds.has(segment.id) ? (
+                                  <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                                ) : (
+                                  <Mic {...iconProps()} />
+                                )}
+                              </button>
                               <button
                                 type="button"
                                 className="icon-btn"

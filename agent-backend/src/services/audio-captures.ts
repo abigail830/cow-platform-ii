@@ -222,8 +222,8 @@ export async function getCaptureWithSegments(id: string, options?: { sync?: bool
     await syncCaptureStatus(id);
   }
 
-  const capture = await getCapturePublicById(id);
-  if (!capture) return null;
+  const row = await getAudioCaptureById(id);
+  if (!row) return null;
 
   const segments = await db
     .select()
@@ -232,6 +232,24 @@ export async function getCaptureWithSegments(id: string, options?: { sync?: bool
     .orderBy(asc(appAudios.segmentIndex), asc(appAudios.createdAt));
 
   const jobs = await getLatestAudioPipelineJobsForAudios(segments.map((s) => s.id));
+  const captureJob = await getLatestCapturePipelineJob(id);
+  const statusSegments: CaptureStatusSegment[] = segments.map((seg) => {
+    const job = jobs.get(seg.id);
+    return {
+      status: seg.status,
+      pipeline_job: job ? { stage: job.stage } : null,
+    };
+  });
+  const resolvedStatus = resolveCaptureStatusFromSegments(
+    statusSegments,
+    captureJob ? { stage: captureJob.stage } : null,
+  );
+
+  const capture = toCapturePublic(
+    { ...row, status: resolvedStatus },
+    captureJob ?? undefined,
+    segments.length,
+  );
 
   return {
     ...capture,

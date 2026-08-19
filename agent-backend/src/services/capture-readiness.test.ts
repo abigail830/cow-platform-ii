@@ -26,6 +26,14 @@ describe('capture-readiness', () => {
     assert.equal(result.ready, true);
   });
 
+  it('starts when all segments complete via pipeline job stage', () => {
+    const result = evaluateCaptureReadiness({
+      segments: [{ status: 'running', pipeline_job: { stage: 'done' } }],
+      latestJobStage: null,
+    });
+    assert.equal(result.ready, true);
+  });
+
   it('skips when post-process already done', () => {
     const result = evaluateCaptureReadiness({
       segmentStatuses: ['completed'],
