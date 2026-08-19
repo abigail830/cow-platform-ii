@@ -12,6 +12,10 @@ SUPPORTED_AUDIO_PIPELINES: dict[str, tuple[str, str]] = {
         "Aliyun Qwen-Audio Transcribe",
         "Transcribe audio via DashScope Qwen-Audio-3.0 file transcription API.",
     ),
+    "aliyun-fun-asr-transcribe": (
+        "Aliyun Fun-ASR Transcribe",
+        "Transcribe audio via DashScope Fun-ASR file transcription API (fun-asr).",
+    ),
 }
 
 audio_pipeline_app = typer.Typer(

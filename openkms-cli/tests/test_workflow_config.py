@@ -144,6 +144,12 @@ def test_audio_transcribe_default_collects_model_name():
     assert cfg["asr"]["enable_diarization"] is False
 
 
+def test_fun_asr_transcribe_default_collects_model_name():
+    cfg = load_packaged_default("aliyun-fun-asr-transcribe")
+    assert collect_model_names(cfg) == ["fun-asr"]
+    assert cfg["asr"]["enable_diarization"] is False
+
+
 def test_audio_capture_post_process_default_collects_model_name():
     cfg = load_packaged_default("audio-capture-post-process")
     assert collect_model_names(cfg) == ["deepSeek-V4-Flash"]

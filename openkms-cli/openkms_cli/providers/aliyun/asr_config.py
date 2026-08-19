@@ -43,7 +43,7 @@ def resolve_asr_from_workflow(
     display_name = workflow_asr_model_name(config)
     if not display_name:
         raise AsrConfigError(
-            "aliyun-qwen-audio-transcribe workflow must set model_name "
+            "Audio transcribe workflow must set model_name "
             "(Models list bold name, api_type=audio-asr)."
         )
 

@@ -19,6 +19,32 @@ type ModelConfigFormProps = {
 const CAPABILITY_SUGGESTIONS = ['Vision', 'Document parse', 'Function calling', 'JSON mode', 'Streaming'];
 const VLM_CAPABILITY_SUGGESTIONS = ['Vision', 'OCR', 'Layout detection', 'Document parse'];
 
+const AUDIO_ASR_PRESETS: Array<{
+  id: string;
+  label: string;
+  name: string;
+  modelId: string;
+  provider: string;
+  baseUrl: string;
+}> = [
+  {
+    id: 'qwen-filetrans',
+    label: 'Qwen Audio 3.0 Filetrans',
+    name: 'qwen-audio-3.0-asr-flash-filetrans',
+    modelId: 'qwen-audio-3.0-asr-flash-filetrans',
+    provider: 'Alibaba DashScope',
+    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+  },
+  {
+    id: 'fun-asr',
+    label: 'Fun ASR',
+    name: 'fun-asr',
+    modelId: 'fun-asr',
+    provider: 'Alibaba DashScope',
+    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+  },
+];
+
 function placeholdersForApiType(apiType: ModelApiType) {
   if (apiType === 'vlm') {
     return {
@@ -92,6 +118,7 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
   const [thinkingLevel, setThinkingLevel] = useState(
     readThinkingLevel(initial?.extraConfig ?? duplicateFrom?.extraConfig),
   );
+  const [audioAsrPreset, setAudioAsrPreset] = useState('qwen-filetrans');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -129,7 +156,18 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
     }
     setCapabilityInput('');
     setError('');
+    setAudioAsrPreset('qwen-filetrans');
   }, [initial, duplicateFrom]);
+
+  function applyAudioAsrPreset(presetId: string) {
+    const preset = AUDIO_ASR_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+    setAudioAsrPreset(presetId);
+    setName(preset.name);
+    setModelId(preset.modelId);
+    setProvider(preset.provider);
+    setBaseUrl(preset.baseUrl);
+  }
 
   function addCapability(value: string) {
     const trimmed = value.trim();
@@ -214,7 +252,16 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
             </label>
             <label className="form-field">
               <span>API format</span>
-              <select value={apiType} onChange={(event) => setApiType(event.target.value as ModelApiType)}>
+              <select
+                value={apiType}
+                onChange={(event) => {
+                  const next = event.target.value as ModelApiType;
+                  setApiType(next);
+                  if (next === 'audio-asr' && !initial) {
+                    applyAudioAsrPreset(audioAsrPreset);
+                  }
+                }}
+              >
                 {MODEL_API_TYPES.map((type) => (
                   <option key={type} value={type}>
                     {MODEL_API_TYPE_LABELS[type]}
@@ -222,6 +269,21 @@ export function ModelConfigForm({ initial, duplicateFrom, onSubmit, onCancel }: 
                 ))}
               </select>
             </label>
+            {apiType === 'audio-asr' && !initial && (
+              <label className="form-field form-field-wide">
+                <span>ASR preset</span>
+                <select
+                  value={audioAsrPreset}
+                  onChange={(event) => applyAudioAsrPreset(event.target.value)}
+                >
+                  {AUDIO_ASR_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="form-field form-field-wide">
               <span>Base URL</span>
               <input

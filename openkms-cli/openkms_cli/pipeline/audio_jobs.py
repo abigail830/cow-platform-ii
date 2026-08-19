@@ -46,12 +46,31 @@ def _load_workflow(ctx: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _asr_options(workflow: dict[str, Any]) -> tuple[bool, str | None]:
+def _asr_options(workflow: dict[str, Any]) -> dict[str, Any]:
     asr_cfg = workflow.get("asr") if isinstance(workflow.get("asr"), dict) else {}
     enable_diarization = bool(asr_cfg.get("enable_diarization", False))
     context_prompt = asr_cfg.get("context_prompt")
     prompt = str(context_prompt).strip() if context_prompt else None
-    return enable_diarization, prompt or None
+
+    language_hints: list[str] | None = None
+    raw_hints = asr_cfg.get("language_hints")
+    if isinstance(raw_hints, list):
+        language_hints = [str(h).strip() for h in raw_hints if str(h).strip()]
+
+    speaker_count: int | None = None
+    raw_speaker_count = asr_cfg.get("speaker_count")
+    if raw_speaker_count is not None:
+        try:
+            speaker_count = int(raw_speaker_count)
+        except (TypeError, ValueError):
+            speaker_count = None
+
+    return {
+        "enable_diarization": enable_diarization,
+        "context_prompt": prompt or None,
+        "language_hints": language_hints,
+        "speaker_count": speaker_count,
+    }
 
 
 def submit_audio_job(job_id: str, api_url: str | None = None) -> None:
@@ -87,7 +106,7 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
 
     workflow = _load_workflow(ctx)
     asr_runtime = resolve_asr_from_workflow(workflow, cfg=cfg)
-    enable_diarization, context_prompt = _asr_options(workflow)
+    asr_options = _asr_options(workflow)
 
     audio = ctx["audio"]
     bucket, key = parse_s3_uri(ctx["input_uri"])
@@ -113,8 +132,10 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
         api_key=asr_runtime.api_key,
         base_url=asr_runtime.base_url,
         model=asr_runtime.model,
-        enable_diarization=enable_diarization,
-        context_prompt=context_prompt,
+        enable_diarization=asr_options["enable_diarization"],
+        context_prompt=asr_options["context_prompt"],
+        language_hints=asr_options["language_hints"],
+        speaker_count=asr_options["speaker_count"],
     )
     patch_audio_job(api_url, job_id, stage="transcribing", external_job_id=task_id)
 

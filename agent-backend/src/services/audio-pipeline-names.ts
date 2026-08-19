@@ -1,4 +1,7 @@
-export const ASYNC_AUDIO_PIPELINE_NAMES = new Set(['aliyun-qwen-audio-transcribe']);
+export const ASYNC_AUDIO_PIPELINE_NAMES = new Set([
+  'aliyun-qwen-audio-transcribe',
+  'aliyun-fun-asr-transcribe',
+]);
 
 export const DEFAULT_AUDIO_TRANSCRIBE_WORKFLOW_FILE = 'openkms-audio-transcribe.yml';
 
@@ -11,6 +14,11 @@ export function defaultAudioPipelineWorkflowFile(_pipelineName: string): string 
 }
 
 export function audioPipelineProviderForName(pipelineName: string): 'aliyun' | null {
-  if (pipelineName === 'aliyun-qwen-audio-transcribe') return 'aliyun';
+  if (
+    pipelineName === 'aliyun-qwen-audio-transcribe' ||
+    pipelineName === 'aliyun-fun-asr-transcribe'
+  ) {
+    return 'aliyun';
+  }
   return null;
 }

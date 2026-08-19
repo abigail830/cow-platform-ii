@@ -13,6 +13,20 @@ DASHSCOPE_TRANSCRIPTION_PATH = "/services/audio/asr/transcription"
 DEFAULT_MODEL = "qwen-audio-3.0-asr-flash-filetrans"
 
 
+def _is_qwen_filetrans_model(model: str) -> bool:
+    lowered = model.lower()
+    return "qwen" in lowered and "asr" in lowered
+
+
+def _supports_context_prompt(model: str) -> bool:
+    lowered = model.lower()
+    if _is_qwen_filetrans_model(model):
+        return True
+    if lowered.startswith("fun-asr") and "flash" in lowered and "realtime" not in lowered:
+        return True
+    return False
+
+
 class AliyunAsrError(RuntimeError):
     """Raised when DashScope ASR API fails."""
 
@@ -35,6 +49,8 @@ def submit_file_transcription(
     model: str = DEFAULT_MODEL,
     enable_diarization: bool = False,
     context_prompt: str | None = None,
+    language_hints: list[str] | None = None,
+    speaker_count: int | None = None,
     timeout: int = 120,
 ) -> str:
     if not api_key.strip():
@@ -42,9 +58,15 @@ def submit_file_transcription(
 
     parameters: dict[str, Any] = {}
     if enable_diarization:
-        parameters["enable_diarization"] = True
-    if context_prompt and context_prompt.strip():
+        parameters["diarization_enabled"] = True
+        if speaker_count is not None and 2 <= speaker_count <= 100:
+            parameters["speaker_count"] = speaker_count
+    if context_prompt and context_prompt.strip() and _supports_context_prompt(model):
         parameters["prompt"] = context_prompt.strip()
+    if language_hints:
+        hints = [str(h).strip() for h in language_hints if str(h).strip()]
+        if hints:
+            parameters["language_hints"] = hints[:4] if _is_qwen_filetrans_model(model) else hints[:1]
 
     payload: dict[str, Any] = {
         "model": model,

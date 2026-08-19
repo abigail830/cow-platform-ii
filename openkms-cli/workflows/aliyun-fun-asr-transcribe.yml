@@ -1,0 +1,10 @@
+# Default worker config for aliyun-fun-asr-transcribe pipeline.
+# model_name = Models list bold name (app_model_configs.name), api_type=audio-asr.
+# Credentials via GET /internal-api/models/cli-params?model_name=…
+
+model_name: "fun-asr"
+
+asr:
+  enable_diarization: false
+  # language_hints: ["zh"]   # Fun-ASR supports only one hint
+  # speaker_count: 3         # requires enable_diarization: true
