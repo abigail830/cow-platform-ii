@@ -12,7 +12,7 @@ import type { LoadedAgentSpec } from './schema.ts';
 export type CatalogAgentRuntimeConfig = {
   model: string;
   instructions: string;
-  skills: ReturnType<typeof loadAgentSkills>;
+  skills: Awaited<ReturnType<typeof loadAgentSkills>>;
   tools: Awaited<ReturnType<typeof connectAgentMcpTools>>;
   sandbox?: ReturnType<typeof resolveSandboxFactory>;
   cwd?: string;
@@ -37,7 +37,7 @@ export function agentRuntimeCacheKey(spec: LoadedAgentSpec): string {
 async function buildAgentRuntimeConfig(spec: LoadedAgentSpec): Promise<CatalogAgentRuntimeConfig> {
   const sessionFileTools = createSessionFileTools();
   const mcpTools = await connectAgentMcpTools(spec);
-  const skills = loadAgentSkills(spec);
+  const skills = await loadAgentSkills(spec);
   const sandbox = resolveSandboxFactory(spec.sandbox, spec.id);
   // E2B workspace cwd is applied inside the sandbox SessionEnv — avoid Flue's second cwd wrapper
   // (it produces a different env object and breaks session-scoped tool binding).

@@ -30,6 +30,18 @@ export const pgVector = customType<{ data: number[]; driverData: string }>({
   },
 });
 
+export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+  toDriver(value: Buffer): Buffer {
+    return value;
+  },
+  fromDriver(value: Buffer): Buffer {
+    return value;
+  },
+});
+
 /** Chunking options for RAG index pipeline Config YAML (not stored on KB row). */
 export type KbChunkConfig = {
   strategy?: 'markdown_header' | 'fixed_size' | 'paragraph';
@@ -210,7 +222,13 @@ export const appUserRoles = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.roleId] })],
 );
 
-export const RESOURCE_TYPES = ['document_channel', 'audio_channel', 'knowledge_base', 'studio_agent'] as const;
+export const RESOURCE_TYPES = [
+  'document_channel',
+  'audio_channel',
+  'knowledge_base',
+  'studio_agent',
+  'skill',
+] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
 
 export const GRANTEE_TYPES = ['user', 'others'] as const;
@@ -900,6 +918,58 @@ export const appUserMcpCredentials = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [uniqueIndex('uq_user_mcp_credentials_user_platform').on(t.userId, t.platformMcpId)],
+);
+
+export const SKILL_ORIGINS = ['platform', 'user'] as const;
+export type SkillOrigin = (typeof SKILL_ORIGINS)[number];
+
+export const SKILL_IMPORT_STATUSES = ['pending', 'ready', 'failed'] as const;
+export type SkillImportStatus = (typeof SKILL_IMPORT_STATUSES)[number];
+
+export const appSkills = pgTable(
+  'app_skills',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: text('slug').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    instructions: text('instructions').notNull().default(''),
+    license: text('license'),
+    compatibility: text('compatibility'),
+    metadata: jsonb('metadata').$type<Record<string, string>>().notNull().default({}),
+    origin: text('origin').notNull(),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'cascade' }),
+    sourceS3Key: text('source_s3_key'),
+    importStatus: text('import_status').notNull().default('ready'),
+    importError: text('import_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_app_skills_origin').on(t.origin),
+    index('idx_app_skills_created_by').on(t.createdBy),
+    index('idx_app_skills_import_status').on(t.importStatus),
+    index('idx_app_skills_slug').on(t.slug),
+  ],
+);
+
+export const appSkillFiles = pgTable(
+  'app_skill_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    skillId: uuid('skill_id')
+      .notNull()
+      .references(() => appSkills.id, { onDelete: 'cascade' }),
+    filePath: text('file_path').notNull(),
+    content: bytea('content').notNull(),
+    contentType: text('content_type').notNull().default('text/plain'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('uq_app_skill_files_skill_path').on(t.skillId, t.filePath),
+    index('idx_app_skill_files_skill').on(t.skillId),
+  ],
 );
 
 export const appUserDatasources = pgTable(

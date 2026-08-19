@@ -8,8 +8,11 @@ import {
   getDocumentChannelIdForDocument,
   resolveChannelPermission,
   resolveKnowledgeBasePermission,
+  userHasSkillAccess,
   type ResourcePermissionLevel,
 } from './resource-access.ts';
+import { eq } from 'drizzle-orm';
+import { appSkills, db } from '../db/index.ts';
 
 export async function denyUnlessAudioChannelAccess(
   c: Context,
@@ -74,6 +77,22 @@ export async function denyUnlessKnowledgeBaseAccess(
       : required === 'write'
         ? flags.write || flags.manage
         : flags.read || flags.write || flags.manage;
+  if (!allowed) return c.json({ error: 'Forbidden' }, 403);
+  return null;
+}
+
+export async function denyUnlessSkillAccess(
+  c: Context,
+  skillId: string,
+  required: ResourcePermissionLevel,
+): Promise<Response | null> {
+  const user = getUser(c);
+  const [skill] = await db.select().from(appSkills).where(eq(appSkills.id, skillId)).limit(1);
+  if (!skill) return c.json({ error: 'Skill not found' }, 404);
+  if (skill.origin === 'platform' && required === 'read') {
+    return null;
+  }
+  const allowed = await userHasSkillAccess(user.id, skillId, required);
   if (!allowed) return c.json({ error: 'Forbidden' }, 403);
   return null;
 }

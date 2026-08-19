@@ -6,9 +6,9 @@ import { loadAgentSkills } from './load-skills.ts';
 import { loadAgentSpec } from './discover.ts';
 import { agentCatalogRoot, resolveCatalogPath } from './paths.ts';
 
-test('html-slides skill layout: references markdown + root assets', () => {
+test('html-slides skill layout: references markdown + root assets', async () => {
   const spec = loadAgentSpec(`${agentCatalogRoot()}/content-studio`);
-  const skills = loadAgentSkills(spec);
+  const skills = await loadAgentSkills(spec);
   const htmlSlides = skills.find((skill) => skill.name === 'html-slides');
   assert.ok(htmlSlides, 'content-studio should load html-slides skill');
 
@@ -28,9 +28,9 @@ test('html-slides skill layout: references markdown + root assets', () => {
   }
 });
 
-test('pptx skill layout: references markdown + root assets', () => {
+test('pptx skill layout: references markdown + root assets', async () => {
   const spec = loadAgentSpec(`${agentCatalogRoot()}/content-studio`);
-  const skills = loadAgentSkills(spec);
+  const skills = await loadAgentSkills(spec);
   const pptx = skills.find((skill) => skill.name === 'pptx');
   assert.ok(pptx, 'content-studio should load pptx skill');
 

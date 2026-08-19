@@ -21,9 +21,20 @@ Presigned URLs are short-lived (today: document GET ~15 min, audio/upload ~1 h).
 
 - **Mint per user action** (page load, tab switch, upload click). Fetch OSS immediately. Do not store URLs in DB, localStorage, or long-lived React state.
 - **Expiry ≠ ETIMEDOUT.** An expired signature is OSS **HTTP 403** (AccessDenied). `connect ETIMEDOUT …:443` means Vercel (or the browser) could not TCP to OSS at all.
-- Treat 403 from a just-minted URL as missing/forbidden object; if a **cached** URL 403s, remint and retry once.
-- Upload TTL only matters if the user waits longer than TTL between `upload-init` and PUT. Current flows PUT immediately after init.
 - Do not “fix expiry” by proxying bytes through Vercel or by persisting a URL for hours. Remint.
+
+## HTTP 403 from OSS (AccessDenied)
+
+403 is not one bug. Diagnose by **when** it happens:
+
+| When | Likely cause | Fix |
+|------|----------------|-----|
+| GET of an artifact that may not exist yet | Aliyun often returns **403 instead of 404** without ListBucket. Frontend treats this as missing (`fetchPresignedStorageText` → `null`). | Wait for the pipeline; do not proxy through Vercel. |
+| GET/PUT of a URL minted earlier and reused | Signature expired | Remint in the same user action; never cache the URL. |
+| PUT immediately after `upload-init` | Signed headers the browser did not send. AWS SDK v3 defaults checksum headers (`x-amz-checksum-*`) into the signature. | S3Client must set `requestChecksumCalculation: 'WHEN_REQUIRED'` (see `s3-client.ts`). Browser PUT must send the **same `Content-Type`** the server signed. |
+| Browser `Failed to fetch` (not 403) | OSS CORS missing GET/PUT for the frontend origin | Bucket CORS, not a signature issue. |
+
+Do not disable checksums on worker `PutObject` that goes through the SDK client send path beyond `WHEN_REQUIRED` — that still checksums when the API requires it. The failure class is **presigned browser PUT missing signed checksum headers**.
 
 ## Do
 
@@ -63,4 +74,5 @@ Presigned URLs are short-lived (today: document GET ~15 min, audio/upload ~1 h).
 - [ ] Frontend fetches OSS directly (including small files in production)?
 - [ ] No Vercel HEAD/GET/PUT on the user-facing path?
 - [ ] URL minted for this action only (not cached across reloads)?
+- [ ] S3Client `requestChecksumCalculation: 'WHEN_REQUIRED'` so browser PUT is not 403?
 - [ ] CORS documented or already on bucket?

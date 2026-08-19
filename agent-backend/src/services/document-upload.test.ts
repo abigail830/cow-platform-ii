@@ -47,4 +47,6 @@ test('initDocumentUpload mints a presigned URL without probing storage', async (
   assert.equal(result.method, 'PUT');
   assert.equal(result.headers['Content-Type'], 'application/pdf');
   assert.ok(result.s3_key.includes(fileHash));
+  assert.doesNotMatch(result.upload_url, /x-amz-checksum/i);
+  assert.doesNotMatch(result.upload_url, /x-amz-sdk-checksum/i);
 });

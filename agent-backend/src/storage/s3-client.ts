@@ -31,6 +31,10 @@ export function getS3Client(): { client: S3Client; config: S3Config } | null {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
       },
+      // Default WHEN_SUPPORTED signs x-amz-checksum-* into presigned PUTs;
+      // browsers do not send those headers → OSS/S3 HTTP 403 AccessDenied.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
       requestHandler: new NodeHttpHandler({
         // Bundle downloads list + fetch many objects; allow slower OSS links.
         connectionTimeout: 30_000,

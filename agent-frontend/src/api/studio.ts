@@ -1,6 +1,7 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
+import { putFileToPresignedUrl, shouldUseDirectUpload } from './direct-upload.ts';
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
@@ -35,7 +36,9 @@ export type AssetSummary = {
   title: string;
   description: string;
   type: 'agent' | 'skill' | 'mcp' | 'sandbox';
-  source?: 'platform' | 'studio';
+  source?: 'platform' | 'studio' | 'user';
+  origin?: 'platform' | 'user';
+  canManage?: boolean;
   icon?: string;
 };
 
@@ -121,6 +124,71 @@ export async function getSkillFile(
     `/api/studio/assets/skills/${encodeURIComponent(skillId)}/file?path=${encodeURIComponent(path)}`,
   );
   return data as { path: string; content: string; truncated: boolean };
+}
+
+async function sha256HexFromFile(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hash = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hash))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export async function uploadSkillZip(file: File): Promise<{ id: string; slug: string; import_status: string }> {
+  if (shouldUseDirectUpload(file)) {
+    const fileHash = await sha256HexFromFile(file);
+    const init = (await authFetch('/api/studio/skills/upload-init', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: file.name,
+        file_hash: fileHash,
+        size_bytes: file.size,
+      }),
+    })) as {
+      s3_key: string;
+      upload_url?: string;
+      method?: string;
+      headers?: Record<string, string>;
+    };
+
+    if (!init.upload_url) throw new Error('Server did not return an upload URL');
+    await putFileToPresignedUrl(
+      init.upload_url,
+      file,
+      init.headers ?? { 'Content-Type': 'application/zip' },
+      init.method ?? 'PUT',
+    );
+
+    const data = await authFetch('/api/studio/skills/upload-complete', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: file.name,
+        file_hash: fileHash,
+        s3_key: init.s3_key,
+        size_bytes: file.size,
+      }),
+    });
+    return data as { id: string; slug: string; import_status: string };
+  }
+
+  const token = getToken();
+  if (!token) throw new Error('Not authenticated');
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(apiUrl('/api/studio/skills/upload'), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  if (text) data = JSON.parse(text) as Record<string, unknown>;
+  if (!res.ok) throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
+  return data as { id: string; slug: string; import_status: string };
+}
+
+export async function deleteSkill(skillId: string): Promise<void> {
+  await authFetch(`/api/studio/skills/${encodeURIComponent(skillId)}`, { method: 'DELETE' });
 }
 
 export async function getPlatformMcpDetail(id: string): Promise<{

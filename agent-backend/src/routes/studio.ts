@@ -8,6 +8,8 @@ import {
   listSkillTree,
   readSkillFile,
 } from '../agent-assets/skill-browse.ts';
+import skillsRouter from './skills.ts';
+import { assertSkillIdsAccessible, listSkillTreeForUser, listVisibleSkillsForUser, readSkillFileForUser } from '../services/skills/skills.ts';
 import { bootAgentCatalog, upsertStudioAgentInRegistry } from '../agent-catalog/boot.ts';
 import { loadAgentSpec } from '../agent-catalog/discover.ts';
 import { listPlatformMcpDiscoveredTools } from '../agent-catalog/load-mcp.ts';
@@ -41,6 +43,8 @@ import {
 } from '../database-mcp/datasource-service.ts';
 
 const studio = new Hono();
+
+studio.route('/skills', skillsRouter);
 
 const slugSchema = z
   .string()
@@ -94,6 +98,23 @@ studio.get(
     const type =
       raw === 'skills' ? 'skill' : raw === 'agents' ? 'agent' : raw === 'sandboxes' ? 'sandbox' : raw;
     if (type === 'skill' || type === 'mcp' || type === 'sandbox') {
+      if (type === 'skill') {
+        const user = getUser(c);
+        const skills = await listVisibleSkillsForUser(user.id);
+        return c.json({
+          assets: skills
+            .filter((skill) => skill.importStatus === 'ready' || skill.origin === 'platform')
+            .map((skill) => ({
+              id: skill.id,
+              title: skill.title,
+              description: skill.description,
+              type: 'skill' as const,
+              origin: skill.origin,
+              source: skill.origin,
+              canManage: skill.canManage,
+            })),
+        });
+      }
       return c.json({ assets: listAssetSummaries(type) });
     }
     if (type === 'agent' || type === 'all') {
@@ -229,11 +250,17 @@ studio.get(
   requireAuth,
   requireResourcePermission('agent', 'asset-market', 'read'),
   async (c) => {
+    const user = getUser(c);
     try {
-      const { skillId, tree } = listSkillTree(c.req.param('id'));
-      return c.json({ skillId, tree, defaultPath: defaultSkillPreviewPath(tree) });
-    } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : 'Unknown skill' }, 404);
+      const tree = await listSkillTreeForUser(user.id, c.req.param('id'));
+      return c.json({ skillId: tree.skillId, tree: tree.tree, defaultPath: defaultSkillPreviewPath(tree.tree) });
+    } catch {
+      try {
+        const { skillId, tree } = listSkillTree(c.req.param('id'));
+        return c.json({ skillId, tree, defaultPath: defaultSkillPreviewPath(tree) });
+      } catch (err) {
+        return c.json({ error: err instanceof Error ? err.message : 'Unknown skill' }, 404);
+      }
     }
   },
 );
@@ -245,13 +272,19 @@ studio.get(
   async (c) => {
     const path = c.req.query('path')?.trim();
     if (!path) return c.json({ error: 'path is required' }, 400);
+    const user = getUser(c);
     try {
-      const file = readSkillFile(c.req.param('id'), path);
+      const file = await readSkillFileForUser(user.id, c.req.param('id'), path);
       return c.json(file);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to read file';
-      const status = message === 'Not found' || message.startsWith('Unknown') ? 404 : 400;
-      return c.json({ error: message }, status);
+    } catch {
+      try {
+        const file = readSkillFile(c.req.param('id'), path);
+        return c.json(file);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to read file';
+        const status = message === 'Not found' || message.startsWith('Unknown') ? 404 : 400;
+        return c.json({ error: message }, status);
+      }
     }
   },
 );
@@ -299,6 +332,7 @@ studio.post(
 
     try {
       await assertDatasourceIdsOwnedByUser(user.id, body.datasourceIds);
+      await assertSkillIdsAccessible(user.id, body.skillIds);
       const [row] = await db
         .insert(appStudioAgents)
         .values({
@@ -369,6 +403,14 @@ studio.patch(
     if (body.datasourceIds) {
       try {
         await assertDatasourceIdsOwnedByUser(user.id, body.datasourceIds);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return c.json({ error: message }, 400);
+      }
+    }
+    if (body.skillIds) {
+      try {
+        await assertSkillIdsAccessible(user.id, body.skillIds);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return c.json({ error: message }, 400);

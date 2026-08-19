@@ -4,6 +4,7 @@ import {
   appDocumentChannels,
   appKnowledgeBases,
   appResourceGrants,
+  appSkills,
   appStudioAgents,
   appUsers,
   db,
@@ -98,6 +99,15 @@ async function loadOwnerId(resourceType: ResourceType, resourceId: string): Prom
       .select({ createdBy: appStudioAgents.createdBy })
       .from(appStudioAgents)
       .where(eq(appStudioAgents.id, resourceId))
+      .limit(1);
+    return row?.createdBy ?? null;
+  }
+
+  if (resourceType === 'skill') {
+    const [row] = await db
+      .select({ createdBy: appSkills.createdBy })
+      .from(appSkills)
+      .where(eq(appSkills.id, resourceId))
       .limit(1);
     return row?.createdBy ?? null;
   }
@@ -237,6 +247,34 @@ export async function userHasStudioAgentAccess(
   return satisfiesResourcePermission(flags, level);
 }
 
+async function loadSkillRow(skillId: string) {
+  const [row] = await db.select().from(appSkills).where(eq(appSkills.id, skillId)).limit(1);
+  return row ?? null;
+}
+
+export async function resolveSkillPermission(
+  userId: string,
+  skillId: string,
+): Promise<ResourcePermissionFlags> {
+  const skill = await loadSkillRow(skillId);
+  if (!skill) return NO_RESOURCE_ACCESS;
+  if (await isPlatformAdmin(userId)) return FULL_RESOURCE_ACCESS;
+  if (skill.origin === 'platform') {
+    return { read: true, write: false, manage: false };
+  }
+  const grantsByResource = await loadGrantsForResources('skill', [skillId]);
+  return permissionAtLevel(userId, skill.createdBy, grantsByResource.get(skillId) ?? []);
+}
+
+export async function userHasSkillAccess(
+  userId: string,
+  skillId: string,
+  level: ResourcePermissionLevel,
+): Promise<boolean> {
+  const flags = await resolveSkillPermission(userId, skillId);
+  return satisfiesResourcePermission(flags, level);
+}
+
 export async function listAccessibleChannelIds(userId: string): Promise<Set<string>> {
   if (await isPlatformAdmin(userId)) {
     const rows = await loadAllChannelRows();
@@ -363,6 +401,14 @@ export async function getResourceAccessSettings(
       .limit(1);
     if (!exists) return null;
   }
+  if (ownerId === null && resourceType === 'skill') {
+    const [exists] = await db
+      .select({ id: appSkills.id })
+      .from(appSkills)
+      .where(eq(appSkills.id, resourceId))
+      .limit(1);
+    if (!exists) return null;
+  }
 
   const grants = (await loadGrantsForResources(resourceType, [resourceId])).get(resourceId) ?? [];
   const othersGrant = grants.find((grant) => grant.granteeType === 'others');
@@ -406,6 +452,8 @@ export async function getResourceAccessSettings(
           )
         : resourceType === 'studio_agent'
         ? await resolveStudioAgentPermission(viewerUserId, resourceId)
+        : resourceType === 'skill'
+          ? await resolveSkillPermission(viewerUserId, resourceId)
         : await resolveKnowledgeBasePermission(viewerUserId, resourceId);
 
   return {
@@ -433,6 +481,8 @@ export async function replaceResourceAccessSettings(
           )
         : resourceType === 'studio_agent'
         ? await userHasStudioAgentAccess(actorUserId, resourceId, 'manage')
+        : resourceType === 'skill'
+          ? await userHasSkillAccess(actorUserId, resourceId, 'manage')
         : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
   if (!canManage) throw new Error('Forbidden');
 
@@ -497,6 +547,8 @@ export async function transferResourceOwner(
           )
         : resourceType === 'studio_agent'
         ? await userHasStudioAgentAccess(actorUserId, resourceId, 'manage')
+        : resourceType === 'skill'
+          ? await userHasSkillAccess(actorUserId, resourceId, 'manage')
         : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
   if (!canManage) throw new Error('Forbidden');
 
@@ -524,6 +576,13 @@ export async function transferResourceOwner(
       .where(eq(appStudioAgents.id, resourceId))
       .returning({ id: appStudioAgents.id });
     if (!updated) throw new Error('Studio agent not found');
+  } else if (resourceType === 'skill') {
+    const [updated] = await db
+      .update(appSkills)
+      .set({ createdBy: newOwnerUserId, updatedAt: new Date() })
+      .where(eq(appSkills.id, resourceId))
+      .returning({ id: appSkills.id });
+    if (!updated) throw new Error('Skill not found');
   } else {
     const [updated] = await db
       .update(appKnowledgeBases)

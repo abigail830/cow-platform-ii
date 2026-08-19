@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, Fragment, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Fragment, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ChevronRight,
@@ -10,7 +10,9 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  Share2,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { listModelConfigs, type ModelConfig } from '../api/models.ts';
@@ -19,6 +21,7 @@ import {
   createUserDatasource,
   DATASOURCE_MCP_TEMPLATE_IDS,
   deleteStudioAgent,
+  deleteSkill,
   deleteUserDatasource,
   getPlatformAgentCopyDraft,
   getPlatformAgentDetail,
@@ -31,6 +34,7 @@ import {
   listUserDatasources,
   putPlatformMcpCredential,
   updateStudioAgent,
+  uploadSkillZip,
   type AssetSummary,
   type SkillTreeNode,
   type StudioAgent,
@@ -38,7 +42,7 @@ import {
   type UserDatasource,
 } from '../api/studio.ts';
 import { iconProps } from '../components/icons/icon-props.ts';
-import { MarkdownCodeEditor } from '../components/MarkdownCodeEditor.tsx';
+import { ResourceSharingModal } from '../components/ResourceSharingModal.tsx';
 import { ReadOnlyCodeEditor, readOnlyCodeLanguageForPath } from '../components/ReadOnlyCodeEditor.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { applyParsedDatabaseUrl, parseDatabaseUrl } from '../shared/parse-database-url.ts';
@@ -82,6 +86,8 @@ function viewingAgentKey(view: ViewingAgent | null): string | null {
   return `${view.kind}:${view.id}`;
 }
 
+type SkillFilter = 'all' | 'platform' | 'mine' | 'shared';
+
 export function AssetMarketPage() {
   const { user, refreshAgents } = useAppOutletContext();
   const canWrite = useMemo(() => hasPermission(user, 'agent:asset-market', 'write'), [user]);
@@ -98,6 +104,10 @@ export function AssetMarketPage() {
   const [viewingSkillId, setViewingSkillId] = useState<string | null>(null);
   const [viewingMcpId, setViewingMcpId] = useState<string | null>(null);
   const [copyBusyId, setCopyBusyId] = useState<string | null>(null);
+  const [skillFilter, setSkillFilter] = useState<SkillFilter>('all');
+  const [sharingSkill, setSharingSkill] = useState<AssetSummary | null>(null);
+  const [skillUploadBusy, setSkillUploadBusy] = useState(false);
+  const skillUploadInputRef = useRef<HTMLInputElement>(null);
 
   const agentsBrowseSplit = useResizableSplit('asset-market-agents-browse-split', 38, {
     minPct: 24,
@@ -157,6 +167,16 @@ export function AssetMarketPage() {
     return [...platform, ...studio];
   }, [assets, myAgents]);
 
+  const filteredSkills = useMemo(() => {
+    return assets.filter((asset) => {
+      if (asset.type !== 'skill') return false;
+      if (skillFilter === 'platform') return asset.origin === 'platform';
+      if (skillFilter === 'mine') return asset.origin === 'user' && asset.canManage;
+      if (skillFilter === 'shared') return asset.origin === 'user' && !asset.canManage;
+      return true;
+    });
+  }, [assets, skillFilter]);
+
   function switchTab(next: Tab) {
     setEditing(null);
     setDuplicateFrom(null);
@@ -164,7 +184,35 @@ export function AssetMarketPage() {
     setViewingAgent(null);
     setViewingSkillId(null);
     setViewingMcpId(null);
+    setSharingSkill(null);
     setTab(next);
+  }
+
+  async function handleSkillUpload(file: File) {
+    setSkillUploadBusy(true);
+    setError('');
+    try {
+      const result = await uploadSkillZip(file);
+      await reload();
+      setViewingSkillId(result.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSkillUploadBusy(false);
+      if (skillUploadInputRef.current) skillUploadInputRef.current.value = '';
+    }
+  }
+
+  async function handleSkillDelete(skill: AssetSummary) {
+    if (!window.confirm(`Delete skill "${skill.title}"?`)) return;
+    setError('');
+    try {
+      await deleteSkill(skill.id);
+      if (viewingSkillId === skill.id) setViewingSkillId(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   async function handleCopyStudio(agent: StudioAgent) {
@@ -234,16 +282,18 @@ export function AssetMarketPage() {
         </div>
         <div className="admin-page-tabs-actions">
           {canWrite ? (
-            <button
-              type="button"
-              className={`btn-primary${tab !== 'agents' ? ' is-tab-hidden' : ''}`}
-              onClick={() => {
-                setDuplicateFrom(null);
-                setEditing('new');
-              }}
-            >
-              + New agent
-            </button>
+            <>
+              <button
+                type="button"
+                className={`btn-primary${tab !== 'agents' ? ' is-tab-hidden' : ''}`}
+                onClick={() => {
+                  setDuplicateFrom(null);
+                  setEditing('new');
+                }}
+              >
+                + New agent
+              </button>
+            </>
           ) : null}
         </div>
       </div>
@@ -311,40 +361,93 @@ export function AssetMarketPage() {
           />
         )
       ) : tab === 'skills' ? (
-        viewingSkillId ? (
-          <div
-            ref={skillsBrowseSplit.containerRef}
-            className="asset-market-browse has-detail"
-            style={
-              {
-                ['--asset-market-browse-left-pct' as string]: `${skillsBrowseSplit.leftPct}%`,
-              }
-            }
-          >
-            <div className="asset-market-browse-list">
-              <AssetTable
-                assets={assets}
-                empty="No skills published yet."
-                selectedId={viewingSkillId}
-                onView={(id) => setViewingSkillId(id)}
-              />
+        <>
+          <div className="asset-market-skill-toolbar">
+            <div className="asset-market-skill-filters" role="group" aria-label="Skill filters">
+              {(
+                [
+                  ['all', 'All'],
+                  ['platform', 'Platform'],
+                  ['mine', 'My skills'],
+                  ['shared', 'Shared with me'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`asset-market-filter-chip${skillFilter === key ? ' active' : ''}`}
+                  aria-pressed={skillFilter === key}
+                  onClick={() => setSkillFilter(key)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <div
-              className="asset-market-split-handle"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize skills list and preview"
-              onMouseDown={skillsBrowseSplit.onHandleMouseDown}
-            />
-            <SkillBrowserPanel skillId={viewingSkillId} onClose={() => setViewingSkillId(null)} />
+            {canWrite ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-secondary asset-market-skill-upload"
+                  disabled={skillUploadBusy}
+                  onClick={() => skillUploadInputRef.current?.click()}
+                >
+                  <Upload {...iconProps({ size: 16 })} aria-hidden />
+                  {skillUploadBusy ? 'Uploading…' : 'Upload skill'}
+                </button>
+                <input
+                  ref={skillUploadInputRef}
+                  type="file"
+                  accept=".zip,application/zip"
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void handleSkillUpload(file);
+                  }}
+                />
+              </>
+            ) : null}
           </div>
-        ) : (
-          <AssetTable
-            assets={assets}
-            empty="No skills published yet."
-            onView={(id) => setViewingSkillId(id)}
-          />
-        )
+          {viewingSkillId ? (
+            <div
+              ref={skillsBrowseSplit.containerRef}
+              className="asset-market-browse has-detail"
+              style={
+                {
+                  ['--asset-market-browse-left-pct' as string]: `${skillsBrowseSplit.leftPct}%`,
+                }
+              }
+            >
+              <div className="asset-market-browse-list">
+                <SkillsTable
+                  assets={filteredSkills}
+                  canWrite={canWrite}
+                  empty="No skills match this filter."
+                  selectedId={viewingSkillId}
+                  onView={(id) => setViewingSkillId(id)}
+                  onShare={setSharingSkill}
+                  onDelete={(skill) => void handleSkillDelete(skill)}
+                />
+              </div>
+              <div
+                className="asset-market-split-handle"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize skills list and preview"
+                onMouseDown={skillsBrowseSplit.onHandleMouseDown}
+              />
+              <SkillBrowserPanel skillId={viewingSkillId} onClose={() => setViewingSkillId(null)} />
+            </div>
+          ) : (
+            <SkillsTable
+              assets={filteredSkills}
+              canWrite={canWrite}
+              empty="No skills match this filter."
+              onView={(id) => setViewingSkillId(id)}
+              onShare={setSharingSkill}
+              onDelete={(skill) => void handleSkillDelete(skill)}
+            />
+          )}
+        </>
       ) : tab === 'mcp' ? (
         viewingMcpId ? (
           <div
@@ -412,6 +515,16 @@ export function AssetMarketPage() {
           onCancel={() => setMcpKeyFor(null)}
           onSaved={() => setMcpKeyFor(null)}
           onError={setError}
+        />
+      ) : null}
+
+      {sharingSkill ? (
+        <ResourceSharingModal
+          resourceType="skill"
+          resourceId={sharingSkill.id}
+          resourceLabel={sharingSkill.title}
+          inheritHint="Users with read access can attach this skill to their studio agents."
+          onClose={() => setSharingSkill(null)}
         />
       ) : null}
     </main>
@@ -629,6 +742,108 @@ function AssetTable({
                       >
                         <Eye {...iconProps()} aria-hidden />
                       </button>
+                    </div>
+                  </td>
+                ) : null}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SkillsTable({
+  assets,
+  empty,
+  canWrite,
+  selectedId,
+  onView,
+  onShare,
+  onDelete,
+}: {
+  assets: AssetSummary[];
+  empty: string;
+  canWrite: boolean;
+  selectedId?: string | null;
+  onView?: (id: string) => void;
+  onShare?: (skill: AssetSummary) => void;
+  onDelete?: (skill: AssetSummary) => void;
+}) {
+  const showActions = Boolean(onView);
+  return (
+    <div className="admin-table-wrap">
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Origin</th>
+            <th>Id</th>
+            <th>Description</th>
+            {showActions ? <th>Actions</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {assets.length === 0 ? (
+            <tr>
+              <td colSpan={showActions ? 5 : 4} className="admin-table-empty">
+                {empty}
+              </td>
+            </tr>
+          ) : (
+            assets.map((asset) => (
+              <tr
+                key={`${asset.type}:${asset.id}`}
+                className={selectedId === asset.id ? 'asset-market-row selected' : undefined}
+              >
+                <td>
+                  <strong>{asset.title}</strong>
+                </td>
+                <td>
+                  <span
+                    className={
+                      asset.origin === 'platform'
+                        ? 'asset-market-origin-badge platform'
+                        : 'asset-market-origin-badge custom'
+                    }
+                  >
+                    {asset.origin === 'platform' ? 'Platform' : 'Custom'}
+                  </span>
+                </td>
+                <td className="mono-cell">{asset.id}</td>
+                <td className="admin-muted">{asset.description || '—'}</td>
+                {showActions ? (
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="View contents"
+                        onClick={() => onView?.(asset.id)}
+                      >
+                        <Eye {...iconProps()} aria-hidden />
+                      </button>
+                      {canWrite && asset.origin === 'user' && asset.canManage ? (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Share"
+                          onClick={() => onShare?.(asset)}
+                        >
+                          <Share2 {...iconProps()} aria-hidden />
+                        </button>
+                      ) : null}
+                      {canWrite && asset.canManage ? (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Delete"
+                          onClick={() => onDelete?.(asset)}
+                        >
+                          <Trash2 {...iconProps()} aria-hidden />
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 ) : null}
@@ -1868,7 +2083,12 @@ function StudioAgentForm({
                             checked={skillIds.includes(skill.id)}
                             onChange={() => setSkillIds((prev) => toggleId(prev, skill.id))}
                           />
-                          <span>{skill.title}</span>
+                          <span>
+                            {skill.title}{' '}
+                            <span className="admin-muted">
+                              ({skill.origin === 'platform' ? 'Platform' : 'Custom'})
+                            </span>
+                          </span>
                         </label>
                       ))
                     )}

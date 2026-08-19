@@ -37,6 +37,17 @@ export async function putFileToPresignedUrl(
     );
   }
   if (!putRes.ok) {
-    throw new Error(`Direct storage upload failed (HTTP ${putRes.status})`);
+    const body = await putRes.text().catch(() => '');
+    if (putRes.status === 403) {
+      throw new Error(
+        'Direct storage upload denied (HTTP 403). Use a freshly minted upload URL, send the same Content-Type the server signed, and allow PUT in OSS CORS.',
+      );
+    }
+    const snippet = body.replace(/\s+/g, ' ').slice(0, 180);
+    throw new Error(
+      snippet
+        ? `Direct storage upload failed (HTTP ${putRes.status}): ${snippet}`
+        : `Direct storage upload failed (HTTP ${putRes.status})`,
+    );
   }
 }

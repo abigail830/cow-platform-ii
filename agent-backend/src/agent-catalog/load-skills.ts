@@ -4,6 +4,8 @@ import matter from 'gray-matter';
 import { defineSkill, type SkillReference } from '@flue/runtime';
 import { resolveCatalogPath } from './paths.ts';
 import type { LoadedAgentSpec } from './schema.ts';
+import { isUuidSkillId } from '../services/skills/reserved-names.ts';
+import { resolveSkillAssetPath } from '../agent-assets/manifest.ts';
 
 const SKILL_FILE = 'SKILL.md';
 /** Sandbox-only binaries (E2B copy); skip UTF-8 packaging in defineSkill. */
@@ -24,6 +26,12 @@ const SENSITIVE_NAMES = new Set([
   'credentials.json',
   'secrets.json',
 ]);
+
+function shouldPackageTextFile(path: string): boolean {
+  const name = path.split('/').pop() ?? path;
+  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
+  return !PACKAGED_SKILL_SKIP_EXTENSIONS.has(ext);
+}
 
 function collectOpenkmsSharedFiles(skillDir: string, files: Record<string, string>): void {
   const sharedDir = join(skillDir, '..', 'shared');
@@ -50,14 +58,35 @@ function collectSkillFiles(skillDir: string): Record<string, string> {
       }
       const rel = relative(skillDir, full).replace(/\\/g, '/');
       if (rel === SKILL_FILE || SENSITIVE_NAMES.has(name)) continue;
-      const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
-      if (PACKAGED_SKILL_SKIP_EXTENSIONS.has(ext)) continue;
+      if (!shouldPackageTextFile(rel)) continue;
       files[rel] = readFileSync(full, 'utf-8');
     }
   };
   walk(skillDir);
   collectOpenkmsSharedFiles(skillDir, files);
   return files;
+}
+
+function buildSkillReference(input: {
+  name: string;
+  description: string;
+  instructions: string;
+  license?: string;
+  compatibility?: string;
+  allowedTools?: string;
+  metadata?: Record<string, string>;
+  files: Record<string, string>;
+}): SkillReference {
+  return defineSkill({
+    name: input.name,
+    description: input.description,
+    instructions: input.instructions,
+    license: input.license,
+    compatibility: input.compatibility,
+    allowedTools: input.allowedTools,
+    metadata: input.metadata,
+    files: input.files,
+  });
 }
 
 function loadSkillFromDirectory(skillDir: string): SkillReference {
@@ -78,7 +107,7 @@ function loadSkillFromDirectory(skillDir: string): SkillReference {
     throw new Error(`skill name "${name}" must match directory "${dirName}" in ${skillDir}`);
   }
 
-  return defineSkill({
+  return buildSkillReference({
     name,
     description,
     instructions: parsed.content.trim(),
@@ -99,13 +128,60 @@ function loadSkillFromDirectory(skillDir: string): SkillReference {
   });
 }
 
-export function loadAgentSkills(spec: LoadedAgentSpec): SkillReference[] {
+function loadSkillFromDbRecord(
+  row: NonNullable<Awaited<ReturnType<typeof loadSkillRecordForRuntime>>>['row'],
+  fileRows: NonNullable<Awaited<ReturnType<typeof loadSkillRecordForRuntime>>>['files'],
+): SkillReference {
+  const files: Record<string, string> = {};
+  for (const file of fileRows) {
+    if (!shouldPackageTextFile(file.filePath)) continue;
+    files[file.filePath] = file.content.toString('utf-8');
+  }
+  return buildSkillReference({
+    name: row.slug,
+    description: row.description,
+    instructions: row.instructions,
+    license: row.license ?? undefined,
+    compatibility: row.compatibility ?? undefined,
+    metadata: row.metadata ?? undefined,
+    files,
+  });
+}
+
+function isFilesystemSkillRef(skillRef: string): boolean {
+  return skillRef.startsWith('/') || skillRef.startsWith('./') || skillRef.startsWith('../');
+}
+
+async function loadSkillRef(skillRef: string, agentDir: string): Promise<SkillReference> {
+  if (isFilesystemSkillRef(skillRef)) {
+    const skillDir = resolveCatalogPath(skillRef, agentDir);
+    return loadSkillFromDirectory(skillDir);
+  }
+
+  const { loadSkillRecordForRuntime } = await import('../services/skills/skill-db-loader.ts');
+  const dbRecord = await loadSkillRecordForRuntime(skillRef);
+  if (dbRecord) {
+    return loadSkillFromDbRecord(dbRecord.row, dbRecord.files);
+  }
+
+  if (!isUuidSkillId(skillRef)) {
+    try {
+      const skillDir = resolveSkillAssetPath(skillRef);
+      return loadSkillFromDirectory(skillDir);
+    } catch {
+      // fall through
+    }
+  }
+
+  throw new Error(`Unknown skill "${skillRef}"`);
+}
+
+export async function loadAgentSkills(spec: LoadedAgentSpec): Promise<SkillReference[]> {
   const skills: SkillReference[] = [];
   const seen = new Set<string>();
 
   for (const skillRef of spec.skills) {
-    const skillDir = resolveCatalogPath(skillRef, spec.agentDir);
-    const skill = loadSkillFromDirectory(skillDir);
+    const skill = await loadSkillRef(skillRef, spec.agentDir);
     if (seen.has(skill.name)) {
       throw new Error(`duplicate skill "${skill.name}" on agent "${spec.id}"`);
     }

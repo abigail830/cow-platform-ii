@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { join } from 'node:path';
-import { resolveSkillAssetPath } from '../agent-assets/manifest.ts';
 import { agentAssetsRoot } from '../agent-catalog/paths.ts';
 import type { LoadedAgentSpec, SandboxYaml } from '../agent-catalog/schema.ts';
 import { a2aYamlSchema, sandboxSchema } from '../agent-catalog/schema.ts';
@@ -27,14 +26,6 @@ export async function studioRowToLoadedSpec(row: StudioAgentRow): Promise<Loaded
     throw new Error(`Studio agent "${row.slug}" references missing model config`);
   }
 
-  const skillPaths = (row.skillIds ?? []).map((id) => {
-    const abs = resolveSkillAssetPath(id);
-    // Store as /agent-assets/... so resolveCatalogPath works from any agentDir
-    const root = agentAssetsRoot();
-    const rel = abs.startsWith(root) ? abs.slice(root.length).replace(/^\//, '') : abs;
-    return `/agent-assets/${rel}`;
-  });
-
   const sandbox = sandboxSchema.parse(row.sandbox ?? { provider: 'none' }) as SandboxYaml;
   const a2a = row.a2a ? a2aYamlSchema.parse(row.a2a) : undefined;
 
@@ -54,7 +45,7 @@ export async function studioRowToLoadedSpec(row: StudioAgentRow): Promise<Loaded
         : {}),
     },
     prompt: './prompt.md',
-    skills: skillPaths,
+    skills: row.skillIds ?? [],
     mcp: [], // resolved per-user at runtime from platformMcpIds / privateMcpIds
     sandbox,
     access: { defaultForRoles: [] },

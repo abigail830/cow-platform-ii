@@ -7,7 +7,7 @@ import {
   type ResourceAccessPutInput,
   type ResourceType,
 } from '../auth/resource-access.ts';
-import { denyUnlessChannelAccess, denyUnlessKnowledgeBaseAccess, denyUnlessAudioChannelAccess } from '../auth/require-resource-access.ts';
+import { denyUnlessChannelAccess, denyUnlessKnowledgeBaseAccess, denyUnlessAudioChannelAccess, denyUnlessSkillAccess } from '../auth/require-resource-access.ts';
 
 export async function handleGetResourceAccess(
   c: Context,
@@ -20,6 +20,8 @@ export async function handleGetResourceAccess(
       ? await denyUnlessChannelAccess(c, resourceId, 'read')
       : resourceType === 'audio_channel'
         ? await denyUnlessAudioChannelAccess(c, resourceId, 'read')
+        : resourceType === 'skill'
+          ? await denyUnlessSkillAccess(c, resourceId, 'read')
         : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'read');
   if (denied) return denied;
 
@@ -39,6 +41,8 @@ export async function handlePutResourceAccess(
       ? await denyUnlessChannelAccess(c, resourceId, 'manage')
       : resourceType === 'audio_channel'
         ? await denyUnlessAudioChannelAccess(c, resourceId, 'manage')
+        : resourceType === 'skill'
+          ? await denyUnlessSkillAccess(c, resourceId, 'manage')
         : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'manage');
   if (denied) return denied;
 
@@ -68,6 +72,8 @@ export async function handleTransferResourceOwner(
       ? await denyUnlessChannelAccess(c, resourceId, 'manage')
       : resourceType === 'audio_channel'
         ? await denyUnlessAudioChannelAccess(c, resourceId, 'manage')
+        : resourceType === 'skill'
+          ? await denyUnlessSkillAccess(c, resourceId, 'manage')
         : await denyUnlessKnowledgeBaseAccess(c, resourceId, 'manage');
   if (denied) return denied;
 
