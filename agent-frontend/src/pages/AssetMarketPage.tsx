@@ -42,6 +42,7 @@ import {
   type UserDatasource,
 } from '../api/studio.ts';
 import { iconProps } from '../components/icons/icon-props.ts';
+import { MarkdownCodeEditor } from '../components/MarkdownCodeEditor.tsx';
 import { ResourceSharingModal } from '../components/ResourceSharingModal.tsx';
 import { ReadOnlyCodeEditor, readOnlyCodeLanguageForPath } from '../components/ReadOnlyCodeEditor.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
