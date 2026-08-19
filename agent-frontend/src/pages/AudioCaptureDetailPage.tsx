@@ -728,9 +728,6 @@ export function AudioCaptureDetailPage() {
   const segmentAcceptTypes = transcriptCapture
     ? '.md,.markdown,.docx'
     : '.m4a,.mp3,.wav,.flac,.aac,.amr,.ogg,.opus,.webm';
-  const segmentsTranscribing = capture.segments.some((segment) =>
-    isAudioPipelineActive({ status: segment.status, pipeline_job: segment.pipeline_job }),
-  );
   const segmentsNeedingTranscription = capture.segments.filter((segment) =>
     segmentNeedsTranscription(segment),
   );
@@ -1069,9 +1066,6 @@ export function AudioCaptureDetailPage() {
               </table>
             </div>
           )}
-          {segmentsTranscribing ? (
-            <p className="documents-table-meta">Segment transcription in progress…</p>
-          ) : null}
         </section>
 
         <section className="audio-detail-panel audio-detail-transcript" aria-label="Extraction preview">
