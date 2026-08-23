@@ -6,7 +6,9 @@ import {
   ArrowUp,
   Download,
   Loader2,
+  Maximize2,
   Mic,
+  Minimize2,
   Plus,
   Upload,
 } from 'lucide-react';
@@ -52,6 +54,7 @@ function PanelLoading({ label }: { label: string }) {
 }
 
 type ExtractionTopic = {
+  topic_id?: string;
   title?: string;
   key_points?: string[];
   action_items?: string[];
@@ -62,23 +65,39 @@ type ExtractionArtifact = {
   topics?: ExtractionTopic[];
 };
 
+type ContentFacetsByTopic = {
+  topic_id?: string;
+  content_facets?: string[];
+};
+
 type RecordingContextArtifact = {
+  recording_mode?: string;
+  audience?: string;
   classification?: {
     recording_mode?: string;
     audience?: string;
     confidence?: number;
     needs_review?: boolean;
+    content_facets_by_topic?: ContentFacetsByTopic[];
   };
   metadata?: Record<string, unknown>;
 };
 
-type CaptureArtifactTab = 'summary' | 'structured_transcript' | 'recording_context' | 'extraction';
+type CaptureArtifactTab = 'summary' | 'structured_transcript' | 'extraction';
+type StructuredTranscriptView = 'json' | 'table';
+type ExtractionView = 'timeline' | 'json';
+
+type StructuredTranscriptTurn = {
+  turn_id?: unknown;
+  timestamp?: unknown;
+  speaker?: unknown;
+  text?: unknown;
+};
 
 const CAPTURE_ARTIFACT_TABS: Array<{ id: CaptureArtifactTab; label: string }> = [
   { id: 'summary', label: 'Summary' },
   { id: 'structured_transcript', label: 'Structured transcript' },
-  { id: 'recording_context', label: 'Recording context' },
-  { id: 'extraction', label: 'Extraction JSON' },
+  { id: 'extraction', label: 'Extraction' },
 ];
 
 const ARTIFACT_POLL_MAX_AFTER_FINISH = 15;
@@ -117,14 +136,14 @@ function formatExtractionPreview(
 
   for (const topic of extraction.topics ?? []) {
     lines.push(`## ${topic.title ?? 'Topic'}`);
-    for (const point of topic.key_points ?? []) {
-      if (point.trim()) lines.push(`- ${point.trim()}`);
+    for (const point of topicFieldList(topic, ['key_points', 'key_points'])) {
+      lines.push(`- ${point}`);
     }
-    for (const item of topic.action_items ?? []) {
-      if (item.trim()) lines.push(`- [Action] ${item.trim()}`);
+    for (const item of topicFieldList(topic, ['action_items', 'action_items'])) {
+      lines.push(`- [Action] ${item}`);
     }
-    for (const question of topic.open_questions ?? []) {
-      if (question.trim()) lines.push(`- [Question] ${question.trim()}`);
+    for (const question of topicFieldList(topic, ['open_questions', 'open_questions'])) {
+      lines.push(`- [Question] ${question}`);
     }
     lines.push('');
   }
@@ -175,8 +194,6 @@ function isArtifactTabLoaded(
   switch (tab) {
     case 'structured_transcript':
       return structuredArtifact != null;
-    case 'recording_context':
-      return contextArtifact != null;
     case 'extraction':
       return extractionArtifact != null;
     case 'summary':
@@ -195,6 +212,89 @@ function parseArtifactJson<T>(text: string | null): T | null {
   }
 }
 
+function asDisplayString(value: unknown): string {
+  if (value == null) return '';
+  return String(value);
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
+function topicFieldList(topic: ExtractionTopic, keys: string[]): string[] {
+  const record = topic as Record<string, unknown>;
+  for (const key of keys) {
+    const list = asStringList(record[key]);
+    if (list.length > 0) return list;
+  }
+  return [];
+}
+
+function formatFacetLabel(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
+function structuredTopicTimestamps(artifact: unknown): Map<string, string> {
+  const timestamps = new Map<string, string>();
+  if (!artifact || typeof artifact !== 'object') return timestamps;
+
+  const turns = structuredTranscriptTurns(artifact);
+  const turnTime = new Map<string, string>();
+  for (const turn of turns) {
+    const turnId = asDisplayString(turn.turn_id);
+    const timestamp = asDisplayString(turn.timestamp);
+    if (turnId && timestamp) turnTime.set(turnId, timestamp);
+  }
+
+  const topics = (artifact as { topics?: unknown }).topics;
+  if (!Array.isArray(topics)) return timestamps;
+
+  for (const [index, topic] of topics.entries()) {
+    if (!topic || typeof topic !== 'object') continue;
+    const topicId = asDisplayString((topic as { topic_id?: unknown }).topic_id);
+    const turnIds = asStringList(
+      (topic as { turn_ids?: unknown }).turn_ids ?? (topic as { turn_ids?: unknown }).turn_ids,
+    );
+    const firstTurnId = turnIds.find((id) => turnTime.has(id));
+    if (firstTurnId) {
+      const time = turnTime.get(firstTurnId) ?? '';
+      if (topicId) timestamps.set(topicId, time);
+      timestamps.set(`#${index}`, time);
+    }
+  }
+  return timestamps;
+}
+
+function facetsByTopicId(context: RecordingContextArtifact | null): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  const rows = context?.classification?.content_facets_by_topic;
+  if (!Array.isArray(rows)) return map;
+  for (const row of rows) {
+    const topicId = asDisplayString(row.topic_id);
+    const facets = asStringList(row.content_facets);
+    if (topicId && facets.length > 0) map.set(topicId, facets);
+  }
+  return map;
+}
+
+function structuredTranscriptTurns(artifact: unknown): StructuredTranscriptTurn[] {
+  if (Array.isArray(artifact)) {
+    return artifact.filter(
+      (row): row is StructuredTranscriptTurn => Boolean(row) && typeof row === 'object',
+    );
+  }
+  if (artifact && typeof artifact === 'object') {
+    const turns = (artifact as { turns?: unknown }).turns;
+    if (Array.isArray(turns)) {
+      return turns.filter(
+        (row): row is StructuredTranscriptTurn => Boolean(row) && typeof row === 'object',
+      );
+    }
+  }
+  return [];
+}
+
 export function AudioCaptureDetailPage() {
   const { captureId } = useParams<{ captureId: string }>();
   const { setSelectedChannelId, canWrite } = useAudioOutletContext();
@@ -210,6 +310,11 @@ export function AudioCaptureDetailPage() {
   const [reordering, setReordering] = useState(false);
   const [needsReview, setNeedsReview] = useState(false);
   const [artifactTab, setArtifactTab] = useState<CaptureArtifactTab>('summary');
+  const [structuredTranscriptView, setStructuredTranscriptView] =
+    useState<StructuredTranscriptView>('table');
+  const [extractionView, setExtractionView] = useState<ExtractionView>('timeline');
+  const [showExtractionTagging, setShowExtractionTagging] = useState(false);
+  const [artifactPreviewMaximized, setArtifactPreviewMaximized] = useState(false);
   const [summaryMarkdown, setSummaryMarkdown] = useState<string | null>(null);
   const [structuredArtifact, setStructuredArtifact] = useState<unknown | null>(null);
   const [contextArtifact, setContextArtifact] = useState<RecordingContextArtifact | null>(null);
@@ -230,6 +335,41 @@ export function AudioCaptureDetailPage() {
   const [openSegmentId, setOpenSegmentId] = useState<string | null>(null);
   const [openSegmentLabel, setOpenSegmentLabel] = useState<string | null>(null);
   const [transcribingSegmentIds, setTranscribingSegmentIds] = useState<Set<string>>(new Set());
+
+  const loadExtractionCompanions = useCallback(async () => {
+    if (!captureId) return;
+    const tasks: Promise<void>[] = [];
+    if (structuredArtifact == null) {
+      tasks.push(
+        (async () => {
+          try {
+            const text = await fetchCapturePostProcessArtifactText(captureId, 'structured_transcript');
+            const parsed = parseArtifactJson<unknown>(text);
+            if (parsed != null) setStructuredArtifact(parsed);
+          } catch {
+            // Timestamps are optional for the extraction timeline.
+          }
+        })(),
+      );
+    }
+    if (contextArtifact == null) {
+      tasks.push(
+        (async () => {
+          try {
+            const text = await fetchCapturePostProcessArtifactText(captureId, 'recording_context');
+            const parsed = parseArtifactJson<RecordingContextArtifact>(text);
+            if (parsed) {
+              setContextArtifact(parsed);
+              setNeedsReview(Boolean(parsed.classification?.needs_review));
+            }
+          } catch {
+            // Tagging is optional.
+          }
+        })(),
+      );
+    }
+    if (tasks.length > 0) await Promise.all(tasks);
+  }, [captureId, contextArtifact, structuredArtifact]);
 
   const loadCapture = useCallback(
     async (options?: { silent?: boolean; sync?: boolean }) => {
@@ -295,6 +435,7 @@ export function AudioCaptureDetailPage() {
           extractionArtifact,
         )
       ) {
+        if (tab === 'extraction') void loadExtractionCompanions();
         return true;
       }
 
@@ -368,6 +509,7 @@ export function AudioCaptureDetailPage() {
             if (parsed) {
               setExtractionArtifact(parsed);
               loaded = true;
+              void loadExtractionCompanions();
             }
           }
         }
@@ -403,7 +545,7 @@ export function AudioCaptureDetailPage() {
         if (showLoading) setArtifactTabLoading(tab, false);
       }
     },
-    [captureId, contextArtifact, extractionArtifact, setArtifactTabLoading, structuredArtifact, summaryMarkdown],
+    [captureId, contextArtifact, extractionArtifact, loadExtractionCompanions, setArtifactTabLoading, structuredArtifact, summaryMarkdown],
   );
 
   const syncCaptureWhenCoreArtifactsReady = useCallback(
@@ -456,11 +598,24 @@ export function AudioCaptureDetailPage() {
     setArtifactTabErrors({});
     setLoadingArtifactTabs(new Set());
     setArtifactPollExhausted(false);
+    setStructuredTranscriptView('table');
+    setExtractionView('timeline');
+    setShowExtractionTagging(false);
+    setArtifactPreviewMaximized(false);
     prevPostProcessActiveRef.current = false;
     prevPipelineJobIdRef.current = null;
     prevJobStageRef.current = null;
     postProcessJustFinishedRef.current = false;
   }, [captureId]);
+
+  useEffect(() => {
+    if (!artifactPreviewMaximized) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setArtifactPreviewMaximized(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [artifactPreviewMaximized]);
 
   useEffect(() => {
     if (!capture) {
@@ -803,7 +958,7 @@ export function AudioCaptureDetailPage() {
       if (artifactTab === 'summary') {
         return (
           <div
-            className="document-markdown-panel capture-artifact-preview-scroll"
+            className="document-markdown-panel capture-artifact-preview capture-artifact-preview-scroll"
             onWheel={handleArtifactPreviewWheel}
           >
             <Markdown content={summaryMarkdown ?? ''} />
@@ -811,16 +966,142 @@ export function AudioCaptureDetailPage() {
         );
       }
 
+      if (artifactTab === 'structured_transcript' && structuredTranscriptView === 'table') {
+        const turns = structuredTranscriptTurns(structuredArtifact);
+        return (
+          <div
+            className="admin-table-wrap capture-artifact-preview capture-artifact-preview-scroll capture-structured-transcript-table-wrap"
+            onWheel={handleArtifactPreviewWheel}
+          >
+            <table className="admin-table capture-structured-transcript-table">
+              <thead>
+                <tr>
+                  <th>turn_id</th>
+                  <th>timestamp</th>
+                  <th>speaker</th>
+                  <th>text</th>
+                </tr>
+              </thead>
+              <tbody>
+                {turns.length === 0 ? (
+                  <tr>
+                    <td className="admin-table-empty" colSpan={4}>
+                      No turns in this transcript.
+                    </td>
+                  </tr>
+                ) : (
+                  turns.map((turn, index) => (
+                    <tr key={asDisplayString(turn.turn_id) || String(index)}>
+                      <td className="documents-table-meta">{asDisplayString(turn.turn_id)}</td>
+                      <td className="documents-table-meta">{asDisplayString(turn.timestamp)}</td>
+                      <td>{asDisplayString(turn.speaker)}</td>
+                      <td className="capture-structured-transcript-text">{asDisplayString(turn.text)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      if (artifactTab === 'extraction' && extractionView === 'timeline') {
+        const topics = extractionArtifact?.topics ?? [];
+        const timestamps = structuredTopicTimestamps(structuredArtifact);
+        const facets = showExtractionTagging ? facetsByTopicId(contextArtifact) : new Map<string, string[]>();
+        const recordingMode = showExtractionTagging
+          ? contextArtifact?.classification?.recording_mode ?? contextArtifact?.recording_mode
+          : undefined;
+        const audience = showExtractionTagging
+          ? contextArtifact?.classification?.audience ?? contextArtifact?.audience
+          : undefined;
+
+        return (
+          <div
+            className="capture-extraction-timeline capture-artifact-preview capture-artifact-preview-scroll"
+            onWheel={handleArtifactPreviewWheel}
+          >
+            {showExtractionTagging && (recordingMode || audience) ? (
+              <p className="capture-extraction-session-meta">
+                {recordingMode ? formatFacetLabel(recordingMode) : null}
+                {recordingMode && audience ? ' · ' : null}
+                {audience ? formatFacetLabel(audience) : null}
+                {contextArtifact?.classification?.needs_review ? ' · needs review' : null}
+              </p>
+            ) : null}
+            {topics.length === 0 ? (
+              <p className="document-detail-panel-empty">No topics in this extraction.</p>
+            ) : (
+              topics.map((topic, index) => {
+                const topicId = asDisplayString(topic.topic_id) || `topic_${String(index + 1).padStart(2, '0')}`;
+                const keyPoints = topicFieldList(topic, ['key_points', 'key_points']);
+                const actionItems = topicFieldList(topic, ['action_items', 'action_items']);
+                const openQuestions = topicFieldList(topic, ['open_questions', 'open_questions']);
+                const topicFacets = facets.get(topicId) ?? [];
+                const timestamp = timestamps.get(topicId) || timestamps.get(`#${index}`);
+                return (
+                  <article key={topicId} className="capture-extraction-topic">
+                    <time className="capture-extraction-topic-time">{timestamp || '—'}</time>
+                    <div className="capture-extraction-topic-body">
+                      <h4 className="capture-extraction-topic-title">{topic.title || `Topic ${index + 1}`}</h4>
+                      {showExtractionTagging && topicFacets.length > 0 ? (
+                        <div className="capture-extraction-facets">
+                          {topicFacets.map((facet) => (
+                            <span key={facet} className="capture-extraction-facet">
+                              {formatFacetLabel(facet)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {keyPoints.length > 0 ? (
+                        <>
+                          <p className="capture-extraction-section-label">Key points</p>
+                          <ul className="capture-extraction-list">
+                            {keyPoints.map((point) => (
+                              <li key={point}>{point}</li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : null}
+                      {actionItems.length > 0 ? (
+                        <>
+                          <p className="capture-extraction-section-label">Action items</p>
+                          <ul className="capture-extraction-list">
+                            {actionItems.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : null}
+                      {openQuestions.length > 0 ? (
+                        <>
+                          <p className="capture-extraction-section-label">Open questions</p>
+                          <ul className="capture-extraction-list">
+                            {openQuestions.map((question) => (
+                              <li key={question}>{question}</li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        );
+      }
+
       return (
         <pre
-          className="document-json-preview capture-extraction-preview capture-artifact-preview-scroll"
+          className="document-json-preview capture-extraction-preview capture-artifact-preview capture-artifact-preview-scroll"
           onWheel={handleArtifactPreviewWheel}
         >
           {JSON.stringify(
             artifactTab === 'structured_transcript'
               ? structuredArtifact
-              : artifactTab === 'recording_context'
-                ? contextArtifact
+              : showExtractionTagging && contextArtifact
+                ? { extraction: extractionArtifact, recording_context: contextArtifact }
                 : extractionArtifact,
             null,
             2,
@@ -1068,11 +1349,22 @@ export function AudioCaptureDetailPage() {
           )}
         </section>
 
-        <section className="audio-detail-panel audio-detail-transcript" aria-label="Extraction preview">
+        {artifactPreviewMaximized ? (
+          <div
+            className="capture-artifact-maximize-backdrop"
+            onClick={() => setArtifactPreviewMaximized(false)}
+          />
+        ) : null}
+        <section
+          className={`audio-detail-panel audio-detail-transcript${artifactPreviewMaximized ? ' is-maximized' : ''}`}
+          aria-label="Extraction preview"
+          aria-modal={artifactPreviewMaximized || undefined}
+          role={artifactPreviewMaximized ? 'dialog' : undefined}
+        >
           <div className="document-detail-content-header capture-extraction-header">
             <div className="capture-extraction-header-top">
               <h3 className="document-detail-panel-heading">Extraction preview</h3>
-              {canWriteCapture ? (
+              {canWriteCapture && !artifactPreviewMaximized ? (
                 <div className="document-detail-toolbar-actions">
                   <button
                     type="button"
@@ -1128,6 +1420,57 @@ export function AudioCaptureDetailPage() {
                       );
                     })}
                   </div>
+                  <div className="capture-artifact-tabs-actions">
+                  {artifactTab === 'structured_transcript' && structuredArtifact != null ? (
+                    <div className="capture-structured-transcript-views" role="group" aria-label="Transcript view">
+                      <button
+                        type="button"
+                        className={`capture-structured-transcript-view${structuredTranscriptView === 'table' ? ' active' : ''}`}
+                        aria-pressed={structuredTranscriptView === 'table'}
+                        onClick={() => setStructuredTranscriptView('table')}
+                      >
+                        Table
+                      </button>
+                      <button
+                        type="button"
+                        className={`capture-structured-transcript-view${structuredTranscriptView === 'json' ? ' active' : ''}`}
+                        aria-pressed={structuredTranscriptView === 'json'}
+                        onClick={() => setStructuredTranscriptView('json')}
+                      >
+                        Raw
+                      </button>
+                    </div>
+                  ) : null}
+                  {artifactTab === 'extraction' && extractionArtifact != null ? (
+                    <div className="capture-extraction-toolbar">
+                      <div className="capture-structured-transcript-views" role="group" aria-label="Extraction view">
+                        <button
+                          type="button"
+                          className={`capture-structured-transcript-view${extractionView === 'timeline' ? ' active' : ''}`}
+                          aria-pressed={extractionView === 'timeline'}
+                          onClick={() => setExtractionView('timeline')}
+                        >
+                          Timeline
+                        </button>
+                        <button
+                          type="button"
+                          className={`capture-structured-transcript-view${extractionView === 'json' ? ' active' : ''}`}
+                          aria-pressed={extractionView === 'json'}
+                          onClick={() => setExtractionView('json')}
+                        >
+                          Raw
+                        </button>
+                      </div>
+                      <label className="form-checkbox capture-extraction-tagging-toggle">
+                        <input
+                          type="checkbox"
+                          checked={showExtractionTagging}
+                          onChange={(event) => setShowExtractionTagging(event.target.checked)}
+                        />
+                        Show tagging
+                      </label>
+                    </div>
+                  ) : null}
                   {artifactTab === 'summary' && summaryMarkdown?.trim() ? (
                     <div className="document-detail-toolbar-actions">
                       <button
@@ -1147,6 +1490,22 @@ export function AudioCaptureDetailPage() {
                       </button>
                     </div>
                   ) : null}
+                  {activeTabLoaded ? (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={artifactPreviewMaximized ? 'Exit full view' : 'Maximize'}
+                      aria-label={artifactPreviewMaximized ? 'Exit full view' : 'Maximize preview'}
+                      onClick={() => setArtifactPreviewMaximized((current) => !current)}
+                    >
+                      {artifactPreviewMaximized ? (
+                        <Minimize2 {...iconProps()} />
+                      ) : (
+                        <Maximize2 {...iconProps()} />
+                      )}
+                    </button>
+                  ) : null}
+                  </div>
                 </div>
               ) : null}
               {postProcessActive ? (
