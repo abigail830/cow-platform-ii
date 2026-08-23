@@ -188,7 +188,6 @@ function isArtifactTabLoaded(
   tab: CaptureArtifactTab,
   summaryMarkdown: string | null,
   structuredArtifact: unknown | null,
-  contextArtifact: RecordingContextArtifact | null,
   extractionArtifact: ExtractionArtifact | null,
 ): boolean {
   switch (tab) {
@@ -431,7 +430,6 @@ export function AudioCaptureDetailPage() {
           tab,
           summaryMarkdown,
           structuredArtifact,
-          contextArtifact,
           extractionArtifact,
         )
       ) {
@@ -686,7 +684,6 @@ export function AudioCaptureDetailPage() {
         artifactTab,
         summaryMarkdown,
         structuredArtifact,
-        contextArtifact,
         extractionArtifact,
       ) &&
       !artifactPollExhausted &&
@@ -906,7 +903,6 @@ export function AudioCaptureDetailPage() {
     artifactTab,
     summaryMarkdown,
     structuredArtifact,
-    contextArtifact,
     extractionArtifact,
   );
   const canBrowseArtifactTabs =
