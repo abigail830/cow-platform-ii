@@ -16,12 +16,16 @@ describe('faq-index-yaml', () => {
     assert.throws(() => parseFaqIndexYaml('dimensions: 1024\n', 'test'), /model_name/);
   });
 
-  it('prefers pipeline config_yaml override', () => {
+  it('reads pipeline config_yaml from DB', () => {
     const result = resolveFaqIndexWorkflowYamlText({
       configYaml: 'model_name: "MyEmbed"\ndimensions: 1024\n',
     });
     assert.match(result.yaml, /MyEmbed/);
     assert.equal(result.source, 'pipeline.config_yaml');
     assert.ok(result.configYamlSnapshot);
+  });
+
+  it('requires pipeline config_yaml', () => {
+    assert.throws(() => resolveFaqIndexWorkflowYamlText({ configYaml: null }), /Config YAML/);
   });
 });

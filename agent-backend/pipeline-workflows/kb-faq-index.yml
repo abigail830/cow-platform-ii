@@ -1,0 +1,7 @@
+# Default worker config for kb-faq-index.
+# model_name = Models list bold name (app_model_configs.name), api_type=embeddings.
+# Credentials via GET /internal-api/models/cli-params?model_name=…
+# Do not put api_key / base_url / UUID model ids here.
+
+model_name: "qwen3-Embedding-8B"
+dimensions: 4096

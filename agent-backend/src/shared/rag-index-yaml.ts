@@ -4,7 +4,6 @@
 import { parse as parseYaml } from 'yaml';
 import type { KbChunkConfig } from '../db/schema.ts';
 import { DEFAULT_KB_CHUNK_CONFIG } from '../db/schema.ts';
-import { readCliPackagedDefaultConfigYaml } from './cli-workflow-defaults.ts';
 import { RAG_KB_PIPELINE_NAME } from './pipeline-catalog.ts';
 
 export type RagIndexYamlConfig = {
@@ -102,20 +101,12 @@ export function parseRagIndexYaml(raw: string, source: string): RagIndexYamlConf
 export function resolveRagIndexWorkflowYamlText(pipeline: {
   configYaml?: string | null;
 } | null | undefined): { yaml: string; source: string; configYamlSnapshot: string | null } {
-  const override = pipeline?.configYaml?.trim() || null;
-  if (override) {
-    return { yaml: override, source: 'pipeline.config_yaml', configYamlSnapshot: override };
-  }
-  const packaged = readCliPackagedDefaultConfigYaml(RAG_KB_PIPELINE_NAME);
-  if (!packaged?.trim()) {
+  const configYaml = pipeline?.configYaml?.trim() || null;
+  if (!configYaml) {
     throw new Error(
-      `No RAG index worker config found for pipeline ${RAG_KB_PIPELINE_NAME} ` +
-        `(set Admin Config YAML or package openkms-cli/workflows/${RAG_KB_PIPELINE_NAME}.yml)`,
+      `No RAG index worker config found for pipeline ${RAG_KB_PIPELINE_NAME}. ` +
+        `Set Config YAML under Admin → Pipelines → ${RAG_KB_PIPELINE_NAME}.`,
     );
   }
-  return {
-    yaml: packaged,
-    source: 'cli packaged default',
-    configYamlSnapshot: null,
-  };
+  return { yaml: configYaml, source: 'pipeline.config_yaml', configYamlSnapshot: configYaml };
 }

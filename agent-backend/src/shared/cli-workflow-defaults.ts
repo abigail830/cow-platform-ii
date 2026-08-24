@@ -1,34 +1,39 @@
+/**
+ * Packaged pipeline worker YAML on disk — **local dev / Admin "Reset to default" only**.
+ * Vercel runtime and KB import paths read `app_pipeline_configs.config_yaml` from the DB.
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 function candidateWorkflowDirs(): string[] {
   const here = path.dirname(fileURLToPath(import.meta.url));
+  const fromEnv = process.env.PIPELINE_WORKFLOWS_PATH?.trim();
   return [
-    // agent-backend/src/shared → ../../.. = repo root
-    path.resolve(here, '..', '..', '..', 'openkms-cli', 'workflows'),
-    // agent-backend/dist/shared → ../../../.. = repo root
-    path.resolve(here, '..', '..', '..', '..', 'openkms-cli', 'workflows'),
+    ...(fromEnv ? [path.resolve(fromEnv)] : []),
+    // agent-backend/src/shared → ../.. = agent-backend root
+    path.resolve(here, '..', '..', 'pipeline-workflows'),
+    // agent-backend/dist/shared → ../../.. = agent-backend root
+    path.resolve(here, '..', '..', '..', 'pipeline-workflows'),
     // cwd-relative (dev from agent-backend/)
-    path.resolve(process.cwd(), '..', 'openkms-cli', 'workflows'),
-    path.resolve(process.cwd(), 'openkms-cli', 'workflows'),
+    path.resolve(process.cwd(), 'pipeline-workflows'),
   ];
 }
 
-function openkmsCliWorkflowsDir(): string | null {
+function pipelineWorkflowsDir(): string | null {
   for (const dir of candidateWorkflowDirs()) {
     if (fs.existsSync(dir)) return dir;
   }
   return null;
 }
 
-/** Load packaged CLI default worker YAML for a pipeline_name (null if missing). */
+/** Load packaged default worker YAML for a pipeline_name (null if missing). */
 export function readCliPackagedDefaultConfigYaml(pipelineName: string): string | null {
   const name = pipelineName.trim();
   if (!name || name.includes('/') || name.includes('\\') || name.includes('..')) {
     return null;
   }
-  const dir = openkmsCliWorkflowsDir();
+  const dir = pipelineWorkflowsDir();
   if (!dir) return null;
   const filePath = path.join(dir, `${name}.yml`);
   try {
