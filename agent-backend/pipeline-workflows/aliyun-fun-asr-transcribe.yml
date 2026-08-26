@@ -5,6 +5,6 @@
 model_name: "fun-asr"
 
 asr:
-  enable_diarization: false
+  enable_diarization: true
   # language_hints: ["zh"]   # Fun-ASR supports only one hint
   # speaker_count: 3         # requires enable_diarization: true

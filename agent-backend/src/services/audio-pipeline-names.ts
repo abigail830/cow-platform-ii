@@ -3,6 +3,9 @@ export const ASYNC_AUDIO_PIPELINE_NAMES = new Set([
   'aliyun-fun-asr-transcribe',
 ]);
 
+/** Default transcription pipeline for new audio channels (root-level, no parent). */
+export const DEFAULT_AUDIO_TRANSCRIPTION_PIPELINE_NAME = 'aliyun-fun-asr-transcribe';
+
 export const DEFAULT_AUDIO_TRANSCRIBE_WORKFLOW_FILE = 'openkms-audio-transcribe.yml';
 
 export function isAudioAsyncPipelineName(pipelineName: string): boolean {

@@ -9,6 +9,7 @@ import {
 } from './audio-pipeline-jobs.ts';
 import { reconcileStaleAudioPipelineJobs } from './audio-pipeline-reconcile.ts';
 import { isAudioAsyncPipelineName, ASYNC_AUDIO_PIPELINE_NAMES } from './audio-pipeline-names.ts';
+import { resolveDefaultAudioTranscriptionPipelineId } from '../shared/audio-pipeline-binding.ts';
 import {
   isCapturePostProcessPipelineName,
   CAPTURE_POST_PROCESS_PIPELINE_NAMES,
@@ -111,6 +112,9 @@ export async function createAudioChannel(input: {
 
   const maxSort = siblings.reduce((max, row) => Math.max(max, row.sortOrder), -1);
 
+  const pipelineId =
+    parent?.pipelineId ?? (await resolveDefaultAudioTranscriptionPipelineId());
+
   const [row] = await db
     .insert(appAudioChannels)
     .values({
@@ -118,7 +122,7 @@ export async function createAudioChannel(input: {
       description: input.description?.trim() || null,
       parentId: input.parentId ?? null,
       sortOrder: maxSort + 1,
-      pipelineId: parent?.pipelineId ?? null,
+      pipelineId,
       postProcessPipelineId: parent?.postProcessPipelineId ?? null,
       autoStartPipeline: parent?.pipelineId ? parent.autoStartPipeline : false,
       createdBy: input.createdBy ?? null,
