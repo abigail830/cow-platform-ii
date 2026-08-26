@@ -1,6 +1,6 @@
 type TransientNoticeProps = {
   message: string | null;
-  variant?: 'success' | 'info';
+  variant?: 'success' | 'info' | 'error';
 };
 
 export function TransientNotice({ message, variant = 'success' }: TransientNoticeProps) {

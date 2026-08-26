@@ -7,6 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/agent-backend"
 FRONTEND_DIR="$ROOT_DIR/agent-frontend"
 OPENKMS_CLI_DIR="$ROOT_DIR/openkms-cli"
+EVALUATE_CLI_DIR="$ROOT_DIR/evaluate-cli"
 RUN_DIR="$ROOT_DIR/.run/agent-platform"
 
 BACKEND_PORT="${BACKEND_PORT:-8787}"
@@ -175,5 +176,27 @@ ensure_openkms_cli() {
   (
     cd "$OPENKMS_CLI_DIR"
     uv pip install -e ".[pipeline,baidu,metadata,aliyun]" --python .venv/bin/python
+  )
+}
+
+ensure_evaluate_cli() {
+  local python_bin="$EVALUATE_CLI_DIR/.venv/bin/python"
+  if [[ ! -x "$python_bin" ]]; then
+    echo "Warning: evaluate-cli venv missing ($EVALUATE_CLI_DIR/.venv). Eval runs will fail." >&2
+    return 0
+  fi
+
+  if "$python_bin" -c "import importlib.util; import sys; sys.exit(0 if importlib.util.find_spec('openkms_cli') else 1)" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "Warning: evaluate-cli deps missing and uv not installed. Run: cd evaluate-cli && uv sync --extra dev" >&2
+    return 0
+  fi
+  echo "Installing evaluate-cli (dev extras)..."
+  (
+    cd "$EVALUATE_CLI_DIR"
+    uv sync --extra dev
   )
 }

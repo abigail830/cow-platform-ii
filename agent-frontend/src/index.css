@@ -2281,6 +2281,13 @@ textarea {
   min-width: 0;
 }
 
+.admin-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .admin-search {
   display: flex;
   align-items: center;
@@ -2415,6 +2422,15 @@ textarea {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  line-height: 1.2;
+}
+
+.btn-primary svg {
+  flex-shrink: 0;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -2449,9 +2465,20 @@ textarea {
   border-radius: 8px;
   background: #ffffff;
   color: #334155;
-  padding: 0.45rem 0.8rem;
+  padding: 0.5rem 0.875rem;
   font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  line-height: 1.2;
+}
+
+.btn-secondary svg {
+  flex-shrink: 0;
 }
 
 .btn-link {
@@ -2681,6 +2708,56 @@ textarea {
 .modal-card h2 {
   margin: 0 0 0.75rem;
   font-size: 1rem;
+}
+
+.admin-toolbar-meta {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.eval-run-cell-error {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.eval-run-create-modal .admin-form-hint {
+  white-space: normal;
+}
+
+.eval-run-pipeline-list {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.eval-run-pipeline-list .form-checkbox {
+  grid-column: auto;
+}
+
+.eval-run-mode-options {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.eval-run-mode-options .form-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.eval-run-compare-cell {
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .document-delete-confirm-body {
@@ -6922,6 +6999,12 @@ select:focus-visible {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   color: #334155;
+}
+
+.app-transient-notice-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
 }
 
 @keyframes app-transient-notice-in {

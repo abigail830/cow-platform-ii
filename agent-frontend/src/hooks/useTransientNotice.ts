@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+export type TransientNoticeVariant = 'success' | 'info' | 'error';
+
+type NoticeState = {
+  message: string;
+  variant: TransientNoticeVariant;
+};
+
 export function useTransientNotice(durationMs = 4000) {
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<NoticeState | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearNotice = useCallback(() => {
@@ -13,11 +20,11 @@ export function useTransientNotice(durationMs = 4000) {
   }, []);
 
   const showNotice = useCallback(
-    (message: string) => {
+    (message: string, variant: TransientNoticeVariant = 'success') => {
       const trimmed = message.trim();
       if (!trimmed) return;
       if (timerRef.current) clearTimeout(timerRef.current);
-      setNotice(trimmed);
+      setNotice({ message: trimmed, variant });
       timerRef.current = setTimeout(() => {
         setNotice(null);
         timerRef.current = null;
@@ -28,5 +35,10 @@ export function useTransientNotice(durationMs = 4000) {
 
   useEffect(() => () => clearNotice(), [clearNotice]);
 
-  return { notice, showNotice, clearNotice };
+  return {
+    notice: notice?.message ?? null,
+    noticeVariant: notice?.variant ?? 'success',
+    showNotice,
+    clearNotice,
+  };
 }

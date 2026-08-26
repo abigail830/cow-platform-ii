@@ -68,6 +68,18 @@ export function normalizeAsyncWorkerCliArgs(args: string[]): string[] {
   return args;
 }
 
+/** Map openkms-cli audio-pipeline worker args to evaluate-cli pipeline args. */
+export function mapOpenkmsAudioCliArgsToEvaluateCli(args: string[]): string[] {
+  const normalized = normalizeAsyncWorkerCliArgs(args);
+  if (normalized.length >= 2 && normalized[0] === 'audio-pipeline') {
+    return ['pipeline', ...normalized.slice(1)];
+  }
+  if (normalized.length >= 2 && normalized[0] === 'pipeline') {
+    return normalized;
+  }
+  return normalized;
+}
+
 /** Read --page-index-strategy from parsed CLI args (for GHA workflow inputs). */
 export function pageIndexStrategyFromCliArgs(args: string[]): string | undefined {
   const idx = args.indexOf('--page-index-strategy');

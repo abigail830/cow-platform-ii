@@ -4,6 +4,8 @@ import {
   ADMIN_PAGES,
   ADMINISTRATION_CATEGORY,
   AGENTS_CATEGORY,
+  EVALUATION_CATEGORY,
+  EVALUATION_PAGES,
   KNOWLEDGE_MANAGEMENT_CATEGORY,
   KNOWLEDGE_MANAGEMENT_PAGES,
   PLATFORM_BASIC_CATEGORY,
@@ -79,6 +81,7 @@ export function AppSideNav({
   const userMenuRef = useRef<HTMLDivElement>(null);
   const platformBasicItems = PLATFORM_BASIC_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
   const knowledgeItems = KNOWLEDGE_MANAGEMENT_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
+  const evaluationItems = EVALUATION_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
   const adminItems = ADMIN_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read'));
   const agentItems = visibleAgentPages(user);
 
@@ -126,6 +129,14 @@ export function AppSideNav({
         <NavSection
           category={KNOWLEDGE_MANAGEMENT_CATEGORY}
           items={knowledgeItems}
+          activePath={activePath}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        />
+
+        <NavSection
+          category={EVALUATION_CATEGORY}
+          items={evaluationItems}
           activePath={activePath}
           collapsed={collapsed}
           onNavigate={onNavigate}

@@ -1,0 +1,110 @@
+# Evaluation ASR pipeline worker — evaluate-cli module (not openkms-cli audio library jobs).
+#
+# Manual: Actions → Evaluate Pipeline → Run workflow → job_id from app_eval_run_items.
+# Trigger API (backend):
+#   POST /repos/{owner}/{repo}/actions/workflows/evaluate-pipeline.yml/dispatches
+
+name: Evaluate Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Eval run item UUID (app_eval_run_items.id)
+        required: true
+        type: string
+      worker_cli_args:
+        description: JSON array of evaluate-cli args (from pipeline command template)
+        required: false
+        type: string
+
+concurrency:
+  group: evaluate-pipeline-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: evaluate-cli
+
+jobs:
+  eval-pipeline:
+    name: evaluate-cli pipeline (${{ inputs.job_id }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            evaluate-cli/uv.lock
+            openkms-cli/uv.lock
+
+      # evaluate-cli reuses openkms-cli ASR/OSS providers as a library dependency only.
+      - name: Install openkms-cli (ASR + OSS library)
+        working-directory: openkms-cli
+        run: uv sync --frozen --extra pipeline --extra aliyun
+
+      - name: Install evaluate-cli
+        run: uv sync --frozen --extra dev
+
+      - name: Validate backend URL
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+        run: |
+          if [ -z "$OPENKMS_API_URL" ]; then
+            echo "::error::GitHub secret OPENKMS_API_URL is not set."
+            exit 1
+          fi
+          case "$OPENKMS_API_URL" in
+            http://127.0.0.1:*|http://localhost:*|https://127.0.0.1:*|https://localhost:*)
+              echo "::error::OPENKMS_API_URL points to localhost — GitHub runners cannot reach your machine."
+              exit 1
+              ;;
+          esac
+          curl -fsS --max-time 15 "${OPENKMS_API_URL%/}/health" || {
+            echo "::error::Backend health check failed."
+            exit 1
+          }
+
+      - name: Run eval pipeline (submit → poll → finalize)
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+          OPENKMS_AUTH_MODE: local
+          OPENKMS_CLI_BASIC_USER: ${{ secrets.OPENKMS_CLI_BASIC_USER }}
+          OPENKMS_CLI_BASIC_PASSWORD: ${{ secrets.OPENKMS_CLI_BASIC_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_BUCKET_NAME: ${{ secrets.AWS_BUCKET_NAME }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
+        run: |
+          ARGS_JSON='${{ inputs.worker_cli_args }}'
+          if [ -n "$ARGS_JSON" ] && [ "$ARGS_JSON" != "null" ]; then
+            uv run evaluate-cli $(python3 -c 'import json,sys; print(" ".join(json.loads(sys.argv[1])))' "$ARGS_JSON")
+          else
+            uv run evaluate-cli pipeline run-async --job-id "${{ inputs.job_id }}"
+          fi
+
+      - name: Mark job failed on workflow error
+        if: failure()
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+          OPENKMS_CLI_BASIC_USER: ${{ secrets.OPENKMS_CLI_BASIC_USER }}
+          OPENKMS_CLI_BASIC_PASSWORD: ${{ secrets.OPENKMS_CLI_BASIC_PASSWORD }}
+        run: |
+          JOB_ID="${{ inputs.job_id }}"
+          curl -fsS -X PATCH "${OPENKMS_API_URL%/}/internal-api/eval-pipeline/jobs/${JOB_ID}" \
+            -u "${OPENKMS_CLI_BASIC_USER}:${OPENKMS_CLI_BASIC_PASSWORD}" \
+            -H "Content-Type: application/json" \
+            -d '{"stage":"failed","error_message":"GitHub Actions worker failed before eval pipeline completed"}' \
+            || echo "::warning::Could not mark eval pipeline job as failed"

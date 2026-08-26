@@ -13,7 +13,9 @@ export type NavPageIcon =
   | 'playground'
   | 'session-explorer'
   | 'hybrid-search'
-  | 'asset-market';
+  | 'asset-market'
+  | 'evaluation-dataset'
+  | 'evaluation-run';
 
 export type NavPage = {
   path: string;
@@ -139,6 +141,27 @@ export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
   },
 ];
 
+export const EVALUATION_CATEGORY = 'Evaluation';
+
+export const EVALUATION_PAGES: readonly NavPage[] = [
+  {
+    path: '/evaluation/datasets',
+    navLabel: 'DataSet',
+    titleMain: 'Data',
+    titleAccent: 'Set',
+    permissionKey: 'evaluation:datasets',
+    icon: 'evaluation-dataset',
+  },
+  {
+    path: '/evaluation/runs',
+    navLabel: 'Evaluation',
+    titleMain: 'Evaluation',
+    titleAccent: '',
+    permissionKey: 'evaluation:runs',
+    icon: 'evaluation-run',
+  },
+];
+
 export const ADMINISTRATION_CATEGORY = 'Administration';
 
 export const ADMIN_PAGES: readonly NavPage[] = [
@@ -171,6 +194,7 @@ export const ADMIN_PAGES: readonly NavPage[] = [
 export const ALL_NAV_PAGES: readonly NavPage[] = [
   ...AGENT_PAGES,
   ...KNOWLEDGE_MANAGEMENT_PAGES,
+  ...EVALUATION_PAGES,
   ...PLATFORM_BASIC_PAGES,
   ...ADMIN_PAGES,
 ];

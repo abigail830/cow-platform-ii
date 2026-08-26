@@ -65,7 +65,7 @@ export const MODEL_API_TYPES = [
 
 export type ModelApiType = (typeof MODEL_API_TYPES)[number];
 
-export const PERMISSION_CATEGORIES = ['platform-basic', 'knowledge-management', 'admin', 'agent'] as const;
+export const PERMISSION_CATEGORIES = ['platform-basic', 'knowledge-management', 'evaluation', 'admin', 'agent'] as const;
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
 
 export const ACCESS_LEVELS = ['read', 'write'] as const;
@@ -1033,6 +1033,184 @@ export const appUserDatasources = pgTable(
   (t) => [
     index('idx_user_datasources_created_by').on(t.createdBy),
     uniqueIndex('uq_user_datasources_owner_name').on(t.createdBy, t.name),
+  ],
+);
+
+export const EVAL_DATASET_KINDS = ['test', 'annotation'] as const;
+export type EvalDatasetKind = (typeof EVAL_DATASET_KINDS)[number];
+
+export const EVAL_MEDIA_TYPES = ['audio', 'document'] as const;
+export type EvalMediaType = (typeof EVAL_MEDIA_TYPES)[number];
+
+export const appEvalDatasets = pgTable(
+  'app_eval_datasets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    kind: text('kind').$type<EvalDatasetKind>().notNull().default('test'),
+    mediaType: text('media_type').$type<EvalMediaType>().notNull().default('audio'),
+    itemCount: integer('item_count').notNull().default(0),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_eval_datasets_updated').on(t.updatedAt)],
+);
+
+export const appEvalDatasetItems = pgTable(
+  'app_eval_dataset_items',
+  {
+    id: uuid('id').primaryKey(),
+    datasetId: uuid('dataset_id')
+      .notNull()
+      .references(() => appEvalDatasets.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    fileType: text('file_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull().default(0),
+    fileHash: text('file_hash').notNull(),
+    s3Key: text('s3_key').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+    referenceS3Key: text('reference_s3_key'),
+    uploadedBy: uuid('uploaded_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_eval_dataset_items_dataset').on(t.datasetId, t.sortOrder),
+    uniqueIndex('uq_eval_dataset_items_dataset_hash').on(t.datasetId, t.fileHash),
+  ],
+);
+
+export const EVAL_RUN_STATUSES = [
+  'draft',
+  'running',
+  'completed',
+  'completed_with_errors',
+  'failed',
+  'cancelled',
+] as const;
+export type EvalRunStatus = (typeof EVAL_RUN_STATUSES)[number];
+
+export const EVAL_RUN_PHASES = ['transcribing', 'comparing', 'judging', 'done'] as const;
+export type EvalRunPhase = (typeof EVAL_RUN_PHASES)[number];
+
+export const EVAL_RUN_MODES = ['pipeline_only', 'full'] as const;
+export type EvalRunMode = (typeof EVAL_RUN_MODES)[number];
+
+export const EVAL_RUN_COMPARE_STATUSES = ['pending', 'running', 'done', 'failed'] as const;
+export type EvalRunCompareStatus = (typeof EVAL_RUN_COMPARE_STATUSES)[number];
+
+export const EVAL_RUN_ITEM_STAGES = ['submitted', 'transcribing', 'done', 'failed', 'cancelled'] as const;
+export type EvalRunItemStage = (typeof EVAL_RUN_ITEM_STAGES)[number];
+
+export const appEvalRuns = pgTable(
+  'app_eval_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    datasetId: uuid('dataset_id')
+      .notNull()
+      .references(() => appEvalDatasets.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    status: text('status').$type<EvalRunStatus>().notNull().default('draft'),
+    phase: text('phase').$type<EvalRunPhase>().notNull().default('transcribing'),
+    runMode: text('run_mode').$type<EvalRunMode>().notNull().default('pipeline_only'),
+    evalType: text('eval_type').notNull().default('asr_pipeline_compare'),
+    judgeEnabled: boolean('judge_enabled').notNull().default(false),
+    judgeMetrics: jsonb('judge_metrics').$type<Record<string, unknown>[] | null>(),
+    totalRunItems: integer('total_run_items').notNull().default(0),
+    completedRunItems: integer('completed_run_items').notNull().default(0),
+    failedRunItems: integer('failed_run_items').notNull().default(0),
+    totalCompareItems: integer('total_compare_items').notNull().default(0),
+    completedCompareItems: integer('completed_compare_items').notNull().default(0),
+    failedCompareItems: integer('failed_compare_items').notNull().default(0),
+    summaryMetrics: jsonb('summary_metrics').$type<Record<string, unknown> | null>(),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_eval_runs_dataset').on(t.datasetId, t.updatedAt),
+    index('idx_eval_runs_status').on(t.status, t.updatedAt),
+  ],
+);
+
+export const appEvalRunVariants = pgTable(
+  'app_eval_run_variants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => appEvalRuns.id, { onDelete: 'cascade' }),
+    pipelineConfigId: uuid('pipeline_config_id')
+      .notNull()
+      .references(() => appPipelineConfigs.id, { onDelete: 'restrict' }),
+    pipelineName: text('pipeline_name').notNull(),
+    displayName: text('display_name').notNull(),
+    configYaml: text('config_yaml'),
+    status: text('status').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_eval_run_variants_run').on(t.runId),
+    uniqueIndex('uq_eval_run_variants_run_pipeline').on(t.runId, t.pipelineConfigId),
+  ],
+);
+
+export const appEvalRunItems = pgTable(
+  'app_eval_run_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => appEvalRuns.id, { onDelete: 'cascade' }),
+    variantId: uuid('variant_id')
+      .notNull()
+      .references(() => appEvalRunVariants.id, { onDelete: 'cascade' }),
+    datasetItemId: uuid('dataset_item_id')
+      .notNull()
+      .references(() => appEvalDatasetItems.id, { onDelete: 'cascade' }),
+    pipelineName: text('pipeline_name').notNull(),
+    stage: text('stage').$type<EvalRunItemStage>().notNull().default('submitted'),
+    configYaml: text('config_yaml'),
+    externalJobId: text('external_job_id'),
+    outputS3Prefix: text('output_s3_prefix').notNull(),
+    transcriptS3Key: text('transcript_s3_key'),
+    asrResultS3Key: text('asr_result_s3_key'),
+    errorMessage: text('error_message'),
+    metrics: jsonb('metrics').$type<Record<string, unknown> | null>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_eval_run_items_run').on(t.runId, t.stage),
+    index('idx_eval_run_items_variant').on(t.variantId),
+    uniqueIndex('uq_eval_run_items_variant_item').on(t.variantId, t.datasetItemId),
+  ],
+);
+
+export const appEvalRunComparisons = pgTable(
+  'app_eval_run_comparisons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => appEvalRuns.id, { onDelete: 'cascade' }),
+    datasetItemId: uuid('dataset_item_id')
+      .notNull()
+      .references(() => appEvalDatasetItems.id, { onDelete: 'cascade' }),
+    status: text('status').$type<EvalRunCompareStatus>().notNull().default('pending'),
+    resultS3Key: text('result_s3_key'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_eval_run_comparisons_run').on(t.runId, t.status),
+    uniqueIndex('uq_eval_run_comparisons_run_item').on(t.runId, t.datasetItemId),
   ],
 );
 

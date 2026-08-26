@@ -4,6 +4,7 @@ import {
   AGENT_PAGES,
   AGENT_PLAYGROUND_PATH,
   ASSET_MARKET_PATH,
+  EVALUATION_PAGES,
   KNOWLEDGE_MANAGEMENT_PAGES,
   PLATFORM_BASIC_PAGES,
   SESSION_EXPLORER_PATH,
@@ -60,6 +61,7 @@ export function visibleNavPages(user: AuthUser): NavPage[] {
   return [
     ...visibleAgentPages(user),
     ...KNOWLEDGE_MANAGEMENT_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
+    ...EVALUATION_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
     ...PLATFORM_BASIC_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
     ...ADMIN_PAGES.filter((item) => hasPermission(user, item.permissionKey, 'read')),
   ];
@@ -87,6 +89,7 @@ export function canAccessAppPath(user: AuthUser, path: string): boolean {
   const pages: readonly NavPage[] = [
     ...AGENT_PAGES,
     ...KNOWLEDGE_MANAGEMENT_PAGES,
+    ...EVALUATION_PAGES,
     ...PLATFORM_BASIC_PAGES,
     ...ADMIN_PAGES,
   ];

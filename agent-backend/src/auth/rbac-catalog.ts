@@ -31,6 +31,15 @@ export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
 export type KnowledgeManagementResource =
   (typeof KNOWLEDGE_MANAGEMENT_RESOURCES)[keyof typeof KNOWLEDGE_MANAGEMENT_RESOURCES];
 
+export const EVALUATION_CATEGORY = 'evaluation' as const;
+
+export const EVALUATION_RESOURCES = {
+  DATASETS: 'datasets',
+  RUNS: 'runs',
+} as const;
+
+export type EvaluationResource = (typeof EVALUATION_RESOURCES)[keyof typeof EVALUATION_RESOURCES];
+
 export const AGENT_CATEGORY = 'agent' as const;
 
 export const AGENT_RESOURCES = {
@@ -125,6 +134,23 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
     description: 'PageIndex knowledge bases and document import.',
     routePatterns: ['/knowledge/knowledge-bases'],
     apiPatterns: ['/api/knowledge-bases', '/api/knowledge-bases/*'],
+  },
+];
+
+const EVALUATION_RESOURCE_DEFS: ResourceDefinition[] = [
+  {
+    resource: EVALUATION_RESOURCES.DATASETS,
+    label: 'Data sets',
+    description: 'Evaluation test datasets and uploaded sample files.',
+    routePatterns: ['/evaluation/datasets'],
+    apiPatterns: ['/api/evaluation/datasets', '/api/evaluation/datasets/*'],
+  },
+  {
+    resource: EVALUATION_RESOURCES.RUNS,
+    label: 'Evaluations',
+    description: 'Pipeline comparison and LLM judge evaluation runs.',
+    routePatterns: ['/evaluation/runs'],
+    apiPatterns: ['/api/evaluation/runs', '/api/evaluation/runs/*'],
   },
 ];
 
@@ -252,6 +278,7 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   ...buildPermissions(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCE_DEFS),
   ...buildPermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS),
   ...buildFeaturePermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_FEATURE_DEFS),
+  ...buildPermissions(EVALUATION_CATEGORY, EVALUATION_RESOURCE_DEFS),
   ...buildPermissions(AGENT_CATEGORY, AGENT_RW_RESOURCE_DEFS),
   ...buildFeaturePermissions(AGENT_CATEGORY, AGENT_FEATURE_DEFS),
   ...buildPermissions('admin', ADMIN_RESOURCE_DEFS),

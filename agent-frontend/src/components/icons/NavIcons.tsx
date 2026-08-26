@@ -2,9 +2,11 @@ import {
   Mic,
   Boxes,
   Bot,
+  ClipboardCheck,
   Combine,
   Database,
   FileText,
+  FlaskConical,
   GitBranch,
   Highlighter,
   KeyRound,
@@ -35,6 +37,8 @@ const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   'session-explorer': Search,
   'hybrid-search': Combine,
   'asset-market': Package,
+  'evaluation-dataset': FlaskConical,
+  'evaluation-run': ClipboardCheck,
 };
 
 export function NavPageIcon({ name, ...props }: LucideProps & { name: NavPageIcon }) {
