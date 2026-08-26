@@ -59,6 +59,8 @@ export type EvalRunItem = {
   transcript_s3_key: string | null;
   asr_result_s3_key: string | null;
   error_message: string | null;
+  metrics: Record<string, unknown> | null;
+  created_at: string;
   updated_at: string;
 };
 

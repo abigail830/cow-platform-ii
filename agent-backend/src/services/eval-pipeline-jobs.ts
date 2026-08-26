@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { isTerminalEvalRunItemStage } from './eval-run-phase.ts';
 import {
   appEvalDatasetItems,
   appEvalRunItems,
@@ -56,8 +57,23 @@ export async function updateEvalRunItem(
     errorMessage?: string | null;
     transcriptS3Key?: string | null;
     asrResultS3Key?: string | null;
+    metrics?: Record<string, unknown> | null;
   },
 ): Promise<typeof appEvalRunItems.$inferSelect | null> {
+  let mergedMetrics: Record<string, unknown> | null | undefined;
+  if (input.metrics !== undefined) {
+    const existing = await getEvalRunItemById(id);
+    if (input.metrics == null) {
+      mergedMetrics = null;
+    } else {
+      const prior =
+        existing?.metrics && typeof existing.metrics === 'object' && !Array.isArray(existing.metrics)
+          ? (existing.metrics as Record<string, unknown>)
+          : {};
+      mergedMetrics = { ...prior, ...input.metrics };
+    }
+  }
+
   const [row] = await db
     .update(appEvalRunItems)
     .set({
@@ -66,6 +82,7 @@ export async function updateEvalRunItem(
       ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
       ...(input.transcriptS3Key !== undefined ? { transcriptS3Key: input.transcriptS3Key } : {}),
       ...(input.asrResultS3Key !== undefined ? { asrResultS3Key: input.asrResultS3Key } : {}),
+      ...(mergedMetrics !== undefined ? { metrics: mergedMetrics } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appEvalRunItems.id, id))
@@ -146,6 +163,12 @@ export async function markEvalRunItemForJobStage(
     await updateEvalRunItem(itemId, { stage });
   }
 
+  if (isTerminalEvalRunItemStage(stage)) {
+    const { maybeAdvanceEvalRunAfterJobTerminal } = await import('./eval-runs.ts');
+    await maybeAdvanceEvalRunAfterJobTerminal(item.runId);
+    return;
+  }
+
   await maybeFinalizeEvalRunPhase(item.runId);
 }
 
@@ -166,6 +189,8 @@ export function evalRunItemToPublic(item: typeof appEvalRunItems.$inferSelect) {
     transcript_s3_key: item.transcriptS3Key,
     asr_result_s3_key: item.asrResultS3Key,
     error_message: item.errorMessage,
+    metrics: item.metrics,
+    created_at: item.createdAt.toISOString(),
     updated_at: item.updatedAt.toISOString(),
   };
 }

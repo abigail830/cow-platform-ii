@@ -1,7 +1,8 @@
-"""Eval pipeline: submit → poll → finalize transcript artifacts for dataset items."""
+"""Evaluation pipeline async job routing."""
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -32,10 +33,16 @@ from evaluate_cli.pipeline.api import (
 console = Console(stderr=True)
 
 
-def fail_eval_job(api_url: str, job_id: str, message: str) -> None:
+def fail_eval_job(api_url: str, job_id: str, message: str, metrics: dict[str, Any] | None = None) -> None:
     console.print(f"[red]{message}[/red]")
     try:
-        patch_eval_job(api_url, job_id, stage="failed", error_message=message[:2000])
+        patch_eval_job(
+            api_url,
+            job_id,
+            stage="failed",
+            error_message=message[:2000],
+            metrics=metrics,
+        )
     except EvalPipelineJobApiError as e:
         console.print(f"[yellow]Could not mark eval job failed: {e}[/yellow]")
 
@@ -77,6 +84,10 @@ def _asr_options(workflow: dict[str, Any]) -> dict[str, Any]:
 def _dataset_item_name(ctx: dict[str, Any]) -> str:
     dataset_item = ctx.get("dataset_item") or {}
     return str(dataset_item.get("name") or "audio")
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, int((time.monotonic() - started) * 1000))
 
 
 def submit_eval_job(job_id: str, api_url: str | None = None) -> None:
@@ -146,7 +157,7 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
     patch_eval_job(api_url, job_id, stage="transcribing", external_job_id=task_id)
 
 
-def poll_eval_job(job_id: str, api_url: str | None = None) -> None:
+def poll_eval_job(job_id: str, api_url: str | None = None, metrics: dict[str, Any] | None = None) -> None:
     cfg = get_cli_settings()
     api = (api_url or cfg.openkms_api_url).rstrip("/")
     try:
@@ -180,10 +191,10 @@ def poll_eval_job(job_id: str, api_url: str | None = None) -> None:
             max_wait_seconds=max(cfg.async_max_wait_seconds, 7200),
         )
     except AliyunAsrError as e:
-        fail_eval_job(api, job_id, str(e))
+        fail_eval_job(api, job_id, str(e), metrics=metrics)
         raise SystemExit(1) from e
 
-    finalize_eval_job(job_id, api, ctx, data)
+    finalize_eval_job(job_id, api, ctx, data, metrics=metrics)
 
 
 def finalize_eval_job(
@@ -191,6 +202,7 @@ def finalize_eval_job(
     api_url: str,
     ctx: dict[str, Any] | None = None,
     asr_result: dict[str, Any] | None = None,
+    metrics: dict[str, Any] | None = None,
 ) -> None:
     cfg = get_cli_settings()
     api = api_url.rstrip("/")
@@ -200,10 +212,11 @@ def finalize_eval_job(
     workflow = _load_workflow(ctx)
     asr_runtime = resolve_asr_from_workflow(workflow, cfg=cfg)
 
+    finalize_started = time.monotonic()
     if asr_result is None:
         external_id = (ctx.get("external_job_id") or "").strip()
         if not external_id:
-            fail_eval_job(api, job_id, "Missing external_job_id for finalize")
+            fail_eval_job(api, job_id, "Missing external_job_id for finalize", metrics=metrics)
             raise SystemExit(1)
         asr_result = query_transcription_task(
             task_id=external_id,
@@ -235,18 +248,29 @@ def finalize_eval_job(
         asr_result=transcription_payload,
     )
 
-    patch_eval_job(api, job_id, stage="done")
+    payload_metrics = dict(metrics or {})
+    payload_metrics["finalize_duration_ms"] = _elapsed_ms(finalize_started)
+    patch_eval_job(api, job_id, stage="done", metrics=payload_metrics)
     console.print(f"[green]Eval job {job_id} done — transcript uploaded[/green]")
 
 
 def run_async_eval_job(job_id: str, api_url: str | None = None) -> None:
     cfg = get_cli_settings()
     api = (api_url or cfg.openkms_api_url).rstrip("/")
+    worker_started = time.monotonic()
+    metrics: dict[str, Any] = {
+        "dataset_item_id": None,
+        "pipeline_name": None,
+    }
+
     try:
         ctx = get_eval_job_context(api, job_id)
     except EvalPipelineJobApiError as e:
         console.print(f"[red]{e}[/red]")
         raise SystemExit(1) from e
+
+    metrics["dataset_item_id"] = ctx.get("dataset_item_id")
+    metrics["pipeline_name"] = ctx.get("pipeline_name")
 
     stage = str(ctx.get("stage") or "")
     if stage == "done":
@@ -257,8 +281,17 @@ def run_async_eval_job(job_id: str, api_url: str | None = None) -> None:
         raise SystemExit(1)
 
     if stage == "submitted" and not (ctx.get("external_job_id") or "").strip():
+        submit_started = time.monotonic()
         submit_eval_job(job_id, api)
+        metrics["submit_duration_ms"] = _elapsed_ms(submit_started)
         ctx = get_eval_job_context(api, job_id)
+        stage = str(ctx.get("stage") or "")
 
     if stage in {"submitted", "transcribing"}:
-        poll_eval_job(job_id, api)
+        asr_started = time.monotonic()
+        poll_eval_job(job_id, api, metrics=metrics)
+        metrics["asr_duration_ms"] = _elapsed_ms(asr_started)
+
+    metrics["worker_duration_ms"] = _elapsed_ms(worker_started)
+    if stage in {"submitted", "transcribing", "done"}:
+        patch_eval_job(api, job_id, metrics=metrics)

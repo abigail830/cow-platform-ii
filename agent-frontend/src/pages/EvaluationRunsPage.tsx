@@ -63,6 +63,30 @@ function compareStatusClass(status: EvalRunCompareStatus): string {
   return 'document-status-badge';
 }
 
+function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const totalSeconds = Math.round(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
+function evalItemDurationLabel(item: EvalRunItem | undefined): string | null {
+  if (!item?.metrics || typeof item.metrics !== 'object') return null;
+  const metrics = item.metrics as Record<string, unknown>;
+  const durationMs =
+    typeof metrics.asr_duration_ms === 'number'
+      ? metrics.asr_duration_ms
+      : typeof metrics.worker_duration_ms === 'number'
+        ? metrics.worker_duration_ms
+        : null;
+  if (durationMs == null) return null;
+  const formatted = formatDurationMs(durationMs);
+  return formatted || null;
+}
+
 export function EvaluationRunsListPage() {
   const navigate = useNavigate();
   const { user } = useAppOutletContext();
@@ -519,6 +543,9 @@ export function EvaluationRunDetailPage() {
                         ) : (
                           <>
                             <span className={stageClass(stage)}>{stageLabel(stage)}</span>
+                            {evalItemDurationLabel(cell) ? (
+                              <div className="admin-muted eval-run-cell-duration">{evalItemDurationLabel(cell)}</div>
+                            ) : null}
                             {cell?.error_message ? (
                               <div className="admin-muted eval-run-cell-error" title={cell.error_message}>
                                 {cell.error_message}

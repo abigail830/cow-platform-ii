@@ -14,10 +14,7 @@ import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { getEvalDatasetById, listEvalDatasetItems } from './eval-datasets.ts';
 import { computeEvalRunCompletion, isTerminalEvalRunItemStage } from './eval-run-phase.ts';
 import { evalRunItemToPublic, snapshotConfigYaml } from './eval-pipeline-jobs.ts';
-import {
-  dispatchEvalRunItemsWithConcurrency,
-  EVAL_RUN_DEFAULT_DISPATCH_CONCURRENCY,
-} from './eval-pipeline-runner.ts';
+import { orchestrateEvalRunDispatch } from './eval-run-dispatch.ts';
 import { buildEvalRunItemOutputPrefix } from '../storage/eval-run-files.ts';
 import { isAudioAsyncPipelineName, audioPipelineProviderForName } from './audio-pipeline-names.ts';
 import { getStorageReadUrl } from '../storage/document-files.ts';
@@ -177,23 +174,6 @@ async function rollbackEvalRunStart(runId: string): Promise<void> {
     .where(eq(appEvalRunVariants.runId, runId));
 }
 
-function formatEvalRunDispatchError(failures: string[]): string {
-  const first = failures[0] ?? 'Failed to dispatch eval pipeline workers';
-  if (/404|Not Found|workflow/i.test(first)) {
-    return (
-      'Eval pipeline worker could not start: GitHub Actions workflow not found on the remote branch. ' +
-      'Push `.github/workflows/evaluate-pipeline.yml` to your repo, or set PIPELINE_WORKER=spawn for local evaluate-cli.'
-    );
-  }
-  if (/evaluate-cli|EVALUATE_CLI|ENOENT|spawn/i.test(first)) {
-    return (
-      'Eval pipeline worker could not start locally. Install evaluate-cli (`cd evaluate-cli && uv sync --extra dev`) ' +
-      'and configure OSS/ASR credentials in evaluate-cli/.env.'
-    );
-  }
-  return first;
-}
-
 export async function startEvalRun(runId: string) {
   let run = await getEvalRunById(runId);
   if (!run) throw new Error('Eval run not found');
@@ -262,20 +242,12 @@ export async function startEvalRun(runId: string) {
     .set({ status: 'running', updatedAt: new Date() })
     .where(eq(appEvalRunVariants.runId, runId));
 
-  const dispatchItems = itemRows.map((item) => {
-    const variant = variants.find((v) => v.id === item.variantId)!;
-    return { id: item.id, pipelineName: variant.pipelineName };
+  void orchestrateEvalRunDispatch(runId).catch((error) => {
+    console.error(
+      `[eval-run] orchestration failed for run ${runId}:`,
+      error instanceof Error ? error.message : error,
+    );
   });
-
-  const concurrency = Number(process.env.EVAL_RUN_DISPATCH_CONCURRENCY ?? EVAL_RUN_DEFAULT_DISPATCH_CONCURRENCY);
-  const { failures } = await dispatchEvalRunItemsWithConcurrency(dispatchItems, concurrency);
-  if (failures.length === dispatchItems.length) {
-    await rollbackEvalRunStart(runId);
-    throw new Error(formatEvalRunDispatchError(failures));
-  }
-  if (failures.length > 0) {
-    console.warn(`[eval-run] ${failures.length}/${dispatchItems.length} pipeline dispatches failed`);
-  }
 
   return getEvalRunDetail(runId);
 }
@@ -352,7 +324,15 @@ export async function reconcileStaleEvalRunItems(runId: string): Promise<void> {
       .where(eq(appEvalRunItems.id, item.id));
   }
 
+  await maybeAdvanceEvalRunAfterJobTerminal(runId);
+}
+
+export async function maybeAdvanceEvalRunAfterJobTerminal(runId: string): Promise<void> {
   await maybeFinalizeEvalRunPhase(runId);
+  const run = await getEvalRunById(runId);
+  if (!run || run.status !== 'running' || run.phase !== 'transcribing') return;
+  const { dispatchNextEvalRunJob } = await import('./eval-run-dispatch.ts');
+  await dispatchNextEvalRunJob(runId);
 }
 
 export async function getEvalRunDetail(runId: string) {

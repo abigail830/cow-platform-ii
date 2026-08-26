@@ -37,6 +37,7 @@ evalPipelineJobs.patch('/:id', async (c) => {
     stage?: EvalRunItemStage;
     external_job_id?: string | null;
     error_message?: string | null;
+    metrics?: Record<string, unknown> | null;
   }>();
 
   const item = await getEvalRunItemById(id);
@@ -45,6 +46,7 @@ evalPipelineJobs.patch('/:id', async (c) => {
   const updated = await updateEvalRunItem(item.id, {
     stage: body.stage,
     externalJobId: body.external_job_id,
+    metrics: body.metrics,
     ...(body.error_message !== undefined
       ? {
           errorMessage: resolveAudioPipelineJobErrorMessage(item.errorMessage, body.error_message),

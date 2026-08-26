@@ -19,9 +19,12 @@ def test_run_async_eval_job_submits_then_polls() -> None:
     with patch("evaluate_cli.pipeline.jobs.get_eval_job_context", return_value=ctx_submitted):
         with patch("evaluate_cli.pipeline.jobs.submit_eval_job") as mock_submit:
             with patch("evaluate_cli.pipeline.jobs.poll_eval_job") as mock_poll:
-                run_async_eval_job("job-1", api_url="http://127.0.0.1:8787")
-                mock_submit.assert_called_once_with("job-1", "http://127.0.0.1:8787")
-                mock_poll.assert_called_once_with("job-1", "http://127.0.0.1:8787")
+                with patch("evaluate_cli.pipeline.jobs.patch_eval_job") as mock_patch:
+                    run_async_eval_job("job-1", api_url="http://127.0.0.1:8787")
+                    mock_submit.assert_called_once_with("job-1", "http://127.0.0.1:8787")
+                    mock_poll.assert_called_once()
+                    assert mock_poll.call_args.args == ("job-1", "http://127.0.0.1:8787")
+                    assert isinstance(mock_poll.call_args.kwargs.get("metrics"), dict)
 
 
 def test_run_async_eval_job_skips_done() -> None:
