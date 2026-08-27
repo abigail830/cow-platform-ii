@@ -11,7 +11,7 @@ import {
   evalRunItemDispatchClaimed,
 } from './eval-run-phase.ts';
 import { updateEvalRunItem } from './eval-pipeline-jobs.ts';
-import { spawnAsyncEvalPipelineWorker } from './eval-pipeline-runner.ts';
+import { dispatchEvalTranscribeViaAudioPipeline } from './eval-audio-bridge.ts';
 
 import { groupEvalRunDispatchItemsByDatasetFile, type EvalRunDispatchItem } from './eval-run-dispatch-group.ts';
 
@@ -116,9 +116,9 @@ export async function dispatchNextEvalRunJob(runId: string): Promise<void> {
     });
 
     try {
-      await spawnAsyncEvalPipelineWorker(nextItem.id, nextItem.pipelineName);
+      await dispatchEvalTranscribeViaAudioPipeline(nextItem.id, nextItem.pipelineName);
       console.info(
-        `[eval-run] dispatched job ${nextItem.id} pipeline=${nextItem.pipelineName} ` +
+        `[eval-run] dispatched audio-pipeline job for eval item ${nextItem.id} pipeline=${nextItem.pipelineName} ` +
           `dataset_item=${nextItem.datasetItemId}`,
       );
     } catch (error) {

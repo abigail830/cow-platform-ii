@@ -10,6 +10,7 @@ import {
   type AudioPipelineJobStage,
 } from '../../services/audio-pipeline-jobs.ts';
 import { spawnAsyncAudioPipelineWorker } from '../../services/audio-pipeline-runner.ts';
+import { syncEvalRunItemFromAudioPipelineJob } from '../../services/eval-audio-bridge.ts';
 
 const audioPipelineJobs = new Hono();
 
@@ -54,6 +55,7 @@ audioPipelineJobs.patch('/:id', async (c) => {
 
   if (body.stage) {
     await markAudioForJobStage(job.audioId, body.stage);
+    await syncEvalRunItemFromAudioPipelineJob(job.id);
   }
 
   return c.json({ ok: true, job: updated });

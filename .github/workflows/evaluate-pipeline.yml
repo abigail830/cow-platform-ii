@@ -1,5 +1,7 @@
 # Evaluation ASR pipeline worker — evaluate-cli module (not openkms-cli audio library jobs).
 #
+# NOTE: Eval run **transcription** uses openkms-audio-transcribe.yml + audio-pipeline run-async
+# (see eval-audio-bridge.ts). This workflow remains for evaluate-cli judge/compare workers.
 # Manual: Actions → Evaluate Pipeline → Run workflow → job_id from app_eval_run_items.
 # Trigger API (backend):
 #   POST /repos/{owner}/{repo}/actions/workflows/evaluate-pipeline.yml/dispatches
@@ -55,7 +57,7 @@ jobs:
         run: uv sync --frozen --extra pipeline --extra aliyun
 
       - name: Install evaluate-cli
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra pipeline --extra aliyun
 
       - name: Validate backend URL
         env:

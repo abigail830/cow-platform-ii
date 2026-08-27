@@ -472,12 +472,14 @@ export const appAudioPipelineJobs = pgTable(
     configYaml: text('config_yaml'),
     asrVocabularyIdSnapshot: text('asr_vocabulary_id_snapshot'),
     errorMessage: text('error_message'),
+    evalRunItemId: uuid('eval_run_item_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
     index('idx_audio_pipeline_jobs_audio').on(t.audioId, t.createdAt),
     index('idx_audio_pipeline_jobs_stage').on(t.stage, t.provider),
+    index('idx_audio_pipeline_jobs_eval_item').on(t.evalRunItemId),
   ],
 );
 
@@ -1178,6 +1180,9 @@ export const appEvalRunItems = pgTable(
     configYaml: text('config_yaml'),
     externalJobId: text('external_job_id'),
     outputS3Prefix: text('output_s3_prefix').notNull(),
+    audioPipelineJobId: uuid('audio_pipeline_job_id').references(() => appAudioPipelineJobs.id, {
+      onDelete: 'set null',
+    }),
     transcriptS3Key: text('transcript_s3_key'),
     asrResultS3Key: text('asr_result_s3_key'),
     errorMessage: text('error_message'),
@@ -1188,6 +1193,7 @@ export const appEvalRunItems = pgTable(
   (t) => [
     index('idx_eval_run_items_run').on(t.runId, t.stage),
     index('idx_eval_run_items_variant').on(t.variantId),
+    index('idx_eval_run_items_audio_job').on(t.audioPipelineJobId),
     uniqueIndex('uq_eval_run_items_variant_item').on(t.variantId, t.datasetItemId),
   ],
 );

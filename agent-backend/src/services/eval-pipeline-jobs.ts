@@ -76,6 +76,7 @@ export async function updateEvalRunItem(
     errorMessage?: string | null;
     transcriptS3Key?: string | null;
     asrResultS3Key?: string | null;
+    audioPipelineJobId?: string | null;
     metrics?: Record<string, unknown> | null;
   },
 ): Promise<typeof appEvalRunItems.$inferSelect | null> {
@@ -101,6 +102,9 @@ export async function updateEvalRunItem(
       ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
       ...(input.transcriptS3Key !== undefined ? { transcriptS3Key: input.transcriptS3Key } : {}),
       ...(input.asrResultS3Key !== undefined ? { asrResultS3Key: input.asrResultS3Key } : {}),
+      ...(input.audioPipelineJobId !== undefined
+        ? { audioPipelineJobId: input.audioPipelineJobId }
+        : {}),
       ...(mergedMetrics !== undefined ? { metrics: mergedMetrics } : {}),
       updatedAt: new Date(),
     })

@@ -50,6 +50,10 @@ function shouldFailStaleEvalRunItem(
     }
   }
 
+  if (item.audioPipelineJobId) {
+    return { stale: false };
+  }
+
   return shouldFailStaleAudioJob({
     stage: item.stage,
     externalJobId: item.externalJobId,

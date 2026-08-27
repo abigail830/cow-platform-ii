@@ -24,17 +24,20 @@ Worker mode: `PIPELINE_WORKER=spawn` (local dev) | `github_actions` (Vercel defa
 |--------|-------------|--------------|-----|--------------|----------------|
 | **Document parse** | `app_pipeline_jobs` | `/internal-api/pipeline/jobs` | `openkms-cli pipeline run-async` | `pipeline.workflow_file` → `openkms-pipeline.yml` | `pipeline-runner.ts` |
 | **Audio library** | `app_audio_pipeline_jobs` | `/internal-api/audio-pipeline/jobs` | `openkms-cli audio-pipeline run-async` | `pipeline.workflow_file` → `openkms-audio-transcribe.yml` | `audio-pipeline-runner.ts` |
-| **Eval ASR** | `app_eval_run_items` (item = job) | `/internal-api/eval-pipeline/jobs` | `evaluate-cli pipeline run-async` | **`evaluate-pipeline.yml` only** (`eval-pipeline-github-actions.ts`) | `eval-pipeline-runner.ts` |
+| **Eval transcribe** | `app_audio_pipeline_jobs` (+ `eval_run_item_id`) | `/internal-api/audio-pipeline/jobs` | **`openkms-cli audio-pipeline run-async`** | **`openkms-audio-transcribe.yml`** (same as audio library) | `eval-audio-bridge.ts` → `audio-pipeline-runner.ts` |
+| **Eval compare/judge** | `app_eval_run_comparisons` / future judge jobs | backend + `evaluate-cli` | `evaluate-cli judge …` (planned) | `evaluate-pipeline.yml` (judge only) | `eval-run-compare.ts` |
 | **Capture post-process** | capture pipeline jobs | `/internal-api/audio-capture-pipeline/jobs` | openkms-cli | capture workflow env | `audio-capture-pipeline-runner.ts` |
 | **KB import** | kb import jobs | `/internal-api/kb-import-jobs` | openkms-cli | kb import workflow | `kb-import-runner.ts` |
 
-**Eval rule:** never dispatch eval jobs through `openkms-audio-transcribe.yml` or read `app_pipeline_configs.workflow_file` for eval. Mapped args like `pipeline run-async` on **openkms-cli** hit document `/internal-api/pipeline/jobs` and 404.
+**Eval transcribe rule:** reuse **audio pipeline worker** with fun-asr/qwen configs from `app_pipeline_configs`. Job context overrides `input_uri` (dataset audio) and `s3_prefix` (eval-runs output) via `eval_run_item_id` on the audio job row. PATCH on audio job syncs `app_eval_run_items` stage. **Do not** run transcription through `evaluate-cli pipeline` or `evaluate-pipeline.yml`.
+
+**Legacy bug:** dispatching eval items to `openkms-audio-transcribe.yml` with `pipeline run-async` args (document namespace) → GET `/internal-api/pipeline/jobs` → 404.
 
 ## Reference implementations
 
 - **Audio (canonical):** `createAudioPipelineJob()` → `spawnAsyncAudioPipelineWorker()` → `buildAudioWorkerCliArgs()` → GHA `openkms-audio-transcribe.yml` → `openkms_cli/pipeline/audio_jobs.py` → GET/PATCH `audio-pipeline/jobs`.
-- **Eval (mirror audio, separate module):** `startEvalRun()` inserts `app_eval_run_items` → `await orchestrateEvalRunDispatch()` → `buildEvalWorkerCliArgs(jobId)` → GHA `evaluate-pipeline.yml` → `evaluate_cli/pipeline/jobs.py` → GET/PATCH `eval-pipeline/jobs`.
-- **Command templates:** `agent-backend/src/shared/pipeline-command-template.ts` — `defaultEvalAsyncWorkerTemplate()` for eval; audio uses `audio-pipeline run-async`.
+- **Eval transcribe (reuse audio worker):** `startEvalRun()` → `dispatchEvalTranscribeViaAudioPipeline()` → linked `app_audio_pipeline_jobs` with `eval_run_item_id` → same GHA/CLI as audio → PATCH syncs eval run item → compare phase in `full` mode.
+- **Eval compare:** `startEvalRunComparePhase()` → backend reads transcript artifacts, writes comparison JSON.
 
 ## Serial eval dispatch
 

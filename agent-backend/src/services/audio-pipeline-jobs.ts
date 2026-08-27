@@ -56,6 +56,7 @@ export async function createAudioPipelineJob(input: {
   provider: string;
   configYaml?: string | null;
   asrVocabularyIdSnapshot?: string | null;
+  evalRunItemId?: string | null;
 }): Promise<typeof appAudioPipelineJobs.$inferSelect> {
   const [row] = await db
     .insert(appAudioPipelineJobs)
@@ -66,6 +67,7 @@ export async function createAudioPipelineJob(input: {
       stage: 'submitted',
       configYaml: snapshotConfigYaml(input.configYaml),
       asrVocabularyIdSnapshot: input.asrVocabularyIdSnapshot?.trim() || null,
+      evalRunItemId: input.evalRunItemId?.trim() || null,
     })
     .returning();
   return row!;
@@ -177,6 +179,20 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
     process.env.OPENKMS_API_URL?.trim() ||
     `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
 
+  let inputUri = `s3://${s3.bucket}/${audio.s3Key}`;
+  let s3Prefix = s3PrefixFromKey(audio.s3Key) || audioStoragePrefix(audio.fileHash);
+  let displayName = audio.name;
+
+  if (job.evalRunItemId) {
+    const { buildEvalLinkedAudioPipelineContextOverrides } = await import('./eval-audio-bridge.ts');
+    const overrides = await buildEvalLinkedAudioPipelineContextOverrides(job.evalRunItemId);
+    if (overrides) {
+      inputUri = overrides.input_uri;
+      s3Prefix = overrides.s3_prefix;
+      displayName = overrides.dataset_item_name;
+    }
+  }
+
   return {
     id: job.id,
     audio_id: audio.id,
@@ -189,14 +205,14 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
     error_message: job.errorMessage,
     audio: {
       id: audio.id,
-      name: audio.name,
+      name: displayName,
       file_type: audio.fileType,
       s3_key: audio.s3Key,
       file_hash: audio.fileHash,
       channel_id: audio.channelId,
     },
-    input_uri: `s3://${s3.bucket}/${audio.s3Key}`,
-    s3_prefix: s3PrefixFromKey(audio.s3Key) || audioStoragePrefix(audio.fileHash),
+    input_uri: inputUri,
+    s3_prefix: s3Prefix,
     api_url: apiUrl,
   };
 }
@@ -205,19 +221,25 @@ export async function markAudioForJobStage(
   audioId: string,
   stage: AudioPipelineJobStage,
 ): Promise<void> {
-  if (stage === 'done') {
-    const [audio] = await db
-      .select({ captureId: appAudios.captureId })
-      .from(appAudios)
-      .where(eq(appAudios.id, audioId))
-      .limit(1);
+  const [audio] = await db
+    .select({ captureId: appAudios.captureId, metadata: appAudios.metadata })
+    .from(appAudios)
+    .where(eq(appAudios.id, audioId))
+    .limit(1);
+  if (!audio) return;
 
+  const { isEvalShadowAudio } = await import('./eval-shadow-audio.ts');
+  if (isEvalShadowAudio(audio.metadata as Record<string, unknown> | null)) {
+    return;
+  }
+
+  if (stage === 'done') {
     await db
       .update(appAudios)
       .set({ status: 'completed', updatedAt: new Date() })
       .where(eq(appAudios.id, audioId));
 
-    if (audio?.captureId) {
+    if (audio.captureId) {
       const { maybeStartCapturePostProcess } = await import('./capture-post-process-trigger.ts');
       try {
         await maybeStartCapturePostProcess(audio.captureId);

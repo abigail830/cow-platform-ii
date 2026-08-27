@@ -38,6 +38,8 @@ export async function reconcileStaleAudioPipelineJobs(audioIds: string[]): Promi
       errorMessage: decision.message,
     });
     await markAudioForJobStage(audioId, 'failed');
+    const { syncEvalRunItemFromAudioPipelineJob } = await import('./eval-audio-bridge.ts');
+    await syncEvalRunItemFromAudioPipelineJob(job.id);
     reconciled += 1;
   }
 
