@@ -1,8 +1,9 @@
-import { asc, desc, eq } from 'drizzle-orm';
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   appEvalDatasetItems,
   appEvalRunComparisons,
   appEvalRunItems,
+  appEvalRunAttempts,
   appEvalRunVariants,
   appEvalRuns,
   db,
@@ -20,6 +21,14 @@ import { isAudioAsyncPipelineName, audioPipelineProviderForName } from './audio-
 import { getStorageReadUrl } from '../storage/document-files.ts';
 import { shouldFailStaleAudioJob } from './audio-pipeline-stale.ts';
 import { startEvalRunComparePhase } from './eval-run-compare.ts';
+import {
+  createEvalRunAttempt,
+  getLatestEvalRunAttempt,
+  listEvalRunAttempts,
+  syncEvalRunAttemptFromRun,
+  toAttemptPublic,
+} from './eval-run-attempts.ts';
+import { enrichEvalRunItemPublic } from './eval-run-item-enrichment.ts';
 
 const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
   'Worker exited without updating job status (check GitHub Actions logs).';
@@ -100,7 +109,45 @@ function toVariantPublic(row: typeof appEvalRunVariants.$inferSelect) {
 
 export async function listEvalRuns() {
   const rows = await db.select().from(appEvalRuns).orderBy(desc(appEvalRuns.updatedAt));
-  return rows.map(toRunPublic);
+  if (rows.length === 0) return [];
+
+  const runIds = rows.map((row) => row.id);
+  const datasetIds = [...new Set(rows.map((row) => row.datasetId))];
+
+  const itemCounts =
+    datasetIds.length === 0
+      ? []
+      : await db
+          .select({
+            datasetId: appEvalDatasetItems.datasetId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(appEvalDatasetItems)
+          .where(inArray(appEvalDatasetItems.datasetId, datasetIds))
+          .groupBy(appEvalDatasetItems.datasetId);
+
+  const attempts = await db
+    .select({
+      runId: appEvalRunAttempts.runId,
+      startedAt: appEvalRunAttempts.startedAt,
+      attemptNumber: appEvalRunAttempts.attemptNumber,
+    })
+    .from(appEvalRunAttempts)
+    .where(inArray(appEvalRunAttempts.runId, runIds))
+    .orderBy(desc(appEvalRunAttempts.attemptNumber));
+
+  const fileCountByDatasetId = new Map(itemCounts.map((row) => [row.datasetId, row.count]));
+  const lastRunAtByRunId = new Map<string, string>();
+  for (const attempt of attempts) {
+    if (lastRunAtByRunId.has(attempt.runId)) continue;
+    lastRunAtByRunId.set(attempt.runId, attempt.startedAt.toISOString());
+  }
+
+  return rows.map((row) => ({
+    ...toRunPublic(row),
+    file_count: fileCountByDatasetId.get(row.datasetId) ?? 0,
+    last_run_at: lastRunAtByRunId.get(row.id) ?? null,
+  }));
 }
 
 export async function getEvalRunById(id: string) {
@@ -193,27 +240,10 @@ export async function createEvalRun(input: {
   };
 }
 
-async function rollbackEvalRunStart(runId: string): Promise<void> {
-  await db.delete(appEvalRunComparisons).where(eq(appEvalRunComparisons.runId, runId));
-  await db.delete(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
-  await db
-    .update(appEvalRuns)
-    .set({
-      status: 'draft',
-      phase: 'transcribing',
-      totalRunItems: 0,
-      completedRunItems: 0,
-      failedRunItems: 0,
-      totalCompareItems: 0,
-      completedCompareItems: 0,
-      failedCompareItems: 0,
-      updatedAt: new Date(),
-    })
-    .where(eq(appEvalRuns.id, runId));
-  await db
-    .update(appEvalRunVariants)
-    .set({ status: 'pending', updatedAt: new Date() })
-    .where(eq(appEvalRunVariants.runId, runId));
+export async function listActiveAttemptItems(runId: string) {
+  const attempt = await getLatestEvalRunAttempt(runId);
+  if (!attempt) return [];
+  return db.select().from(appEvalRunItems).where(eq(appEvalRunItems.attemptId, attempt.id));
 }
 
 export async function startEvalRun(runId: string, options?: { runMode?: EvalRunMode }) {
@@ -230,18 +260,29 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
     );
   }
   if (run.status !== 'draft') {
-    await rollbackEvalRunStart(runId);
-    run = (await getEvalRunById(runId))!;
+    const latest = await getLatestEvalRunAttempt(runId);
+    if (latest && latest.status === 'running') {
+      throw new Error(
+        'This evaluation run is still in progress. Wait for it to finish, then try Restart again.',
+      );
+    }
   }
 
+  const runMode = options?.runMode
+    ? options.runMode === 'full'
+      ? 'full'
+      : 'pipeline_only'
+    : run.runMode;
+
   if (options?.runMode) {
-    const runMode = options.runMode === 'full' ? 'full' : 'pipeline_only';
     await db
       .update(appEvalRuns)
       .set({ runMode, updatedAt: new Date() })
       .where(eq(appEvalRuns.id, runId));
     run = (await getEvalRunById(runId))!;
   }
+
+  const attempt = await createEvalRunAttempt({ runId, runMode });
 
   const variants = await db
     .select()
@@ -259,11 +300,17 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
   const itemRows: Array<typeof appEvalRunItems.$inferSelect> = [];
   for (const variant of variants) {
     for (const datasetItem of datasetItems) {
-      const outputS3Prefix = buildEvalRunItemOutputPrefix(runId, variant.id, datasetItem.id);
+      const outputS3Prefix = buildEvalRunItemOutputPrefix(
+        runId,
+        attempt.id,
+        variant.id,
+        datasetItem.id,
+      );
       const [row] = await db
         .insert(appEvalRunItems)
         .values({
           runId,
+          attemptId: attempt.id,
           variantId: variant.id,
           datasetItemId: datasetItem.id,
           pipelineName: variant.pipelineName,
@@ -284,9 +331,25 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
       totalRunItems: itemRows.length,
       completedRunItems: 0,
       failedRunItems: 0,
+      totalCompareItems: 0,
+      completedCompareItems: 0,
+      failedCompareItems: 0,
       updatedAt: new Date(),
     })
     .where(eq(appEvalRuns.id, runId));
+
+  await db
+    .update(appEvalRunAttempts)
+    .set({
+      totalRunItems: itemRows.length,
+      completedRunItems: 0,
+      failedRunItems: 0,
+      totalCompareItems: 0,
+      completedCompareItems: 0,
+      failedCompareItems: 0,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRunAttempts.id, attempt.id));
 
   await db
     .update(appEvalRunVariants)
@@ -308,9 +371,11 @@ export async function maybeFinalizeEvalRunPhase(runId: string): Promise<void> {
     return;
   }
 
-  const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
+  const items = await listActiveAttemptItems(runId);
   const completion = computeEvalRunCompletion(items);
   if (!completion) return;
+
+  const attempt = await getLatestEvalRunAttempt(runId);
 
   if (run.runMode === 'full' && completion.completedRunItems > 0) {
     await db
@@ -321,7 +386,7 @@ export async function maybeFinalizeEvalRunPhase(runId: string): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(appEvalRuns.id, runId));
-    await startEvalRunComparePhase(runId);
+    await startEvalRunComparePhase(runId, attempt?.id);
     return;
   }
 
@@ -336,6 +401,10 @@ export async function maybeFinalizeEvalRunPhase(runId: string): Promise<void> {
     })
     .where(eq(appEvalRuns.id, runId));
 
+  if (attempt) {
+    await syncEvalRunAttemptFromRun(attempt.id, runId);
+  }
+
   const variantStatus = completion.status === 'failed' ? 'failed' : 'done';
   await db
     .update(appEvalRunVariants)
@@ -347,7 +416,7 @@ export async function reconcileStaleEvalRunItems(runId: string): Promise<void> {
   const run = await getEvalRunById(runId);
   if (!run || run.status !== 'running') return;
 
-  const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
+  const items = await listActiveAttemptItems(runId);
   for (const item of items) {
     if (isTerminalEvalRunItemStage(item.stage)) continue;
 
@@ -376,7 +445,7 @@ export async function maybeAdvanceEvalRunAfterJobTerminal(runId: string): Promis
   const run = await getEvalRunById(runId);
   if (!run || run.status !== 'running' || run.phase !== 'transcribing') return;
 
-  const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
+  const items = await listActiveAttemptItems(runId);
   const { shouldContinueEvalRunDispatch } = await import('./eval-run-phase.ts');
   if (!shouldContinueEvalRunDispatch(items)) {
     const { abortEvalRunTranscribeWithoutSuccess } = await import('./eval-run-dispatch.ts');
@@ -400,8 +469,8 @@ export async function getEvalRunDetail(runId: string) {
     .from(appEvalRunVariants)
     .where(eq(appEvalRunVariants.runId, runId));
 
+  const attempts = await listEvalRunAttempts(runId);
   const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
-
   const comparisons = await db
     .select()
     .from(appEvalRunComparisons)
@@ -414,36 +483,74 @@ export async function getEvalRunDetail(runId: string) {
 
   const datasetItemById = new Map(datasetItems.map((row) => [row.id, row]));
 
+  const attemptDetails = await Promise.all(
+    attempts.map(async (attempt) => {
+      const attemptItems = items.filter((item) => item.attemptId === attempt.id);
+      const attemptComparisons = comparisons.filter((row) => row.attemptId === attempt.id);
+      const enrichedItems = await Promise.all(
+        attemptItems.map((item) =>
+          enrichEvalRunItemPublic(
+            item,
+            datasetItemById.get(item.datasetItemId)?.name ?? '',
+          ),
+        ),
+      );
+      return {
+        ...toAttemptPublic(attempt),
+        items: enrichedItems,
+        comparisons: attemptComparisons.map((row) => ({
+          id: row.id,
+          run_id: row.runId,
+          attempt_id: row.attemptId,
+          dataset_item_id: row.datasetItemId,
+          dataset_item_name: datasetItemById.get(row.datasetItemId)?.name ?? '',
+          status: row.status,
+          error_message: row.errorMessage,
+          updated_at: row.updatedAt.toISOString(),
+        })),
+      };
+    }),
+  );
+
+  const latestAttempt = attempts[0] ?? null;
+
   return {
     run: toRunPublic(refreshed),
     variants: variants.map(toVariantPublic),
-    items: items.map((item) => ({
-      ...evalRunItemToPublic(item),
-      dataset_item_name: datasetItemById.get(item.datasetItemId)?.name ?? '',
-    })),
-    comparisons: comparisons.map((row) => ({
+    attempts: attemptDetails,
+    items: latestAttempt
+      ? attemptDetails.find((attempt) => attempt.id === latestAttempt.id)?.items ?? []
+      : [],
+    comparisons: latestAttempt
+      ? attemptDetails.find((attempt) => attempt.id === latestAttempt.id)?.comparisons ?? []
+      : [],
+    dataset_items: datasetItems.map((row) => ({
       id: row.id,
-      run_id: row.runId,
-      dataset_item_id: row.datasetItemId,
-      dataset_item_name: datasetItemById.get(row.datasetItemId)?.name ?? '',
-      status: row.status,
-      error_message: row.errorMessage,
-      updated_at: row.updatedAt.toISOString(),
+      name: row.name,
+      file_type: row.fileType,
     })),
   };
 }
 
-export async function getEvalRunCompareUrls(runId: string, datasetItemId: string) {
+export async function getEvalRunCompareUrls(
+  runId: string,
+  datasetItemId: string,
+  attemptId?: string,
+) {
   const run = await getEvalRunById(runId);
   if (!run) throw new Error('Eval run not found');
+
+  const resolvedAttemptId =
+    attemptId?.trim() || (await getLatestEvalRunAttempt(runId))?.id || null;
+  if (!resolvedAttemptId) throw new Error('No evaluation attempt found for this run');
 
   const items = await db
     .select()
     .from(appEvalRunItems)
-    .where(eq(appEvalRunItems.runId, runId));
+    .where(eq(appEvalRunItems.attemptId, resolvedAttemptId));
 
   const targetItems = items.filter((item) => item.datasetItemId === datasetItemId);
-  if (targetItems.length === 0) throw new Error('Dataset item not found in this run');
+  if (targetItems.length === 0) throw new Error('Dataset item not found in this attempt');
 
   const variants = await db
     .select()
@@ -476,7 +583,7 @@ export async function getEvalRunCompareUrls(runId: string, datasetItemId: string
     comparisons.push(entry);
   }
 
-  return { dataset_item_id: datasetItemId, comparisons };
+  return { dataset_item_id: datasetItemId, attempt_id: resolvedAttemptId, comparisons };
 }
 
 export async function deleteEvalRun(runId: string): Promise<void> {

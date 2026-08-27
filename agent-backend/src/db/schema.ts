@@ -1162,6 +1162,34 @@ export const appEvalRunVariants = pgTable(
   ],
 );
 
+export const appEvalRunAttempts = pgTable(
+  'app_eval_run_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => appEvalRuns.id, { onDelete: 'cascade' }),
+    attemptNumber: integer('attempt_number').notNull(),
+    status: text('status').$type<EvalRunStatus>().notNull().default('running'),
+    phase: text('phase').$type<EvalRunPhase>().notNull().default('transcribing'),
+    runMode: text('run_mode').$type<EvalRunMode>().notNull().default('pipeline_only'),
+    startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    totalRunItems: integer('total_run_items').notNull().default(0),
+    completedRunItems: integer('completed_run_items').notNull().default(0),
+    failedRunItems: integer('failed_run_items').notNull().default(0),
+    totalCompareItems: integer('total_compare_items').notNull().default(0),
+    completedCompareItems: integer('completed_compare_items').notNull().default(0),
+    failedCompareItems: integer('failed_compare_items').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_eval_run_attempts_run').on(t.runId, t.attemptNumber),
+    uniqueIndex('uq_eval_run_attempts_run_number').on(t.runId, t.attemptNumber),
+  ],
+);
+
 export const appEvalRunItems = pgTable(
   'app_eval_run_items',
   {
@@ -1169,6 +1197,9 @@ export const appEvalRunItems = pgTable(
     runId: uuid('run_id')
       .notNull()
       .references(() => appEvalRuns.id, { onDelete: 'cascade' }),
+    attemptId: uuid('attempt_id')
+      .notNull()
+      .references(() => appEvalRunAttempts.id, { onDelete: 'cascade' }),
     variantId: uuid('variant_id')
       .notNull()
       .references(() => appEvalRunVariants.id, { onDelete: 'cascade' }),
@@ -1192,9 +1223,14 @@ export const appEvalRunItems = pgTable(
   },
   (t) => [
     index('idx_eval_run_items_run').on(t.runId, t.stage),
+    index('idx_eval_run_items_attempt').on(t.attemptId, t.stage),
     index('idx_eval_run_items_variant').on(t.variantId),
     index('idx_eval_run_items_audio_job').on(t.audioPipelineJobId),
-    uniqueIndex('uq_eval_run_items_variant_item').on(t.variantId, t.datasetItemId),
+    uniqueIndex('uq_eval_run_items_attempt_variant_item').on(
+      t.attemptId,
+      t.variantId,
+      t.datasetItemId,
+    ),
   ],
 );
 
@@ -1205,6 +1241,9 @@ export const appEvalRunComparisons = pgTable(
     runId: uuid('run_id')
       .notNull()
       .references(() => appEvalRuns.id, { onDelete: 'cascade' }),
+    attemptId: uuid('attempt_id')
+      .notNull()
+      .references(() => appEvalRunAttempts.id, { onDelete: 'cascade' }),
     datasetItemId: uuid('dataset_item_id')
       .notNull()
       .references(() => appEvalDatasetItems.id, { onDelete: 'cascade' }),
@@ -1216,7 +1255,8 @@ export const appEvalRunComparisons = pgTable(
   },
   (t) => [
     index('idx_eval_run_comparisons_run').on(t.runId, t.status),
-    uniqueIndex('uq_eval_run_comparisons_run_item').on(t.runId, t.datasetItemId),
+    index('idx_eval_run_comparisons_attempt').on(t.attemptId, t.status),
+    uniqueIndex('uq_eval_run_comparisons_attempt_item').on(t.attemptId, t.datasetItemId),
   ],
 );
 

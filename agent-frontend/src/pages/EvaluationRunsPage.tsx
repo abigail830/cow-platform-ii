@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Eye, GitCompare, Loader2, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
+import { Eye, GitCompare, History, Loader2, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { getEvalDataset, listEvalDatasets, type EvalDataset } from '../api/evaluation/datasets.ts';
 import {
   createEvalRun,
@@ -13,6 +13,7 @@ import {
   listEvalRuns,
   startEvalRun,
   type EvalRun,
+  type EvalRunAttempt,
   type EvalRunDetail,
   type EvalRunCompareRow,
   type EvalRunCompareStatus,
@@ -47,22 +48,6 @@ function isEvalItemActive(item: EvalRunItem | undefined, runStatus: EvalRunStatu
 function isEvalItemQueued(item: EvalRunItem | undefined, runStatus: EvalRunStatus): boolean {
   if (!item || runStatus !== 'running') return false;
   return item.stage === 'submitted' && !itemDispatchClaimed(item);
-}
-
-function EvalRunStatusBadge({ status }: { status: EvalRunStatus }) {
-  if (status === 'running') {
-    return (
-      <span className="document-status-badge status-running eval-run-status-badge">
-        <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
-        {formatEvalRunStatus(status)}
-      </span>
-    );
-  }
-  return (
-    <span className={stageClass(status)}>
-      {formatEvalRunStatus(status)}
-    </span>
-  );
 }
 
 function EvalRunItemStatusBadge({
@@ -142,7 +127,22 @@ function formatDurationMs(ms: number): string {
   return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
 
+function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function evalItemDurationLabel(item: EvalRunItem | undefined): string | null {
+  if (item?.duration_ms != null) {
+    const formatted = formatDurationMs(item.duration_ms);
+    return formatted || null;
+  }
   if (!item?.metrics || typeof item.metrics !== 'object') return null;
   const metrics = item.metrics as Record<string, unknown>;
   const durationMs =
@@ -154,6 +154,226 @@ function evalItemDurationLabel(item: EvalRunItem | undefined): string | null {
   if (durationMs == null) return null;
   const formatted = formatDurationMs(durationMs);
   return formatted || null;
+}
+
+function attemptProgressLabel(attempt: EvalRunAttempt): string {
+  const done = attempt.completed_run_items;
+  const total = attempt.total_run_items;
+  if (total === 0) return 'No items';
+  if (attempt.status === 'running') return `${done}/${total} in progress`;
+  return `${done}/${total} succeeded${attempt.failed_run_items ? ` · ${attempt.failed_run_items} failed` : ''}`;
+}
+
+function TranscriptPreview({ url }: { url: string }) {
+  const [body, setBody] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [loadingText, setLoadingText] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingText(true);
+    setError('');
+    void fetchPresignedStorageText(url)
+      .then((text) => {
+        if (cancelled) return;
+        setBody(text ?? '(empty transcript)');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to load transcript');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingText(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  if (loadingText) return <p className="admin-muted">Loading transcript…</p>;
+  if (error) return <p className="admin-error">{error}</p>;
+  return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
+}
+
+function EvalRunPipelineOutput({
+  cell,
+  variantName,
+  runStatus,
+  starting,
+}: {
+  cell: EvalRunItem | undefined;
+  variantName: string;
+  runStatus: EvalRunStatus;
+  starting: boolean;
+}) {
+  const duration = evalItemDurationLabel(cell);
+
+  return (
+    <div className="eval-run-pipeline-col">
+      <div className="eval-run-pipeline-col-header">
+        <span className="eval-run-pipeline-col-name">{variantName}</span>
+        <EvalRunItemStatusBadge item={cell} runStatus={runStatus} starting={starting} />
+        {duration ? <span className="admin-muted eval-run-cell-duration">{duration}</span> : null}
+      </div>
+      <div className="eval-run-pipeline-col-body">
+        {cell?.error_message ? (
+          <p className="admin-error eval-run-cell-error">{cell.error_message}</p>
+        ) : null}
+        {cell?.stage === 'done' && cell.transcript_url ? (
+          <TranscriptPreview url={cell.transcript_url} />
+        ) : cell?.stage !== 'done' ? (
+          <p className="admin-muted">Transcript not ready.</p>
+        ) : (
+          <p className="admin-muted">No transcript artifact.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EvalRunAttemptSection({
+  attempt,
+  variants,
+  datasetItemRows,
+  runStatus,
+  starting,
+  defaultOpen,
+  onCompare,
+}: {
+  attempt: EvalRunAttempt;
+  variants: EvalRunDetail['variants'];
+  datasetItemRows: Array<{ id: string; name: string }>;
+  runStatus: EvalRunStatus;
+  starting: boolean;
+  defaultOpen: boolean;
+  onCompare: (datasetItemId: string, attemptId: string) => void;
+}) {
+  const itemByVariantAndDataset = useMemo(() => {
+    const map = new Map<string, EvalRunItem>();
+    for (const item of attempt.items) {
+      map.set(`${item.variant_id}:${item.dataset_item_id}`, item);
+    }
+    return map;
+  }, [attempt.items]);
+
+  const compareByDatasetItem = useMemo(() => {
+    const map = new Map<string, EvalRunCompareRow>();
+    for (const row of attempt.comparisons) {
+      map.set(row.dataset_item_id, row);
+    }
+    return map;
+  }, [attempt.comparisons]);
+
+  const isComparingPhase = attempt.phase === 'comparing' && attempt.status === 'running';
+  const durationLabel = attempt.duration_ms ? formatDurationMs(attempt.duration_ms) : null;
+
+  return (
+    <details className="eval-run-attempt" open={defaultOpen}>
+      <summary className="eval-run-attempt-summary">
+        <span className="eval-run-attempt-title">
+          <History {...iconProps({ size: 16 })} className="eval-run-attempt-icon" aria-hidden />
+          Run #{attempt.attempt_number} · {formatDateTime(attempt.started_at)}
+        </span>
+        <span className={`document-status-badge eval-run-status-badge ${stageClass(attempt.status)}`}>
+          {formatEvalRunStatus(attempt.status)}
+        </span>
+        <span className="admin-muted eval-run-attempt-meta">
+          {attempt.run_mode === 'full' ? 'Full' : 'Pipeline only'} · {attemptProgressLabel(attempt)}
+          {durationLabel ? ` · ${durationLabel}` : ''}
+        </span>
+      </summary>
+
+      <div className="eval-run-attempt-body">
+        {datasetItemRows.length === 0 ? (
+          <p className="admin-muted">No files in this run.</p>
+        ) : (
+          datasetItemRows.map((row) => {
+            const itemRunStatus = attempt.status === 'running' ? 'running' : runStatus;
+            const itemStarting = starting && attempt.status === 'running';
+
+            return (
+            <details key={row.id} className="eval-run-file-block">
+              <summary className="eval-run-file-summary">
+                <span className="eval-run-file-name">{row.name}</span>
+                <div className="eval-run-file-pipeline-row">
+                  {variants.map((variant) => {
+                    const cell = itemByVariantAndDataset.get(`${variant.id}:${row.id}`);
+                    const duration = evalItemDurationLabel(cell);
+                    return (
+                      <span key={variant.id} className="eval-run-pipeline-chip">
+                        <span className="eval-run-pipeline-chip-name">{variant.display_name}</span>
+                        <EvalRunItemStatusBadge
+                          item={cell}
+                          runStatus={itemRunStatus}
+                          starting={itemStarting}
+                        />
+                        {duration ? (
+                          <span className="admin-muted eval-run-cell-duration">{duration}</span>
+                        ) : null}
+                      </span>
+                    );
+                  })}
+                </div>
+              </summary>
+
+              <div className="eval-run-file-body">
+                <div
+                  className="eval-run-pipeline-grid"
+                  style={{ ['--pipeline-cols' as string]: String(Math.max(variants.length, 1)) }}
+                >
+                  {variants.map((variant) => {
+                    const cell = itemByVariantAndDataset.get(`${variant.id}:${row.id}`);
+                    return (
+                      <EvalRunPipelineOutput
+                        key={variant.id}
+                        cell={cell}
+                        variantName={variant.display_name}
+                        runStatus={itemRunStatus}
+                        starting={itemStarting}
+                      />
+                    );
+                  })}
+                </div>
+
+                {attempt.run_mode === 'full' ? (
+                  <div className="eval-run-compare-row">
+                    {isComparingPhase || compareByDatasetItem.has(row.id) ? (
+                      <span
+                        className={`${compareStatusClass(compareByDatasetItem.get(row.id)?.status ?? 'pending')} eval-run-status-badge`}
+                      >
+                        {(compareByDatasetItem.get(row.id)?.status ??
+                          (isComparingPhase ? 'running' : 'pending')) === 'running' ? (
+                          <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
+                        ) : null}
+                        {compareStatusLabel(
+                          compareByDatasetItem.get(row.id)?.status ??
+                            (isComparingPhase ? 'running' : 'pending'),
+                        )}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn-secondary eval-run-compare-btn"
+                      onClick={() => onCompare(row.id, attempt.id)}
+                      disabled={
+                        isComparingPhase ||
+                        (compareByDatasetItem.get(row.id)?.status !== 'done' &&
+                          attempt.status === 'running')
+                      }
+                    >
+                      <GitCompare {...iconProps()} aria-hidden />
+                      Compare transcripts
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </details>
+            );
+          })
+        )}
+      </div>
+    </details>
+  );
 }
 
 export function EvaluationRunsListPage() {
@@ -264,22 +484,21 @@ export function EvaluationRunsListPage() {
             <tr>
               <th>Name</th>
               <th>Dataset</th>
-              <th>Status</th>
-              <th>Progress</th>
-              <th>Updated</th>
+              <th>Files</th>
+              <th>Last run</th>
               <th aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={5} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
             ) : runs.length === 0 ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={5} className="admin-table-empty">
                   No evaluation runs yet.{' '}
                   {canWrite ? (
                     <>
@@ -297,20 +516,14 @@ export function EvaluationRunsListPage() {
               runs.map((run) => (
                 <tr key={run.id}>
                   <td>
-                    <Link to={`/evaluation/runs/${run.id}`} className="admin-link">
+                    <Link to={`/evaluation/runs/${run.id}`} className="admin-link eval-run-list-name">
+                      <History {...iconProps({ size: 16 })} className="eval-run-list-icon" aria-hidden />
                       {run.name}
                     </Link>
                   </td>
                   <td>{datasetNameById.get(run.dataset_id) ?? run.dataset_id.slice(0, 8)}</td>
-                  <td>
-                    <EvalRunStatusBadge status={run.status} />
-                  </td>
-                  <td>
-                    {run.status === 'draft'
-                      ? '—'
-                      : `${run.completed_run_items}/${run.total_run_items}${run.failed_run_items ? ` (${run.failed_run_items} failed)` : ''}`}
-                  </td>
-                  <td>{new Date(run.updated_at).toLocaleString()}</td>
+                  <td>{run.file_count ?? '—'}</td>
+                  <td>{run.last_run_at ? formatDateTime(run.last_run_at) : '—'}</td>
                   <td>
                     <div className="row-actions">
                       <Link to={`/evaluation/runs/${run.id}`} className="icon-btn" title="View">
@@ -425,38 +638,21 @@ export function EvaluationRunDetailPage() {
 
   const datasetItemRows = useMemo(() => {
     if (!detail) return [];
+    if (detail.dataset_items?.length) {
+      return detail.dataset_items.map((row) => ({ id: row.id, name: row.name }));
+    }
     const names = new Map<string, string>();
-    for (const item of detail.items) {
-      if (item.dataset_item_name) names.set(item.dataset_item_id, item.dataset_item_name);
+    for (const attempt of detail.attempts ?? []) {
+      for (const item of attempt.items) {
+        if (item.dataset_item_name) names.set(item.dataset_item_id, item.dataset_item_name);
+      }
     }
     return [...names.entries()].map(([id, name]) => ({ id, name }));
   }, [detail]);
 
-  const variantColumns = detail?.variants ?? [];
-
-  const itemByVariantAndDataset = useMemo(() => {
-    const map = new Map<string, EvalRunItem>();
-    if (!detail) return map;
-    for (const item of detail.items) {
-      map.set(`${item.variant_id}:${item.dataset_item_id}`, item);
-    }
-    return map;
-  }, [detail]);
-
-  const compareByDatasetItem = useMemo(() => {
-    const map = new Map<string, EvalRunCompareRow>();
-    if (!detail?.comparisons) return map;
-    for (const row of detail.comparisons) {
-      map.set(row.dataset_item_id, row);
-    }
-    return map;
-  }, [detail]);
-
-  const isComparingPhase = detail?.run.phase === 'comparing';
-
   const fileCount =
     detail?.run.status === 'draft'
-      ? (datasetItemCount ?? 0)
+      ? (datasetItemCount ?? detail?.dataset_items?.length ?? 0)
       : datasetItemRows.length;
 
   if (!canRead) return <Navigate to="/agents/playground" replace />;
@@ -492,13 +688,13 @@ export function EvaluationRunDetailPage() {
     return mode === 'full' ? `${prefix} full` : `${prefix} pipeline only`;
   }
 
-  async function openCompare(datasetItemId: string) {
+  async function openCompare(datasetItemId: string, attemptId: string) {
     if (!runId) return;
     setCompareItemId(datasetItemId);
     setCompareLoading(true);
     setComparePanels([]);
     try {
-      const comparison = await getEvalRunCompare(runId, datasetItemId);
+      const comparison = await getEvalRunCompare(runId, datasetItemId, attemptId);
       const panels = await Promise.all(
         comparison.comparisons.map(async (entry) => {
           if (entry.stage !== 'done' || !entry.transcript_url) {
@@ -545,6 +741,9 @@ export function EvaluationRunDetailPage() {
               {detail.run.run_mode === 'full' ? ' · Full' : ' · Pipeline only'} · {detail.variants.length}{' '}
               pipeline
               {detail.variants.length === 1 ? '' : 's'} · {fileCount} file{fileCount === 1 ? '' : 's'}
+              {(detail.attempts?.length ?? 0) > 0
+                ? ` · ${detail.attempts.length} run${detail.attempts.length === 1 ? '' : 's'}`
+                : ''}
             </p>
           ) : null}
         </div>
@@ -597,100 +796,31 @@ export function EvaluationRunDetailPage() {
         </div>
       </div>
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>File</th>
-              {(detail?.variants ?? []).map((variant) => (
-                <th key={variant.id}>{variant.display_name}</th>
-              ))}
-              {loading && !detail ? null : <th>Compare</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && !detail ? (
-              <tr>
-                <td colSpan={99} className="admin-table-empty">
-                  Loading…
-                </td>
-              </tr>
-            ) : !detail ? (
-              <tr>
-                <td colSpan={99} className="admin-table-empty">
-                  Evaluation run not found.
-                </td>
-              </tr>
-            ) : datasetItemRows.length === 0 ? (
-              <tr>
-                <td colSpan={variantColumns.length + 2} className="admin-table-empty">
-                  {detail.run.status === 'draft'
-                    ? `Ready to transcribe ${fileCount} file${fileCount === 1 ? '' : 's'}. Choose a run mode above.`
-                    : 'No files in this run.'}
-                </td>
-              </tr>
-            ) : (
-              datasetItemRows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.name}</td>
-                  {variantColumns.map((variant) => {
-                    const cell = itemByVariantAndDataset.get(`${variant.id}:${row.id}`);
-                    return (
-                      <td key={variant.id}>
-                        <EvalRunItemStatusBadge
-                          item={cell}
-                          runStatus={displayRunStatus ?? detail.run.status}
-                          starting={starting}
-                        />
-                        {evalItemDurationLabel(cell) ? (
-                          <div className="admin-muted eval-run-cell-duration">{evalItemDurationLabel(cell)}</div>
-                        ) : null}
-                        {cell?.error_message ? (
-                          <div className="admin-muted eval-run-cell-error" title={cell.error_message}>
-                            {cell.error_message}
-                          </div>
-                        ) : null}
-                      </td>
-                    );
-                  })}
-                  <td>
-                    <div className="row-actions eval-run-compare-cell">
-                      {detail.run.run_mode === 'full' && (isComparingPhase || compareByDatasetItem.has(row.id)) ? (
-                        <span
-                          className={`${compareStatusClass(compareByDatasetItem.get(row.id)?.status ?? 'pending')} eval-run-status-badge`}
-                        >
-                          {(compareByDatasetItem.get(row.id)?.status ?? (isComparingPhase ? 'running' : 'pending')) ===
-                          'running' ? (
-                            <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
-                          ) : null}
-                          {compareStatusLabel(
-                            compareByDatasetItem.get(row.id)?.status ??
-                              (isComparingPhase ? 'running' : 'pending'),
-                          )}
-                        </span>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Compare transcripts"
-                        aria-label={`Compare transcripts for ${row.name}`}
-                        onClick={() => void openCompare(row.id)}
-                        disabled={
-                          isComparingPhase ||
-                          (detail.run.run_mode === 'full' &&
-                            compareByDatasetItem.get(row.id)?.status !== 'done' &&
-                            detail.run.status === 'running')
-                        }
-                      >
-                        <GitCompare {...iconProps()} aria-hidden />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="eval-run-attempts">
+        {loading && !detail ? (
+          <p className="admin-muted">Loading…</p>
+        ) : !detail ? (
+          <p className="admin-muted">Evaluation run not found.</p>
+        ) : detail.run.status === 'draft' && (detail.attempts?.length ?? 0) === 0 ? (
+          <p className="admin-muted">
+            Ready to transcribe {fileCount} file{fileCount === 1 ? '' : 's'}. Choose a run mode above.
+          </p>
+        ) : (detail.attempts?.length ?? 0) === 0 ? (
+          <p className="admin-muted">No run history yet.</p>
+        ) : (
+          detail.attempts.map((attempt, index) => (
+            <EvalRunAttemptSection
+              key={attempt.id}
+              attempt={attempt}
+              variants={detail.variants}
+              datasetItemRows={datasetItemRows}
+              runStatus={displayRunStatus ?? detail.run.status}
+              starting={starting}
+              defaultOpen={index === 0}
+              onCompare={(datasetItemId, attemptId) => void openCompare(datasetItemId, attemptId)}
+            />
+          ))
+        )}
       </div>
 
       {compareItemId ? (

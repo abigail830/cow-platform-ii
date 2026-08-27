@@ -43,7 +43,8 @@ function fileItemsInProgress(
 }
 
 export async function abortEvalRunTranscribeWithoutSuccess(runId: string): Promise<void> {
-  const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
+  const { listActiveAttemptItems } = await import('./eval-runs.ts');
+  const items = await listActiveAttemptItems(runId);
 
   for (const item of items) {
     if (isTerminalEvalRunItemStage(item.stage)) continue;
@@ -74,7 +75,8 @@ export async function dispatchNextEvalRunJob(runId: string): Promise<void> {
   const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
   if (!run || run.status !== 'running' || run.phase !== 'transcribing') return;
 
-  const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
+  const { listActiveAttemptItems } = await import('./eval-runs.ts');
+  const items = await listActiveAttemptItems(runId);
   if (items.length === 0) return;
 
   if (!shouldContinueEvalRunDispatch(items)) {

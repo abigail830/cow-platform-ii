@@ -4,10 +4,11 @@ export const EVAL_RUNS_PREFIX = 'eval-runs/';
 
 export function buildEvalRunItemOutputPrefix(
   runId: string,
+  attemptId: string,
   variantId: string,
-  itemId: string,
+  datasetItemId: string,
 ): string {
-  const prefix = `${EVAL_RUNS_PREFIX}${runId}/variants/${variantId}/items/${itemId}/`;
+  const prefix = `${EVAL_RUNS_PREFIX}${runId}/attempts/${attemptId}/variants/${variantId}/items/${datasetItemId}/`;
   validateKey(prefix);
   return prefix;
 }
@@ -18,8 +19,12 @@ export function evalRunTranscriptKey(outputPrefix: string): string {
   return key;
 }
 
-export function buildEvalRunComparisonKey(runId: string, datasetItemId: string): string {
-  const key = `${EVAL_RUNS_PREFIX}${runId}/comparisons/${datasetItemId}.json`;
+export function buildEvalRunComparisonKey(
+  runId: string,
+  attemptId: string,
+  datasetItemId: string,
+): string {
+  const key = `${EVAL_RUNS_PREFIX}${runId}/attempts/${attemptId}/comparisons/${datasetItemId}.json`;
   validateKey(key);
   return key;
 }

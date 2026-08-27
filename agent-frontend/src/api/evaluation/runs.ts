@@ -36,6 +36,8 @@ export type EvalRun = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  file_count?: number;
+  last_run_at?: string | null;
 };
 
 export type EvalRunVariant = {
@@ -50,6 +52,7 @@ export type EvalRunVariant = {
 export type EvalRunItem = {
   id: string;
   run_id: string;
+  attempt_id: string;
   variant_id: string;
   dataset_item_id: string;
   dataset_item_name?: string;
@@ -58,8 +61,10 @@ export type EvalRunItem = {
   output_s3_prefix: string;
   transcript_s3_key: string | null;
   asr_result_s3_key: string | null;
+  transcript_url: string | null;
   error_message: string | null;
   metrics: Record<string, unknown> | null;
+  duration_ms: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -67,6 +72,7 @@ export type EvalRunItem = {
 export type EvalRunCompareRow = {
   id: string;
   run_id: string;
+  attempt_id: string;
   dataset_item_id: string;
   dataset_item_name: string;
   status: EvalRunCompareStatus;
@@ -74,11 +80,39 @@ export type EvalRunCompareRow = {
   updated_at: string;
 };
 
+export type EvalRunAttempt = {
+  id: string;
+  run_id: string;
+  attempt_number: number;
+  status: EvalRunStatus;
+  phase: string;
+  run_mode: EvalRunMode;
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  total_run_items: number;
+  completed_run_items: number;
+  failed_run_items: number;
+  total_compare_items: number;
+  completed_compare_items: number;
+  failed_compare_items: number;
+  items: EvalRunItem[];
+  comparisons: EvalRunCompareRow[];
+};
+
+export type EvalRunDatasetItemRef = {
+  id: string;
+  name: string;
+  file_type: string;
+};
+
 export type EvalRunDetail = {
   run: EvalRun;
   variants: EvalRunVariant[];
+  attempts: EvalRunAttempt[];
   items: EvalRunItem[];
   comparisons: EvalRunCompareRow[];
+  dataset_items: EvalRunDatasetItemRef[];
 };
 
 export type EvalRunProcessingOption = {
@@ -182,7 +216,9 @@ export async function deleteEvalRun(runId: string): Promise<void> {
 export async function getEvalRunCompare(
   runId: string,
   datasetItemId: string,
-): Promise<{ dataset_item_id: string; comparisons: EvalRunCompareEntry[] }> {
-  const data = await authFetch(`/api/evaluation/runs/${runId}/compare/${datasetItemId}`);
-  return data as { dataset_item_id: string; comparisons: EvalRunCompareEntry[] };
+  attemptId?: string,
+): Promise<{ dataset_item_id: string; attempt_id: string; comparisons: EvalRunCompareEntry[] }> {
+  const query = attemptId ? `?attempt_id=${encodeURIComponent(attemptId)}` : '';
+  const data = await authFetch(`/api/evaluation/runs/${runId}/compare/${datasetItemId}${query}`);
+  return data as { dataset_item_id: string; attempt_id: string; comparisons: EvalRunCompareEntry[] };
 }

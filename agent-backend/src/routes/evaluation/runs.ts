@@ -116,7 +116,8 @@ runs.get(
     if (!datasetItemId) return c.json({ error: 'Dataset item id is required' }, 400);
 
     try {
-      const comparison = await getEvalRunCompareUrls(id, datasetItemId);
+      const attemptId = c.req.query('attempt_id')?.trim() || undefined;
+      const comparison = await getEvalRunCompareUrls(id, datasetItemId, attemptId);
       return c.json(comparison);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load comparison';

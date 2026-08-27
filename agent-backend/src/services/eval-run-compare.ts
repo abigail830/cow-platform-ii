@@ -1,6 +1,7 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 import {
   appEvalDatasetItems,
+  appEvalRunAttempts,
   appEvalRunComparisons,
   appEvalRunItems,
   appEvalRunVariants,
@@ -39,7 +40,7 @@ export async function runEvalRunCompare(comparisonId: string): Promise<void> {
     const items = await db
       .select()
       .from(appEvalRunItems)
-      .where(eq(appEvalRunItems.runId, comparison.runId));
+      .where(eq(appEvalRunItems.attemptId, comparison.attemptId));
 
     const targetItems = items.filter((item) => item.datasetItemId === comparison.datasetItemId);
     const variants = await db
@@ -71,9 +72,14 @@ export async function runEvalRunCompare(comparisonId: string): Promise<void> {
       });
     }
 
-    const resultKey = buildEvalRunComparisonKey(comparison.runId, comparison.datasetItemId);
+    const resultKey = buildEvalRunComparisonKey(
+      comparison.runId,
+      comparison.attemptId,
+      comparison.datasetItemId,
+    );
     const payload = {
       run_id: comparison.runId,
+      attempt_id: comparison.attemptId,
       dataset_item_id: comparison.datasetItemId,
       compared_at: new Date().toISOString(),
       variants: entries,
@@ -130,10 +136,25 @@ export async function dispatchEvalRunComparisonsWithConcurrency(
   await Promise.all(workers);
 }
 
-export async function startEvalRunComparePhase(runId: string): Promise<void> {
+export async function startEvalRunComparePhase(
+  runId: string,
+  attemptId?: string,
+): Promise<void> {
   const run = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
   const row = run[0];
   if (!row || row.runMode !== 'full') return;
+
+  const resolvedAttemptId =
+    attemptId?.trim() ||
+    (
+      await db
+        .select({ id: appEvalRunAttempts.id })
+        .from(appEvalRunAttempts)
+        .where(eq(appEvalRunAttempts.runId, runId))
+        .orderBy(desc(appEvalRunAttempts.attemptNumber))
+        .limit(1)
+    )[0]?.id;
+  if (!resolvedAttemptId) return;
 
   const datasetItems = await db
     .select({ id: appEvalDatasetItems.id })
@@ -143,13 +164,12 @@ export async function startEvalRunComparePhase(runId: string): Promise<void> {
 
   if (datasetItems.length === 0) return;
 
-  await db.delete(appEvalRunComparisons).where(eq(appEvalRunComparisons.runId, runId));
-
   const comparisonRows = await db
     .insert(appEvalRunComparisons)
     .values(
       datasetItems.map((item) => ({
         runId,
+        attemptId: resolvedAttemptId,
         datasetItemId: item.id,
         status: 'pending' as EvalRunCompareStatus,
       })),
@@ -168,6 +188,18 @@ export async function startEvalRunComparePhase(runId: string): Promise<void> {
     })
     .where(eq(appEvalRuns.id, runId));
 
+  await db
+    .update(appEvalRunAttempts)
+    .set({
+      phase: 'comparing',
+      status: 'running',
+      totalCompareItems: comparisonRows.length,
+      completedCompareItems: 0,
+      failedCompareItems: 0,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRunAttempts.id, resolvedAttemptId));
+
   void dispatchEvalRunComparisonsWithConcurrency(comparisonRows.map((row) => row.id));
 }
 
@@ -175,15 +207,28 @@ export async function maybeFinalizeEvalRunComparePhase(runId: string): Promise<v
   const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
   if (!run || run.status !== 'running' || run.phase !== 'comparing') return;
 
+  const attempt = (
+    await db
+      .select()
+      .from(appEvalRunAttempts)
+      .where(eq(appEvalRunAttempts.runId, runId))
+      .orderBy(desc(appEvalRunAttempts.attemptNumber))
+      .limit(1)
+  )[0];
+  if (!attempt) return;
+
   const comparisons = await db
     .select()
     .from(appEvalRunComparisons)
-    .where(eq(appEvalRunComparisons.runId, runId));
+    .where(eq(appEvalRunComparisons.attemptId, attempt.id));
 
   const completion = computeEvalRunCompareCompletion(comparisons);
   if (!completion) return;
 
-  const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
+  const items = await db
+    .select()
+    .from(appEvalRunItems)
+    .where(eq(appEvalRunItems.attemptId, attempt.id));
   let completedRunItems = 0;
   let failedRunItems = 0;
   for (const item of items) {
@@ -203,6 +248,9 @@ export async function maybeFinalizeEvalRunComparePhase(runId: string): Promise<v
       updatedAt: new Date(),
     })
     .where(eq(appEvalRuns.id, runId));
+
+  const { syncEvalRunAttemptFromRun } = await import('./eval-run-attempts.ts');
+  await syncEvalRunAttemptFromRun(attempt.id, runId);
 
   const variantStatus = completion.status === 'failed' ? 'failed' : 'done';
   await db
