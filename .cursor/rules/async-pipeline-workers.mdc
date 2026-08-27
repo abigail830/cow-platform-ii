@@ -25,7 +25,8 @@ Worker mode: `PIPELINE_WORKER=spawn` (local dev) | `github_actions` (Vercel defa
 | **Document parse** | `app_pipeline_jobs` | `/internal-api/pipeline/jobs` | `openkms-cli pipeline run-async` | `pipeline.workflow_file` → `openkms-pipeline.yml` | `pipeline-runner.ts` |
 | **Audio library** | `app_audio_pipeline_jobs` | `/internal-api/audio-pipeline/jobs` | `openkms-cli audio-pipeline run-async` | `pipeline.workflow_file` → `openkms-audio-transcribe.yml` | `audio-pipeline-runner.ts` |
 | **Eval transcribe** | `app_audio_pipeline_jobs` (+ `eval_run_item_id`) | `/internal-api/audio-pipeline/jobs` | **`openkms-cli audio-pipeline run-async`** | **`openkms-audio-transcribe.yml`** (same as audio library) | `eval-audio-bridge.ts` → `audio-pipeline-runner.ts` |
-| **Eval compare/judge** | `app_eval_run_comparisons` / future judge jobs | backend + `evaluate-cli` | `evaluate-cli judge …` (planned) | `evaluate-pipeline.yml` (judge only) | `eval-run-compare.ts` |
+| **Eval judge** | `app_eval_run_judge_jobs` | `/internal-api/eval-judge/jobs` | `evaluate-cli judge run-async` | `evaluate-pipeline.yml` | `eval-judge-runner.ts` |
+| **Eval compare** | `app_eval_run_comparisons` | *(backend inline)* | — | — | `eval-run-compare.ts` |
 | **Capture post-process** | capture pipeline jobs | `/internal-api/audio-capture-pipeline/jobs` | openkms-cli | capture workflow env | `audio-capture-pipeline-runner.ts` |
 | **KB import** | kb import jobs | `/internal-api/kb-import-jobs` | openkms-cli | kb import workflow | `kb-import-runner.ts` |
 
@@ -37,7 +38,8 @@ Worker mode: `PIPELINE_WORKER=spawn` (local dev) | `github_actions` (Vercel defa
 
 - **Audio (canonical):** `createAudioPipelineJob()` → `spawnAsyncAudioPipelineWorker()` → `buildAudioWorkerCliArgs()` → GHA `openkms-audio-transcribe.yml` → `openkms_cli/pipeline/audio_jobs.py` → GET/PATCH `audio-pipeline/jobs`.
 - **Eval transcribe (reuse audio worker):** `startEvalRun()` → `dispatchEvalTranscribeViaAudioPipeline()` → linked `app_audio_pipeline_jobs` with `eval_run_item_id` → same GHA/CLI as audio → PATCH syncs eval run item → compare phase in `full` mode.
-- **Eval compare:** `startEvalRunComparePhase()` → backend reads transcript artifacts, writes comparison JSON.
+- **Eval judge:** `spawnAsyncEvalJudgeWorker()` → GHA `evaluate-pipeline.yml` → `evaluate-cli judge run-async` → GET context (`bucket`, `artifact_keys`, presigned transcript reads) → worker PutObject result → PATCH status + `summary_metrics` only → `finalizeEvalJudgeJobFromWorker()` updates DB + run phase.
+- **Eval compare:** `startEvalRunComparePhase()` → backend reads transcript artifacts, writes comparison JSON *(inline on backend — not a GHA worker)*.
 
 ## Serial eval dispatch
 
@@ -59,6 +61,7 @@ Eval runs dispatch **one worker at a time** (`eval-run-dispatch.ts`): claim via 
 - Dispatch before the job row is committed.
 - Mark undispatched queue items failed in stale reconcile.
 - Run provider submit/poll/OSS writes on the user-facing API request path.
+- Write pipeline artifacts in internal-api PATCH handlers (worker PutObject; backend records deterministic `artifact_keys` / `resultS3Key` only).
 
 ## New async pipeline checklist
 

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timezone
 from typing import Any
 
 import requests
+from openkms_cli.core.settings import get_cli_settings
+from openkms_cli.pipeline.storage import get_s3_client
 
 from evaluate_cli.judge.metrics import score_pairwise_dimension, score_variant_dimension
 
@@ -57,17 +60,47 @@ def _load_transcript_text(entry: dict[str, Any]) -> str:
     raise RuntimeError(f"Missing transcript_url for variant {variant_id or 'unknown'}")
 
 
+def _upload_judge_result(context: dict[str, Any], result: dict[str, Any]) -> None:
+    bucket = context.get("bucket")
+    artifact_keys = context.get("artifact_keys") or {}
+    result_key = artifact_keys.get("result")
+    if not isinstance(bucket, str) or not bucket.strip():
+        raise RuntimeError("Missing bucket in judge job context")
+    if not isinstance(result_key, str) or not result_key.strip():
+        raise RuntimeError("Missing artifact_keys.result in judge job context")
+
+    cfg = get_cli_settings()
+    if not cfg.aws_access_key_id or not cfg.aws_secret_access_key:
+        raise RuntimeError(
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required to upload judge results"
+        )
+
+    client = get_s3_client(
+        cfg.aws_endpoint_url or None,
+        cfg.aws_access_key_id,
+        cfg.aws_secret_access_key,
+        cfg.aws_region,
+    )
+    client.put_object(
+        Bucket=bucket.strip(),
+        Key=result_key.strip(),
+        Body=json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8"),
+        ContentType="application/json",
+    )
+
+
 def run_async_judge_job(job_id: str, api_url: str | None = None) -> None:
     _request("PATCH", f"/internal-api/eval-judge/jobs/{job_id}", api_url, json={"status": "running"})
 
     try:
         context = _request("GET", f"/internal-api/eval-judge/jobs/{job_id}", api_url).json()
         result, summary = evaluate_judge_context(context)
+        _upload_judge_result(context, result)
         _request(
             "PATCH",
             f"/internal-api/eval-judge/jobs/{job_id}",
             api_url,
-            json={"status": "done", "result": result, "summary_metrics": summary},
+            json={"status": "done", "summary_metrics": summary},
         )
     except Exception as exc:  # noqa: BLE001 — worker terminal PATCH
         message = str(exc) or exc.__class__.__name__

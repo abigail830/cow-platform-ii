@@ -10,7 +10,6 @@ import {
   type EvalRunJudgeStatus,
   type EvalRunStatus,
 } from '../../db/index.ts';
-import { uploadAudioObject } from '../../storage/audio-files.ts';
 import { buildEvalRunJudgeResultKey } from '../../storage/eval-run-files.ts';
 import {
   DEFAULT_EVAL_JUDGE_SCENARIO_ID,
@@ -410,7 +409,6 @@ export async function retryEvalRunJudgeJob(
 export async function finalizeEvalJudgeJobFromWorker(input: {
   jobId: string;
   status: EvalRunJudgeStatus;
-  result?: Record<string, unknown> | null;
   summaryMetrics?: Record<string, unknown> | null;
   errorMessage?: string | null;
 }): Promise<void> {
@@ -419,15 +417,11 @@ export async function finalizeEvalJudgeJobFromWorker(input: {
   )[0];
   if (!job) throw new Error('Eval judge job not found');
 
-  let resultS3Key: string | null = job.resultS3Key;
-  if (input.status === 'done' && input.result) {
-    resultS3Key = buildEvalRunJudgeResultKey(job.runId, job.attemptId, job.datasetItemId);
-    await uploadAudioObject(
-      resultS3Key,
-      Buffer.from(JSON.stringify(input.result, null, 2), 'utf8'),
-      'application/json',
-    );
-  }
+  // Worker uploads result JSON to OSS (artifact_keys.result); backend only records the key.
+  const resultS3Key =
+    input.status === 'done'
+      ? buildEvalRunJudgeResultKey(job.runId, job.attemptId, job.datasetItemId)
+      : job.resultS3Key;
 
   await db
     .update(appEvalRunJudgeJobs)

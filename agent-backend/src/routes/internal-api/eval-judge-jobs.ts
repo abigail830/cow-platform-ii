@@ -29,7 +29,6 @@ evalJudgeJobs.patch('/:id', async (c) => {
 
   const body = await c.req.json<{
     status?: EvalRunJudgeStatus;
-    result?: Record<string, unknown> | null;
     summary_metrics?: Record<string, unknown> | null;
     error_message?: string | null;
   }>();
@@ -46,7 +45,6 @@ evalJudgeJobs.patch('/:id', async (c) => {
     await finalizeEvalJudgeJobFromWorker({
       jobId: id,
       status: body.status,
-      result: body.result ?? null,
       summaryMetrics: body.summary_metrics ?? null,
       errorMessage: body.error_message ?? null,
     });

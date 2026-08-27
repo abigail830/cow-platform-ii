@@ -9,7 +9,9 @@ import {
   db,
   type EvalRunJudgeStatus,
 } from '../../db/index.ts';
+import { buildEvalRunJudgeResultKey } from '../../storage/eval-run-files.ts';
 import { getStorageReadUrl } from '../../storage/document-files.ts';
+import { getS3Config } from '../../storage/s3-config.ts';
 import {
   parseEvalJudgeModelName,
   resolveEvalJudgeConfigYaml,
@@ -103,6 +105,11 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     );
   }
 
+  const s3 = getS3Config();
+  if (!s3) throw new Error('Object storage is not configured');
+
+  const resultS3Key = buildEvalRunJudgeResultKey(job.runId, job.attemptId, job.datasetItemId);
+
   return {
     job_id: job.id,
     run_id: job.runId,
@@ -113,6 +120,10 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     dimensions: job.dimensionsSnapshot as EvalJudgeDimensionDefinition[],
     transcripts,
     config_yaml: configYaml,
+    bucket: s3.bucket,
+    artifact_keys: {
+      result: resultS3Key,
+    },
     llm: {
       model_config_id: modelParams.model_id,
       config_name: modelParams.config_name,
