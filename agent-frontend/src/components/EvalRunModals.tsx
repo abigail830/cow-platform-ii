@@ -131,7 +131,10 @@ export function EvalRunCreateModal({
               )}
             </div>
             <div className="form-field form-field-wide">
-              <span>Run mode</span>
+              <span>Default run mode</span>
+              <p className="admin-form-hint eval-run-mode-hint">
+                Saved on the run as the default. You can start or restart in either mode from the run detail page.
+              </p>
               <div className="eval-run-mode-options">
                 <label className="form-radio">
                   <input
@@ -170,7 +173,7 @@ export function EvalRunCreateModal({
               Cancel
             </button>
             <button type="submit" className="btn-primary" disabled={busy || !canSubmit}>
-              {busy ? 'Starting…' : 'Create & start run'}
+              {busy ? 'Creating…' : 'Create run'}
             </button>
           </div>
         </form>

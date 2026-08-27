@@ -1,0 +1,65 @@
+---
+description: Async pipeline workers — DB-first job rows, internal API context, GHA or local spawn
+alwaysApply: true
+---
+
+# Async pipeline workers
+
+Long-running parse/transcribe/import jobs **must not** run inside Vercel request handlers. Follow the established **DB-first → dispatch worker → CLI reads context from internal API** pattern.
+
+## Core pattern (all async pipelines)
+
+1. **Write job row in DB first** — snapshot everything the worker needs (`pipeline_name`, `config_yaml`, input refs, output prefix, stage=`submitted`).
+2. **`await` dispatch** after the insert/commit (do not fire-and-forget before the row exists).
+3. **Worker CLI args = job id only** (plus subcommand). Build from a **module-specific template**, not another pipeline's `command_template` / `workflow_file`.
+4. **Worker GETs context** from `/internal-api/<module>/jobs/:id` (Basic auth: `OPENKMS_CLI_BASIC_*`).
+5. **Worker PATCHes progress** (`stage`, `external_job_id`, `error_message`, optional `metrics`) on the same path.
+6. **Terminal stage** triggers backend side-effects (parent status, next dispatch, compare phase, etc.).
+
+Worker mode: `PIPELINE_WORKER=spawn` (local dev) | `github_actions` (Vercel default). GHA needs `GITHUB_PIPELINE_TOKEN`, `GITHUB_PIPELINE_REPOSITORY`, `OPENKMS_API_URL` secret pointing at the **same backend that created the job**.
+
+## Pipeline families (do not cross wires)
+
+| Domain | Job storage | Internal API | CLI | GHA workflow | Backend runner |
+|--------|-------------|--------------|-----|--------------|----------------|
+| **Document parse** | `app_pipeline_jobs` | `/internal-api/pipeline/jobs` | `openkms-cli pipeline run-async` | `pipeline.workflow_file` → `openkms-pipeline.yml` | `pipeline-runner.ts` |
+| **Audio library** | `app_audio_pipeline_jobs` | `/internal-api/audio-pipeline/jobs` | `openkms-cli audio-pipeline run-async` | `pipeline.workflow_file` → `openkms-audio-transcribe.yml` | `audio-pipeline-runner.ts` |
+| **Eval ASR** | `app_eval_run_items` (item = job) | `/internal-api/eval-pipeline/jobs` | `evaluate-cli pipeline run-async` | **`evaluate-pipeline.yml` only** (`eval-pipeline-github-actions.ts`) | `eval-pipeline-runner.ts` |
+| **Capture post-process** | capture pipeline jobs | `/internal-api/audio-capture-pipeline/jobs` | openkms-cli | capture workflow env | `audio-capture-pipeline-runner.ts` |
+| **KB import** | kb import jobs | `/internal-api/kb-import-jobs` | openkms-cli | kb import workflow | `kb-import-runner.ts` |
+
+**Eval rule:** never dispatch eval jobs through `openkms-audio-transcribe.yml` or read `app_pipeline_configs.workflow_file` for eval. Mapped args like `pipeline run-async` on **openkms-cli** hit document `/internal-api/pipeline/jobs` and 404.
+
+## Reference implementations
+
+- **Audio (canonical):** `createAudioPipelineJob()` → `spawnAsyncAudioPipelineWorker()` → `buildAudioWorkerCliArgs()` → GHA `openkms-audio-transcribe.yml` → `openkms_cli/pipeline/audio_jobs.py` → GET/PATCH `audio-pipeline/jobs`.
+- **Eval (mirror audio, separate module):** `startEvalRun()` inserts `app_eval_run_items` → `await orchestrateEvalRunDispatch()` → `buildEvalWorkerCliArgs(jobId)` → GHA `evaluate-pipeline.yml` → `evaluate_cli/pipeline/jobs.py` → GET/PATCH `eval-pipeline/jobs`.
+- **Command templates:** `agent-backend/src/shared/pipeline-command-template.ts` — `defaultEvalAsyncWorkerTemplate()` for eval; audio uses `audio-pipeline run-async`.
+
+## Serial eval dispatch
+
+Eval runs dispatch **one worker at a time** (`eval-run-dispatch.ts`): claim via `metrics.dispatch_claimed_at`, chain next job on terminal PATCH. Stale watchdog must **not** fail queued items that were never claimed.
+
+## Do
+
+- Add a dedicated internal-api route + job context builder + runner + (if GHA) workflow per new async domain.
+- Keep `config_yaml` snapshot on the job row at creation time.
+- GHA failure step PATCHes the **correct** internal-api path for that domain.
+- On list/detail reads, reconcile stale jobs (`shouldFailStaleAudioJob` pattern) for in-flight stages only.
+
+## Don't
+
+- Pass full pipeline config in GHA inputs — worker loads from DB.
+- Reuse another domain's GHA workflow or internal-api prefix.
+- Dispatch before the job row is committed.
+- Mark undispatched queue items failed in stale reconcile.
+- Run provider submit/poll/OSS writes on the user-facing API request path.
+
+## New async pipeline checklist
+
+- [ ] Job table (or equivalent row) created **before** dispatch?
+- [ ] Worker args = `{module} run-async --job-id {id}` only?
+- [ ] GET context returns input URI, output prefix, config snapshot?
+- [ ] PATCH updates stage + external id; terminal stage advances orchestration?
+- [ ] GHA workflow runs the **correct CLI** in the **correct working-directory**?
+- [ ] `OPENKMS_API_URL` in GHA secrets matches the backend that owns the job row?

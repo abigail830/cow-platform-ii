@@ -3,18 +3,12 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { redactCliCommandSecrets } from '../shared/model-cli-client.ts';
-import { getPipelineConfigByPipelineName } from '../shared/pipeline-config-store.ts';
-import {
-  normalizeAsyncWorkerCliArgs,
-  parseAsyncWorkerTemplate,
-  pipelineTemplateToCliArgs,
-  mapOpenkmsAudioCliArgsToEvaluateCli,
-} from '../shared/pipeline-command-template.ts';
+import { buildEvalWorkerCliArgsFromTemplate } from '../shared/pipeline-command-template.ts';
 import { resolvePipelineWorkerMode, isServerlessRuntime } from './pipeline-worker-mode.ts';
 import {
-  resolveAudioPipelineGithubConfig,
-  triggerAudioPipelineGithubActions,
-} from './audio-pipeline-github-actions.ts';
+  resolveEvalPipelineGithubConfig,
+  triggerEvalPipelineGithubActions,
+} from './eval-pipeline-github-actions.ts';
 
 function repoRootFromBackend(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -66,16 +60,9 @@ function cliSpawnEnv(apiUrl: string): NodeJS.ProcessEnv {
   };
 }
 
-export async function buildEvalWorkerCliArgs(jobId: string, pipelineName: string): Promise<string[]> {
-  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
-  const template = parseAsyncWorkerTemplate(pipeline?.commandTemplate ?? '', pipelineName);
-  const args = mapOpenkmsAudioCliArgsToEvaluateCli(
-    normalizeAsyncWorkerCliArgs(pipelineTemplateToCliArgs(template, { job_id: jobId })),
-  );
-  if (args.length === 0 || args[0] !== 'pipeline') {
-    return ['pipeline', 'run-async', '--job-id', jobId];
-  }
-  return args;
+/** Worker only needs job id — pipeline config/input paths come from GET eval-pipeline job context. */
+export function buildEvalWorkerCliArgs(jobId: string): string[] {
+  return buildEvalWorkerCliArgsFromTemplate(jobId);
 }
 
 function spawnEvalPipelineCliLocal(args: string[], apiUrl?: string): Promise<void> {
@@ -131,8 +118,8 @@ function spawnEvalPipelineCliLocal(args: string[], apiUrl?: string): Promise<voi
   });
 }
 
-async function dispatchGithubActionsEvalWorker(jobId: string, pipelineName: string): Promise<void> {
-  const baseConfig = resolveAudioPipelineGithubConfig();
+async function dispatchGithubActionsEvalWorker(jobId: string, apiUrl?: string): Promise<void> {
+  const baseConfig = resolveEvalPipelineGithubConfig();
   if (!baseConfig) {
     throw new Error(
       'PIPELINE_WORKER=github_actions requires GITHUB_PIPELINE_TOKEN (or GITHUB_TOKEN) ' +
@@ -140,27 +127,18 @@ async function dispatchGithubActionsEvalWorker(jobId: string, pipelineName: stri
     );
   }
 
-  const pipeline = await getPipelineConfigByPipelineName(pipelineName);
-  const workflowFile =
-    pipeline?.workflowFile?.trim() ||
-    process.env.GITHUB_EVAL_PIPELINE_WORKFLOW?.trim() ||
-    'evaluate-pipeline.yml';
+  const workerCliArgs = buildEvalWorkerCliArgs(jobId);
 
-  const workerCliArgs = await buildEvalWorkerCliArgs(jobId, pipelineName);
-
-  await triggerAudioPipelineGithubActions(
-    { jobId, workerCliArgs },
-    { ...baseConfig, workflowFile },
-  );
+  await triggerEvalPipelineGithubActions({ jobId, workerCliArgs }, baseConfig);
   console.info(
-    `[eval-pipeline] dispatched GitHub Actions workflow=${workflowFile} ` +
-      `repo=${baseConfig.repository} job=${jobId}`,
+    `[eval-pipeline] dispatched GitHub Actions workflow=${baseConfig.workflowFile} ` +
+      `repo=${baseConfig.repository} job=${jobId} api=${resolveApiUrl(apiUrl)}`,
   );
 }
 
 export async function spawnAsyncEvalPipelineWorker(
   jobId: string,
-  pipelineName: string,
+  _pipelineName: string,
   apiUrl?: string,
 ): Promise<void> {
   if (activeEvalPipelineJobs.has(jobId)) {
@@ -171,14 +149,14 @@ export async function spawnAsyncEvalPipelineWorker(
   if (resolvePipelineWorkerMode() === 'github_actions') {
     activeEvalPipelineJobs.add(jobId);
     try {
-      await dispatchGithubActionsEvalWorker(jobId, pipelineName);
+      await dispatchGithubActionsEvalWorker(jobId, apiUrl);
     } catch (error) {
       if (!isServerlessRuntime() && isGithubWorkflowDispatchError(error)) {
         console.warn(
           `[eval-pipeline] GitHub Actions unavailable (${error instanceof Error ? error.message : error}); ` +
             'falling back to local evaluate-cli',
         );
-        const args = await buildEvalWorkerCliArgs(jobId, pipelineName);
+        const args = buildEvalWorkerCliArgs(jobId);
         await spawnEvalPipelineCliLocal(args, apiUrl);
         return;
       }
@@ -189,7 +167,7 @@ export async function spawnAsyncEvalPipelineWorker(
     return;
   }
 
-  const args = await buildEvalWorkerCliArgs(jobId, pipelineName);
+  const args = buildEvalWorkerCliArgs(jobId);
   await spawnEvalPipelineCliLocal(args, apiUrl);
 }
 

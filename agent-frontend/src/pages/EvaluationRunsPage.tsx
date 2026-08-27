@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Eye, GitCompare, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
+import { Eye, GitCompare, Loader2, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { getEvalDataset, listEvalDatasets, type EvalDataset } from '../api/evaluation/datasets.ts';
 import {
   createEvalRun,
@@ -20,6 +20,7 @@ import {
   type EvalRunItemStage,
   type EvalRunMode,
   type EvalRunProcessingOption,
+  type EvalRunStatus,
 } from '../api/evaluation/runs.ts';
 import { EvalRunCreateModal } from '../components/EvalRunModals.tsx';
 import { TransientNotice } from '../components/TransientNotice.tsx';
@@ -31,6 +32,74 @@ import { hasPermission } from '../shared/permissions.ts';
 import { fetchPresignedStorageText } from '../api/storage-fetch.ts';
 
 const LIST_PAGE = getNavPage('/evaluation/runs')!;
+
+function itemDispatchClaimed(item: EvalRunItem | undefined): boolean {
+  if (!item?.metrics || typeof item.metrics !== 'object' || Array.isArray(item.metrics)) return false;
+  return Boolean((item.metrics as Record<string, unknown>).dispatch_claimed_at);
+}
+
+function isEvalItemActive(item: EvalRunItem | undefined, runStatus: EvalRunStatus): boolean {
+  if (!item || runStatus !== 'running') return false;
+  if (item.stage === 'transcribing') return true;
+  return item.stage === 'submitted' && itemDispatchClaimed(item);
+}
+
+function isEvalItemQueued(item: EvalRunItem | undefined, runStatus: EvalRunStatus): boolean {
+  if (!item || runStatus !== 'running') return false;
+  return item.stage === 'submitted' && !itemDispatchClaimed(item);
+}
+
+function EvalRunStatusBadge({ status }: { status: EvalRunStatus }) {
+  if (status === 'running') {
+    return (
+      <span className="document-status-badge status-running eval-run-status-badge">
+        <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
+        {formatEvalRunStatus(status)}
+      </span>
+    );
+  }
+  return (
+    <span className={stageClass(status)}>
+      {formatEvalRunStatus(status)}
+    </span>
+  );
+}
+
+function EvalRunItemStatusBadge({
+  item,
+  runStatus,
+  starting,
+}: {
+  item: EvalRunItem | undefined;
+  runStatus: EvalRunStatus;
+  starting: boolean;
+}) {
+  const stage = item?.stage ?? 'submitted';
+
+  if (starting && stage !== 'done' && stage !== 'failed') {
+    return (
+      <span className="document-status-badge status-running eval-run-status-badge">
+        <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
+        Starting…
+      </span>
+    );
+  }
+
+  if (isEvalItemActive(item, runStatus)) {
+    return (
+      <span className="document-status-badge status-running eval-run-status-badge">
+        <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
+        {stage === 'transcribing' ? 'Transcribing…' : 'Running…'}
+      </span>
+    );
+  }
+
+  if (isEvalItemQueued(item, runStatus)) {
+    return <span className="document-status-badge">Queued</span>;
+  }
+
+  return <span className={stageClass(stage)}>{stageLabel(stage)}</span>;
+}
 
 function stageLabel(stage: EvalRunItemStage): string {
   if (stage === 'done') return 'Done';
@@ -147,7 +216,6 @@ export function EvaluationRunsListPage() {
       pipeline_config_ids: input.pipelineConfigIds,
       run_mode: input.runMode,
     });
-    await startEvalRun(created.run.id);
     setModalOpen(false);
     await load();
     navigate(`/evaluation/runs/${created.run.id}`);
@@ -235,9 +303,7 @@ export function EvaluationRunsListPage() {
                   </td>
                   <td>{datasetNameById.get(run.dataset_id) ?? run.dataset_id.slice(0, 8)}</td>
                   <td>
-                    <span className={stageClass(run.status)}>
-                      {formatEvalRunStatus(run.status)}
-                    </span>
+                    <EvalRunStatusBadge status={run.status} />
                   </td>
                   <td>
                     {run.status === 'draft'
@@ -310,6 +376,7 @@ export function EvaluationRunDetailPage() {
   const [datasetItemCount, setDatasetItemCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [startingMode, setStartingMode] = useState<EvalRunMode | null>(null);
   const [fastPollUntil, setFastPollUntil] = useState<number | null>(null);
   const { notice, noticeVariant, showNotice } = useTransientNotice(6000);
   const [compareItemId, setCompareItemId] = useState<string | null>(null);
@@ -351,16 +418,9 @@ export function EvaluationRunDetailPage() {
   }, [detail, load, fastPollUntil]);
 
   const displayRunStatus = starting ? 'running' : detail?.run.status;
-  const canStartOrRestart =
-    canWrite && detail != null && !starting && detail.run.status !== 'running';
-  const runActionLabel =
-    detail?.run.status === 'draft'
-      ? starting
-        ? 'Starting…'
-        : 'Start run'
-      : starting
-        ? 'Restarting…'
-        : 'Restart run';
+  const isRunActive = displayRunStatus === 'running';
+  const activeRunMode = starting && startingMode ? startingMode : detail?.run.run_mode;
+  const canTriggerRun = canWrite && detail != null && !starting && !isRunActive;
   const RunActionIcon = detail?.run.status === 'draft' ? Play : RotateCw;
 
   const datasetItemRows = useMemo(() => {
@@ -402,15 +462,17 @@ export function EvaluationRunDetailPage() {
   if (!canRead) return <Navigate to="/agents/playground" replace />;
   if (!runId) return <Navigate to="/evaluation/runs" replace />;
 
-  async function handleStart() {
+  async function handleStart(runMode: EvalRunMode) {
     if (!runId) return;
     setStarting(true);
+    setStartingMode(runMode);
     try {
-      const result = await startEvalRun(runId);
+      const result = await startEvalRun(runId, { run_mode: runMode });
       setDetail(result);
       setFastPollUntil(Date.now() + 60_000);
+      const isDraft = detail?.run.status === 'draft';
       showNotice(
-        detail?.run.status === 'draft' ? 'Evaluation run started' : 'Evaluation run restarted',
+        isDraft ? 'Evaluation run started' : 'Evaluation run restarted',
         'success',
       );
     } catch (err) {
@@ -419,7 +481,15 @@ export function EvaluationRunDetailPage() {
       await load({ silent: true });
     } finally {
       setStarting(false);
+      setStartingMode(null);
     }
+  }
+
+  function runModeButtonLabel(mode: EvalRunMode, action: 'start' | 'restart'): string {
+    const prefix = action === 'start' ? 'Run' : 'Restart';
+    if (isRunActive && activeRunMode === mode) return 'Running…';
+    if (starting && startingMode === mode) return action === 'start' ? 'Starting…' : 'Restarting…';
+    return mode === 'full' ? `${prefix} full` : `${prefix} pipeline only`;
   }
 
   async function openCompare(datasetItemId: string) {
@@ -478,12 +548,43 @@ export function EvaluationRunDetailPage() {
             </p>
           ) : null}
         </div>
-        <div className="admin-toolbar-actions">
-          {canStartOrRestart ? (
-            <button type="button" className="btn-primary" onClick={() => void handleStart()} disabled={starting}>
-              <RunActionIcon {...iconProps()} aria-hidden />
-              {runActionLabel}
-            </button>
+        <div className="admin-toolbar-actions eval-run-toolbar-actions">
+          {canWrite && detail ? (
+            <>
+              <button
+                type="button"
+                className={
+                  isRunActive && activeRunMode === 'pipeline_only'
+                    ? 'btn-primary'
+                    : 'btn-secondary'
+                }
+                onClick={() => void handleStart('pipeline_only')}
+                disabled={!canTriggerRun}
+              >
+                {isRunActive && activeRunMode === 'pipeline_only' ? (
+                  <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                ) : (
+                  <RunActionIcon {...iconProps()} aria-hidden />
+                )}
+                {runModeButtonLabel(
+                  'pipeline_only',
+                  detail.run.status === 'draft' ? 'start' : 'restart',
+                )}
+              </button>
+              <button
+                type="button"
+                className={isRunActive && activeRunMode === 'full' ? 'btn-primary' : 'btn-secondary'}
+                onClick={() => void handleStart('full')}
+                disabled={!canTriggerRun}
+              >
+                {isRunActive && activeRunMode === 'full' ? (
+                  <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                ) : (
+                  <RunActionIcon {...iconProps()} aria-hidden />
+                )}
+                {runModeButtonLabel('full', detail.run.status === 'draft' ? 'start' : 'restart')}
+              </button>
+            </>
           ) : null}
           <button
             type="button"
@@ -524,7 +625,7 @@ export function EvaluationRunDetailPage() {
               <tr>
                 <td colSpan={variantColumns.length + 2} className="admin-table-empty">
                   {detail.run.status === 'draft'
-                    ? `Ready to transcribe ${fileCount} file${fileCount === 1 ? '' : 's'}. Click Start run.`
+                    ? `Ready to transcribe ${fileCount} file${fileCount === 1 ? '' : 's'}. Choose a run mode above.`
                     : 'No files in this run.'}
                 </td>
               </tr>
@@ -534,33 +635,38 @@ export function EvaluationRunDetailPage() {
                   <td>{row.name}</td>
                   {variantColumns.map((variant) => {
                     const cell = itemByVariantAndDataset.get(`${variant.id}:${row.id}`);
-                    const stage = cell?.stage ?? 'submitted';
-                    const showStarting = starting && stage !== 'done';
                     return (
                       <td key={variant.id}>
-                        {showStarting ? (
-                          <span className="document-status-badge status-running">Starting…</span>
-                        ) : (
-                          <>
-                            <span className={stageClass(stage)}>{stageLabel(stage)}</span>
-                            {evalItemDurationLabel(cell) ? (
-                              <div className="admin-muted eval-run-cell-duration">{evalItemDurationLabel(cell)}</div>
-                            ) : null}
-                            {cell?.error_message ? (
-                              <div className="admin-muted eval-run-cell-error" title={cell.error_message}>
-                                {cell.error_message}
-                              </div>
-                            ) : null}
-                          </>
-                        )}
+                        <EvalRunItemStatusBadge
+                          item={cell}
+                          runStatus={displayRunStatus ?? detail.run.status}
+                          starting={starting}
+                        />
+                        {evalItemDurationLabel(cell) ? (
+                          <div className="admin-muted eval-run-cell-duration">{evalItemDurationLabel(cell)}</div>
+                        ) : null}
+                        {cell?.error_message ? (
+                          <div className="admin-muted eval-run-cell-error" title={cell.error_message}>
+                            {cell.error_message}
+                          </div>
+                        ) : null}
                       </td>
                     );
                   })}
                   <td>
                     <div className="row-actions eval-run-compare-cell">
                       {detail.run.run_mode === 'full' && (isComparingPhase || compareByDatasetItem.has(row.id)) ? (
-                        <span className={compareStatusClass(compareByDatasetItem.get(row.id)?.status ?? 'pending')}>
-                          {compareStatusLabel(compareByDatasetItem.get(row.id)?.status ?? 'pending')}
+                        <span
+                          className={`${compareStatusClass(compareByDatasetItem.get(row.id)?.status ?? 'pending')} eval-run-status-badge`}
+                        >
+                          {(compareByDatasetItem.get(row.id)?.status ?? (isComparingPhase ? 'running' : 'pending')) ===
+                          'running' ? (
+                            <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
+                          ) : null}
+                          {compareStatusLabel(
+                            compareByDatasetItem.get(row.id)?.status ??
+                              (isComparingPhase ? 'running' : 'pending'),
+                          )}
                         </span>
                       ) : null}
                       <button

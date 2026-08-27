@@ -163,8 +163,15 @@ export async function getEvalRunDetail(runId: string): Promise<EvalRunDetail> {
   return data as EvalRunDetail;
 }
 
-export async function startEvalRun(runId: string): Promise<EvalRunDetail> {
-  const data = await authFetch(`/api/evaluation/runs/${runId}/start`, { method: 'POST' });
+export async function startEvalRun(
+  runId: string,
+  options?: { run_mode?: EvalRunMode },
+): Promise<EvalRunDetail> {
+  const data = await authFetch(`/api/evaluation/runs/${runId}/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options?.run_mode ? { run_mode: options.run_mode } : {}),
+  });
   return data as EvalRunDetail;
 }
 

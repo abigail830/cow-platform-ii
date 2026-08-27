@@ -14,7 +14,7 @@ import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { getEvalDatasetById, listEvalDatasetItems } from './eval-datasets.ts';
 import { computeEvalRunCompletion, isTerminalEvalRunItemStage } from './eval-run-phase.ts';
 import { evalRunItemToPublic, snapshotConfigYaml } from './eval-pipeline-jobs.ts';
-import { orchestrateEvalRunDispatch } from './eval-run-dispatch.ts';
+import { orchestrateEvalRunDispatch, evalRunItemDispatchClaimed } from './eval-run-dispatch.ts';
 import { buildEvalRunItemOutputPrefix } from '../storage/eval-run-files.ts';
 import { isAudioAsyncPipelineName, audioPipelineProviderForName } from './audio-pipeline-names.ts';
 import { getStorageReadUrl } from '../storage/document-files.ts';
@@ -174,7 +174,7 @@ async function rollbackEvalRunStart(runId: string): Promise<void> {
     .where(eq(appEvalRunVariants.runId, runId));
 }
 
-export async function startEvalRun(runId: string) {
+export async function startEvalRun(runId: string, options?: { runMode?: EvalRunMode }) {
   let run = await getEvalRunById(runId);
   if (!run) throw new Error('Eval run not found');
 
@@ -189,6 +189,15 @@ export async function startEvalRun(runId: string) {
   }
   if (run.status !== 'draft') {
     await rollbackEvalRunStart(runId);
+    run = (await getEvalRunById(runId))!;
+  }
+
+  if (options?.runMode) {
+    const runMode = options.runMode === 'full' ? 'full' : 'pipeline_only';
+    await db
+      .update(appEvalRuns)
+      .set({ runMode, updatedAt: new Date() })
+      .where(eq(appEvalRuns.id, runId));
     run = (await getEvalRunById(runId))!;
   }
 
@@ -242,12 +251,7 @@ export async function startEvalRun(runId: string) {
     .set({ status: 'running', updatedAt: new Date() })
     .where(eq(appEvalRunVariants.runId, runId));
 
-  void orchestrateEvalRunDispatch(runId).catch((error) => {
-    console.error(
-      `[eval-run] orchestration failed for run ${runId}:`,
-      error instanceof Error ? error.message : error,
-    );
-  });
+  await orchestrateEvalRunDispatch(runId);
 
   return getEvalRunDetail(runId);
 }
@@ -304,6 +308,9 @@ export async function reconcileStaleEvalRunItems(runId: string): Promise<void> {
   const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
   for (const item of items) {
     if (isTerminalEvalRunItemStage(item.stage)) continue;
+
+    // Queued items (never dispatched) must not be stale-failed while an earlier job is stuck.
+    if (item.stage === 'submitted' && !evalRunItemDispatchClaimed(item.metrics)) continue;
 
     const decision = shouldFailStaleAudioJob({
       stage: item.stage,

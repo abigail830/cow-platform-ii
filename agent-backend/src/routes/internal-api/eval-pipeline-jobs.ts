@@ -7,7 +7,7 @@ import {
   markEvalRunItemForJobStage,
   updateEvalRunItem,
 } from '../../services/eval-pipeline-jobs.ts';
-import { resolveAudioPipelineJobErrorMessage } from '../../services/audio-pipeline-jobs.ts';
+import { resolveEvalPipelineJobErrorMessage } from '../../services/eval-pipeline-jobs.ts';
 import { spawnAsyncEvalPipelineWorker } from '../../services/eval-pipeline-runner.ts';
 import type { EvalRunItemStage } from '../../db/index.ts';
 
@@ -49,7 +49,7 @@ evalPipelineJobs.patch('/:id', async (c) => {
     metrics: body.metrics,
     ...(body.error_message !== undefined
       ? {
-          errorMessage: resolveAudioPipelineJobErrorMessage(item.errorMessage, body.error_message),
+          errorMessage: resolveEvalPipelineJobErrorMessage(item.errorMessage, body.error_message),
         }
       : {}),
   });

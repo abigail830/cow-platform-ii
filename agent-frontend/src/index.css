@@ -2766,6 +2766,22 @@ textarea {
   gap: 0.5rem;
 }
 
+.eval-run-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.eval-run-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.eval-run-mode-hint {
+  margin: 0.25rem 0 0.5rem;
+}
+
 .document-delete-confirm-body {
   margin: 0 0 1rem;
   display: flex;

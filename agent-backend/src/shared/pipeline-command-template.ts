@@ -18,12 +18,17 @@ export function parseAsyncWorkerTemplate(commandTemplate: string, pipelineName: 
   return workerLine.trim() || defaultAsyncWorkerTemplate(pipelineName);
 }
 
+/** Strip openkms-cli / evaluate-cli binary prefix before tokenizing worker args. */
+export function stripWorkerCliBinaryPrefix(rendered: string): string {
+  return rendered.replace(/^(?:openkms-cli|evaluate-cli)\s+/i, '').trim();
+}
+
 export function pipelineTemplateToCliArgs(
   template: string,
   values: Record<string, string>,
 ): string[] {
   const rendered = renderCommandTemplate(template.trim(), values);
-  const body = rendered.replace(/^openkms-cli\s+/i, '').trim();
+  const body = stripWorkerCliBinaryPrefix(rendered);
   if (!body) return [];
 
   const tokens: string[] = [];
@@ -124,4 +129,17 @@ export function defaultAsyncWorkerTemplate(pipelineName: string): string {
     return 'openkms-cli pipeline run-async --job-id {job_id} --page-index-strategy markdown-headings';
   }
   return 'openkms-cli pipeline run-async --job-id {job_id}';
+}
+
+/** evaluate-cli worker entrypoint — job config is loaded from DB via internal API. */
+export function defaultEvalAsyncWorkerTemplate(): string {
+  return 'evaluate-cli pipeline run-async --job-id {job_id}';
+}
+
+export function buildEvalWorkerCliArgsFromTemplate(jobId: string): string[] {
+  const args = pipelineTemplateToCliArgs(defaultEvalAsyncWorkerTemplate(), { job_id: jobId });
+  if (args.length >= 3 && args[0] === 'pipeline' && args[1] === 'run-async') {
+    return args;
+  }
+  return ['pipeline', 'run-async', '--job-id', jobId];
 }

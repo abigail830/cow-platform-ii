@@ -95,8 +95,10 @@ runs.post(
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Run id is required' }, 400);
 
+    const body = await c.req.json<{ run_mode?: 'pipeline_only' | 'full' }>().catch(() => ({}));
+
     try {
-      const detail = await startEvalRun(id);
+      const detail = await startEvalRun(id, { runMode: body.run_mode });
       return c.json(detail, 202);
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : 'Failed to start run' }, 400);

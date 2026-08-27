@@ -14,6 +14,25 @@ import {
 } from '../storage/eval-run-files.ts';
 import { audioPipelineProviderForName } from './audio-pipeline-names.ts';
 
+export const GENERIC_EVAL_GHA_FAILURE_MESSAGE =
+  'GitHub Actions worker failed before eval pipeline completed';
+
+export function resolveEvalPipelineJobErrorMessage(
+  existing: string | null | undefined,
+  incoming: string | null | undefined,
+): string | null {
+  const next = incoming?.trim() || null;
+  const prev = existing?.trim();
+  if (
+    next === GENERIC_EVAL_GHA_FAILURE_MESSAGE &&
+    prev &&
+    prev !== GENERIC_EVAL_GHA_FAILURE_MESSAGE
+  ) {
+    return prev;
+  }
+  return next;
+}
+
 export function snapshotConfigYaml(configYaml: string | null | undefined): string | null {
   const raw = configYaml?.trim();
   return raw ? raw : null;

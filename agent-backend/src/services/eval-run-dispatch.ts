@@ -14,10 +14,16 @@ import { groupEvalRunDispatchItemsByDatasetFile, type EvalRunDispatchItem } from
 export type { EvalRunDispatchItem } from './eval-run-dispatch-group.ts';
 export { groupEvalRunDispatchItemsByDatasetFile } from './eval-run-dispatch-group.ts';
 
-function itemDispatchClaimed(metrics: unknown): boolean {
+function evalRunItemDispatchClaimed(metrics: unknown): boolean {
   if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return false;
   return Boolean((metrics as Record<string, unknown>).dispatch_claimed_at);
 }
+
+function itemDispatchClaimed(metrics: unknown): boolean {
+  return evalRunItemDispatchClaimed(metrics);
+}
+
+export { evalRunItemDispatchClaimed };
 
 function fileItemsInProgress(
   fileItemIds: string[],
