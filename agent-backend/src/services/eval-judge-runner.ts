@@ -8,6 +8,7 @@ import {
   resolveEvalPipelineGithubConfig,
   triggerEvalPipelineGithubActions,
 } from './eval-pipeline-github-actions.ts';
+import { updateEvalJudgeJob } from './eval-judge-jobs.ts';
 
 function repoRootFromBackend(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -107,10 +108,18 @@ async function dispatchGithubActionsEvalJudgeWorker(jobId: string, apiUrl?: stri
     );
   }
 
-  await triggerEvalPipelineGithubActions(
-    { jobId, workerCliArgs: buildEvalJudgeWorkerCliArgs(jobId) },
-    baseConfig,
-  );
+  await updateEvalJudgeJob(jobId, { status: 'running', errorMessage: null });
+
+  try {
+    await triggerEvalPipelineGithubActions(
+      { jobId, workerCliArgs: buildEvalJudgeWorkerCliArgs(jobId) },
+      baseConfig,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to dispatch eval judge worker';
+    await updateEvalJudgeJob(jobId, { status: 'failed', errorMessage: message });
+    throw error;
+  }
   console.info(
     `[eval-judge] dispatched GitHub Actions workflow=${baseConfig.workflowFile} ` +
       `repo=${baseConfig.repository} job=${jobId} api=${resolveApiUrl(apiUrl)}`,

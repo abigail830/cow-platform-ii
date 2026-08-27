@@ -381,10 +381,21 @@ export async function maybeFinalizeEvalRunJudgePhase(runId: string): Promise<voi
 
   const summaryMetrics = aggregateJudgeSummaryMetrics(jobs);
 
+  const attemptItems = await db
+    .select()
+    .from(appEvalRunItems)
+    .where(eq(appEvalRunItems.attemptId, attempt.id));
+  const transcribeSucceeded = attemptItems.some((item) => item.stage === 'done');
+
+  let runStatus = completion.status;
+  if (runStatus === 'failed' && transcribeSucceeded && completion.completed + completion.failed > 0) {
+    runStatus = 'completed_with_errors';
+  }
+
   await db
     .update(appEvalRuns)
     .set({
-      status: completion.status,
+      status: runStatus,
       phase: 'done',
       summaryMetrics,
       completedCompareItems: completion.completed,
@@ -397,7 +408,7 @@ export async function maybeFinalizeEvalRunJudgePhase(runId: string): Promise<voi
   const { syncEvalRunAttemptFromRun } = await import('./eval-run-attempts.ts');
   await syncEvalRunAttemptFromRun(attempt.id, runId);
 
-  const variantStatus = completion.status === 'failed' ? 'failed' : 'done';
+  const variantStatus = runStatus === 'failed' ? 'failed' : 'done';
   await db
     .update(appEvalRunVariants)
     .set({ status: variantStatus, updatedAt: new Date() })

@@ -15,8 +15,6 @@ import {
   type EvalRun,
   type EvalRunAttempt,
   type EvalRunDetail,
-  type EvalRunCompareRow,
-  type EvalRunCompareStatus,
   type EvalRunJudgeRow,
   type EvalRunJudgeStatus,
   type EvalRunItem,
@@ -102,20 +100,6 @@ function stageClass(stage: EvalRunItemStage | EvalRun['status']): string {
     return 'document-status-badge status-failed';
   }
   if (stage === 'running' || stage === 'transcribing') return 'document-status-badge status-running';
-  return 'document-status-badge';
-}
-
-function compareStatusLabel(status: EvalRunCompareStatus): string {
-  if (status === 'done') return 'Compared';
-  if (status === 'failed') return 'Compare failed';
-  if (status === 'running') return 'Comparing…';
-  return 'Pending';
-}
-
-function compareStatusClass(status: EvalRunCompareStatus): string {
-  if (status === 'done') return 'document-status-badge status-completed';
-  if (status === 'failed') return 'document-status-badge status-failed';
-  if (status === 'running') return 'document-status-badge status-running';
   return 'document-status-badge';
 }
 
@@ -342,6 +326,38 @@ function TranscriptPreview({ url }: { url: string }) {
   return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
 }
 
+function resolveJudgeUiStatus(
+  job: EvalRunJudgeRow | undefined,
+  isJudgingPhase: boolean,
+): EvalRunJudgeStatus | null {
+  if (job?.status) return job.status;
+  if (isJudgingPhase) return 'running';
+  return null;
+}
+
+function EvalRunJudgeChip({
+  job,
+  isJudgingPhase,
+}: {
+  job: EvalRunJudgeRow | undefined;
+  isJudgingPhase: boolean;
+}) {
+  const status = resolveJudgeUiStatus(job, isJudgingPhase);
+  if (!status) return null;
+
+  return (
+    <span className="eval-run-pipeline-chip eval-run-compare-chip">
+      <span className="eval-run-pipeline-chip-name">Compare</span>
+      <span className={`${judgeStatusClass(status)} eval-run-status-badge`}>
+        {status === 'running' ? (
+          <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
+        ) : null}
+        {judgeStatusLabel(status)}
+      </span>
+    </span>
+  );
+}
+
 function EvalRunPipelineOutput({
   cell,
   variantName,
@@ -411,14 +427,6 @@ function EvalRunAttemptSection({
     return [...names.entries()].map(([id, name]) => ({ id, name }));
   }, [attempt.items]);
 
-  const compareByDatasetItem = useMemo(() => {
-    const map = new Map<string, EvalRunCompareRow>();
-    for (const row of attempt.comparisons) {
-      map.set(row.dataset_item_id, row);
-    }
-    return map;
-  }, [attempt.comparisons]);
-
   const judgeByDatasetItem = useMemo(() => {
     const map = new Map<string, EvalRunJudgeRow>();
     for (const row of attempt.judge_jobs) {
@@ -427,7 +435,6 @@ function EvalRunAttemptSection({
     return map;
   }, [attempt.judge_jobs]);
 
-  const isComparingPhase = attempt.phase === 'comparing' && attempt.status === 'running';
   const isJudgingPhase = attempt.phase === 'judging' && attempt.status === 'running';
   const durationLabel = attempt.duration_ms ? formatDurationMs(attempt.duration_ms) : null;
   const statusBadge = attemptStatusBadge(attempt);
@@ -481,6 +488,31 @@ function EvalRunAttemptSection({
                       </span>
                     );
                   })}
+                  {attempt.run_mode === 'full' ? (
+                    <>
+                      <EvalRunJudgeChip
+                        job={judgeByDatasetItem.get(row.id)}
+                        isJudgingPhase={isJudgingPhase}
+                      />
+                      <button
+                        type="button"
+                        className="btn-secondary eval-run-compare-btn eval-run-compare-btn-inline"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          onCompare(row.id, attempt.id);
+                        }}
+                        disabled={
+                          variants.filter(
+                            (variant) =>
+                              itemByVariantAndDataset.get(`${variant.id}:${row.id}`)?.stage === 'done',
+                          ).length < 2
+                        }
+                      >
+                        <GitCompare {...iconProps()} aria-hidden />
+                        Compare transcripts
+                      </button>
+                    </>
+                  ) : null}
                 </div>
               </summary>
 
@@ -505,43 +537,10 @@ function EvalRunAttemptSection({
 
                 {attempt.run_mode === 'full' ? (
                   <div className="eval-run-compare-row">
-                    {isJudgingPhase || judgeByDatasetItem.has(row.id) ? (
-                      <span
-                        className={`${judgeStatusClass(judgeByDatasetItem.get(row.id)?.status ?? 'pending')} eval-run-status-badge`}
-                      >
-                        {judgeByDatasetItem.get(row.id)?.status === 'running' ? (
-                          <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
-                        ) : null}
-                        {judgeStatusLabel(judgeByDatasetItem.get(row.id)?.status ?? 'pending')}
-                      </span>
-                    ) : isComparingPhase || compareByDatasetItem.has(row.id) ? (
-                      <span
-                        className={`${compareStatusClass(compareByDatasetItem.get(row.id)?.status ?? 'pending')} eval-run-status-badge`}
-                      >
-                        {compareByDatasetItem.get(row.id)?.status === 'running' ? (
-                          <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
-                        ) : null}
-                        {compareStatusLabel(compareByDatasetItem.get(row.id)?.status ?? 'pending')}
-                      </span>
-                    ) : null}
                     {judgeByDatasetItem.get(row.id)?.error_message ? (
                       <p className="admin-error eval-run-cell-error">{judgeByDatasetItem.get(row.id)?.error_message}</p>
                     ) : null}
                     <EvalRunJudgeScores job={judgeByDatasetItem.get(row.id)} variants={variants} />
-                    <button
-                      type="button"
-                      className="btn-secondary eval-run-compare-btn"
-                      onClick={() => onCompare(row.id, attempt.id)}
-                      disabled={
-                        variants.filter(
-                          (variant) =>
-                            itemByVariantAndDataset.get(`${variant.id}:${row.id}`)?.stage === 'done',
-                        ).length < 2
-                      }
-                    >
-                      <GitCompare {...iconProps()} aria-hidden />
-                      Compare transcripts
-                    </button>
                   </div>
                 ) : null}
               </div>
@@ -791,6 +790,7 @@ export function EvaluationRunDetailPage() {
   const canWrite = useMemo(() => hasPermission(user, 'evaluation:runs', 'write'), [user]);
 
   const [detail, setDetail] = useState<EvalRunDetail | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [startingMode, setStartingMode] = useState<EvalRunMode | null>(null);
@@ -803,12 +803,15 @@ export function EvaluationRunDetailPage() {
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!runId) return;
     if (!options?.silent) setLoading(true);
+    setLoadError('');
     try {
       const detailData = await getEvalRunDetail(runId);
       setDetail(detailData);
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load run';
+      setLoadError(message);
       if (!options?.silent) {
-        showNotice(err instanceof Error ? err.message : 'Failed to load run', 'error');
+        showNotice(message, 'error');
       }
     } finally {
       if (!options?.silent) setLoading(false);
@@ -973,6 +976,8 @@ export function EvaluationRunDetailPage() {
       <div className="eval-run-attempts">
         {loading && !detail ? (
           <p className="admin-muted">Loading…</p>
+        ) : loadError && !detail ? (
+          <p className="admin-error">{loadError}</p>
         ) : !detail ? (
           <p className="admin-muted">Evaluation run not found.</p>
         ) : detail.run.status === 'draft' && (detail.attempts?.length ?? 0) === 0 ? (

@@ -11,21 +11,21 @@ import {
 } from '../db/index.ts';
 import { readStorageText } from '../storage/document-content.ts';
 import {
-  defaultEvalJudgeConfigYaml,
   parseEvalJudgeModelName,
+  resolveEvalJudgeConfigYaml,
 } from '../shared/eval-judge-workflow.ts';
 import type { EvalJudgeDimensionDefinition } from './eval-judge-dimensions.ts';
 import { resolveModelCliParams } from './model-cli-params.ts';
 
 function evalJudgeConfigYamlFromRun(
   judgeMetrics: Record<string, unknown>[] | null | undefined,
-): string {
+): string | null {
   const first = Array.isArray(judgeMetrics) ? judgeMetrics[0] : null;
   if (first && typeof first === 'object' && typeof first.config_yaml === 'string') {
     const trimmed = first.config_yaml.trim();
     if (trimmed) return trimmed;
   }
-  return defaultEvalJudgeConfigYaml();
+  return null;
 }
 
 export async function getEvalJudgeJobById(id: string) {
@@ -91,7 +91,9 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     throw new Error('At least two successful transcripts are required for judge evaluation');
   }
 
-  const configYaml = evalJudgeConfigYamlFromRun(run.judgeMetrics as Record<string, unknown>[] | null);
+  const configYaml =
+    evalJudgeConfigYamlFromRun(run.judgeMetrics as Record<string, unknown>[] | null) ??
+    (await resolveEvalJudgeConfigYaml());
   const modelDisplayName = parseEvalJudgeModelName(configYaml);
   const modelParams = await resolveModelCliParams({
     modelName: modelDisplayName,

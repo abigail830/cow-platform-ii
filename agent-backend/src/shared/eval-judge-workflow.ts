@@ -54,3 +54,13 @@ export function snapshotEvalJudgeConfigYaml(raw?: string | null): string {
   parseEvalJudgeModelName(text);
   return text;
 }
+
+/** Prefer Admin → Pipelines system row; fall back to packaged default YAML. */
+export async function resolveEvalJudgeConfigYaml(): Promise<string> {
+  const { getPipelineConfigByPipelineName } = await import('../shared/pipeline-config-store.ts');
+  const pipeline = await getPipelineConfigByPipelineName(EVAL_JUDGE_COMPARE_PIPELINE_NAME);
+  if (pipeline?.configYaml?.trim()) {
+    return snapshotEvalJudgeConfigYaml(pipeline.configYaml);
+  }
+  return defaultEvalJudgeConfigYaml();
+}

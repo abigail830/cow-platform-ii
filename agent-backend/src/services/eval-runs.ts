@@ -38,7 +38,7 @@ import {
   DEFAULT_EVAL_JUDGE_SCENARIO_ID,
   snapshotEvalJudgeDimensions,
 } from './eval-judge-dimensions.ts';
-import { snapshotEvalJudgeConfigYaml } from '../shared/eval-judge-workflow.ts';
+import { resolveEvalJudgeConfigYaml } from '../shared/eval-judge-workflow.ts';
 
 const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
   'Worker exited without updating job status (check GitHub Actions logs).';
@@ -223,6 +223,7 @@ export async function createEvalRun(input: {
   }
 
   const runMode = input.runMode === 'full' ? 'full' : 'pipeline_only';
+  const judgeConfigYaml = runMode === 'full' ? await resolveEvalJudgeConfigYaml() : null;
 
   const [run] = await db
     .insert(appEvalRuns)
@@ -240,7 +241,7 @@ export async function createEvalRun(input: {
               {
                 scenario_id: DEFAULT_EVAL_JUDGE_SCENARIO_ID,
                 dimensions: snapshotEvalJudgeDimensions(),
-                config_yaml: snapshotEvalJudgeConfigYaml(),
+                config_yaml: judgeConfigYaml,
               },
             ]
           : null,
@@ -314,7 +315,7 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
                 {
                   scenario_id: DEFAULT_EVAL_JUDGE_SCENARIO_ID,
                   dimensions: snapshotEvalJudgeDimensions(),
-                  config_yaml: snapshotEvalJudgeConfigYaml(),
+                  config_yaml: await resolveEvalJudgeConfigYaml(),
                 },
               ]
             : null,
