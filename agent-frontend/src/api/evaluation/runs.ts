@@ -130,6 +130,8 @@ export type EvalRunDatasetItemRef = {
   name: string;
   file_type: string;
   size_bytes?: number;
+  reference_s3_key?: string | null;
+  reference_url?: string | null;
 };
 
 export type EvalRunDetail = {

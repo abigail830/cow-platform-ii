@@ -608,11 +608,17 @@ export async function getEvalRunDetail(runId: string) {
     judge_jobs: latestAttempt
       ? attemptDetails.find((attempt) => attempt.id === latestAttempt.id)?.judge_jobs ?? []
       : [],
-    dataset_items: datasetItems.map((row) => ({
-      id: row.id,
-      name: row.name,
-      file_type: row.fileType,
-    })),
+    dataset_items: await Promise.all(
+      datasetItems.map(async (row) => ({
+        id: row.id,
+        name: row.name,
+        file_type: row.fileType,
+        reference_s3_key: row.referenceS3Key,
+        reference_url: row.referenceS3Key
+          ? await getStorageReadUrl(row.referenceS3Key, 3600)
+          : null,
+      })),
+    ),
   };
 }
 

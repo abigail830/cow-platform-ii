@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Eye, FolderOpen, History, Loader2, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
+import { Eye, FolderOpen, History, Loader2, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
@@ -15,6 +15,7 @@ import {
   type EvalRun,
   type EvalRunAttempt,
   type EvalRunDetail,
+  type EvalRunDatasetItemRef,
   type EvalRunJudgeRow,
   type EvalRunJudgeStatus,
   type EvalRunItem,
@@ -23,7 +24,7 @@ import {
   type EvalRunProcessingOption,
   type EvalRunStatus,
 } from '../api/evaluation/runs.ts';
-import { listEvalDatasets, type EvalDataset } from '../api/evaluation/datasets.ts';
+import { listEvalDatasets, getEvalDatasetReferenceDownloadUrl, type EvalDataset } from '../api/evaluation/datasets.ts';
 import { EvalRunCreateModal, EvalRunFilesModal } from '../components/EvalRunModals.tsx';
 import { TransientNotice } from '../components/TransientNotice.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -32,6 +33,7 @@ import { useTransientNotice } from '../hooks/useTransientNotice.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { fetchPresignedStorageText } from '../api/storage-fetch.ts';
+import { extractTranscriptPlainText } from '../shared/transcript-plain-text.ts';
 
 const LIST_PAGE = getNavPage('/evaluation/runs')!;
 
@@ -262,209 +264,101 @@ function attemptStatusBadge(attempt: EvalRunAttempt): { label: string; className
   };
 }
 
-const REASON_COLLAPSE_THRESHOLD = 120;
+const GT_JUDGE_SCENARIO_ID = 'asr_pipeline_compare_with_gt';
 
-function EvalRunJudgeDimensionItem({
-  label,
-  value,
-  reason,
-}: {
-  label: string;
-  value: string;
+type JudgeDimensionRow = {
+  label?: string;
+  kind?: string;
+  score?: number;
+  score_max?: number;
+  lower_is_better?: boolean;
   reason?: string;
+  winner?: string;
+  winner_variant_id?: string | null;
+};
+
+function EvalRunJudgeDimensionTable({
+  rows,
+}: {
+  rows: Array<{ id: string; label: string; value: string; reason: string }>;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const trimmedReason = reason?.trim() ?? '';
-  const isLongReason = trimmedReason.length > REASON_COLLAPSE_THRESHOLD;
-  const showReason = trimmedReason && (!isLongReason || expanded);
-
-  const toggleExpanded = () => {
-    if (isLongReason) setExpanded((current) => !current);
-  };
-
-  const handleHeadKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!isLongReason) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      toggleExpanded();
-    }
-  };
+  if (rows.length === 0) return null;
 
   return (
-    <li className="eval-run-judge-dimension-item">
-      <div
-        className={`eval-run-judge-dimension-head${isLongReason ? ' is-expandable' : ''}`}
-        role={isLongReason ? 'button' : undefined}
-        tabIndex={isLongReason ? 0 : undefined}
-        aria-expanded={isLongReason ? expanded : undefined}
-        onClick={toggleExpanded}
-        onKeyDown={handleHeadKeyDown}
-      >
-        <span className="eval-run-judge-dimension-label">{label}</span>
-        <span className="eval-run-judge-dimension-head-end">
-          <span className="eval-run-judge-dimension-value">{value}</span>
-          {isLongReason ? (
-            <ChevronDown
-              {...iconProps({ size: 14 })}
-              className={`eval-run-judge-dimension-chevron${expanded ? ' is-expanded' : ''}`}
-              aria-hidden
-            />
-          ) : null}
-        </span>
-      </div>
-      {showReason ? <p className="eval-run-judge-dimension-reason">{trimmedReason}</p> : null}
-      {isLongReason && !expanded ? (
-        <p className="eval-run-judge-dimension-reason-hint">Show reason</p>
-      ) : null}
-    </li>
+    <div className="admin-table-wrap eval-run-judge-dimension-table-wrap">
+      <table className="admin-table eval-run-judge-dimension-table">
+        <thead>
+          <tr>
+            <th scope="col">Dimension</th>
+            <th scope="col">Score</th>
+            <th scope="col">Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td className="eval-run-judge-dimension-table-label">{row.label}</td>
+              <td className="eval-run-judge-dimension-table-score">
+                <span className="eval-run-judge-dimension-value">{row.value}</span>
+              </td>
+              <td className="eval-run-judge-dimension-table-reason">
+                {row.reason ? (
+                  <p className="eval-run-judge-dimension-reason">{row.reason}</p>
+                ) : (
+                  <span className="admin-muted">—</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function EvalRunJudgeVariantCompareRow({
-  dimensionLabel,
-  cells,
-  expanded,
-  isExpandable,
-  onToggle,
-}: {
-  dimensionLabel: string;
-  cells: Array<{ value: string; trimmedReason: string; isLongReason: boolean }>;
-  expanded: boolean;
-  isExpandable: boolean;
-  onToggle: () => void;
-}) {
-  const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
-    if (!isExpandable) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onToggle();
-    }
-  };
-
-  return (
-    <tr
-      className={isExpandable ? 'eval-run-judge-variant-row is-expandable' : 'eval-run-judge-variant-row'}
-      role={isExpandable ? 'button' : undefined}
-      tabIndex={isExpandable ? 0 : undefined}
-      aria-expanded={isExpandable ? expanded : undefined}
-      onClick={isExpandable ? onToggle : undefined}
-      onKeyDown={handleKeyDown}
-    >
-      <td className="eval-run-judge-variant-table-dimension">
-        <div className="eval-run-judge-variant-table-dimension-inner">
-          <span className="eval-run-judge-variant-table-dimension-label">{dimensionLabel}</span>
-          {isExpandable ? (
-            <ChevronDown
-              {...iconProps({ size: 14 })}
-              className={`eval-run-judge-dimension-chevron${expanded ? ' is-expanded' : ''}`}
-              aria-hidden
-            />
-          ) : null}
-        </div>
-      </td>
-      {cells.map((cell, index) => (
-        <td key={index} className="eval-run-judge-variant-table-pipeline">
-          <span className="eval-run-judge-dimension-value">{cell.value}</span>
-          {cell.trimmedReason && (!cell.isLongReason || expanded) ? (
-            <p className="eval-run-judge-dimension-reason">{cell.trimmedReason}</p>
-          ) : null}
-          {cell.isLongReason && !expanded ? (
-            <p className="eval-run-judge-dimension-reason-hint">Show reason</p>
-          ) : null}
-        </td>
-      ))}
-    </tr>
-  );
+function buildJudgeDimensionTableRows(
+  dimensions: Record<string, JudgeDimensionRow>,
+  formatValue: (row: JudgeDimensionRow) => string,
+): Array<{ id: string; label: string; value: string; reason: string }> {
+  return Object.entries(dimensions).map(([dimensionId, row]) => ({
+    id: dimensionId,
+    label: row.label ?? dimensionId,
+    value: formatValue(row),
+    reason: row.reason?.trim() ?? '',
+  }));
 }
 
 function EvalRunJudgeVariantCompareTable({
   variantScores,
   variantById,
 }: {
-  variantScores: Record<
-    string,
-    Record<
-      string,
-      {
-        label?: string;
-        kind?: string;
-        score?: number;
-        score_max?: number;
-        lower_is_better?: boolean;
-        reason?: string;
-      }
-    >
-  >;
+  variantScores: Record<string, Record<string, JudgeDimensionRow>>;
   variantById: Map<string, string>;
 }) {
   const variantEntries = Object.entries(variantScores);
-  const [expandedDimensions, setExpandedDimensions] = useState<Set<string>>(() => new Set());
-
-  const dimensionOrder: string[] = [];
-  const dimensionLabels = new Map<string, string>();
-  for (const [, dimensions] of variantEntries) {
-    for (const [dimensionId, row] of Object.entries(dimensions)) {
-      if (!dimensionOrder.includes(dimensionId)) dimensionOrder.push(dimensionId);
-      if (!dimensionLabels.has(dimensionId)) dimensionLabels.set(dimensionId, row.label ?? dimensionId);
-    }
-  }
-
-  const toggleDimension = (dimensionId: string, isExpandable: boolean) => {
-    if (!isExpandable) return;
-    setExpandedDimensions((current) => {
-      const next = new Set(current);
-      if (next.has(dimensionId)) next.delete(dimensionId);
-      else next.add(dimensionId);
-      return next;
-    });
-  };
+  const multipleVariants = variantEntries.length > 1;
 
   return (
-    <div className="admin-table-wrap eval-run-judge-variant-table-wrap">
-      <table className="admin-table eval-run-judge-variant-table">
-        <thead>
-          <tr>
-            <th scope="col">Dimension</th>
-            {variantEntries.map(([variantId]) => (
-              <th key={variantId} scope="col">
-                {variantById.get(variantId) ?? variantId}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {dimensionOrder.map((dimensionId) => {
-            const cells = variantEntries.map(([, dimensions]) => {
-              const row = dimensions[dimensionId];
-              const trimmedReason = row?.reason?.trim() ?? '';
-              return {
-                value:
-                  typeof row?.score === 'number'
-                    ? formatJudgeScore(row.score, row.score_max, {
-                        kind: row.kind,
-                        lowerIsBetter: row.lower_is_better,
-                      })
-                    : '—',
-                trimmedReason,
-                isLongReason: trimmedReason.length > REASON_COLLAPSE_THRESHOLD,
-              };
-            });
-            const isExpandable = cells.some((cell) => cell.isLongReason);
-            const expanded = expandedDimensions.has(dimensionId);
+    <div className="eval-run-judge-variant-score-groups">
+      {variantEntries.map(([variantId, dimensions]) => {
+        const rows = buildJudgeDimensionTableRows(dimensions, (row) =>
+          typeof row.score === 'number'
+            ? formatJudgeScore(row.score, row.score_max, {
+                kind: row.kind,
+                lowerIsBetter: row.lower_is_better,
+              })
+            : '—',
+        );
 
-            return (
-              <EvalRunJudgeVariantCompareRow
-                key={dimensionId}
-                dimensionLabel={dimensionLabels.get(dimensionId) ?? dimensionId}
-                cells={cells}
-                expanded={expanded}
-                isExpandable={isExpandable}
-                onToggle={() => toggleDimension(dimensionId, isExpandable)}
-              />
-            );
-          })}
-        </tbody>
-      </table>
+        return (
+          <div key={variantId} className="eval-run-judge-section">
+            {multipleVariants ? (
+              <p className="eval-run-judge-section-title">{variantById.get(variantId) ?? variantId}</p>
+            ) : null}
+            <EvalRunJudgeDimensionTable rows={rows} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -479,42 +373,29 @@ function EvalRunJudgeScores({
   if (!job?.summary_metrics || job.status !== 'done') return null;
 
   const metrics = job.summary_metrics;
-  const variantScores = metrics.variant_scores as Record<
-    string,
-    Record<string, { label?: string; kind?: string; score?: number; score_max?: number; lower_is_better?: boolean; reason?: string }>
-  > | undefined;
-  const pairwise = metrics.pairwise as Record<
-    string,
-    {
-      label?: string;
-      score?: number;
-      score_max?: number;
-      winner?: string;
-      winner_variant_id?: string | null;
-      reason?: string;
-    }
-  > | undefined;
+  const variantScores = metrics.variant_scores as Record<string, Record<string, JudgeDimensionRow>> | undefined;
+  const pairwise = metrics.pairwise as Record<string, JudgeDimensionRow> | undefined;
 
   const variantById = new Map(variants.map((variant) => [variant.id, variant.display_name]));
 
-  function formatPairwiseValue(row: {
-    score?: number;
-    score_max?: number;
-    winner?: string;
-    winner_variant_id?: string | null;
-  }): string {
+  function formatPairwiseValue(row: JudgeDimensionRow): string {
     if (row.winner) {
       if (row.winner === 'tie') return 'Tie';
       return variantById.get(row.winner_variant_id ?? '') ?? row.winner.toUpperCase();
     }
     if (typeof row.score === 'number') {
       return formatJudgeScore(row.score, row.score_max, {
-        kind: (row as { kind?: string }).kind,
-        lowerIsBetter: (row as { lower_is_better?: boolean }).lower_is_better,
+        kind: row.kind,
+        lowerIsBetter: row.lower_is_better,
       });
     }
     return '—';
   }
+
+  const pairwiseRows =
+    pairwise && Object.keys(pairwise).length > 0
+      ? buildJudgeDimensionTableRows(pairwise, formatPairwiseValue)
+      : [];
 
   return (
     <div className="eval-run-judge-scores">
@@ -525,21 +406,210 @@ function EvalRunJudgeScores({
         </div>
       ) : null}
 
-      {pairwise && Object.keys(pairwise).length > 0 ? (
+      {pairwiseRows.length > 0 ? (
         <div className="eval-run-judge-section">
           <p className="eval-run-judge-section-title">Pairwise</p>
-          <ul className="eval-run-judge-dimension-list eval-run-judge-dimension-list-pairwise">
-            {Object.entries(pairwise).map(([dimensionId, row]) => (
-              <EvalRunJudgeDimensionItem
-                key={dimensionId}
-                label={row.label ?? dimensionId}
-                value={formatPairwiseValue(row)}
-                reason={row.reason}
-              />
-            ))}
-          </ul>
+          <EvalRunJudgeDimensionTable rows={pairwiseRows} />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function TranscriptPlainPreview({
+  url,
+  extractPlain = false,
+}: {
+  url: string;
+  extractPlain?: boolean;
+}) {
+  const [body, setBody] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [loadingText, setLoadingText] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingText(true);
+    setError('');
+    void fetchPresignedStorageText(url)
+      .then((text) => {
+        if (cancelled) return;
+        const raw = text ?? '(empty transcript)';
+        setBody(extractPlain ? extractTranscriptPlainText(raw) || raw : raw);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to load transcript');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingText(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url, extractPlain]);
+
+  if (loadingText) return <p className="admin-muted">Loading transcript…</p>;
+  if (error) return <p className="admin-error">{error}</p>;
+  return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
+}
+
+function useDatasetReferenceUrl(datasetId: string, item: EvalRunDatasetItemRef | undefined) {
+  const [url, setUrl] = useState<string | null>(item?.reference_url ?? null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const hasReference = Boolean(item?.reference_s3_key ?? item?.reference_url);
+
+  useEffect(() => {
+    if (item?.reference_url) {
+      setUrl(item.reference_url);
+      setError('');
+      setLoading(false);
+      return;
+    }
+    if (!item?.id || !datasetId) {
+      setUrl(null);
+      setLoading(false);
+      return;
+    }
+    if (!hasReference && item.reference_s3_key !== 'pending') {
+      setUrl(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    void getEvalDatasetReferenceDownloadUrl(datasetId, item.id)
+      .then((result) => {
+        if (cancelled) return;
+        setUrl(result.download_url);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setUrl(null);
+        setError(err instanceof Error ? err.message : 'Failed to load ground truth');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, hasReference, item?.id, item?.reference_s3_key, item?.reference_url]);
+
+  return { url, loading, error, hasReference };
+}
+
+function EvalRunTranscriptCompare({
+  referenceUrl,
+  actualUrl,
+  actualLabel,
+  actualError,
+}: {
+  referenceUrl: string;
+  actualUrl: string | null;
+  actualLabel: string;
+  actualError?: string | null;
+}) {
+  return (
+    <div className="eval-run-transcript-compare">
+      <div className="eval-run-transcript-compare-pane">
+        <p className="eval-run-transcript-compare-title">Ground truth</p>
+        <div className="eval-run-transcript-compare-body">
+          <TranscriptPlainPreview url={referenceUrl} />
+        </div>
+      </div>
+      <div className="eval-run-transcript-compare-pane">
+        <p className="eval-run-transcript-compare-title">{actualLabel}</p>
+        <div className="eval-run-transcript-compare-body">
+          {actualError ? (
+            <p className="admin-error eval-run-cell-error">{actualError}</p>
+          ) : actualUrl ? (
+            <TranscriptPlainPreview url={actualUrl} extractPlain />
+          ) : (
+            <p className="admin-muted eval-run-transcript-compare-empty">Transcript not ready.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EvalRunFileTranscriptSection({
+  datasetId,
+  datasetItemId,
+  datasetItem,
+  judgeScenarioId,
+  variants,
+  itemByVariantAndDataset,
+  itemRunStatus,
+  itemStarting,
+}: {
+  datasetId: string;
+  datasetItemId: string;
+  datasetItem: EvalRunDatasetItemRef | undefined;
+  judgeScenarioId?: string;
+  variants: EvalRunDetail['variants'];
+  itemByVariantAndDataset: Map<string, EvalRunItem>;
+  itemRunStatus: EvalRunStatus;
+  itemStarting: boolean;
+}) {
+  const gtScenario = judgeScenarioId === GT_JUDGE_SCENARIO_ID;
+  const referenceItem =
+    datasetItem ??
+    (gtScenario
+      ? ({ id: datasetItemId, name: '', file_type: 'audio', reference_s3_key: 'pending' } as EvalRunDatasetItemRef)
+      : undefined);
+  const { url: referenceUrl, loading, error, hasReference } = useDatasetReferenceUrl(datasetId, referenceItem);
+  const showCompare = hasReference || gtScenario;
+
+  if (showCompare) {
+    return (
+      <div className="eval-run-transcript-compare-section">
+        <p className="eval-run-judge-section-title">Transcript comparison</p>
+        {loading ? <p className="admin-muted">Loading ground truth…</p> : null}
+        {error ? <p className="admin-error">{error}</p> : null}
+        {referenceUrl ? (
+          <div className="eval-run-transcript-compare-stack">
+            {variants.map((variant) => {
+              const cell = itemByVariantAndDataset.get(`${variant.id}:${datasetItemId}`);
+              return (
+                <EvalRunTranscriptCompare
+                  key={variant.id}
+                  referenceUrl={referenceUrl}
+                  actualUrl={cell?.transcript_url ?? null}
+                  actualLabel={variant.display_name}
+                  actualError={cell?.error_message}
+                />
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="eval-run-pipeline-grid"
+      style={{ ['--pipeline-cols' as string]: String(Math.max(variants.length, 1)) }}
+    >
+      {variants.map((variant) => {
+        const cell = itemByVariantAndDataset.get(`${variant.id}:${datasetItemId}`);
+        return (
+          <EvalRunPipelineOutput
+            key={variant.id}
+            cell={cell}
+            variantName={variant.display_name}
+            runStatus={itemRunStatus}
+            starting={itemStarting}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -646,6 +716,8 @@ function EvalRunPipelineOutput({
 function EvalRunAttemptSection({
   attempt,
   variants,
+  datasetId,
+  datasetItemsById,
   runStatus,
   starting,
   defaultOpen,
@@ -657,6 +729,8 @@ function EvalRunAttemptSection({
 }: {
   attempt: EvalRunAttempt;
   variants: EvalRunDetail['variants'];
+  datasetId: string;
+  datasetItemsById: Map<string, EvalRunDatasetItemRef>;
   runStatus: EvalRunStatus;
   starting: boolean;
   defaultOpen: boolean;
@@ -745,13 +819,16 @@ function EvalRunAttemptSection({
             const itemRunStatus = attempt.status === 'running' ? 'running' : runStatus;
             const itemStarting = starting && attempt.status === 'running';
             const judgeJob = judgeByDatasetItem.get(row.id);
+            const datasetItem = datasetItemsById.get(row.id);
             const doneVariantCount = variants.filter(
               (variant) => itemByVariantAndDataset.get(`${variant.id}:${row.id}`)?.stage === 'done',
             ).length;
+            const minVariantsForRetry =
+              judgeJob?.scenario_id === GT_JUDGE_SCENARIO_ID ? 1 : 2;
             const canRetryCompare =
               canWrite &&
               attempt.run_mode === 'full' &&
-              doneVariantCount >= 2 &&
+              doneVariantCount >= minVariantsForRetry &&
               judgeJob != null &&
               judgeJob.status === 'failed';
 
@@ -813,23 +890,16 @@ function EvalRunAttemptSection({
               </summary>
 
               <div className="eval-run-file-body">
-                <div
-                  className="eval-run-pipeline-grid"
-                  style={{ ['--pipeline-cols' as string]: String(Math.max(variants.length, 1)) }}
-                >
-                  {variants.map((variant) => {
-                    const cell = itemByVariantAndDataset.get(`${variant.id}:${row.id}`);
-                    return (
-                      <EvalRunPipelineOutput
-                        key={variant.id}
-                        cell={cell}
-                        variantName={variant.display_name}
-                        runStatus={itemRunStatus}
-                        starting={itemStarting}
-                      />
-                    );
-                  })}
-                </div>
+                <EvalRunFileTranscriptSection
+                  datasetId={datasetId}
+                  datasetItemId={row.id}
+                  datasetItem={datasetItem}
+                  judgeScenarioId={judgeJob?.scenario_id}
+                  variants={variants}
+                  itemByVariantAndDataset={itemByVariantAndDataset}
+                  itemRunStatus={itemRunStatus}
+                  itemStarting={itemStarting}
+                />
 
                 {attempt.run_mode === 'full' ? (
                   <div className="eval-run-compare-row">
@@ -1306,6 +1376,8 @@ export function EvaluationRunDetailPage() {
               key={attempt.id}
               attempt={attempt}
               variants={detail.variants}
+              datasetId={detail.run.dataset_id}
+              datasetItemsById={new Map(detail.dataset_items.map((item) => [item.id, item]))}
               runStatus={displayRunStatus ?? detail.run.status}
               starting={starting}
               defaultOpen={index === 0}

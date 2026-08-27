@@ -17,6 +17,7 @@ from evaluate_cli.judge.metrics import (
     score_variant_dimension,
     score_variant_vs_gt_dimension,
 )
+from evaluate_cli.judge.transcript_text import extract_transcript_plain_text
 
 DEFAULT_API_URL = "http://127.0.0.1:8787"
 # Judge LLM calls can be slow; internal API GET/PATCH should stay fast (presigned transcript URLs).
@@ -150,7 +151,8 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
     for entry in raw_transcripts:
         if not isinstance(entry, dict):
             continue
-        transcripts.append({**entry, "transcript": _load_transcript_text(entry)})
+        raw_text = _load_transcript_text(entry)
+        transcripts.append({**entry, "transcript": extract_transcript_plain_text(raw_text)})
 
     min_variants = int(context.get("min_variants") or 2)
     if len(transcripts) < min_variants:
