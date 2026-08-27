@@ -126,6 +126,29 @@ runs.post(
   },
 );
 
+runs.post(
+  '/:id/judge/:datasetItemId/retry',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.RUNS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    const datasetItemId = routeParam(c, 'datasetItemId');
+    if (!id) return c.json({ error: 'Run id is required' }, 400);
+    if (!datasetItemId) return c.json({ error: 'Dataset item id is required' }, 400);
+
+    try {
+      const attemptId = c.req.query('attempt_id')?.trim() || undefined;
+      const { retryEvalRunJudgeJob } = await import('../../services/eval-run-judge.ts');
+      await retryEvalRunJudgeJob(id, datasetItemId, attemptId);
+      const detail = await getEvalRunDetail(id);
+      return c.json(detail, 202);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to retry compare';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
 runs.get(
   '/:id/compare/:datasetItemId',
   requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.RUNS, 'read'),

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Eye, FolderOpen, GitCompare, History, Loader2, Play, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Eye, FolderOpen, History, Loader2, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
   formatEvalRunPhase,
   formatEvalRunStatus,
-  getEvalRunCompare,
   getEvalRunDetail,
   listEvalRunProcessingOptions,
   listEvalRuns,
+  retryEvalRunJudge,
   startEvalRun,
   uploadEvalRunFile,
   type EvalRun,
@@ -30,7 +30,6 @@ import { iconProps } from '../components/icons/icon-props.ts';
 import { useTransientNotice } from '../hooks/useTransientNotice.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
-import { fetchPresignedStorageText } from '../api/storage-fetch.ts';
 
 const LIST_PAGE = getNavPage('/evaluation/runs')!;
 
@@ -470,14 +469,18 @@ function EvalRunAttemptSection({
   runStatus,
   starting,
   defaultOpen,
-  onCompare,
+  canWrite,
+  retryingDatasetItemId,
+  onRetryCompare,
 }: {
   attempt: EvalRunAttempt;
   variants: EvalRunDetail['variants'];
   runStatus: EvalRunStatus;
   starting: boolean;
   defaultOpen: boolean;
-  onCompare: (datasetItemId: string, attemptId: string) => void;
+  canWrite: boolean;
+  retryingDatasetItemId: string | null;
+  onRetryCompare: (datasetItemId: string, attemptId: string) => void;
 }) {
   const itemByVariantAndDataset = useMemo(() => {
     const map = new Map<string, EvalRunItem>();
@@ -535,6 +538,16 @@ function EvalRunAttemptSection({
           datasetItemRows.map((row) => {
             const itemRunStatus = attempt.status === 'running' ? 'running' : runStatus;
             const itemStarting = starting && attempt.status === 'running';
+            const judgeJob = judgeByDatasetItem.get(row.id);
+            const doneVariantCount = variants.filter(
+              (variant) => itemByVariantAndDataset.get(`${variant.id}:${row.id}`)?.stage === 'done',
+            ).length;
+            const canRetryCompare =
+              canWrite &&
+              attempt.run_mode === 'full' &&
+              doneVariantCount >= 2 &&
+              judgeJob != null &&
+              judgeJob.status === 'failed';
 
             return (
             <details key={row.id} className="eval-run-file-block">
@@ -561,26 +574,27 @@ function EvalRunAttemptSection({
                   {attempt.run_mode === 'full' ? (
                     <>
                       <EvalRunJudgeChip
-                        job={judgeByDatasetItem.get(row.id)}
+                        job={judgeJob}
                         isJudgingPhase={isJudgingPhase}
                       />
-                      <button
-                        type="button"
-                        className="btn-secondary eval-run-compare-btn eval-run-compare-btn-inline"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          onCompare(row.id, attempt.id);
-                        }}
-                        disabled={
-                          variants.filter(
-                            (variant) =>
-                              itemByVariantAndDataset.get(`${variant.id}:${row.id}`)?.stage === 'done',
-                          ).length < 2
-                        }
-                      >
-                        <GitCompare {...iconProps()} aria-hidden />
-                        Compare transcripts
-                      </button>
+                      {canRetryCompare ? (
+                        <button
+                          type="button"
+                          className="btn-secondary eval-run-compare-btn eval-run-compare-btn-inline"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            onRetryCompare(row.id, attempt.id);
+                          }}
+                          disabled={retryingDatasetItemId === row.id}
+                        >
+                          {retryingDatasetItemId === row.id ? (
+                            <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                          ) : (
+                            <RotateCw {...iconProps()} aria-hidden />
+                          )}
+                          Retry compare
+                        </button>
+                      ) : null}
                     </>
                   ) : null}
                 </div>
@@ -865,10 +879,8 @@ export function EvaluationRunDetailPage() {
   const [starting, setStarting] = useState(false);
   const [startingMode, setStartingMode] = useState<EvalRunMode | null>(null);
   const [fastPollUntil, setFastPollUntil] = useState<number | null>(null);
+  const [retryingCompareItemId, setRetryingCompareItemId] = useState<string | null>(null);
   const { notice, noticeVariant, showNotice } = useTransientNotice(6000);
-  const [compareItemId, setCompareItemId] = useState<string | null>(null);
-  const [compareLoading, setCompareLoading] = useState(false);
-  const [comparePanels, setComparePanels] = useState<Array<{ title: string; body: string; error?: string }>>([]);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!runId) return;
@@ -938,36 +950,20 @@ export function EvaluationRunDetailPage() {
     return mode === 'full' ? 'Run full' : 'Run pipeline only';
   }
 
-  async function openCompare(datasetItemId: string, attemptId: string) {
+  async function handleRetryCompare(datasetItemId: string, attemptId: string) {
     if (!runId) return;
-    setCompareItemId(datasetItemId);
-    setCompareLoading(true);
-    setComparePanels([]);
+    setRetryingCompareItemId(datasetItemId);
     try {
-      const comparison = await getEvalRunCompare(runId, datasetItemId, attemptId);
-      const panels = await Promise.all(
-        comparison.comparisons.map(async (entry) => {
-          if (entry.stage !== 'done' || !entry.transcript_url) {
-            return {
-              title: entry.display_name,
-              body: '',
-              error: entry.error_message ?? `Stage: ${stageLabel(entry.stage)}`,
-            };
-          }
-          const text = await fetchPresignedStorageText(entry.transcript_url);
-          return {
-            title: entry.display_name,
-            body: text ?? '(empty transcript)',
-          };
-        }),
-      );
-      setComparePanels(panels);
+      const result = await retryEvalRunJudge(runId, datasetItemId, attemptId);
+      setDetail(result);
+      setFastPollUntil(Date.now() + 120_000);
+      showNotice('Compare retry started', 'success');
     } catch (err) {
-      setComparePanels([
-        { title: 'Error', body: '', error: err instanceof Error ? err.message : 'Failed to load transcripts' },
-      ]);
+      const message = err instanceof Error ? err.message : 'Failed to retry compare';
+      showNotice(message, 'error');
+      await load({ silent: true });
     } finally {
-      setCompareLoading(false);
+      setRetryingCompareItemId(null);
     }
   }
 
@@ -1078,45 +1074,13 @@ export function EvaluationRunDetailPage() {
               runStatus={displayRunStatus ?? detail.run.status}
               starting={starting}
               defaultOpen={index === 0}
-              onCompare={(datasetItemId, attemptId) => void openCompare(datasetItemId, attemptId)}
+              canWrite={canWrite}
+              retryingDatasetItemId={retryingCompareItemId}
+              onRetryCompare={(datasetItemId, attemptId) => void handleRetryCompare(datasetItemId, attemptId)}
             />
           ))
         )}
       </div>
-
-      {compareItemId ? (
-            <div className="modal-backdrop" onClick={() => setCompareItemId(null)}>
-              <div
-                className="modal-card"
-                role="dialog"
-                aria-modal="true"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <h2>Transcript comparison</h2>
-                {compareLoading ? (
-                  <p>Loading transcripts…</p>
-                ) : (
-                  <div className="form-grid">
-                    {comparePanels.map((panel) => (
-                      <section key={panel.title} className="form-field form-field-wide">
-                        <h3>{panel.title}</h3>
-                        {panel.error ? (
-                          <p className="admin-error">{panel.error}</p>
-                        ) : (
-                          <pre className="asset-market-code">{panel.body}</pre>
-                        )}
-                      </section>
-                    ))}
-                  </div>
-                )}
-                <div className="modal-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setCompareItemId(null)}>
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
     </div>
   );
 }

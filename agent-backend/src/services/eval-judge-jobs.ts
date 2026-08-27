@@ -9,7 +9,7 @@ import {
   db,
   type EvalRunJudgeStatus,
 } from '../db/index.ts';
-import { readStorageText } from '../storage/document-content.ts';
+import { getStorageReadUrl } from '../storage/document-files.ts';
 import {
   parseEvalJudgeModelName,
   resolveEvalJudgeConfigYaml,
@@ -77,13 +77,11 @@ export async function buildEvalJudgeJobContext(jobId: string) {
   for (const item of targetItems) {
     const variant = variantById.get(item.variantId);
     if (!variant || !item.transcriptS3Key) continue;
-    const text = await readStorageText(item.transcriptS3Key);
-    if (text == null) continue;
     transcripts.push({
       variant_id: variant.id,
       pipeline_name: variant.pipelineName,
       display_name: variant.displayName,
-      transcript: text,
+      transcript_url: await getStorageReadUrl(item.transcriptS3Key, 3600),
     });
   }
 

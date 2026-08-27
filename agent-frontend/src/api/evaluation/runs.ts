@@ -347,6 +347,18 @@ export async function deleteEvalRunFile(
   }
 }
 
+export async function retryEvalRunJudge(
+  runId: string,
+  datasetItemId: string,
+  attemptId?: string,
+): Promise<EvalRunDetail> {
+  const query = attemptId ? `?attempt_id=${encodeURIComponent(attemptId)}` : '';
+  const data = await authFetch(`/api/evaluation/runs/${runId}/judge/${datasetItemId}/retry${query}`, {
+    method: 'POST',
+  });
+  return data as EvalRunDetail;
+}
+
 export async function getEvalRunCompare(
   runId: string,
   datasetItemId: string,

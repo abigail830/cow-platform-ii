@@ -1,4 +1,4 @@
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import {
   appEvalDatasetItems,
   appEvalRunAttempts,
@@ -318,6 +318,93 @@ export async function reconcileAndResumeEvalRunJudgePhase(runId: string): Promis
   const batch = pendingIds.slice(0, Math.max(1, EVAL_JUDGE_DISPATCH_BATCH));
   await dispatchEvalRunJudgeJobsWithConcurrency(batch);
   await maybeFinalizeEvalRunJudgePhase(runId);
+}
+
+export async function retryEvalRunJudgeJob(
+  runId: string,
+  datasetItemId: string,
+  attemptId?: string,
+): Promise<void> {
+  const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
+  if (!run) throw new Error('Eval run not found');
+  if (!run.judgeEnabled) throw new Error('Judge compare is not enabled for this run');
+  if (run.runMode !== 'full') throw new Error('Compare retry is only available for full eval runs');
+
+  const resolvedAttemptId =
+    attemptId?.trim() ||
+    (
+      await db
+        .select({ id: appEvalRunAttempts.id })
+        .from(appEvalRunAttempts)
+        .where(eq(appEvalRunAttempts.runId, runId))
+        .orderBy(desc(appEvalRunAttempts.attemptNumber))
+        .limit(1)
+    )[0]?.id;
+  if (!resolvedAttemptId) throw new Error('Eval run attempt not found');
+
+  const [job] = await db
+    .select()
+    .from(appEvalRunJudgeJobs)
+    .where(
+      and(
+        eq(appEvalRunJudgeJobs.attemptId, resolvedAttemptId),
+        eq(appEvalRunJudgeJobs.datasetItemId, datasetItemId),
+      ),
+    )
+    .limit(1);
+  if (!job) throw new Error('Compare job not found for this file');
+
+  const scenario = await getEvalJudgeScenario(job.scenarioId);
+  if (!scenario) throw new Error(`Unknown eval judge scenario: ${job.scenarioId}`);
+
+  const attemptItems = await db
+    .select()
+    .from(appEvalRunItems)
+    .where(eq(appEvalRunItems.attemptId, resolvedAttemptId));
+  const doneCount = attemptItems.filter(
+    (item) =>
+      item.datasetItemId === datasetItemId && item.stage === 'done' && item.transcriptS3Key,
+  ).length;
+  if (doneCount < scenario.min_variants) {
+    throw new Error('At least two successful transcripts are required before compare can run');
+  }
+
+  if (job.status === 'running') {
+    throw new Error('Compare is already running for this file');
+  }
+
+  await db
+    .update(appEvalRunJudgeJobs)
+    .set({
+      status: 'pending',
+      errorMessage: null,
+      summaryMetrics: null,
+      resultS3Key: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRunJudgeJobs.id, job.id));
+
+  await db
+    .update(appEvalRuns)
+    .set({
+      status: 'running',
+      phase: 'judging',
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRuns.id, runId));
+
+  await db
+    .update(appEvalRunAttempts)
+    .set({
+      status: 'running',
+      phase: 'judging',
+      finishedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRunAttempts.id, resolvedAttemptId));
+
+  await syncEvalRunJudgeProgressCounts(runId, resolvedAttemptId);
+  await spawnAsyncEvalJudgeWorker(job.id);
 }
 
 export async function finalizeEvalJudgeJobFromWorker(input: {

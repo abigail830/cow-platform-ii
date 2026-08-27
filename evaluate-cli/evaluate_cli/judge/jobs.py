@@ -11,6 +11,9 @@ import requests
 from evaluate_cli.judge.metrics import score_pairwise_dimension, score_variant_dimension
 
 DEFAULT_API_URL = "http://127.0.0.1:8787"
+# Judge LLM calls can be slow; internal API GET/PATCH should stay fast (presigned transcript URLs).
+API_TIMEOUT_SECONDS = 120
+TRANSCRIPT_FETCH_TIMEOUT_SECONDS = 300
 
 
 def _api_url(explicit: str | None) -> str:
@@ -27,9 +30,31 @@ def _auth() -> tuple[str, str]:
 
 def _request(method: str, path: str, api_url: str | None, **kwargs: Any) -> requests.Response:
     url = f"{_api_url(api_url)}{path}"
-    response = requests.request(method, url, auth=_auth(), timeout=120, **kwargs)
+    response = requests.request(
+        method,
+        url,
+        auth=_auth(),
+        timeout=kwargs.pop("timeout", API_TIMEOUT_SECONDS),
+        **kwargs,
+    )
     response.raise_for_status()
     return response
+
+
+def _load_transcript_text(entry: dict[str, Any]) -> str:
+    transcript_url = entry.get("transcript_url")
+    if isinstance(transcript_url, str) and transcript_url.strip():
+        response = requests.get(transcript_url.strip(), timeout=TRANSCRIPT_FETCH_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        return response.text
+
+    # Legacy inline payload (local dev only — avoid on Vercel).
+    transcript = entry.get("transcript")
+    if isinstance(transcript, str) and transcript.strip():
+        return transcript
+
+    variant_id = entry.get("variant_id")
+    raise RuntimeError(f"Missing transcript_url for variant {variant_id or 'unknown'}")
 
 
 def run_async_judge_job(job_id: str, api_url: str | None = None) -> None:
@@ -56,7 +81,13 @@ def run_async_judge_job(job_id: str, api_url: str | None = None) -> None:
 
 
 def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    transcripts = context.get("transcripts") or []
+    raw_transcripts = context.get("transcripts") or []
+    transcripts = []
+    for entry in raw_transcripts:
+        if not isinstance(entry, dict):
+            continue
+        transcripts.append({**entry, "transcript": _load_transcript_text(entry)})
+
     if len(transcripts) < 2:
         raise RuntimeError("At least two transcripts are required")
 
