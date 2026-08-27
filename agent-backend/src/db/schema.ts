@@ -1104,6 +1104,9 @@ export type EvalRunMode = (typeof EVAL_RUN_MODES)[number];
 export const EVAL_RUN_COMPARE_STATUSES = ['pending', 'running', 'done', 'failed'] as const;
 export type EvalRunCompareStatus = (typeof EVAL_RUN_COMPARE_STATUSES)[number];
 
+export const EVAL_RUN_JUDGE_STATUSES = ['pending', 'running', 'done', 'failed'] as const;
+export type EvalRunJudgeStatus = (typeof EVAL_RUN_JUDGE_STATUSES)[number];
+
 export const EVAL_RUN_ITEM_STAGES = ['submitted', 'transcribing', 'done', 'failed', 'cancelled'] as const;
 export type EvalRunItemStage = (typeof EVAL_RUN_ITEM_STAGES)[number];
 
@@ -1257,6 +1260,35 @@ export const appEvalRunComparisons = pgTable(
     index('idx_eval_run_comparisons_run').on(t.runId, t.status),
     index('idx_eval_run_comparisons_attempt').on(t.attemptId, t.status),
     uniqueIndex('uq_eval_run_comparisons_attempt_item').on(t.attemptId, t.datasetItemId),
+  ],
+);
+
+export const appEvalRunJudgeJobs = pgTable(
+  'app_eval_run_judge_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => appEvalRuns.id, { onDelete: 'cascade' }),
+    attemptId: uuid('attempt_id')
+      .notNull()
+      .references(() => appEvalRunAttempts.id, { onDelete: 'cascade' }),
+    datasetItemId: uuid('dataset_item_id')
+      .notNull()
+      .references(() => appEvalDatasetItems.id, { onDelete: 'cascade' }),
+    scenarioId: text('scenario_id').notNull(),
+    dimensionsSnapshot: jsonb('dimensions_snapshot').$type<Record<string, unknown>[]>().notNull(),
+    status: text('status').$type<EvalRunJudgeStatus>().notNull().default('pending'),
+    resultS3Key: text('result_s3_key'),
+    errorMessage: text('error_message'),
+    summaryMetrics: jsonb('summary_metrics').$type<Record<string, unknown> | null>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_eval_run_judge_jobs_run').on(t.runId, t.status),
+    index('idx_eval_run_judge_jobs_attempt').on(t.attemptId, t.status),
+    uniqueIndex('uq_eval_run_judge_jobs_attempt_item').on(t.attemptId, t.datasetItemId),
   ],
 );
 

@@ -26,6 +26,7 @@ type EvalRunCreateModalProps = {
 export function EvalRunCreateModal({ pipelines, onCancel, onCreate }: EvalRunCreateModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [mediaTab, setMediaTab] = useState<'audio'>('audio');
   const [files, setFiles] = useState<File[]>([]);
   const [selectedPipelineIds, setSelectedPipelineIds] = useState<string[]>([]);
   const [runMode, setRunMode] = useState<EvalRunMode>('full');
@@ -71,8 +72,8 @@ export function EvalRunCreateModal({ pipelines, onCancel, onCreate }: EvalRunCre
       >
         <h2 id="eval-run-create-title">New evaluation run</h2>
         <p className="admin-form-hint">
-          Create an evaluation set, add audio files, and pick two or more ASR pipelines to compare on the same
-          recordings.
+          Name the evaluation set, then configure type-specific settings. Audio runs compare ASR pipelines on the
+          same recordings.
         </p>
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div className="form-grid">
@@ -95,70 +96,91 @@ export function EvalRunCreateModal({ pipelines, onCancel, onCreate }: EvalRunCre
                 disabled={busy}
               />
             </label>
-            <div className="form-field form-field-wide">
-              <span>Audio files</span>
-              <p className="admin-form-hint">Optional now — you can also upload or remove files from the list page.</p>
-              <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} disabled={busy} />
-            </div>
-            <div className="form-field form-field-wide">
-              <span>Pipelines to compare</span>
-              {pipelines.length === 0 ? (
-                <p className="admin-muted">No enabled async transcription pipelines found.</p>
-              ) : (
-                <div className="eval-run-pipeline-list">
-                  {pipelines.map((pipeline) => (
-                    <label key={pipeline.id} className="form-checkbox">
+          </div>
+
+          <div className="modal-tabs" role="tablist" aria-label="Evaluation type">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mediaTab === 'audio'}
+              className={`modal-tab${mediaTab === 'audio' ? ' active' : ''}`}
+              onClick={() => setMediaTab('audio')}
+            >
+              Audio
+            </button>
+          </div>
+
+          <div className="eval-run-create-tab-body form-grid">
+            {mediaTab === 'audio' ? (
+              <>
+                <div className="form-field form-field-wide">
+                  <span>Audio files</span>
+                  <p className="admin-form-hint">
+                    Optional now — you can also upload or remove files from the list page.
+                  </p>
+                  <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} disabled={busy} />
+                </div>
+                <div className="form-field form-field-wide">
+                  <span>Pipelines to compare</span>
+                  {pipelines.length === 0 ? (
+                    <p className="admin-muted">No enabled async transcription pipelines found.</p>
+                  ) : (
+                    <div className="eval-run-pipeline-list">
+                      {pipelines.map((pipeline) => (
+                        <label key={pipeline.id} className="form-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={selectedPipelineIds.includes(pipeline.id)}
+                            onChange={() => togglePipeline(pipeline.id)}
+                            disabled={busy}
+                          />
+                          <span>
+                            {pipeline.name}{' '}
+                            <span className="admin-muted">({pipeline.pipeline_name})</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="form-field form-field-wide">
+                  <span>Default run mode</span>
+                  <p className="admin-form-hint eval-run-mode-hint">
+                    Saved on the run as the default. You can start another run in either mode from the detail page.
+                  </p>
+                  <div className="eval-run-mode-options">
+                    <label className="form-radio">
                       <input
-                        type="checkbox"
-                        checked={selectedPipelineIds.includes(pipeline.id)}
-                        onChange={() => togglePipeline(pipeline.id)}
+                        type="radio"
+                        name="eval-run-mode"
+                        value="pipeline_only"
+                        checked={runMode === 'pipeline_only'}
+                        onChange={() => setRunMode('pipeline_only')}
                         disabled={busy}
                       />
                       <span>
-                        {pipeline.name}{' '}
-                        <span className="admin-muted">({pipeline.pipeline_name})</span>
+                        Pipeline only{' '}
+                        <span className="admin-muted">— stop after transcription finishes</span>
                       </span>
                     </label>
-                  ))}
+                    <label className="form-radio">
+                      <input
+                        type="radio"
+                        name="eval-run-mode"
+                        value="full"
+                        checked={runMode === 'full'}
+                        onChange={() => setRunMode('full')}
+                        disabled={busy}
+                      />
+                      <span>
+                        Full{' '}
+                        <span className="admin-muted">— auto-compare all files before marking complete</span>
+                      </span>
+                    </label>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div className="form-field form-field-wide">
-              <span>Default run mode</span>
-              <p className="admin-form-hint eval-run-mode-hint">
-                Saved on the run as the default. You can start or restart in either mode from the run detail page.
-              </p>
-              <div className="eval-run-mode-options">
-                <label className="form-radio">
-                  <input
-                    type="radio"
-                    name="eval-run-mode"
-                    value="pipeline_only"
-                    checked={runMode === 'pipeline_only'}
-                    onChange={() => setRunMode('pipeline_only')}
-                    disabled={busy}
-                  />
-                  <span>
-                    Pipeline only{' '}
-                    <span className="admin-muted">— stop after transcription finishes</span>
-                  </span>
-                </label>
-                <label className="form-radio">
-                  <input
-                    type="radio"
-                    name="eval-run-mode"
-                    value="full"
-                    checked={runMode === 'full'}
-                    onChange={() => setRunMode('full')}
-                    disabled={busy}
-                  />
-                  <span>
-                    Full{' '}
-                    <span className="admin-muted">— auto-compare all files before marking complete</span>
-                  </span>
-                </label>
-              </div>
-            </div>
+              </>
+            ) : null}
           </div>
           {error ? <p className="error">{error}</p> : null}
           <div className="modal-actions">

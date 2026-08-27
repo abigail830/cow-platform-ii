@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   buildEvalRunComparisonKey,
+  buildEvalRunJudgeResultKey,
   buildEvalRunItemOutputPrefix,
   evalRunAsrResultKey,
   evalRunTranscriptKey,
@@ -30,5 +31,10 @@ describe('eval-run-files', () => {
   it('builds comparison keys scoped to attempt', () => {
     const key = buildEvalRunComparisonKey(runId, attemptId, itemId);
     assert.equal(key, `eval-runs/${runId}/attempts/${attemptId}/comparisons/${itemId}.json`);
+  });
+
+  it('builds judge result keys scoped to attempt', () => {
+    const key = buildEvalRunJudgeResultKey(runId, attemptId, itemId);
+    assert.equal(key, `eval-runs/${runId}/attempts/${attemptId}/judgments/${itemId}.json`);
   });
 });

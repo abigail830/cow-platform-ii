@@ -236,6 +236,27 @@ export async function maybeFinalizeEvalRunComparePhase(runId: string): Promise<v
     else if (item.stage === 'failed' || item.stage === 'cancelled') failedRunItems += 1;
   }
 
+  if (run.judgeEnabled) {
+    await db
+      .update(appEvalRuns)
+      .set({
+        status: 'running',
+        completedCompareItems: completion.completedCompareItems,
+        failedCompareItems: completion.failedCompareItems,
+        completedRunItems,
+        failedRunItems,
+        updatedAt: new Date(),
+      })
+      .where(eq(appEvalRuns.id, runId));
+
+    const { syncEvalRunAttemptFromRun } = await import('./eval-run-attempts.ts');
+    await syncEvalRunAttemptFromRun(attempt.id, runId);
+
+    const { startEvalRunJudgePhase } = await import('./eval-run-judge.ts');
+    await startEvalRunJudgePhase(runId, attempt.id);
+    return;
+  }
+
   await db
     .update(appEvalRuns)
     .set({

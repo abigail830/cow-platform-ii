@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Eye, FolderOpen, GitCompare, History, Loader2, Play, Plus, RotateCw, Trash2, Upload } from 'lucide-react';
+import { Eye, FolderOpen, GitCompare, History, Loader2, Play, Plus, Trash2 } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
@@ -549,16 +549,6 @@ export function EvaluationRunsListPage() {
                           <FolderOpen {...iconProps()} aria-hidden />
                         </button>
                       ) : null}
-                      {canWrite && run.status !== 'running' ? (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title="Upload files"
-                          onClick={() => setFilesTarget(run)}
-                        >
-                          <Upload {...iconProps()} aria-hidden />
-                        </button>
-                      ) : null}
                       <Link to={`/evaluation/runs/${run.id}`} className="icon-btn" title="View">
                         <Eye {...iconProps()} aria-hidden />
                       </Link>
@@ -673,7 +663,7 @@ export function EvaluationRunDetailPage() {
   const activeRunMode = starting && startingMode ? startingMode : detail?.run.run_mode;
   const canTriggerRun =
     canWrite && detail != null && !starting && !isRunActive && (detail.dataset_items?.length ?? 0) > 0;
-  const RunActionIcon = detail?.run.status === 'draft' ? Play : RotateCw;
+  const RunActionIcon = Play;
 
   const fileCount = detail?.dataset_items?.length ?? 0;
 
@@ -688,11 +678,7 @@ export function EvaluationRunDetailPage() {
       const result = await startEvalRun(runId, { run_mode: runMode });
       setDetail(result);
       setFastPollUntil(Date.now() + 60_000);
-      const isDraft = detail?.run.status === 'draft';
-      showNotice(
-        isDraft ? 'Evaluation run started' : 'Evaluation run restarted',
-        'success',
-      );
+      showNotice('Run started', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start run';
       showNotice(message, 'error');
@@ -703,11 +689,10 @@ export function EvaluationRunDetailPage() {
     }
   }
 
-  function runModeButtonLabel(mode: EvalRunMode, action: 'start' | 'restart'): string {
-    const prefix = action === 'start' ? 'Run' : 'Restart';
+  function runModeButtonLabel(mode: EvalRunMode): string {
     if (isRunActive && activeRunMode === mode) return 'Running…';
-    if (starting && startingMode === mode) return action === 'start' ? 'Starting…' : 'Restarting…';
-    return mode === 'full' ? `${prefix} full` : `${prefix} pipeline only`;
+    if (starting && startingMode === mode) return 'Starting…';
+    return mode === 'full' ? 'Run full' : 'Run pipeline only';
   }
 
   async function openCompare(datasetItemId: string, attemptId: string) {
@@ -787,10 +772,7 @@ export function EvaluationRunDetailPage() {
                 ) : (
                   <RunActionIcon {...iconProps()} aria-hidden />
                 )}
-                {runModeButtonLabel(
-                  'pipeline_only',
-                  detail.run.status === 'draft' ? 'start' : 'restart',
-                )}
+                {runModeButtonLabel('pipeline_only')}
               </button>
               <button
                 type="button"
@@ -803,7 +785,7 @@ export function EvaluationRunDetailPage() {
                 ) : (
                   <RunActionIcon {...iconProps()} aria-hidden />
                 )}
-                {runModeButtonLabel('full', detail.run.status === 'draft' ? 'start' : 'restart')}
+                {runModeButtonLabel('full')}
               </button>
             </>
           ) : null}

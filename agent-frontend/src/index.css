@@ -2733,6 +2733,19 @@ textarea {
   line-height: 1.35;
 }
 
+.eval-run-create-modal {
+  width: min(760px, 100%);
+  min-height: min(640px, calc(100vh - 2.5rem));
+}
+
+.eval-run-create-modal .form-grid + .modal-tabs {
+  margin-top: 0.25rem;
+}
+
+.eval-run-create-tab-body {
+  margin-bottom: 0.25rem;
+}
+
 .eval-run-create-modal .admin-form-hint {
   white-space: normal;
 }

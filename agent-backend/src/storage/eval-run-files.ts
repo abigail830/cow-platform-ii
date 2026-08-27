@@ -29,6 +29,16 @@ export function buildEvalRunComparisonKey(
   return key;
 }
 
+export function buildEvalRunJudgeResultKey(
+  runId: string,
+  attemptId: string,
+  datasetItemId: string,
+): string {
+  const key = `${EVAL_RUNS_PREFIX}${runId}/attempts/${attemptId}/judgments/${datasetItemId}.json`;
+  validateKey(key);
+  return key;
+}
+
 export function evalRunAsrResultKey(outputPrefix: string): string {
   const key = `${outputPrefix.replace(/\/?$/, '/')}asr_result.json`;
   validateKey(key);

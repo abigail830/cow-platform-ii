@@ -29,6 +29,10 @@ import {
   toAttemptPublic,
 } from './eval-run-attempts.ts';
 import { enrichEvalRunItemPublic } from './eval-run-item-enrichment.ts';
+import {
+  DEFAULT_EVAL_JUDGE_SCENARIO_ID,
+  snapshotEvalJudgeDimensions,
+} from './eval-judge-dimensions.ts';
 
 const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
   'Worker exited without updating job status (check GitHub Actions logs).';
@@ -223,6 +227,16 @@ export async function createEvalRun(input: {
       status: 'draft',
       phase: 'transcribing',
       runMode,
+      judgeEnabled: runMode === 'full',
+      judgeMetrics:
+        runMode === 'full'
+          ? [
+              {
+                scenario_id: DEFAULT_EVAL_JUDGE_SCENARIO_ID,
+                dimensions: snapshotEvalJudgeDimensions(),
+              },
+            ]
+          : null,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -284,7 +298,20 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
   if (options?.runMode) {
     await db
       .update(appEvalRuns)
-      .set({ runMode, updatedAt: new Date() })
+      .set({
+        runMode,
+        judgeEnabled: runMode === 'full',
+        judgeMetrics:
+          runMode === 'full'
+            ? [
+                {
+                  scenario_id: DEFAULT_EVAL_JUDGE_SCENARIO_ID,
+                  dimensions: snapshotEvalJudgeDimensions(),
+                },
+              ]
+            : null,
+        updatedAt: new Date(),
+      })
       .where(eq(appEvalRuns.id, runId));
     run = (await getEvalRunById(runId))!;
   }
@@ -375,6 +402,12 @@ export async function maybeFinalizeEvalRunPhase(runId: string): Promise<void> {
   if (run.phase === 'comparing') {
     const { maybeFinalizeEvalRunComparePhase } = await import('./eval-run-compare.ts');
     await maybeFinalizeEvalRunComparePhase(runId);
+    return;
+  }
+
+  if (run.phase === 'judging') {
+    const { maybeFinalizeEvalRunJudgePhase } = await import('./eval-run-judge.ts');
+    await maybeFinalizeEvalRunJudgePhase(runId);
     return;
   }
 

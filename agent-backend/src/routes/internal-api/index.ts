@@ -7,6 +7,7 @@ import pipelineJobs from './pipeline-jobs.ts';
 import audioPipelineJobs from './audio-pipeline-jobs.ts';
 import audioCapturePipelineJobs from './audio-capture-pipeline-jobs.ts';
 import evalPipelineJobs from './eval-pipeline-jobs.ts';
+import evalJudgeJobs from './eval-judge-jobs.ts';
 
 const internalApi = new Hono();
 
@@ -19,5 +20,6 @@ internalApi.route('/pipeline/jobs', pipelineJobs);
 internalApi.route('/audio-pipeline/jobs', audioPipelineJobs);
 internalApi.route('/audio-capture-pipeline/jobs', audioCapturePipelineJobs);
 internalApi.route('/eval-pipeline/jobs', evalPipelineJobs);
+internalApi.route('/eval-judge/jobs', evalJudgeJobs);
 
 export default internalApi;

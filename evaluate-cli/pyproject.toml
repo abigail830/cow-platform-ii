@@ -19,6 +19,9 @@ dev = [
 pipeline = [
     "boto3>=1.26.0",
 ]
+judge = [
+    "deepeval>=2.0.0",
+]
 aliyun = [
     "alibabacloud_docmind_api20220711>=1.4.0",
     "alibabacloud_tea_openapi>=0.3.0",
