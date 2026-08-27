@@ -20,6 +20,7 @@
     "verify": "npm run catalog:validate && tsx scripts/verify-smoke.ts",
     "verify:documents": "tsx scripts/verify-documents.ts",
     "verify:knowledge-bases": "tsx scripts/verify-knowledge-bases.ts",
+    "verify:eval-pipeline-dispatch": "tsx scripts/verify-eval-pipeline-dispatch.ts",
     "verify:resource-access": "tsx scripts/verify-resource-access.ts",
     "verify:user-api-key": "tsx scripts/verify-user-api-key.ts",
     "test": "tsx --test src/**/*.test.ts",

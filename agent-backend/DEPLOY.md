@@ -41,7 +41,7 @@ Run `npx tsc --noEmit` locally before deploy to catch type errors.
 | `DATABASE_URL` | Neon pooler URL (Vercel integration) |
 | `JWT_SECRET` | Production secret |
 | `CORS_ORIGIN` | Frontend origin, e.g. `https://your-frontend.vercel.app` |
-| `OPENKMS_API_URL` | **This** deployment URL (GHA callbacks) |
+| `OPENKMS_API_URL` | **This backend deployment URL** (GHA callbacks), e.g. `https://cow-platform-ii.vercel.app` — **not** the frontend SPA host (`cow-platform.vercel.app`). Frontend only proxies `/api` and `/health`; `/internal-api/*` must hit backend directly or workers get HTML/404. |
 | `OPENKMS_CLI_BASIC_USER` / `OPENKMS_CLI_BASIC_PASSWORD` | internal-api auth |
 | `GITHUB_PIPELINE_TOKEN` | PAT with `actions:write` on `cow-platform-ii` |
 | `GITHUB_PIPELINE_REPOSITORY` | `abigail830/cow-platform-ii` |

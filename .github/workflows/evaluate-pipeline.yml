@@ -76,6 +76,29 @@ jobs:
             exit 1
           }
 
+      - name: Validate internal eval API route
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+          OPENKMS_CLI_BASIC_USER: ${{ secrets.OPENKMS_CLI_BASIC_USER }}
+          OPENKMS_CLI_BASIC_PASSWORD: ${{ secrets.OPENKMS_CLI_BASIC_PASSWORD }}
+        run: |
+          probe_url="${OPENKMS_API_URL%/}/internal-api/eval-pipeline/jobs/00000000-0000-0000-0000-000000000000"
+          response="$(curl -sS --max-time 15 -u "${OPENKMS_CLI_BASIC_USER}:${OPENKMS_CLI_BASIC_PASSWORD}" -w '\n%{http_code}' "$probe_url")"
+          body="$(printf '%s' "$response" | sed '$d')"
+          code="$(printf '%s' "$response" | tail -n 1)"
+          if printf '%s' "$body" | grep -qi '<html'; then
+            echo "::error::OPENKMS_API_URL looks like the frontend host — use the agent-backend URL (e.g. cow-platform-ii.vercel.app), not the SPA."
+            exit 1
+          fi
+          if [ "$code" != "404" ] && [ "$code" != "401" ]; then
+            echo "::error::Unexpected internal-api probe status ${code}. Expected backend JSON 404/401."
+            exit 1
+          fi
+          if [ "$code" = "401" ]; then
+            echo "::error::internal-api auth failed — check OPENKMS_CLI_BASIC_* secrets."
+            exit 1
+          fi
+
       - name: Run eval pipeline (submit → poll → finalize)
         env:
           OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}

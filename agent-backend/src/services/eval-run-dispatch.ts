@@ -5,7 +5,11 @@ import {
   appEvalRuns,
   db,
 } from '../db/index.ts';
-import { isTerminalEvalRunItemStage } from './eval-run-phase.ts';
+import {
+  isTerminalEvalRunItemStage,
+  shouldContinueEvalRunDispatch,
+  evalRunItemDispatchClaimed,
+} from './eval-run-phase.ts';
 import { updateEvalRunItem } from './eval-pipeline-jobs.ts';
 import { spawnAsyncEvalPipelineWorker } from './eval-pipeline-runner.ts';
 
@@ -14,16 +18,17 @@ import { groupEvalRunDispatchItemsByDatasetFile, type EvalRunDispatchItem } from
 export type { EvalRunDispatchItem } from './eval-run-dispatch-group.ts';
 export { groupEvalRunDispatchItemsByDatasetFile } from './eval-run-dispatch-group.ts';
 
-function evalRunItemDispatchClaimed(metrics: unknown): boolean {
-  if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return false;
-  return Boolean((metrics as Record<string, unknown>).dispatch_claimed_at);
-}
+export const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
+  'Worker exited without updating job status (check GitHub Actions logs).';
+
+export const EVAL_RUN_SKIP_NO_PRIOR_SUCCESS_MESSAGE =
+  'Skipped — waiting for at least one successful transcription before continuing.';
 
 function itemDispatchClaimed(metrics: unknown): boolean {
   return evalRunItemDispatchClaimed(metrics);
 }
 
-export { evalRunItemDispatchClaimed };
+export { evalRunItemDispatchClaimed } from './eval-run-phase.ts';
 
 function fileItemsInProgress(
   fileItemIds: string[],
@@ -37,9 +42,33 @@ function fileItemsInProgress(
   });
 }
 
+export async function abortEvalRunTranscribeWithoutSuccess(runId: string): Promise<void> {
+  const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
+
+  for (const item of items) {
+    if (isTerminalEvalRunItemStage(item.stage)) continue;
+
+    if (item.stage === 'submitted' && evalRunItemDispatchClaimed(item.metrics)) {
+      await updateEvalRunItem(item.id, {
+        stage: 'failed',
+        errorMessage: item.errorMessage ?? EVAL_RUN_WORKER_NO_STATUS_MESSAGE,
+      });
+      continue;
+    }
+
+    await updateEvalRunItem(item.id, {
+      stage: 'cancelled',
+      errorMessage: EVAL_RUN_SKIP_NO_PRIOR_SUCCESS_MESSAGE,
+    });
+  }
+
+  const { maybeFinalizeEvalRunPhase } = await import('./eval-runs.ts');
+  await maybeFinalizeEvalRunPhase(runId);
+}
+
 /**
  * Dispatch at most one eval pipeline worker, file-by-file and one pipeline job at a time.
- * Call on run start and whenever a job reaches a terminal stage.
+ * Stops after the first failure until at least one transcription succeeds.
  */
 export async function dispatchNextEvalRunJob(runId: string): Promise<void> {
   const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
@@ -47,6 +76,11 @@ export async function dispatchNextEvalRunJob(runId: string): Promise<void> {
 
   const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
   if (items.length === 0) return;
+
+  if (!shouldContinueEvalRunDispatch(items)) {
+    await abortEvalRunTranscribeWithoutSuccess(runId);
+    return;
+  }
 
   if (items.some((item) => item.stage === 'transcribing')) return;
 

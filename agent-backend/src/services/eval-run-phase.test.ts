@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { computeEvalRunCompletion, computeEvalRunCompareCompletion, isTerminalEvalRunItemStage } from './eval-run-phase.ts';
+import { computeEvalRunCompletion, computeEvalRunCompareCompletion, isTerminalEvalRunItemStage, shouldContinueEvalRunDispatch } from './eval-run-phase.ts';
 
 describe('eval-run-phase', () => {
   it('detects terminal item stages', () => {
@@ -55,6 +55,19 @@ describe('eval-run-phase', () => {
       completedRunItems: 0,
       failedRunItems: 2,
     });
+  });
+
+  it('stops dispatch after failure when nothing succeeded yet', () => {
+    assert.equal(shouldContinueEvalRunDispatch([{ stage: 'submitted' }]), true);
+    assert.equal(shouldContinueEvalRunDispatch([{ stage: 'failed' }]), false);
+    assert.equal(
+      shouldContinueEvalRunDispatch([{ stage: 'failed' }, { stage: 'submitted' }]),
+      false,
+    );
+    assert.equal(
+      shouldContinueEvalRunDispatch([{ stage: 'done' }, { stage: 'failed' }]),
+      true,
+    );
   });
 
   it('marks compare phase completed when every comparison succeeds', () => {

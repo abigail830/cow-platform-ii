@@ -33,6 +33,23 @@ export function isTerminalEvalRunCompareStatus(status: string): boolean {
   return TERMINAL_COMPARE_STATUSES.has(status as EvalRunCompareStatus);
 }
 
+export function evalRunItemDispatchClaimed(metrics: unknown): boolean {
+  if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return false;
+  return Boolean((metrics as Record<string, unknown>).dispatch_claimed_at);
+}
+
+export function hasEvalRunTranscribeSuccess(items: EvalRunItemStageSnapshot[]): boolean {
+  return items.some((item) => item.stage === 'done');
+}
+
+/** Stop dispatching more workers once a job fails and none have succeeded yet. */
+export function shouldContinueEvalRunDispatch(items: EvalRunItemStageSnapshot[]): boolean {
+  if (hasEvalRunTranscribeSuccess(items)) return true;
+  return !items.some(
+    (item) => item.stage === 'failed' || item.stage === 'cancelled',
+  );
+}
+
 export function computeEvalRunCompletion(items: EvalRunItemStageSnapshot[]): EvalRunCompletion | null {
   if (items.length === 0) return null;
   if (!items.every((item) => isTerminalEvalRunItemStage(item.stage))) {

@@ -12,14 +12,52 @@ import {
 } from '../db/index.ts';
 import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
 import { getEvalDatasetById, listEvalDatasetItems } from './eval-datasets.ts';
-import { computeEvalRunCompletion, isTerminalEvalRunItemStage } from './eval-run-phase.ts';
+import { computeEvalRunCompletion, isTerminalEvalRunItemStage, evalRunItemDispatchClaimed } from './eval-run-phase.ts';
 import { evalRunItemToPublic, snapshotConfigYaml } from './eval-pipeline-jobs.ts';
-import { orchestrateEvalRunDispatch, evalRunItemDispatchClaimed } from './eval-run-dispatch.ts';
+import { orchestrateEvalRunDispatch } from './eval-run-dispatch.ts';
 import { buildEvalRunItemOutputPrefix } from '../storage/eval-run-files.ts';
 import { isAudioAsyncPipelineName, audioPipelineProviderForName } from './audio-pipeline-names.ts';
 import { getStorageReadUrl } from '../storage/document-files.ts';
 import { shouldFailStaleAudioJob } from './audio-pipeline-stale.ts';
 import { startEvalRunComparePhase } from './eval-run-compare.ts';
+
+const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
+  'Worker exited without updating job status (check GitHub Actions logs).';
+
+const EVAL_DISPATCH_CLAIM_STALE_MS = Number(
+  process.env.EVAL_PIPELINE_DISPATCH_CLAIM_STALE_MS ?? 2 * 60 * 1000,
+);
+
+function dispatchClaimedAt(metrics: unknown): number | null {
+  if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return null;
+  const raw = (metrics as Record<string, unknown>).dispatch_claimed_at;
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function shouldFailStaleEvalRunItem(
+  item: typeof appEvalRunItems.$inferSelect,
+  now = Date.now(),
+): { stale: boolean; message?: string } {
+  if (item.stage === 'submitted' && evalRunItemDispatchClaimed(item.metrics)) {
+    const claimedAt = dispatchClaimedAt(item.metrics);
+    if (claimedAt != null && now - claimedAt > EVAL_DISPATCH_CLAIM_STALE_MS) {
+      return {
+        stale: true,
+        message: item.errorMessage ?? EVAL_RUN_WORKER_NO_STATUS_MESSAGE,
+      };
+    }
+  }
+
+  return shouldFailStaleAudioJob({
+    stage: item.stage,
+    externalJobId: item.externalJobId,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    now,
+  });
+}
 
 function toRunPublic(row: typeof appEvalRuns.$inferSelect) {
   return {
@@ -312,12 +350,7 @@ export async function reconcileStaleEvalRunItems(runId: string): Promise<void> {
     // Queued items (never dispatched) must not be stale-failed while an earlier job is stuck.
     if (item.stage === 'submitted' && !evalRunItemDispatchClaimed(item.metrics)) continue;
 
-    const decision = shouldFailStaleAudioJob({
-      stage: item.stage,
-      externalJobId: item.externalJobId,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    });
+    const decision = shouldFailStaleEvalRunItem(item);
 
     if (!decision.stale) continue;
 
@@ -338,6 +371,15 @@ export async function maybeAdvanceEvalRunAfterJobTerminal(runId: string): Promis
   await maybeFinalizeEvalRunPhase(runId);
   const run = await getEvalRunById(runId);
   if (!run || run.status !== 'running' || run.phase !== 'transcribing') return;
+
+  const items = await db.select().from(appEvalRunItems).where(eq(appEvalRunItems.runId, runId));
+  const { shouldContinueEvalRunDispatch } = await import('./eval-run-phase.ts');
+  if (!shouldContinueEvalRunDispatch(items)) {
+    const { abortEvalRunTranscribeWithoutSuccess } = await import('./eval-run-dispatch.ts');
+    await abortEvalRunTranscribeWithoutSuccess(runId);
+    return;
+  }
+
   const { dispatchNextEvalRunJob } = await import('./eval-run-dispatch.ts');
   await dispatchNextEvalRunJob(runId);
 }

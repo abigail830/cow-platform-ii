@@ -40,6 +40,8 @@ Worker mode: `PIPELINE_WORKER=spawn` (local dev) | `github_actions` (Vercel defa
 
 Eval runs dispatch **one worker at a time** (`eval-run-dispatch.ts`): claim via `metrics.dispatch_claimed_at`, chain next job on terminal PATCH. Stale watchdog must **not** fail queued items that were never claimed.
 
+**Fail-fast:** if any job reaches `failed`/`cancelled` and **zero** items are `done`, stop dispatching — cancel remaining queue and finalize the run. Continue only after at least one transcription succeeds.
+
 ## Do
 
 - Add a dedicated internal-api route + job context builder + runner + (if GHA) workflow per new async domain.
@@ -62,4 +64,4 @@ Eval runs dispatch **one worker at a time** (`eval-run-dispatch.ts`): claim via 
 - [ ] GET context returns input URI, output prefix, config snapshot?
 - [ ] PATCH updates stage + external id; terminal stage advances orchestration?
 - [ ] GHA workflow runs the **correct CLI** in the **correct working-directory**?
-- [ ] `OPENKMS_API_URL` in GHA secrets matches the backend that owns the job row?
+- [ ] `OPENKMS_API_URL` in GHA secrets is the **backend** host (not the frontend SPA)?
