@@ -3,8 +3,8 @@ import { normalizeEvalJudgeDimensions } from '../../shared/eval/eval-judge-crite
 
 export { DEFAULT_EVAL_JUDGE_SCENARIO_ID };
 
-export type EvalJudgeDimensionScope = 'variant' | 'pairwise';
-export type EvalJudgeDimensionKind = 'geval_score' | 'geval_winner';
+export type EvalJudgeDimensionScope = 'variant' | 'pairwise' | 'variant_vs_gt';
+export type EvalJudgeDimensionKind = 'geval_score' | 'geval_winner' | 'cer_score' | 'wer_score';
 
 export type EvalJudgeDimensionDefinition = {
   id: string;

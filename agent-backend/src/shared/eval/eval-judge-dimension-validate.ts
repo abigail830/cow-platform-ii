@@ -4,6 +4,13 @@ import { normalizeEvalJudgeGevalCriteria } from './eval-judge-criteria.ts';
 
 const DIMENSION_ID_RE = /^[a-z][a-z0-9_]*$/;
 
+function defaultErrorRateCriteria(kind: 'cer_score' | 'wer_score'): string {
+  if (kind === 'wer_score') {
+    return 'Deterministic Word Error Rate (WER) between EXPECTED_OUTPUT and ACTUAL_OUTPUT.';
+  }
+  return 'Deterministic Character Error Rate (CER) between EXPECTED_OUTPUT and ACTUAL_OUTPUT.';
+}
+
 export function normalizeEvaluationSteps(raw: unknown, dimensionId: string): string[] | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (!Array.isArray(raw)) {
@@ -46,12 +53,24 @@ export function validateJudgeDimensions(
     if (seen.has(id)) throw new Error(`Duplicate dimension id: ${id}`);
     seen.add(id);
     if (!label) throw new Error(`Dimension ${id}: label is required`);
-    if (!criteria) throw new Error(`Dimension ${id}: criteria (evaluation prompt) is required`);
-    if (scope !== 'variant' && scope !== 'pairwise') {
-      throw new Error(`Dimension ${id}: scope must be variant or pairwise`);
+    if (scope !== 'variant' && scope !== 'pairwise' && scope !== 'variant_vs_gt') {
+      throw new Error(`Dimension ${id}: scope must be variant, pairwise, or variant_vs_gt`);
     }
-    if (kind !== 'geval_score' && kind !== 'geval_winner') {
-      throw new Error(`Dimension ${id}: kind must be geval_score or geval_winner`);
+    if (
+      kind !== 'geval_score' &&
+      kind !== 'geval_winner' &&
+      kind !== 'cer_score' &&
+      kind !== 'wer_score'
+    ) {
+      throw new Error(
+        `Dimension ${id}: kind must be geval_score, geval_winner, cer_score, or wer_score`,
+      );
+    }
+    const resolvedCriteria =
+      criteria ||
+      (kind === 'cer_score' || kind === 'wer_score' ? defaultErrorRateCriteria(kind) : '');
+    if (!resolvedCriteria) {
+      throw new Error(`Dimension ${id}: criteria (evaluation prompt) is required`);
     }
     if (!Number.isFinite(weight) || weight <= 0) {
       throw new Error(`Dimension ${id}: weight must be a positive number`);
@@ -65,7 +84,10 @@ export function validateJudgeDimensions(
       scope,
       kind,
       weight,
-      criteria: normalizeEvalJudgeGevalCriteria(criteria, kind),
+      criteria:
+        kind === 'cer_score' || kind === 'wer_score'
+          ? resolvedCriteria
+          : normalizeEvalJudgeGevalCriteria(resolvedCriteria, kind),
       ...(evaluationSteps ? { evaluation_steps: evaluationSteps } : {}),
     };
   });

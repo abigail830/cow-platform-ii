@@ -25,5 +25,13 @@ describe('evaluation runs file routes', () => {
     );
     assert.notEqual(deleteRes.status, 404);
     assert.equal(deleteRes.status, 401);
+
+    const evaluateRes = await runs.request('/00000000-0000-0000-0000-000000000001/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attempt_id: '00000000-0000-0000-0000-000000000002' }),
+    });
+    assert.notEqual(evaluateRes.status, 404);
+    assert.equal(evaluateRes.status, 401);
   });
 });

@@ -33,7 +33,7 @@ export function normalizeEvalJudgeGevalCriteria(
   kind: EvalJudgeDimensionKind,
 ): string {
   const trimmed = criteria.trim();
-  if (kind === 'geval_winner') return trimmed;
+  if (kind === 'geval_winner' || kind === 'cer_score' || kind === 'wer_score') return trimmed;
   if (!trimmed) return `${GEVAL_INTEGER_SCALE_HINT} Explain your score in 1–2 sentences.`;
 
   let text = stripZeroToOneScalePhrases(trimmed);

@@ -2710,6 +2710,104 @@ textarea {
   font-size: 1rem;
 }
 
+.eval-dataset-reference-import-modal.modal-card {
+  width: min(760px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+}
+
+.eval-dataset-reference-import-dataset-hint {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.eval-dataset-reference-import-dataset-name {
+  color: var(--brand-orange);
+  font-weight: 500;
+}
+
+.eval-dataset-reference-import-format {
+  margin: 0 0 0.75rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.eval-dataset-reference-import-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.eval-dataset-reference-import-modal .document-upload-dropzone {
+  background: #ffffff;
+}
+
+.eval-dataset-reference-import-modal .document-upload-dropzone.drag-over {
+  background: #ffffff;
+  border-color: var(--brand-orange);
+}
+
+.eval-dataset-reference-import-modal .document-upload-dropzone-title,
+.eval-dataset-reference-import-modal .document-upload-dropzone-hint {
+  background: transparent;
+}
+
+.eval-dataset-reference-import-modal .document-upload-dropzone ::selection {
+  background: transparent;
+  color: inherit;
+}
+
+.eval-dataset-reference-import-modal .document-upload-dropzone-hint {
+  max-width: none;
+}
+
+.eval-dataset-reference-import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  min-height: 0;
+}
+
+.eval-dataset-reference-import-summary {
+  margin: 0;
+  color: #475569;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.eval-dataset-reference-import-issues {
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  padding: 0.625rem 0.75rem;
+  max-height: 11rem;
+  overflow: auto;
+}
+
+.eval-dataset-reference-import-issues-title {
+  margin: 0 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.eval-dataset-reference-import-issues ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.eval-dataset-reference-import-issues li {
+  padding: 0.125rem 0;
+  color: #b91c1c;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
 .admin-toolbar-meta {
   margin: 0;
   color: #64748b;
@@ -2748,6 +2846,10 @@ textarea {
 
 .eval-run-create-modal .admin-form-hint {
   white-space: normal;
+}
+
+.eval-run-create-dataset-warning {
+  margin: 0.35rem 0 0;
 }
 
 .eval-run-pipeline-list {
@@ -2813,6 +2915,11 @@ textarea {
   list-style: none;
 }
 
+.eval-run-evaluate-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .eval-run-attempt-summary::-webkit-details-marker {
   display: none;
 }
@@ -2851,7 +2958,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  padding: 0.375rem 0.75rem;
   cursor: pointer;
   list-style: none;
 }
@@ -2874,15 +2981,44 @@ textarea {
   flex: 1;
   justify-content: flex-end;
   align-items: center;
-  gap: 1rem;
   min-width: 0;
 }
 
+.eval-run-pipeline-group {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.eval-run-compare-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 1.5rem;
+  padding-left: 1.5rem;
+  border-left: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
 .eval-run-pipeline-chip {
+  display: grid;
+  grid-template-columns: minmax(9rem, 12rem) 5rem 3.25rem;
+  align-items: center;
+  column-gap: 0.5rem;
+  min-width: 0;
+}
+
+.eval-run-compare-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  min-width: 0;
+}
+
+.eval-run-compare-chip-name {
+  font-size: 0.8125rem;
+  color: #64748b;
+  white-space: nowrap;
 }
 
 .eval-run-pipeline-chip-name {
@@ -2891,7 +3027,23 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 10rem;
+}
+
+.eval-run-pipeline-chip-status {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.eval-run-pipeline-chip-status .eval-run-status-badge,
+.eval-run-pipeline-chip-status .document-status-badge {
+  white-space: nowrap;
+}
+
+.eval-run-pipeline-chip-duration {
+  font-size: 0.8125rem;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .eval-run-file-body {
@@ -3206,10 +3358,15 @@ textarea {
   }
 
   .eval-run-file-pipeline-row {
-    width: 100%;
-    justify-content: flex-start;
     flex-wrap: wrap;
-    gap: 0.5rem 0.75rem;
+    justify-content: flex-start;
+  }
+
+  .eval-run-compare-group {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+    width: 100%;
   }
 
   .eval-run-pipeline-grid {
@@ -5352,6 +5509,7 @@ select:focus-visible {
   padding: 1.25rem;
   text-align: center;
   cursor: pointer;
+  user-select: none;
 }
 
 .document-upload-dropzone.drag-over {
@@ -5405,6 +5563,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
+  user-select: text;
 }
 
 .document-upload-file-list li {

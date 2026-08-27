@@ -8,9 +8,12 @@ import {
   deleteEvalDataset,
   deleteEvalDatasetItem,
   finalizeEvalDatasetItemUpload,
+  finalizeEvalDatasetReferenceUpload,
   getEvalDatasetById,
   getEvalDatasetItemDownloadUrl,
+  getEvalDatasetReferenceDownloadUrl,
   initEvalDatasetItemUpload,
+  initEvalDatasetReferenceUpload,
   listEvalDatasetItems,
   listEvalDatasets,
   updateEvalDataset,
@@ -245,6 +248,88 @@ datasets.get(
       if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
       const message = error instanceof Error ? error.message : 'Failed to create download URL';
       const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+datasets.get(
+  '/:id/items/:itemId/reference/download-url',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.DATASETS, 'read'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const id = routeParam(c, 'id');
+    const itemId = routeParam(c, 'itemId');
+    if (!id || !itemId) return c.json({ error: 'Dataset id and item id are required' }, 400);
+
+    try {
+      const result = await getEvalDatasetReferenceDownloadUrl(id, itemId);
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      const message = error instanceof Error ? error.message : 'Failed to create download URL';
+      const status = message.includes('not found') || message.includes('not uploaded') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+datasets.post(
+  '/:id/items/:itemId/reference/upload-init',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.DATASETS, 'write'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const id = routeParam(c, 'id');
+    const itemId = routeParam(c, 'itemId');
+    if (!id || !itemId) return c.json({ error: 'Dataset id and item id are required' }, 400);
+
+    const body = await c.req.json<{ size_bytes?: number }>();
+    const sizeBytes = Number(body.size_bytes);
+    if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
+      return c.json({ error: 'size_bytes is required' }, 400);
+    }
+
+    try {
+      const result = await initEvalDatasetReferenceUpload({
+        datasetId: id,
+        itemId,
+        sizeBytes,
+      });
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      const { message, status } = routeError(error, 'Reference upload init failed');
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+datasets.post(
+  '/:id/items/:itemId/reference/upload-complete',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.DATASETS, 'write'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const id = routeParam(c, 'id');
+    const itemId = routeParam(c, 'itemId');
+    if (!id || !itemId) return c.json({ error: 'Dataset id and item id are required' }, 400);
+
+    const body = await c.req.json<{ s3_key?: string }>();
+    const s3Key = body.s3_key?.trim() ?? '';
+    if (!s3Key) return c.json({ error: 's3_key is required' }, 400);
+
+    try {
+      const item = await finalizeEvalDatasetReferenceUpload({
+        datasetId: id,
+        itemId,
+        s3Key,
+      });
+      return c.json(item);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      const { message, status } = routeError(error, 'Reference upload complete failed');
       return c.json({ error: message }, status);
     }
   },

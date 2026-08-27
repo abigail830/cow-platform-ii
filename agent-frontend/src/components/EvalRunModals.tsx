@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import type { EvalRunProcessingOption, EvalRunMode } from '../api/evaluation/runs.ts';
 import {
@@ -7,31 +8,34 @@ import {
   uploadEvalRunFile,
   type EvalRunDatasetItemRef,
 } from '../api/evaluation/runs.ts';
-import { formatEvalFileBytes } from '../api/evaluation/datasets.ts';
+import { formatEvalFileBytes, type EvalDataset } from '../api/evaluation/datasets.ts';
 import { EvalDatasetFileDropzone } from './EvalDatasetModals.tsx';
 import { iconProps } from './icons/icon-props.ts';
 
 type EvalRunCreateModalProps = {
   pipelines: EvalRunProcessingOption[];
+  datasets: EvalDataset[];
   onCancel: () => void;
   onCreate: (input: {
     name: string;
     description: string;
     pipelineConfigIds: string[];
     runMode: EvalRunMode;
-    files: File[];
+    datasetId: string;
   }) => Promise<void>;
 };
 
-export function EvalRunCreateModal({ pipelines, onCancel, onCreate }: EvalRunCreateModalProps) {
+export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: EvalRunCreateModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [datasetId, setDatasetId] = useState('');
   const [mediaTab, setMediaTab] = useState<'audio'>('audio');
-  const [files, setFiles] = useState<File[]>([]);
   const [selectedPipelineIds, setSelectedPipelineIds] = useState<string[]>([]);
   const [runMode, setRunMode] = useState<EvalRunMode>('full');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const selectedDataset = datasets.find((row) => row.id === datasetId) ?? null;
 
   function togglePipeline(id: string) {
     setSelectedPipelineIds((prev) =>
@@ -50,7 +54,7 @@ export function EvalRunCreateModal({ pipelines, onCancel, onCreate }: EvalRunCre
         description: description.trim(),
         pipelineConfigIds: selectedPipelineIds,
         runMode,
-        files,
+        datasetId,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create run');
@@ -59,7 +63,7 @@ export function EvalRunCreateModal({ pipelines, onCancel, onCreate }: EvalRunCre
     }
   }
 
-  const canSubmit = Boolean(name.trim() && selectedPipelineIds.length > 0);
+  const canSubmit = Boolean(name.trim() && datasetId && selectedPipelineIds.length > 0);
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
@@ -114,11 +118,45 @@ export function EvalRunCreateModal({ pipelines, onCancel, onCreate }: EvalRunCre
             {mediaTab === 'audio' ? (
               <>
                 <div className="form-field form-field-wide">
-                  <span>Audio files</span>
-                  <p className="admin-form-hint">
-                    Optional now — you can also upload or remove files from the list page.
-                  </p>
-                  <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} disabled={busy} />
+                  <span>Dataset</span>
+                  {datasets.length === 0 ? (
+                    <p className="admin-muted">
+                      No datasets yet.{' '}
+                      <Link to="/evaluation/datasets" className="btn-link">
+                        Create a dataset
+                      </Link>{' '}
+                      and upload audio files first.
+                    </p>
+                  ) : (
+                    <>
+                      <select
+                        value={datasetId}
+                        onChange={(event) => setDatasetId(event.target.value)}
+                        disabled={busy}
+                        required
+                      >
+                        <option value="">Select a dataset…</option>
+                        {datasets.map((dataset) => (
+                          <option key={dataset.id} value={dataset.id}>
+                            {dataset.name} ({dataset.item_count} file{dataset.item_count === 1 ? '' : 's'})
+                          </option>
+                        ))}
+                      </select>
+                      {selectedDataset && selectedDataset.item_count === 0 ? (
+                        <p className="error eval-run-create-dataset-warning">
+                          This dataset has no audio files. Upload files on the{' '}
+                          <Link to={`/evaluation/datasets/${selectedDataset.id}`} className="btn-link">
+                            dataset page
+                          </Link>{' '}
+                          before starting a run.
+                        </p>
+                      ) : selectedDataset ? (
+                        <p className="admin-form-hint">
+                          Audio files and references are managed on the dataset page — not here.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
                 </div>
                 <div className="form-field form-field-wide">
                   <span>Pipelines to compare</span>

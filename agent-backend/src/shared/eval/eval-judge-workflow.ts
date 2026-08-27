@@ -5,21 +5,36 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { DEFAULT_EVAL_JUDGE_SCENARIO_ID } from './eval-judge-constants.ts';
+import {
+  DEFAULT_EVAL_JUDGE_SCENARIO_ID,
+  EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME,
+} from './eval-judge-constants.ts';
 
 export const EVAL_JUDGE_COMPARE_PIPELINE_NAME = 'eval-judge-compare';
 
 const DEFAULT_CONFIG_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../pipeline-workflows/eval-judge-compare.yml',
+  '../../../pipeline-workflows/eval-judge-compare.yml',
+);
+
+const DEFAULT_GT_CONFIG_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../pipeline-workflows/eval-judge-compare-with-gt.yml',
 );
 
 let cachedDefaultYaml: string | null = null;
+let cachedDefaultGtYaml: string | null = null;
 
 export function defaultEvalJudgeConfigYaml(): string {
   if (cachedDefaultYaml) return cachedDefaultYaml;
   cachedDefaultYaml = readFileSync(DEFAULT_CONFIG_PATH, 'utf8');
   return cachedDefaultYaml;
+}
+
+export function defaultEvalJudgeGtConfigYaml(): string {
+  if (cachedDefaultGtYaml) return cachedDefaultGtYaml;
+  cachedDefaultGtYaml = readFileSync(DEFAULT_GT_CONFIG_PATH, 'utf8');
+  return cachedDefaultGtYaml;
 }
 
 function parseEvalJudgeConfigRoot(configYaml: string, pipelineName = EVAL_JUDGE_COMPARE_PIPELINE_NAME) {
@@ -70,11 +85,18 @@ export function parseEvalJudgeScenarioId(
   return DEFAULT_EVAL_JUDGE_SCENARIO_ID;
 }
 
-export function snapshotEvalJudgeConfigYaml(raw?: string | null): string {
+export function snapshotEvalJudgeConfigYaml(
+  raw?: string | null,
+  pipelineName = EVAL_JUDGE_COMPARE_PIPELINE_NAME,
+): string {
   const text = raw?.trim();
-  if (!text) return defaultEvalJudgeConfigYaml();
-  parseEvalJudgeModelName(text);
-  parseEvalJudgeScenarioId(text);
+  if (!text) {
+    return pipelineName === EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME
+      ? defaultEvalJudgeGtConfigYaml()
+      : defaultEvalJudgeConfigYaml();
+  }
+  parseEvalJudgeModelName(text, pipelineName);
+  parseEvalJudgeScenarioId(text, pipelineName);
   return text;
 }
 
@@ -86,6 +108,50 @@ export async function resolveEvalJudgeConfigYaml(): Promise<string> {
     return snapshotEvalJudgeConfigYaml(pipeline.configYaml);
   }
   return defaultEvalJudgeConfigYaml();
+}
+
+export async function resolveEvalJudgeGtConfigYaml(): Promise<string> {
+  const { getPipelineConfigByPipelineName } = await import('../pipeline/pipeline-config-store.ts');
+  const pipeline = await getPipelineConfigByPipelineName(EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME);
+  if (pipeline?.configYaml?.trim()) {
+    return snapshotEvalJudgeConfigYaml(pipeline.configYaml, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME);
+  }
+  return defaultEvalJudgeGtConfigYaml();
+}
+
+/**
+ * Full-mode judge config: multi-pipeline runs use pairwise/no-GT; single-pipeline runs
+ * score each transcript against ground-truth references (requires GT on the dataset).
+ */
+export async function resolveEvalJudgeConfigYamlForRun(input: {
+  datasetId: string;
+  pipelineCount: number;
+}): Promise<{ configYaml: string; scenarioId: string }> {
+  const pipelineCount = Math.max(0, input.pipelineCount);
+  if (pipelineCount === 0) {
+    throw new Error('At least one pipeline is required');
+  }
+
+  if (pipelineCount >= 2) {
+    const configYaml = await resolveEvalJudgeConfigYaml();
+    const scenarioId = parseEvalJudgeScenarioId(configYaml);
+    const { assertEvalJudgeScenarioExists } = await import('../../services/eval/eval-judge-dimensions.ts');
+    await assertEvalJudgeScenarioExists(scenarioId);
+    return { configYaml, scenarioId };
+  }
+
+  const configYaml = await resolveEvalJudgeGtConfigYaml();
+  const scenarioId = parseEvalJudgeScenarioId(configYaml, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME);
+  const { assertEvalJudgeScenarioExists, getEvalJudgeScenario } = await import(
+    '../../services/eval/eval-judge-dimensions.ts'
+  );
+  await assertEvalJudgeScenarioExists(scenarioId);
+  const scenario = await getEvalJudgeScenario(scenarioId);
+  if (scenario?.requires_ground_truth) {
+    const { assertEvalDatasetGroundTruthReady } = await import('../../services/eval/eval-datasets.ts');
+    await assertEvalDatasetGroundTruthReady(input.datasetId, scenario.label);
+  }
+  return { configYaml, scenarioId };
 }
 
 export async function resolveEvalJudgeScenarioId(): Promise<string> {

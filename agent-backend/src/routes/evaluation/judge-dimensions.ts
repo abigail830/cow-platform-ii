@@ -56,8 +56,8 @@ judgeDimensions.post(
       dimensions?: Array<{
         id: string;
         label: string;
-        scope: 'variant' | 'pairwise';
-        kind: 'geval_score' | 'geval_winner';
+        scope: 'variant' | 'pairwise' | 'variant_vs_gt';
+        kind: 'geval_score' | 'geval_winner' | 'cer_score' | 'wer_score';
         weight: number;
         criteria: string;
         evaluation_steps?: string[];
@@ -104,8 +104,8 @@ judgeDimensions.patch(
       dimensions?: Array<{
         id: string;
         label: string;
-        scope: 'variant' | 'pairwise';
-        kind: 'geval_score' | 'geval_winner';
+        scope: 'variant' | 'pairwise' | 'variant_vs_gt';
+        kind: 'geval_score' | 'geval_winner' | 'cer_score' | 'wer_score';
         weight: number;
         criteria: string;
         evaluation_steps?: string[];

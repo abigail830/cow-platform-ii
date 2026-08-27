@@ -490,6 +490,7 @@ export function JudgeDimensionsPage() {
                         }
                       >
                         <option value="variant">Per pipeline (variant)</option>
+                        <option value="variant_vs_gt">Per pipeline vs ground truth</option>
                         <option value="pairwise">Pairwise compare</option>
                       </select>
                     </label>
@@ -504,6 +505,8 @@ export function JudgeDimensionsPage() {
                         }
                       >
                         <option value="geval_score">Score (0–10, GEval)</option>
+                        <option value="cer_score">CER (deterministic)</option>
+                        <option value="wer_score">WER (deterministic)</option>
                         <option value="geval_winner">Winner (A/B/Tie)</option>
                       </select>
                     </label>
@@ -527,6 +530,11 @@ export function JudgeDimensionsPage() {
                           <DimensionFieldTooltip
                             label="Criteria"
                             text="Define the evaluation criterion and 0–10 scale here."
+                          />
+                        ) : activeDimension.kind === 'cer_score' || activeDimension.kind === 'wer_score' ? (
+                          <DimensionFieldTooltip
+                            label="Criteria"
+                            text="Optional description for admins. Scoring is computed deterministically from reference vs transcript."
                           />
                         ) : null}
                       </span>

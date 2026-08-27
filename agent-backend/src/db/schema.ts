@@ -1266,8 +1266,8 @@ export const appEvalRunComparisons = pgTable(
 export type EvalJudgeDimensionRecord = {
   id: string;
   label: string;
-  scope: 'variant' | 'pairwise';
-  kind: 'geval_score' | 'geval_winner';
+  scope: 'variant' | 'pairwise' | 'variant_vs_gt';
+  kind: 'geval_score' | 'geval_winner' | 'cer_score' | 'wer_score';
   weight: number;
   criteria: string;
   /** Optional GEval evaluation_steps; omit to let DeepEval generate from criteria. */

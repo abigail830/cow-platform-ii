@@ -3,12 +3,15 @@ import { appEvalDatasetItems, appEvalDatasets, db } from '../../db/index.ts';
 import type { EvalDatasetKind, EvalMediaType } from '../../db/index.ts';
 import {
   buildEvalDatasetItemS3Key,
+  buildEvalDatasetReferenceS3Key,
   extensionFromFilename,
   fileTypeFromExtension,
   getEvalDatasetItemReadUrl,
   getEvalDatasetItemUploadUrl,
   guessEvalDatasetContentType,
+  guessEvalDatasetReferenceContentType,
   MAX_EVAL_DATASET_ITEM_BYTES,
+  MAX_EVAL_DATASET_REFERENCE_BYTES,
   newEvalDatasetItemId,
   validateEvalDatasetFilename,
   validateFileHash,
@@ -123,6 +126,13 @@ export async function deleteEvalDataset(id: string): Promise<void> {
       await deleteEvalDatasetStorageObject(item.s3_key);
     } catch {
       // best-effort OSS cleanup
+    }
+    if (item.reference_s3_key) {
+      try {
+        await deleteEvalDatasetStorageObject(item.reference_s3_key);
+      } catch {
+        // best-effort OSS cleanup
+      }
     }
   }
 }
@@ -313,6 +323,13 @@ export async function deleteEvalDatasetItem(datasetId: string, itemId: string): 
   } catch {
     // best-effort
   }
+  if (item.referenceS3Key) {
+    try {
+      await deleteEvalDatasetStorageObject(item.referenceS3Key);
+    } catch {
+      // best-effort
+    }
+  }
 }
 
 export async function getEvalDatasetItemDownloadUrl(datasetId: string, itemId: string) {
@@ -320,4 +337,95 @@ export async function getEvalDatasetItemDownloadUrl(datasetId: string, itemId: s
   if (!item) throw new Error('Dataset item not found');
   const downloadUrl = await getEvalDatasetItemReadUrl(item.s3Key);
   return { download_url: downloadUrl, filename: item.name };
+}
+
+export async function initEvalDatasetReferenceUpload(input: {
+  datasetId: string;
+  itemId: string;
+  sizeBytes: number;
+}) {
+  const dataset = await getEvalDatasetById(input.datasetId);
+  if (!dataset) throw new Error('Dataset not found');
+
+  const item = await getEvalDatasetItemById(input.datasetId, input.itemId);
+  if (!item) throw new Error('Dataset item not found');
+
+  const sizeBytes = input.sizeBytes;
+  if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
+    throw new Error('size_bytes is required');
+  }
+  if (sizeBytes > MAX_EVAL_DATASET_REFERENCE_BYTES) {
+    throw new Error('Reference text exceeds maximum allowed size');
+  }
+
+  const s3Key = buildEvalDatasetReferenceS3Key(input.datasetId, input.itemId);
+  const contentType = guessEvalDatasetReferenceContentType();
+  const uploadUrl = await getEvalDatasetItemUploadUrl(s3Key, contentType);
+
+  return {
+    s3_key: s3Key,
+    upload_url: uploadUrl,
+    method: 'PUT' as const,
+    headers: { 'Content-Type': contentType },
+  };
+}
+
+export async function finalizeEvalDatasetReferenceUpload(input: {
+  datasetId: string;
+  itemId: string;
+  s3Key: string;
+}) {
+  const dataset = await getEvalDatasetById(input.datasetId);
+  if (!dataset) throw new Error('Dataset not found');
+
+  const item = await getEvalDatasetItemById(input.datasetId, input.itemId);
+  if (!item) throw new Error('Dataset item not found');
+
+  const expectedKey = buildEvalDatasetReferenceS3Key(input.datasetId, input.itemId);
+  if (input.s3Key !== expectedKey) {
+    throw new Error('s3_key does not match dataset reference path');
+  }
+
+  const [row] = await db
+    .update(appEvalDatasetItems)
+    .set({
+      referenceS3Key: expectedKey,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalDatasetItems.id, input.itemId))
+    .returning();
+
+  await db
+    .update(appEvalDatasets)
+    .set({ updatedAt: new Date() })
+    .where(eq(appEvalDatasets.id, input.datasetId));
+
+  return toItemPublic(row!);
+}
+
+export async function getEvalDatasetReferenceDownloadUrl(datasetId: string, itemId: string) {
+  const item = await getEvalDatasetItemById(datasetId, itemId);
+  if (!item) throw new Error('Dataset item not found');
+  if (!item.referenceS3Key) throw new Error('Reference transcript not uploaded');
+  const downloadUrl = await getEvalDatasetItemReadUrl(item.referenceS3Key);
+  return { download_url: downloadUrl, filename: `${item.name}.reference.txt` };
+}
+
+export async function assertEvalDatasetGroundTruthReady(
+  datasetId: string,
+  scenarioLabel: string,
+): Promise<void> {
+  const items = await db
+    .select({ name: appEvalDatasetItems.name, referenceS3Key: appEvalDatasetItems.referenceS3Key })
+    .from(appEvalDatasetItems)
+    .where(eq(appEvalDatasetItems.datasetId, datasetId));
+
+  const missing = items.filter((item) => !item.referenceS3Key).map((item) => item.name);
+  if (missing.length === 0) return;
+
+  const preview = missing.slice(0, 5).join(', ');
+  const suffix = missing.length > 5 ? ` (+${missing.length - 5} more)` : '';
+  throw new Error(
+    `Ground-truth references required for scenario "${scenarioLabel}". Missing for: ${preview}${suffix}`,
+  );
 }

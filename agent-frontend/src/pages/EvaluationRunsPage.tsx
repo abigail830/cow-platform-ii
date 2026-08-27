@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Eye, FolderOpen, History, Loader2, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
+import { ChevronDown, Eye, FolderOpen, History, Loader2, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
+  evaluateEvalRunAttempt,
   formatEvalRunPhase,
   formatEvalRunStatus,
   getEvalRunDetail,
@@ -11,7 +12,6 @@ import {
   listEvalRuns,
   retryEvalRunJudge,
   startEvalRun,
-  uploadEvalRunFile,
   type EvalRun,
   type EvalRunAttempt,
   type EvalRunDetail,
@@ -23,6 +23,7 @@ import {
   type EvalRunProcessingOption,
   type EvalRunStatus,
 } from '../api/evaluation/runs.ts';
+import { listEvalDatasets, type EvalDataset } from '../api/evaluation/datasets.ts';
 import { EvalRunCreateModal, EvalRunFilesModal } from '../components/EvalRunModals.tsx';
 import { TransientNotice } from '../components/TransientNotice.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -35,7 +36,15 @@ import { fetchPresignedStorageText } from '../api/storage-fetch.ts';
 const LIST_PAGE = getNavPage('/evaluation/runs')!;
 
 /** Format judge score for display. New results store raw rubric scale; legacy rows store DeepEval 0–1. */
-function formatJudgeScore(score: number, scoreMax?: number): string {
+function formatJudgeScore(
+  score: number,
+  scoreMax?: number,
+  options?: { kind?: string; lowerIsBetter?: boolean },
+): string {
+  const kind = options?.kind;
+  if (kind === 'cer_score' || kind === 'wer_score' || options?.lowerIsBetter) {
+    return `${(score * 100).toFixed(1)}%`;
+  }
   const max = scoreMax ?? 10;
   const display = scoreMax != null ? score : score * max;
   return `${display.toFixed(1)}/${max}`;
@@ -91,6 +100,28 @@ function EvalRunItemStatusBadge({
   }
 
   return <span className={stageClass(stage)}>{stageLabel(stage)}</span>;
+}
+
+function evalRunFailureMessage(summaryMetrics: Record<string, unknown> | null | undefined): string | null {
+  if (!summaryMetrics || typeof summaryMetrics !== 'object') return null;
+  const error = summaryMetrics.error;
+  return typeof error === 'string' && error.trim() ? error.trim() : null;
+}
+
+function canEvaluateAttempt(
+  attempt: EvalRunAttempt,
+  runStatus: EvalRunStatus,
+  starting: boolean,
+): boolean {
+  if (attempt.run_mode !== 'full') return false;
+  if (starting || runStatus === 'running' || attempt.status === 'running') return false;
+
+  const hasTranscript = attempt.items.some(
+    (item) => item.stage === 'done' && item.transcript_s3_key,
+  );
+  if (!hasTranscript) return false;
+
+  return !attempt.items.some((item) => item.stage === 'submitted' || item.stage === 'transcribing');
 }
 
 function stageLabel(stage: EvalRunItemStage): string {
@@ -350,7 +381,20 @@ function EvalRunJudgeVariantCompareTable({
   variantScores,
   variantById,
 }: {
-  variantScores: Record<string, Record<string, { label?: string; score?: number; score_max?: number; reason?: string }>>;
+  variantScores: Record<
+    string,
+    Record<
+      string,
+      {
+        label?: string;
+        kind?: string;
+        score?: number;
+        score_max?: number;
+        lower_is_better?: boolean;
+        reason?: string;
+      }
+    >
+  >;
   variantById: Map<string, string>;
 }) {
   const variantEntries = Object.entries(variantScores);
@@ -396,7 +440,10 @@ function EvalRunJudgeVariantCompareTable({
               return {
                 value:
                   typeof row?.score === 'number'
-                    ? formatJudgeScore(row.score, row.score_max)
+                    ? formatJudgeScore(row.score, row.score_max, {
+                        kind: row.kind,
+                        lowerIsBetter: row.lower_is_better,
+                      })
                     : '—',
                 trimmedReason,
                 isLongReason: trimmedReason.length > REASON_COLLAPSE_THRESHOLD,
@@ -434,7 +481,7 @@ function EvalRunJudgeScores({
   const metrics = job.summary_metrics;
   const variantScores = metrics.variant_scores as Record<
     string,
-    Record<string, { label?: string; score?: number; score_max?: number; reason?: string }>
+    Record<string, { label?: string; kind?: string; score?: number; score_max?: number; lower_is_better?: boolean; reason?: string }>
   > | undefined;
   const pairwise = metrics.pairwise as Record<
     string,
@@ -460,7 +507,12 @@ function EvalRunJudgeScores({
       if (row.winner === 'tie') return 'Tie';
       return variantById.get(row.winner_variant_id ?? '') ?? row.winner.toUpperCase();
     }
-    if (typeof row.score === 'number') return formatJudgeScore(row.score, row.score_max);
+    if (typeof row.score === 'number') {
+      return formatJudgeScore(row.score, row.score_max, {
+        kind: (row as { kind?: string }).kind,
+        lowerIsBetter: (row as { lower_is_better?: boolean }).lower_is_better,
+      });
+    }
     return '—';
   }
 
@@ -543,8 +595,8 @@ function EvalRunJudgeChip({
   if (!status) return null;
 
   return (
-    <span className="eval-run-pipeline-chip eval-run-compare-chip">
-      <span className="eval-run-pipeline-chip-name">Compare</span>
+    <span className="eval-run-compare-chip">
+      <span className="eval-run-compare-chip-name">Compare</span>
       <span className={`${judgeStatusClass(status)} eval-run-status-badge`}>
         {status === 'running' ? (
           <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
@@ -599,7 +651,9 @@ function EvalRunAttemptSection({
   defaultOpen,
   canWrite,
   retryingDatasetItemId,
+  evaluatingAttemptId,
   onRetryCompare,
+  onEvaluate,
 }: {
   attempt: EvalRunAttempt;
   variants: EvalRunDetail['variants'];
@@ -608,7 +662,9 @@ function EvalRunAttemptSection({
   defaultOpen: boolean;
   canWrite: boolean;
   retryingDatasetItemId: string | null;
+  evaluatingAttemptId: string | null;
   onRetryCompare: (datasetItemId: string, attemptId: string) => void;
+  onEvaluate: (attemptId: string) => void;
 }) {
   const itemByVariantAndDataset = useMemo(() => {
     const map = new Map<string, EvalRunItem>();
@@ -639,6 +695,9 @@ function EvalRunAttemptSection({
   const isJudgingPhase = attempt.phase === 'judging' && attempt.status === 'running';
   const durationLabel = attempt.duration_ms ? formatDurationMs(attempt.duration_ms) : null;
   const statusBadge = attemptStatusBadge(attempt);
+  const showEvaluate =
+    canWrite && canEvaluateAttempt(attempt, runStatus, starting);
+  const isEvaluating = evaluatingAttemptId === attempt.id;
 
   return (
     <details className="eval-run-attempt" open={defaultOpen}>
@@ -657,6 +716,25 @@ function EvalRunAttemptSection({
           {attempt.run_mode === 'full' ? 'Full' : 'Pipeline only'} · {attemptProgressLabel(attempt)}
           {durationLabel ? ` · ${durationLabel}` : ''}
         </span>
+        {showEvaluate ? (
+          <button
+            type="button"
+            className="btn-secondary eval-run-evaluate-btn"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onEvaluate(attempt.id);
+            }}
+            disabled={isEvaluating}
+          >
+            {isEvaluating ? (
+              <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+            ) : (
+              <Scale {...iconProps()} aria-hidden />
+            )}
+            Evaluate
+          </button>
+        ) : null}
       </summary>
 
       <div className="eval-run-attempt-body">
@@ -682,25 +760,31 @@ function EvalRunAttemptSection({
               <summary className="eval-run-file-summary">
                 <span className="eval-run-file-name">{row.name}</span>
                 <div className="eval-run-file-pipeline-row">
-                  {variants.map((variant) => {
-                    const cell = itemByVariantAndDataset.get(`${variant.id}:${row.id}`);
-                    const duration = evalItemDurationLabel(cell);
-                    return (
-                      <span key={variant.id} className="eval-run-pipeline-chip">
-                        <span className="eval-run-pipeline-chip-name">{variant.display_name}</span>
-                        <EvalRunItemStatusBadge
-                          item={cell}
-                          runStatus={itemRunStatus}
-                          starting={itemStarting}
-                        />
-                        {duration ? (
-                          <span className="admin-muted eval-run-cell-duration">{duration}</span>
-                        ) : null}
-                      </span>
-                    );
-                  })}
+                  <div className="eval-run-pipeline-group">
+                    {variants.map((variant) => {
+                      const cell = itemByVariantAndDataset.get(`${variant.id}:${row.id}`);
+                      const duration = evalItemDurationLabel(cell);
+                      return (
+                        <span key={variant.id} className="eval-run-pipeline-chip">
+                          <span className="eval-run-pipeline-chip-name" title={variant.display_name}>
+                            {variant.display_name}
+                          </span>
+                          <span className="eval-run-pipeline-chip-status">
+                            <EvalRunItemStatusBadge
+                              item={cell}
+                              runStatus={itemRunStatus}
+                              starting={itemStarting}
+                            />
+                          </span>
+                          <span className="eval-run-pipeline-chip-duration admin-muted">
+                            {duration ?? '—'}
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </div>
                   {attempt.run_mode === 'full' ? (
-                    <>
+                    <div className="eval-run-compare-group">
                       <EvalRunJudgeChip
                         job={judgeJob}
                         isJudgingPhase={isJudgingPhase}
@@ -723,7 +807,7 @@ function EvalRunAttemptSection({
                           Retry compare
                         </button>
                       ) : null}
-                    </>
+                    </div>
                   ) : null}
                 </div>
               </summary>
@@ -773,6 +857,7 @@ export function EvaluationRunsListPage() {
 
   const [runs, setRuns] = useState<EvalRun[]>([]);
   const [pipelines, setPipelines] = useState<EvalRunProcessingOption[]>([]);
+  const [datasets, setDatasets] = useState<EvalDataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -784,12 +869,14 @@ export function EvaluationRunsListPage() {
     setLoading(true);
     setError('');
     try {
-      const [runRows, options] = await Promise.all([
+      const [runRows, options, datasetRows] = await Promise.all([
         listEvalRuns(),
         listEvalRunProcessingOptions(),
+        listEvalDatasets(),
       ]);
       setRuns(runRows);
       setPipelines(options.transcription_pipelines);
+      setDatasets(datasetRows.filter((row) => row.media_type === 'audio'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load evaluation runs');
     } finally {
@@ -812,17 +899,15 @@ export function EvaluationRunsListPage() {
     description: string;
     pipelineConfigIds: string[];
     runMode: EvalRunMode;
-    files: File[];
+    datasetId: string;
   }) {
     const created = await createEvalRun({
       name: input.name,
       description: input.description || undefined,
       pipeline_config_ids: input.pipelineConfigIds,
       run_mode: input.runMode,
+      dataset_id: input.datasetId,
     });
-    for (const file of input.files) {
-      await uploadEvalRunFile(created.run.id, file, created.run.dataset_id);
-    }
     setModalOpen(false);
     await load();
     navigate(`/evaluation/runs/${created.run.id}`);
@@ -848,8 +933,8 @@ export function EvaluationRunsListPage() {
       <header className="admin-header">
         <AdminPageTitle main={LIST_PAGE.titleMain} accent={LIST_PAGE.titleAccent} />
         <AdminPageDescription>
-          Compare multiple ASR pipelines on the same audio files. Create an evaluation set, manage files on the
-          list page, then start transcription from the detail page.
+          Compare multiple ASR pipelines on the same dataset. Create a run by selecting an existing dataset,
+          then start transcription from the detail page.
         </AdminPageDescription>
       </header>
 
@@ -955,6 +1040,7 @@ export function EvaluationRunsListPage() {
       {modalOpen ? (
         <EvalRunCreateModal
           pipelines={pipelines}
+          datasets={datasets}
           onCancel={() => setModalOpen(false)}
           onCreate={handleCreate}
         />
@@ -1008,6 +1094,7 @@ export function EvaluationRunDetailPage() {
   const [startingMode, setStartingMode] = useState<EvalRunMode | null>(null);
   const [fastPollUntil, setFastPollUntil] = useState<number | null>(null);
   const [retryingCompareItemId, setRetryingCompareItemId] = useState<string | null>(null);
+  const [evaluatingAttemptId, setEvaluatingAttemptId] = useState<string | null>(null);
   const { notice, noticeVariant, showNotice } = useTransientNotice(6000);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
@@ -1049,6 +1136,7 @@ export function EvaluationRunDetailPage() {
   const RunActionIcon = Play;
 
   const fileCount = detail?.dataset_items?.length ?? 0;
+  const runFailureReason = detail ? evalRunFailureMessage(detail.run.summary_metrics) : null;
 
   if (!canRead) return <Navigate to="/agents/playground" replace />;
   if (!runId) return <Navigate to="/evaluation/runs" replace />;
@@ -1092,6 +1180,23 @@ export function EvaluationRunDetailPage() {
       await load({ silent: true });
     } finally {
       setRetryingCompareItemId(null);
+    }
+  }
+
+  async function handleEvaluate(attemptId: string) {
+    if (!runId) return;
+    setEvaluatingAttemptId(attemptId);
+    try {
+      const result = await evaluateEvalRunAttempt(runId, attemptId);
+      setDetail(result);
+      setFastPollUntil(Date.now() + 120_000);
+      showNotice('Evaluate started', 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start evaluate';
+      showNotice(message, 'error');
+      await load({ silent: true });
+    } finally {
+      setEvaluatingAttemptId(null);
     }
   }
 
@@ -1167,6 +1272,8 @@ export function EvaluationRunDetailPage() {
         </div>
       </div>
 
+      {runFailureReason ? <p className="admin-error">{runFailureReason}</p> : null}
+
       <div className="eval-run-attempts">
         {loading && !detail ? (
           <p className="admin-muted">Loading…</p>
@@ -1204,7 +1311,9 @@ export function EvaluationRunDetailPage() {
               defaultOpen={index === 0}
               canWrite={canWrite}
               retryingDatasetItemId={retryingCompareItemId}
+              evaluatingAttemptId={evaluatingAttemptId}
               onRetryCompare={(datasetItemId, attemptId) => void handleRetryCompare(datasetItemId, attemptId)}
+              onEvaluate={(attemptId) => void handleEvaluate(attemptId)}
             />
           ))
         )}

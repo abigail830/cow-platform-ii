@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   defaultEvalJudgeConfigYaml,
+  defaultEvalJudgeGtConfigYaml,
   parseEvalJudgeModelName,
   parseEvalJudgeScenarioId,
   snapshotEvalJudgeConfigYaml,
 } from './eval-judge-workflow.ts';
+import { EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME } from './eval-judge-constants.ts';
 
 describe('eval-judge-workflow', () => {
   it('loads packaged default with model_name and scenario_id', () => {
@@ -36,6 +38,15 @@ describe('eval-judge-workflow', () => {
 
   it('rejects missing model_name', () => {
     assert.throws(() => parseEvalJudgeModelName('scenario_id: x\n'), /model_name/);
+  });
+
+  it('loads packaged GT default with ground-truth scenario', () => {
+    const yaml = defaultEvalJudgeGtConfigYaml();
+    assert.match(yaml, /model_name:/);
+    assert.equal(
+      parseEvalJudgeScenarioId(yaml, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME),
+      'asr_pipeline_compare_with_gt',
+    );
   });
 
   it('snapshots valid override yaml', () => {

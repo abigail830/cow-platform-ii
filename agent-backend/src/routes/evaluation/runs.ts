@@ -70,6 +70,7 @@ runs.post(
     }>();
 
     if (!body.name?.trim()) return c.json({ error: 'name is required' }, 400);
+    if (!body.dataset_id?.trim()) return c.json({ error: 'dataset_id is required' }, 400);
     if (!Array.isArray(body.pipeline_config_ids) || body.pipeline_config_ids.length === 0) {
       return c.json({ error: 'pipeline_config_ids is required' }, 400);
     }
@@ -122,6 +123,30 @@ runs.post(
       return c.json(detail, 202);
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : 'Failed to start run' }, 400);
+    }
+  },
+);
+
+runs.post(
+  '/:id/evaluate',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.RUNS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Run id is required' }, 400);
+
+    const body = await c.req.json<{ attempt_id?: string }>().catch(() => ({}));
+    const attemptId = body.attempt_id?.trim() || c.req.query('attempt_id')?.trim();
+    if (!attemptId) return c.json({ error: 'attempt_id is required' }, 400);
+
+    try {
+      const { evaluateEvalRunAttempt } = await import('../../services/eval/eval-run-judge.ts');
+      await evaluateEvalRunAttempt(id, attemptId);
+      const detail = await getEvalRunDetail(id);
+      return c.json(detail, 202);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start evaluate';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
     }
   },
 );

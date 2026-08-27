@@ -11,7 +11,12 @@ import requests
 from openkms_cli.core.settings import get_cli_settings
 from openkms_cli.pipeline.storage import get_s3_client
 
-from evaluate_cli.judge.metrics import score_pairwise_dimension, score_variant_dimension
+from evaluate_cli.judge.metrics import (
+    score_error_rate_dimension,
+    score_pairwise_dimension,
+    score_variant_dimension,
+    score_variant_vs_gt_dimension,
+)
 
 DEFAULT_API_URL = "http://127.0.0.1:8787"
 # Judge LLM calls can be slow; internal API GET/PATCH should stay fast (presigned transcript URLs).
@@ -40,7 +45,19 @@ def _request(method: str, path: str, api_url: str | None, **kwargs: Any) -> requ
         timeout=kwargs.pop("timeout", API_TIMEOUT_SECONDS),
         **kwargs,
     )
-    response.raise_for_status()
+    if not response.ok:
+        detail = response.text.strip()
+        try:
+            payload = response.json()
+            if isinstance(payload, dict):
+                error = payload.get("error")
+                if isinstance(error, str) and error.strip():
+                    detail = error.strip()
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"{method} {path} failed ({response.status_code}): {detail[:2000] or response.reason}"
+        )
     return response
 
 
@@ -113,6 +130,20 @@ def run_async_judge_job(job_id: str, api_url: str | None = None) -> None:
         raise
 
 
+def _load_reference_text(context: dict[str, Any]) -> str:
+    reference_url = context.get("reference_url")
+    if isinstance(reference_url, str) and reference_url.strip():
+        response = requests.get(reference_url.strip(), timeout=TRANSCRIPT_FETCH_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        return response.text
+
+    reference = context.get("reference")
+    if isinstance(reference, str) and reference.strip():
+        return reference
+
+    raise RuntimeError("Missing reference_url in judge job context")
+
+
 def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     raw_transcripts = context.get("transcripts") or []
     transcripts = []
@@ -121,21 +152,39 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
             continue
         transcripts.append({**entry, "transcript": _load_transcript_text(entry)})
 
-    if len(transcripts) < 2:
-        raise RuntimeError("At least two transcripts are required")
+    min_variants = int(context.get("min_variants") or 2)
+    if len(transcripts) < min_variants:
+        raise RuntimeError(f"At least {min_variants} transcripts are required")
+
+    requires_gt = bool(context.get("requires_ground_truth"))
+    reference_text = _load_reference_text(context) if requires_gt else None
 
     dimensions = context.get("dimensions") or []
     variant_results = []
     for entry in transcripts:
         per_dimension: dict[str, Any] = {}
         for dimension in dimensions:
-            if dimension.get("scope") != "variant":
+            scope = dimension.get("scope")
+            if scope == "variant_vs_gt":
+                if reference_text is None:
+                    raise RuntimeError("Ground-truth reference is required for variant_vs_gt dimensions")
+                kind = dimension.get("kind", "geval_score")
+                if kind in {"cer_score", "wer_score"}:
+                    scored = score_error_rate_dimension(reference_text, entry["transcript"], dimension)
+                else:
+                    scored = score_variant_vs_gt_dimension(
+                        reference_text, entry["transcript"], dimension, context
+                    )
+            elif scope == "variant":
+                scored = score_variant_dimension(entry["transcript"], dimension, context)
+            else:
                 continue
-            scored = score_variant_dimension(entry["transcript"], dimension, context)
             per_dimension[dimension["id"]] = {
                 "label": dimension.get("label"),
+                "kind": dimension.get("kind"),
                 "score": scored.score,
                 "score_max": scored.score_max,
+                "lower_is_better": scored.lower_is_better,
                 "reason": scored.reason,
             }
         variant_results.append(
@@ -148,29 +197,30 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
         )
 
     pairwise: dict[str, Any] = {}
-    left = transcripts[0]
-    right = transcripts[1]
-    for dimension in dimensions:
-        if dimension.get("scope") != "pairwise":
-            continue
-        scored = score_pairwise_dimension(left["transcript"], right["transcript"], dimension, context)
-        payload: dict[str, Any] = {
-            "label": dimension.get("label"),
-            "reason": scored.reason,
-        }
-        if dimension.get("kind") == "geval_winner":
-            winner_key = scored.winner
-            winner_variant_id = None
-            if winner_key == "a":
-                winner_variant_id = left["variant_id"]
-            elif winner_key == "b":
-                winner_variant_id = right["variant_id"]
-            payload["winner"] = winner_key
-            payload["winner_variant_id"] = winner_variant_id
-        else:
-            payload["score"] = scored.score
-            payload["score_max"] = scored.score_max
-        pairwise[dimension["id"]] = payload
+    if not requires_gt and len(transcripts) >= 2:
+        left = transcripts[0]
+        right = transcripts[1]
+        for dimension in dimensions:
+            if dimension.get("scope") != "pairwise":
+                continue
+            scored = score_pairwise_dimension(left["transcript"], right["transcript"], dimension, context)
+            payload: dict[str, Any] = {
+                "label": dimension.get("label"),
+                "reason": scored.reason,
+            }
+            if dimension.get("kind") == "geval_winner":
+                winner_key = scored.winner
+                winner_variant_id = None
+                if winner_key == "a":
+                    winner_variant_id = left["variant_id"]
+                elif winner_key == "b":
+                    winner_variant_id = right["variant_id"]
+                payload["winner"] = winner_key
+                payload["winner_variant_id"] = winner_variant_id
+            else:
+                payload["score"] = scored.score
+                payload["score_max"] = scored.score_max
+            pairwise[dimension["id"]] = payload
 
     result = {
         "scenario_id": context.get("scenario_id"),

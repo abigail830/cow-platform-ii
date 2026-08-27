@@ -16,14 +16,11 @@ import {
   getEvalJudgeScenario,
   snapshotEvalJudgeDimensions,
 } from './eval-judge-dimensions.ts';
+import { buildEvalRunJudgeMetrics } from './eval-run-judge-config.ts';
 import { spawnAsyncEvalJudgeWorker } from './eval-judge-runner.ts';
-
-export const EVAL_RUN_DEFAULT_JUDGE_CONCURRENCY = 2;
 
 /** Judge runs on GHA; reset stale `running` rows so reconcile can re-dispatch. */
 const EVAL_JUDGE_STALE_MS = Number(process.env.EVAL_JUDGE_STALE_MS ?? 45 * 60 * 1000);
-
-const EVAL_JUDGE_DISPATCH_BATCH = Number(process.env.EVAL_JUDGE_DISPATCH_BATCH ?? 2);
 
 function isTerminalJudgeStatus(status: string): boolean {
   return status === 'done' || status === 'failed';
@@ -51,30 +48,60 @@ function computeJudgeCompletion(jobs: Array<{ status: string }>) {
   return { completed, failed, total: jobs.length, status };
 }
 
-export async function dispatchEvalRunJudgeJobsWithConcurrency(
-  jobIds: string[],
-  concurrency = EVAL_RUN_DEFAULT_JUDGE_CONCURRENCY,
-): Promise<void> {
-  const limit = Math.max(1, concurrency);
-  let index = 0;
+/** Dispatch at most one judge worker per attempt (serial, DB-claimed). */
+export async function dispatchNextEvalJudgeJob(runId: string): Promise<void> {
+  const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
+  if (!run || run.status !== 'running' || run.phase !== 'judging') return;
 
-  async function worker(): Promise<void> {
-    while (index < jobIds.length) {
-      const current = jobIds[index];
-      index += 1;
-      try {
-        await spawnAsyncEvalJudgeWorker(current);
-      } catch (error) {
-        console.error(
-          `[eval-run] judge dispatch failed for ${current}:`,
-          error instanceof Error ? error.message : error,
-        );
-      }
-    }
+  const attempt = (
+    await db
+      .select()
+      .from(appEvalRunAttempts)
+      .where(eq(appEvalRunAttempts.runId, runId))
+      .orderBy(desc(appEvalRunAttempts.attemptNumber))
+      .limit(1)
+  )[0];
+  if (!attempt) return;
+
+  const [runningJob] = await db
+    .select({ id: appEvalRunJudgeJobs.id })
+    .from(appEvalRunJudgeJobs)
+    .where(and(eq(appEvalRunJudgeJobs.attemptId, attempt.id), eq(appEvalRunJudgeJobs.status, 'running')))
+    .limit(1);
+  if (runningJob) return;
+
+  const [nextPending] = await db
+    .select()
+    .from(appEvalRunJudgeJobs)
+    .where(and(eq(appEvalRunJudgeJobs.attemptId, attempt.id), eq(appEvalRunJudgeJobs.status, 'pending')))
+    .orderBy(asc(appEvalRunJudgeJobs.createdAt))
+    .limit(1);
+
+  if (!nextPending) {
+    await maybeFinalizeEvalRunJudgePhase(runId);
+    return;
   }
 
-  const workers = Array.from({ length: Math.min(limit, jobIds.length) }, () => worker());
-  await Promise.all(workers);
+  const [claimed] = await db
+    .update(appEvalRunJudgeJobs)
+    .set({ status: 'running', errorMessage: null, updatedAt: new Date() })
+    .where(and(eq(appEvalRunJudgeJobs.id, nextPending.id), eq(appEvalRunJudgeJobs.status, 'pending')))
+    .returning();
+
+  if (!claimed) return;
+
+  try {
+    await spawnAsyncEvalJudgeWorker(claimed.id, undefined, { skipMarkRunning: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to dispatch eval judge worker';
+    console.error(`[eval-run] judge dispatch failed for ${claimed.id}:`, message);
+    await db
+      .update(appEvalRunJudgeJobs)
+      .set({ status: 'failed', errorMessage: message, updatedAt: new Date() })
+      .where(eq(appEvalRunJudgeJobs.id, claimed.id));
+    await syncEvalRunJudgeProgressCounts(runId, attempt.id);
+    await dispatchNextEvalJudgeJob(runId);
+  }
 }
 
 async function syncTranscribeCountsOnRun(runId: string, attemptId: string): Promise<void> {
@@ -98,6 +125,43 @@ async function syncTranscribeCountsOnRun(runId: string, attemptId: string): Prom
     .update(appEvalRunAttempts)
     .set({ completedRunItems, failedRunItems, updatedAt: new Date() })
     .where(eq(appEvalRunAttempts.id, attemptId));
+}
+
+function describeJudgeEligibilityFailure(input: {
+  scenario: { label: string; requires_ground_truth: boolean; min_variants: number };
+  datasetItems: Array<{ referenceS3Key: string | null }>;
+  attemptItems: Array<{ datasetItemId: string; stage: string; transcriptS3Key: string | null }>;
+  datasetItemIds: string[];
+  pipelineCount: number;
+}): string {
+  const { scenario, datasetItems, attemptItems, datasetItemIds, pipelineCount } = input;
+
+  if (scenario.requires_ground_truth) {
+    const missingRefs = datasetItems.filter((row) => !row.referenceS3Key).length;
+    if (missingRefs > 0) {
+      return `Judge evaluation did not start: ${missingRefs} dataset file(s) are missing ground-truth reference transcripts. Upload references on the dataset page, then run again.`;
+    }
+  }
+
+  if (pipelineCount < scenario.min_variants) {
+    if (scenario.requires_ground_truth) {
+      return `Judge evaluation did not start: scenario "${scenario.label}" requires ground-truth references for every file in the dataset.`;
+    }
+    return `Judge evaluation did not start: scenario "${scenario.label}" requires at least ${scenario.min_variants} pipelines, but this run has ${pipelineCount}. Select another pipeline or upload ground-truth references for single-pipeline scoring.`;
+  }
+
+  const withTranscripts = datasetItemIds.filter((datasetItemId) =>
+    attemptItems.some(
+      (item) =>
+        item.datasetItemId === datasetItemId && item.stage === 'done' && item.transcriptS3Key,
+    ),
+  ).length;
+
+  if (withTranscripts === 0) {
+    return 'Judge evaluation did not start: no successful transcripts were found.';
+  }
+
+  return 'Judge evaluation did not start: no dataset files met the scenario requirements.';
 }
 
 export async function startEvalRunJudgePhase(
@@ -150,7 +214,7 @@ export async function startEvalRunJudgePhase(
 
   const dimensions = await snapshotEvalJudgeDimensions(scenarioId);
   const datasetItems = await db
-    .select({ id: appEvalDatasetItems.id })
+    .select({ id: appEvalDatasetItems.id, referenceS3Key: appEvalDatasetItems.referenceS3Key })
     .from(appEvalDatasetItems)
     .where(eq(appEvalDatasetItems.datasetId, run.datasetId))
     .orderBy(asc(appEvalDatasetItems.sortOrder), asc(appEvalDatasetItems.name));
@@ -160,7 +224,13 @@ export async function startEvalRunJudgePhase(
     .from(appEvalRunItems)
     .where(eq(appEvalRunItems.attemptId, resolvedAttemptId));
 
+  const variants = await db
+    .select({ id: appEvalRunVariants.id })
+    .from(appEvalRunVariants)
+    .where(eq(appEvalRunVariants.runId, runId));
+
   const eligibleDatasetItemIds = datasetItems
+    .filter((row) => !scenario.requires_ground_truth || row.referenceS3Key)
     .map((row) => row.id)
     .filter((datasetItemId) => {
       const doneCount = attemptItems.filter(
@@ -173,9 +243,21 @@ export async function startEvalRunJudgePhase(
   await syncTranscribeCountsOnRun(runId, resolvedAttemptId);
 
   if (eligibleDatasetItemIds.length === 0) {
+    const failureMessage = describeJudgeEligibilityFailure({
+      scenario,
+      datasetItems,
+      attemptItems,
+      datasetItemIds: datasetItems.map((row) => row.id),
+      pipelineCount: variants.length,
+    });
     await db
       .update(appEvalRuns)
-      .set({ phase: 'done', status: 'failed', updatedAt: new Date() })
+      .set({
+        phase: 'done',
+        status: 'failed',
+        summaryMetrics: { error: failureMessage },
+        updatedAt: new Date(),
+      })
       .where(eq(appEvalRuns.id, runId));
     const { syncEvalRunAttemptFromRun } = await import('./eval-run-attempts.ts');
     await syncEvalRunAttemptFromRun(resolvedAttemptId, runId);
@@ -314,9 +396,7 @@ export async function reconcileAndResumeEvalRunJudgePhase(runId: string): Promis
     return;
   }
 
-  const batch = pendingIds.slice(0, Math.max(1, EVAL_JUDGE_DISPATCH_BATCH));
-  await dispatchEvalRunJudgeJobsWithConcurrency(batch);
-  await maybeFinalizeEvalRunJudgePhase(runId);
+  await dispatchNextEvalJudgeJob(runId);
 }
 
 export async function retryEvalRunJudgeJob(
@@ -365,7 +445,9 @@ export async function retryEvalRunJudgeJob(
       item.datasetItemId === datasetItemId && item.stage === 'done' && item.transcriptS3Key,
   ).length;
   if (doneCount < scenario.min_variants) {
-    throw new Error('At least two successful transcripts are required before compare can run');
+    throw new Error(
+      `At least ${scenario.min_variants} successful transcript(s) are required before compare can run`,
+    );
   }
 
   if (job.status === 'running') {
@@ -409,6 +491,87 @@ export async function retryEvalRunJudgeJob(
   await spawnAsyncEvalJudgeWorker(job.id);
 }
 
+/** Re-run judge evaluation for an attempt that already has transcripts (no re-transcribe). */
+export async function evaluateEvalRunAttempt(runId: string, attemptId: string): Promise<void> {
+  const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
+  if (!run) throw new Error('Eval run not found');
+
+  if (run.status === 'running') {
+    throw new Error('This evaluation run is still in progress');
+  }
+
+  const [attempt] = await db
+    .select()
+    .from(appEvalRunAttempts)
+    .where(and(eq(appEvalRunAttempts.id, attemptId), eq(appEvalRunAttempts.runId, runId)))
+    .limit(1);
+  if (!attempt) throw new Error('Eval run attempt not found');
+  if (attempt.status === 'running') {
+    throw new Error('This run attempt is still in progress');
+  }
+  if (attempt.runMode !== 'full') {
+    throw new Error('Evaluate is only available for full eval runs');
+  }
+
+  const attemptItems = await db
+    .select()
+    .from(appEvalRunItems)
+    .where(eq(appEvalRunItems.attemptId, attemptId));
+
+  const inFlight = attemptItems.some(
+    (item) => item.stage === 'submitted' || item.stage === 'transcribing',
+  );
+  if (inFlight) {
+    throw new Error('Wait for transcription to finish before running evaluate');
+  }
+
+  const doneWithTranscript = attemptItems.filter(
+    (item) => item.stage === 'done' && item.transcriptS3Key,
+  ).length;
+  if (doneWithTranscript === 0) {
+    throw new Error('No successful transcripts to evaluate');
+  }
+
+  const variants = await db
+    .select({ id: appEvalRunVariants.id })
+    .from(appEvalRunVariants)
+    .where(eq(appEvalRunVariants.runId, runId));
+
+  const judgeMetrics = await buildEvalRunJudgeMetrics({
+    datasetId: run.datasetId,
+    pipelineCount: variants.length,
+  });
+
+  await db
+    .update(appEvalRuns)
+    .set({
+      runMode: 'full',
+      judgeEnabled: true,
+      judgeMetrics,
+      summaryMetrics: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRuns.id, runId));
+
+  await db.delete(appEvalRunJudgeJobs).where(eq(appEvalRunJudgeJobs.attemptId, attemptId));
+
+  await startEvalRunJudgePhase(runId, attemptId);
+
+  const [runAfter] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
+  if (runAfter?.status === 'failed' && runAfter.phase === 'done') {
+    const error =
+      runAfter.summaryMetrics &&
+      typeof runAfter.summaryMetrics === 'object' &&
+      !Array.isArray(runAfter.summaryMetrics) &&
+      typeof (runAfter.summaryMetrics as { error?: unknown }).error === 'string'
+        ? (runAfter.summaryMetrics as { error: string }).error
+        : 'Judge evaluation could not start for this attempt';
+    throw new Error(error);
+  }
+
+  await reconcileAndResumeEvalRunJudgePhase(runId);
+}
+
 export async function finalizeEvalJudgeJobFromWorker(input: {
   jobId: string;
   status: EvalRunJudgeStatus;
@@ -439,6 +602,7 @@ export async function finalizeEvalJudgeJobFromWorker(input: {
 
   await syncEvalRunJudgeProgressCounts(job.runId, job.attemptId);
   await maybeFinalizeEvalRunJudgePhase(job.runId);
+  await dispatchNextEvalJudgeJob(job.runId);
 }
 
 export async function maybeFinalizeEvalRunJudgePhase(runId: string): Promise<void> {

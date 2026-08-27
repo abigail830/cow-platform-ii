@@ -8,6 +8,46 @@ def test_coerce_evaluation_steps_filters_blank_lines() -> None:
     assert _coerce_evaluation_steps("not-a-list") is None
 
 
+def test_build_geval_gt_uses_expected_and_actual_params(monkeypatch) -> None:
+    captured: dict = {}
+
+    class FakeGEval:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+        def measure(self, test_case) -> None:
+            captured["test_case"] = test_case
+
+    monkeypatch.setattr("evaluate_cli.judge.metrics.GEval", FakeGEval)
+    monkeypatch.setattr(
+        "evaluate_cli.judge.metrics._judge_model",
+        lambda _ctx: object(),
+    )
+    monkeypatch.setattr(
+        "evaluate_cli.judge.metrics._score_from_metric",
+        lambda *_args, **_kwargs: object(),
+    )
+
+    from deepeval.test_case import LLMTestCaseParams
+
+    from evaluate_cli.judge.metrics import score_variant_vs_gt_dimension
+
+    score_variant_vs_gt_dimension(
+        "reference text",
+        "transcript text",
+        {"label": "Semantic fidelity", "criteria": "Score fidelity 0-10."},
+        {},
+    )
+
+    assert captured["evaluation_params"] == [
+        LLMTestCaseParams.EXPECTED_OUTPUT,
+        LLMTestCaseParams.ACTUAL_OUTPUT,
+    ]
+    test_case = captured["test_case"]
+    assert test_case.expected_output == "reference text"
+    assert test_case.actual_output == "transcript text"
+
+
 def test_build_geval_omits_evaluation_steps_when_unset(monkeypatch) -> None:
     captured: dict = {}
 

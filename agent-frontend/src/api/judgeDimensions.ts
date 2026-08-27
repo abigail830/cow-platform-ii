@@ -2,8 +2,8 @@ import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
 
-export type EvalJudgeDimensionScope = 'variant' | 'pairwise';
-export type EvalJudgeDimensionKind = 'geval_score' | 'geval_winner';
+export type EvalJudgeDimensionScope = 'variant' | 'pairwise' | 'variant_vs_gt';
+export type EvalJudgeDimensionKind = 'geval_score' | 'geval_winner' | 'cer_score' | 'wer_score';
 
 export type EvalJudgeDimension = {
   id: string;

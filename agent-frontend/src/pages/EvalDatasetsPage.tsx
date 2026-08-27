@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Download, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { Download, FileText, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
 import {
   createEvalDataset,
   deleteEvalDataset,
@@ -8,16 +8,20 @@ import {
   formatEvalFileBytes,
   getEvalDataset,
   getEvalDatasetItemDownloadUrl,
+  getEvalDatasetReferenceDownloadUrl,
   listEvalDatasetItems,
   listEvalDatasets,
   updateEvalDataset,
   uploadEvalDatasetItem,
+  uploadEvalDatasetReference,
   type EvalDataset,
   type EvalDatasetItem,
 } from '../api/evaluation/datasets.ts';
 import {
   EvalDatasetCreateModal,
   EvalDatasetEditModal,
+  EvalDatasetReferenceImportModal,
+  EvalDatasetReferenceUploadModal,
   EvalDatasetUploadModal,
 } from '../components/EvalDatasetModals.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -174,13 +178,13 @@ export function EvalDatasetsListPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="admin-table-empty">
+                <td colSpan={6} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={5} className="admin-table-empty">
+                <td colSpan={6} className="admin-table-empty">
                   No datasets yet.
                 </td>
               </tr>
@@ -301,6 +305,8 @@ export function EvalDatasetDetailPage() {
   const [items, setItems] = useState<EvalDatasetItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [referenceImportOpen, setReferenceImportOpen] = useState(false);
+  const [referenceUploadTarget, setReferenceUploadTarget] = useState<EvalDatasetItem | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [forbidden, setForbidden] = useState(false);
@@ -363,6 +369,36 @@ export function EvalDatasetDetailPage() {
     }
   }
 
+  async function handleDownloadReference(item: EvalDatasetItem) {
+    if (!datasetId) return;
+    try {
+      const { download_url, filename } = await getEvalDatasetReferenceDownloadUrl(datasetId, item.id);
+      const anchor = document.createElement('a');
+      anchor.href = download_url;
+      anchor.download = filename;
+      anchor.rel = 'noopener noreferrer';
+      anchor.click();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reference download failed');
+    }
+  }
+
+  async function handleImportReferences(rows: Array<{ itemId: string; reference: string }>) {
+    if (!datasetId) return;
+    for (const row of rows) {
+      await uploadEvalDatasetReference(datasetId, row.itemId, row.reference);
+    }
+    setReferenceImportOpen(false);
+    await load();
+  }
+
+  async function handleUploadReference(itemId: string, referenceText: string) {
+    if (!datasetId) return;
+    await uploadEvalDatasetReference(datasetId, itemId, referenceText);
+    setReferenceUploadTarget(null);
+    await load();
+  }
+
   async function handleDeleteItem() {
     if (!datasetId || !deleteTarget) return;
     setDeleting(true);
@@ -410,10 +446,21 @@ export function EvalDatasetDetailPage() {
           </div>
         </div>
         {canWrite ? (
-          <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
-            <Upload {...iconProps()} aria-hidden />
-            Upload files
-          </button>
+          <div className="admin-toolbar-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setReferenceImportOpen(true)}
+              disabled={items.length === 0}
+            >
+              <FileText {...iconProps()} aria-hidden />
+              Import references
+            </button>
+            <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
+              <Upload {...iconProps()} aria-hidden />
+              Upload files
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -426,6 +473,7 @@ export function EvalDatasetDetailPage() {
               <th>File</th>
               <th>Type</th>
               <th>Size</th>
+              <th>Reference</th>
               <th>Uploaded</th>
               <th aria-label="Actions" />
             </tr>
@@ -433,13 +481,13 @@ export function EvalDatasetDetailPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="admin-table-empty">
+                <td colSpan={6} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={5} className="admin-table-empty">
+                <td colSpan={6} className="admin-table-empty">
                   {items.length === 0 ? (
                     <>
                       No files yet.{' '}
@@ -462,26 +510,47 @@ export function EvalDatasetDetailPage() {
                   <td>{item.name}</td>
                   <td>{item.file_type}</td>
                   <td>{formatEvalFileBytes(item.size_bytes)}</td>
+                  <td>{item.reference_s3_key ? 'Uploaded' : 'Missing'}</td>
                   <td>{new Date(item.created_at).toLocaleString()}</td>
                   <td>
                     <div className="row-actions">
                       <button
                         type="button"
                         className="icon-btn"
-                        title="Download"
+                        title="Download audio"
                         onClick={() => void handleDownload(item)}
                       >
                         <Download {...iconProps()} aria-hidden />
                       </button>
-                      {canWrite ? (
+                      {item.reference_s3_key ? (
                         <button
                           type="button"
                           className="icon-btn"
-                          title="Delete"
-                          onClick={() => setDeleteTarget(item)}
+                          title="Download reference"
+                          onClick={() => void handleDownloadReference(item)}
                         >
-                          <Trash2 {...iconProps()} aria-hidden />
+                          <FileText {...iconProps()} aria-hidden />
                         </button>
+                      ) : null}
+                      {canWrite ? (
+                        <>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title={item.reference_s3_key ? 'Replace reference' : 'Upload reference'}
+                            onClick={() => setReferenceUploadTarget(item)}
+                          >
+                            <Pencil {...iconProps()} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Delete"
+                            onClick={() => setDeleteTarget(item)}
+                          >
+                            <Trash2 {...iconProps()} aria-hidden />
+                          </button>
+                        </>
                       ) : null}
                     </div>
                   </td>
@@ -491,6 +560,23 @@ export function EvalDatasetDetailPage() {
           </tbody>
         </table>
       </div>
+
+      {referenceImportOpen && dataset ? (
+        <EvalDatasetReferenceImportModal
+          datasetName={dataset.name}
+          items={items}
+          onCancel={() => setReferenceImportOpen(false)}
+          onImport={handleImportReferences}
+        />
+      ) : null}
+
+      {referenceUploadTarget ? (
+        <EvalDatasetReferenceUploadModal
+          item={referenceUploadTarget}
+          onCancel={() => setReferenceUploadTarget(null)}
+          onUpload={(referenceText) => handleUploadReference(referenceUploadTarget.id, referenceText)}
+        />
+      ) : null}
 
       {uploadOpen && dataset ? (
         <EvalDatasetUploadModal

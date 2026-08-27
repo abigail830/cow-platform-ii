@@ -442,6 +442,20 @@
       "when": 1785219000000,
       "tag": "0062_eval_judge_asr_rubric_bands",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1785220000000,
+      "tag": "0063_eval_judge_asr_compare_with_gt",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1785221000000,
+      "tag": "0064_eval_judge_gt_dimensions_cer",
+      "breakpoints": true
     }
   ]
 }

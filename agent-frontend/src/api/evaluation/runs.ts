@@ -170,6 +170,11 @@ async function authFetch(path: string, init?: RequestInit) {
     try {
       data = JSON.parse(text) as Record<string, unknown>;
     } catch {
+      if (res.status === 404) {
+        throw new Error(
+          'Evaluate API not found (404). Restart the backend (`./scripts/dev.sh restart`) so new routes load.',
+        );
+      }
       throw new Error(`Unexpected server response (${res.status})`);
     }
   }
@@ -345,6 +350,18 @@ export async function deleteEvalRunFile(
     }
     throw err;
   }
+}
+
+export async function evaluateEvalRunAttempt(
+  runId: string,
+  attemptId: string,
+): Promise<EvalRunDetail> {
+  const data = await authFetch(`/api/evaluation/runs/${runId}/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attempt_id: attemptId }),
+  });
+  return data as EvalRunDetail;
 }
 
 export async function retryEvalRunJudge(

@@ -9,6 +9,8 @@ from typing import Any
 from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
+from evaluate_cli.judge.error_rate import compute_character_error_rate, compute_word_error_rate
+
 GEVAL_PASS_THRESHOLD = 0.5
 
 
@@ -18,6 +20,7 @@ class JudgeScore:
     score_max: float | None
     winner: str | None
     reason: str
+    lower_is_better: bool = False
 
 
 def _judge_model(context: dict[str, Any]):
@@ -101,6 +104,51 @@ def score_variant_dimension(transcript: str, dimension: dict[str, Any], context:
     test_case = LLMTestCase(input="", actual_output=transcript)
     metric.measure(test_case)
     return _score_from_metric(metric, winner=False)
+
+
+def score_variant_vs_gt_dimension(
+    reference: str,
+    transcript: str,
+    dimension: dict[str, Any],
+    context: dict[str, Any],
+) -> JudgeScore:
+    metric = _build_geval(
+        dimension["label"],
+        dimension["criteria"],
+        [LLMTestCaseParams.EXPECTED_OUTPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
+        context,
+        dimension.get("evaluation_steps"),
+    )
+    test_case = LLMTestCase(input="", expected_output=reference, actual_output=transcript)
+    metric.measure(test_case)
+    return _score_from_metric(metric, winner=False)
+
+
+def score_error_rate_dimension(
+    reference: str,
+    transcript: str,
+    dimension: dict[str, Any],
+) -> JudgeScore:
+    kind = dimension.get("kind", "cer_score")
+    if kind == "wer_score":
+        result = compute_word_error_rate(reference, transcript)
+        label = "Word Error Rate (WER)"
+    else:
+        result = compute_character_error_rate(reference, transcript)
+        label = "Character Error Rate (CER)"
+
+    reason = (
+        f"{label} {result.error_rate:.2%}. "
+        f"Substitutions: {result.substitutions}, Deletions: {result.deletions}, "
+        f"Insertions: {result.insertions}, Reference length: {result.reference_length}."
+    )
+    return JudgeScore(
+        score=result.error_rate,
+        score_max=1.0,
+        winner=None,
+        reason=reason,
+        lower_is_better=True,
+    )
 
 
 def score_pairwise_dimension(

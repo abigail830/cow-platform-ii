@@ -99,7 +99,11 @@ function isGithubWorkflowDispatchError(error: unknown): boolean {
   return /dispatch failed \(404\)|Not Found|workflow.*not found/i.test(error.message);
 }
 
-async function dispatchGithubActionsEvalJudgeWorker(jobId: string, apiUrl?: string): Promise<void> {
+async function dispatchGithubActionsEvalJudgeWorker(
+  jobId: string,
+  apiUrl?: string,
+  options?: { skipMarkRunning?: boolean },
+): Promise<void> {
   const baseConfig = resolveEvalPipelineGithubConfig();
   if (!baseConfig) {
     throw new Error(
@@ -108,7 +112,9 @@ async function dispatchGithubActionsEvalJudgeWorker(jobId: string, apiUrl?: stri
     );
   }
 
-  await updateEvalJudgeJob(jobId, { status: 'running', errorMessage: null });
+  if (!options?.skipMarkRunning) {
+    await updateEvalJudgeJob(jobId, { status: 'running', errorMessage: null });
+  }
 
   try {
     await triggerEvalPipelineGithubActions(
@@ -126,7 +132,11 @@ async function dispatchGithubActionsEvalJudgeWorker(jobId: string, apiUrl?: stri
   );
 }
 
-export async function spawnAsyncEvalJudgeWorker(jobId: string, apiUrl?: string): Promise<void> {
+export async function spawnAsyncEvalJudgeWorker(
+  jobId: string,
+  apiUrl?: string,
+  options?: { skipMarkRunning?: boolean },
+): Promise<void> {
   if (activeEvalJudgeJobs.has(jobId)) {
     console.info(`[eval-judge] skip dispatch (worker already active): job ${jobId}`);
     return;
@@ -137,7 +147,7 @@ export async function spawnAsyncEvalJudgeWorker(jobId: string, apiUrl?: string):
   if (resolvePipelineWorkerMode() === 'github_actions') {
     activeEvalJudgeJobs.add(jobId);
     try {
-      await dispatchGithubActionsEvalJudgeWorker(jobId, apiUrl);
+      await dispatchGithubActionsEvalJudgeWorker(jobId, apiUrl, options);
     } catch (error) {
       if (!isServerlessRuntime() && isGithubWorkflowDispatchError(error)) {
         console.warn('[eval-judge] GitHub Actions unavailable; falling back to local evaluate-cli');

@@ -1,10 +1,18 @@
 import { useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import type { EvalDataset } from '../api/evaluation/datasets.ts';
+import type { EvalDataset, EvalDatasetItem } from '../api/evaluation/datasets.ts';
 import { ICON_SIZE_LG, iconProps } from './icons/icon-props.ts';
+import {
+  buildReferenceImportPreview,
+  readReferenceImportFile,
+  type ReferenceImportPreview,
+} from '../shared/reference-import.ts';
 
 export const EVAL_DATASET_AUDIO_ACCEPT =
   'audio/*,video/mp4,.m4a,.mp3,.wav,.flac,.aac,.amr,.ogg,.opus,.webm,.mp4';
+
+export const EVAL_DATASET_REFERENCE_MANIFEST_ACCEPT =
+  '.csv,.tsv,.txt,text/csv,text/tab-separated-values';
 
 function fileKey(file: File): string {
   return `${file.name}-${file.size}-${file.lastModified}`;
@@ -14,15 +22,32 @@ type EvalDatasetFileDropzoneProps = {
   files: File[];
   onFilesChange: (files: File[]) => void;
   disabled?: boolean;
+  accept?: string;
+  multiple?: boolean;
+  title?: string;
+  hint?: string;
 };
 
-export function EvalDatasetFileDropzone({ files, onFilesChange, disabled }: EvalDatasetFileDropzoneProps) {
+export function EvalDatasetFileDropzone({
+  files,
+  onFilesChange,
+  disabled,
+  accept = EVAL_DATASET_AUDIO_ACCEPT,
+  multiple = true,
+  title = 'Drag and drop audio files here, or click to browse (multiple files supported).',
+  hint = 'M4A, MP3, WAV, FLAC, AAC, MP4, and more.',
+}: EvalDatasetFileDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
   function addFiles(fileList: FileList | null) {
     if (!fileList?.length || disabled) return;
     const incoming = Array.from(fileList);
+    if (!multiple) {
+      onFilesChange(incoming.slice(0, 1));
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
     onFilesChange(
       (() => {
         const seen = new Set(files.map(fileKey));
@@ -58,29 +83,22 @@ export function EvalDatasetFileDropzone({ files, onFilesChange, disabled }: Eval
           setDragOver(false);
           addFiles(event.dataTransfer.files);
         }}
-        onClick={() => !disabled && inputRef.current?.click()}
-        role="button"
-        tabIndex={disabled ? -1 : 0}
-        onKeyDown={(event) => {
-          if (disabled) return;
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            inputRef.current?.click();
-          }
+        onMouseDown={(event) => {
+          // Keep click-to-browse without selecting dropzone label text (orange ::selection).
+          if (event.button === 0) event.preventDefault();
         }}
+        onClick={() => !disabled && inputRef.current?.click()}
       >
-        <p className="document-upload-dropzone-title">
-          Drag and drop audio files here, or click to browse (multiple files supported).
-        </p>
-        <p className="document-upload-dropzone-hint">M4A, MP3, WAV, FLAC, AAC, MP4, and more.</p>
+        <p className="document-upload-dropzone-title">{title}</p>
+        <p className="document-upload-dropzone-hint">{hint}</p>
         <div className="document-upload-plus-box" aria-hidden>
           <Plus {...iconProps({ size: ICON_SIZE_LG })} />
         </div>
         <input
           ref={inputRef}
           type="file"
-          accept={EVAL_DATASET_AUDIO_ACCEPT}
-          multiple
+          accept={accept}
+          multiple={multiple}
           hidden
           disabled={disabled}
           onChange={(event) => addFiles(event.target.files)}
@@ -330,6 +348,219 @@ export function EvalDatasetEditModal({ dataset, onCancel, onSave }: EvalDatasetE
             </button>
             <button type="submit" className="btn-primary" disabled={busy || !name.trim()}>
               {busy ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+type EvalDatasetReferenceImportModalProps = {
+  datasetName: string;
+  items: EvalDatasetItem[];
+  onCancel: () => void;
+  onImport: (rows: Array<{ itemId: string; reference: string }>) => Promise<void>;
+};
+
+export function EvalDatasetReferenceImportModal({
+  datasetName,
+  items,
+  onCancel,
+  onImport,
+}: EvalDatasetReferenceImportModalProps) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [preview, setPreview] = useState<ReferenceImportPreview | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const itemByName = new Map(items.map((item) => [item.name, item]));
+
+  async function handleFilesChange(nextFiles: File[]) {
+    setFiles(nextFiles);
+    setError('');
+    const file = nextFiles[0];
+    if (!file) {
+      setPreview(null);
+      return;
+    }
+    try {
+      const text = await readReferenceImportFile(file);
+      setPreview(buildReferenceImportPreview(text, items.map((item) => item.name)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to read file');
+      setPreview(null);
+    }
+  }
+
+  const matchedRows =
+    preview?.rows.filter((row) => itemByName.has(row.filename) && !preview.duplicateFilenames.includes(row.filename)) ??
+    [];
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!preview || matchedRows.length === 0) {
+      setError('No matched rows to import');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const payload = matchedRows.map((row) => ({
+        itemId: itemByName.get(row.filename)!.id,
+        reference: row.reference,
+      }));
+      await onImport(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div
+        className="modal-card model-config-form eval-dataset-reference-import-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="eval-dataset-reference-import-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="eval-dataset-reference-import-title">Import references</h2>
+        <p className="admin-form-hint eval-dataset-reference-import-dataset-hint">
+          Import ground-truth transcripts for dataset:{' '}
+          <span className="eval-dataset-reference-import-dataset-name">{datasetName}</span>
+        </p>
+        <p className="eval-dataset-reference-import-format">
+          CSV or TSV with columns filename (full name including extension, e.g. clip001.wav) and
+          reference (transcript text). Filename must match an uploaded audio file exactly.
+        </p>
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <EvalDatasetFileDropzone
+            files={files}
+            onFilesChange={(nextFiles) => void handleFilesChange(nextFiles)}
+            disabled={busy}
+            accept={EVAL_DATASET_REFERENCE_MANIFEST_ACCEPT}
+            multiple={false}
+            title="Drag and drop a CSV or TSV manifest here, or click to browse."
+            hint="CSV or TSV supported."
+          />
+
+          {preview ? (
+            <div className="eval-dataset-reference-import-preview">
+              <p className="eval-dataset-reference-import-summary">
+                Parsed {preview.rows.length} row(s); {matchedRows.length} will upload (exact filename match).
+              </p>
+              {preview.unmatchedFilenames.length > 0 ? (
+                <div className="eval-dataset-reference-import-issues" role="alert">
+                  <p className="eval-dataset-reference-import-issues-title error">
+                    Unmatched filenames ({preview.unmatchedFilenames.length})
+                  </p>
+                  <ul>
+                    {preview.unmatchedFilenames.map((filename) => (
+                      <li key={filename}>{filename}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {preview.duplicateFilenames.length > 0 ? (
+                <div className="eval-dataset-reference-import-issues" role="alert">
+                  <p className="eval-dataset-reference-import-issues-title error">
+                    Duplicate filenames skipped ({preview.duplicateFilenames.length})
+                  </p>
+                  <ul>
+                    {preview.duplicateFilenames.map((filename) => (
+                      <li key={filename}>{filename}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {error ? <p className="error">{error}</p> : null}
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={busy || matchedRows.length === 0}>
+              {busy
+                ? 'Importing…'
+                : preview
+                  ? `Import ${matchedRows.length} reference(s)`
+                  : 'Import'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+type EvalDatasetReferenceUploadModalProps = {
+  item: EvalDatasetItem;
+  onCancel: () => void;
+  onUpload: (referenceText: string) => Promise<void>;
+};
+
+export function EvalDatasetReferenceUploadModal({
+  item,
+  onCancel,
+  onUpload,
+}: EvalDatasetReferenceUploadModalProps) {
+  const [referenceText, setReferenceText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!referenceText.trim()) {
+      setError('Reference text is required');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await onUpload(referenceText);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div
+        className="modal-card model-config-form"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="eval-dataset-reference-upload-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="eval-dataset-reference-upload-title">Upload reference</h2>
+        <p className="admin-form-hint">
+          Ground-truth transcript for <strong>{item.name}</strong>
+        </p>
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <label className="form-field form-field-wide">
+            <span>Reference text</span>
+            <textarea
+              rows={8}
+              value={referenceText}
+              onChange={(event) => setReferenceText(event.target.value)}
+              disabled={busy}
+              autoFocus
+            />
+          </label>
+          {error ? <p className="error">{error}</p> : null}
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={busy || !referenceText.trim()}>
+              {busy ? 'Uploading…' : 'Upload reference'}
             </button>
           </div>
         </form>

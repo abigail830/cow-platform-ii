@@ -13,7 +13,7 @@ import {
   type EvalRunStatus,
 } from '../../db/index.ts';
 import { getPipelineConfigById } from '../../shared/pipeline/pipeline-config-store.ts';
-import { getEvalDatasetById, createEvalDataset, deleteEvalDataset, listEvalDatasetItems } from './eval-datasets.ts';
+import { getEvalDatasetById, deleteEvalDataset, listEvalDatasetItems } from './eval-datasets.ts';
 import { computeEvalRunCompletion, isTerminalEvalRunItemStage, evalRunItemDispatchClaimed } from './eval-run-phase.ts';
 import { evalRunItemToPublic, snapshotConfigYaml } from './eval-pipeline-jobs.ts';
 import { orchestrateEvalRunDispatch } from './eval-run-dispatch.ts';
@@ -34,11 +34,7 @@ import {
   toAttemptPublic,
 } from './eval-run-attempts.ts';
 import { enrichEvalRunItemPublic } from './eval-run-item-enrichment.ts';
-import {
-  DEFAULT_EVAL_JUDGE_SCENARIO_ID,
-  snapshotEvalJudgeDimensions,
-} from './eval-judge-dimensions.ts';
-import { resolveEvalJudgeConfigYaml, resolveEvalJudgeScenarioId, parseEvalJudgeScenarioId } from '../../shared/eval/eval-judge-workflow.ts';
+import { buildEvalRunJudgeMetrics } from './eval-run-judge-config.ts';
 
 const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
   'Worker exited without updating job status (check GitHub Actions logs).';
@@ -182,19 +178,11 @@ export async function createEvalRun(input: {
   }
 
   let datasetId = input.datasetId?.trim() || '';
-  if (datasetId) {
-    const dataset = await getEvalDatasetById(datasetId);
-    if (!dataset) throw new Error('Dataset not found');
-    if (dataset.mediaType !== 'audio') {
-      throw new Error('Only audio datasets are supported in this version');
-    }
-  } else {
-    const dataset = await createEvalDataset({
-      name,
-      description: input.description?.trim() || null,
-      createdBy: input.createdBy ?? null,
-    });
-    datasetId = dataset.id;
+  if (!datasetId) throw new Error('dataset_id is required');
+  const dataset = await getEvalDatasetById(datasetId);
+  if (!dataset) throw new Error('Dataset not found');
+  if (dataset.mediaType !== 'audio') {
+    throw new Error('Only audio datasets are supported in this version');
   }
 
   const variants: Array<{
@@ -223,11 +211,10 @@ export async function createEvalRun(input: {
   }
 
   const runMode = input.runMode === 'full' ? 'full' : 'pipeline_only';
-  const judgeConfigYaml = runMode === 'full' ? await resolveEvalJudgeConfigYaml() : null;
-  const judgeScenarioId =
-    judgeConfigYaml != null ? parseEvalJudgeScenarioId(judgeConfigYaml) : DEFAULT_EVAL_JUDGE_SCENARIO_ID;
-  const judgeDimensions =
-    runMode === 'full' ? await snapshotEvalJudgeDimensions(judgeScenarioId) : null;
+  const judgeMetrics =
+    runMode === 'full'
+      ? await buildEvalRunJudgeMetrics({ datasetId, pipelineCount: variants.length })
+      : null;
 
   const [run] = await db
     .insert(appEvalRuns)
@@ -239,16 +226,7 @@ export async function createEvalRun(input: {
       phase: 'transcribing',
       runMode,
       judgeEnabled: runMode === 'full',
-      judgeMetrics:
-        runMode === 'full'
-          ? [
-              {
-                scenario_id: judgeScenarioId,
-                dimensions: judgeDimensions,
-                config_yaml: judgeConfigYaml,
-              },
-            ]
-          : null,
+      judgeMetrics,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -307,27 +285,35 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
       : 'pipeline_only'
     : run.runMode;
 
-  if (options?.runMode) {
-    const judgeConfigYaml = runMode === 'full' ? await resolveEvalJudgeConfigYaml() : null;
-    const judgeScenarioId = runMode === 'full' ? await resolveEvalJudgeScenarioId() : DEFAULT_EVAL_JUDGE_SCENARIO_ID;
-    const judgeDimensions =
-      runMode === 'full' ? await snapshotEvalJudgeDimensions(judgeScenarioId) : null;
+  const variants = await db
+    .select()
+    .from(appEvalRunVariants)
+    .where(eq(appEvalRunVariants.runId, runId));
 
+  if (runMode === 'full') {
+    const judgeMetrics = await buildEvalRunJudgeMetrics({
+      datasetId: run.datasetId,
+      pipelineCount: variants.length,
+    });
     await db
       .update(appEvalRuns)
       .set({
-        runMode,
-        judgeEnabled: runMode === 'full',
-        judgeMetrics:
-          runMode === 'full'
-            ? [
-                {
-                  scenario_id: judgeScenarioId,
-                  dimensions: judgeDimensions,
-                  config_yaml: judgeConfigYaml,
-                },
-              ]
-            : null,
+        runMode: 'full',
+        judgeEnabled: true,
+        judgeMetrics,
+        summaryMetrics: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(appEvalRuns.id, runId));
+    run = (await getEvalRunById(runId))!;
+  } else if (options?.runMode === 'pipeline_only') {
+    await db
+      .update(appEvalRuns)
+      .set({
+        runMode: 'pipeline_only',
+        judgeEnabled: false,
+        judgeMetrics: null,
+        summaryMetrics: null,
         updatedAt: new Date(),
       })
       .where(eq(appEvalRuns.id, runId));
@@ -335,11 +321,6 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
   }
 
   const attempt = await createEvalRunAttempt({ runId, runMode });
-
-  const variants = await db
-    .select()
-    .from(appEvalRunVariants)
-    .where(eq(appEvalRunVariants.runId, runId));
 
   const datasetItems = await db
     .select()

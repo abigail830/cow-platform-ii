@@ -15,8 +15,12 @@ import { getS3Config } from '../../storage/s3-config.ts';
 import {
   parseEvalJudgeModelName,
   resolveEvalJudgeConfigYaml,
+  resolveEvalJudgeGtConfigYaml,
+  EVAL_JUDGE_COMPARE_PIPELINE_NAME,
 } from '../../shared/eval/eval-judge-workflow.ts';
+import { EVAL_JUDGE_GT_SCENARIO_ID, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME } from '../../shared/eval/eval-judge-constants.ts';
 import type { EvalJudgeDimensionDefinition } from './eval-judge-dimensions.ts';
+import { getEvalJudgeScenario } from './eval-judge-dimensions.ts';
 import { resolveModelCliParams } from '../models/model-cli-params.ts';
 
 function evalJudgeConfigYamlFromRun(
@@ -87,14 +91,40 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     });
   }
 
-  if (transcripts.length < 2) {
+  if (transcripts.length < 1) {
+    throw new Error('At least one successful transcript is required for judge evaluation');
+  }
+
+  const scenario = await getEvalJudgeScenario(job.scenarioId);
+  if (!scenario) throw new Error(`Unknown eval judge scenario: ${job.scenarioId}`);
+
+  const minVariants = Math.max(1, scenario.min_variants);
+  if (transcripts.length < minVariants) {
+    throw new Error(
+      `At least ${minVariants} successful transcript(s) are required for judge evaluation`,
+    );
+  }
+
+  let referenceUrl: string | null = null;
+  if (scenario.requires_ground_truth) {
+    if (!datasetItem.referenceS3Key) {
+      throw new Error(`Dataset item ${datasetItem.name} is missing a ground-truth reference`);
+    }
+    referenceUrl = await getStorageReadUrl(datasetItem.referenceS3Key, 3600);
+  } else if (transcripts.length < 2) {
     throw new Error('At least two successful transcripts are required for judge evaluation');
   }
 
   const configYaml =
     evalJudgeConfigYamlFromRun(run.judgeMetrics as Record<string, unknown>[] | null) ??
-    (await resolveEvalJudgeConfigYaml());
-  const modelDisplayName = parseEvalJudgeModelName(configYaml);
+    (job.scenarioId === EVAL_JUDGE_GT_SCENARIO_ID
+      ? await resolveEvalJudgeGtConfigYaml()
+      : await resolveEvalJudgeConfigYaml());
+  const judgePipelineName =
+    job.scenarioId === EVAL_JUDGE_GT_SCENARIO_ID
+      ? EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME
+      : EVAL_JUDGE_COMPARE_PIPELINE_NAME;
+  const modelDisplayName = parseEvalJudgeModelName(configYaml, judgePipelineName);
   const modelParams = await resolveModelCliParams({
     modelName: modelDisplayName,
     expectedApiType: 'chat-completions',
@@ -117,8 +147,11 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     dataset_item_id: job.datasetItemId,
     dataset_item_name: datasetItem.name,
     scenario_id: job.scenarioId,
+    requires_ground_truth: scenario.requires_ground_truth,
+    min_variants: minVariants,
     dimensions: job.dimensionsSnapshot as EvalJudgeDimensionDefinition[],
     transcripts,
+    reference_url: referenceUrl,
     config_yaml: configYaml,
     bucket: s3.bucket,
     artifact_keys: {

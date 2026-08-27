@@ -159,3 +159,55 @@ export async function uploadEvalDatasetItem(datasetId: string, file: File): Prom
 
   return completed as EvalDatasetItem;
 }
+
+type ReferenceUploadInitResponse = {
+  s3_key: string;
+  upload_url: string;
+  method?: string;
+  headers?: Record<string, string>;
+};
+
+export async function uploadEvalDatasetReference(
+  datasetId: string,
+  itemId: string,
+  referenceText: string,
+): Promise<EvalDatasetItem> {
+  const blob = new Blob([referenceText], { type: 'text/plain;charset=utf-8' });
+  const init = (await authFetch(
+    `/api/evaluation/datasets/${datasetId}/items/${itemId}/reference/upload-init`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size_bytes: blob.size }),
+    },
+  )) as ReferenceUploadInitResponse;
+
+  const uploadUrl = init.upload_url;
+  if (!uploadUrl) throw new Error('Server did not return an upload URL');
+
+  await putFileToPresignedUrl(uploadUrl, blob, init.headers ?? {}, init.method ?? 'PUT');
+
+  const completed = await authFetch(
+    `/api/evaluation/datasets/${datasetId}/items/${itemId}/reference/upload-complete`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ s3_key: init.s3_key }),
+    },
+  );
+
+  return completed as EvalDatasetItem;
+}
+
+export async function getEvalDatasetReferenceDownloadUrl(
+  datasetId: string,
+  itemId: string,
+): Promise<{ download_url: string; filename: string }> {
+  const data = await authFetch(
+    `/api/evaluation/datasets/${datasetId}/items/${itemId}/reference/download-url`,
+  );
+  return {
+    download_url: String(data.download_url),
+    filename: String(data.filename),
+  };
+}
