@@ -2834,6 +2834,37 @@ textarea {
 .eval-run-create-modal {
   width: min(760px, 100%);
   min-height: min(640px, calc(100vh - 2.5rem));
+  max-height: calc(100vh - 2.5rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.eval-run-create-modal > h2,
+.eval-run-create-modal > .admin-form-hint {
+  flex-shrink: 0;
+}
+
+.eval-run-create-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin-top: 0.25rem;
+}
+
+.eval-run-create-form-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.eval-run-create-modal .modal-actions {
+  flex-shrink: 0;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f5f9;
 }
 
 .eval-run-create-modal .form-grid + .modal-tabs {
@@ -3543,11 +3574,19 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  color: var(--brand-orange);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.eval-run-list-name:hover {
+  color: var(--brand-orange-hover);
+  text-decoration: underline;
 }
 
 .eval-run-list-icon {
   flex-shrink: 0;
-  color: #64748b;
+  color: var(--brand-orange);
 }
 
 .eval-run-files-count {

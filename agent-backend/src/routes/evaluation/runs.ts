@@ -13,6 +13,7 @@ import {
   listEvalRunProcessingOptions,
   listEvalRuns,
   startEvalRun,
+  updateEvalRun,
 } from '../../services/eval/eval-runs.ts';
 import {
   deleteEvalDatasetItem,
@@ -66,7 +67,6 @@ runs.post(
       name?: string;
       description?: string | null;
       pipeline_config_ids?: string[];
-      run_mode?: 'pipeline_only' | 'full';
     }>();
 
     if (!body.name?.trim()) return c.json({ error: 'name is required' }, 400);
@@ -81,7 +81,6 @@ runs.post(
         name: body.name,
         description: body.description,
         pipelineConfigIds: body.pipeline_config_ids,
-        runMode: body.run_mode,
         createdBy: user.id,
       });
       return c.json(created, 201);
@@ -103,6 +102,25 @@ runs.get(
       return c.json(detail);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load run';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+runs.put(
+  '/:id',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.RUNS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Run id is required' }, 400);
+
+    const body = await c.req.json<{ name?: string; description?: string | null }>();
+    try {
+      const run = await updateEvalRun(id, body);
+      return c.json(run);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update run';
       const status = message.includes('not found') ? 404 : 400;
       return c.json({ error: message }, status);
     }

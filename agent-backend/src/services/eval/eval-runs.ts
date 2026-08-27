@@ -166,7 +166,6 @@ export async function createEvalRun(input: {
   name: string;
   description?: string | null;
   pipelineConfigIds: string[];
-  runMode?: EvalRunMode;
   createdBy?: string | null;
 }) {
   const name = input.name.trim();
@@ -210,11 +209,7 @@ export async function createEvalRun(input: {
     });
   }
 
-  const runMode = input.runMode === 'full' ? 'full' : 'pipeline_only';
-  const judgeMetrics =
-    runMode === 'full'
-      ? await buildEvalRunJudgeMetrics({ datasetId, pipelineCount: variants.length })
-      : null;
+  const runMode = 'pipeline_only' as const;
 
   const [run] = await db
     .insert(appEvalRuns)
@@ -225,8 +220,8 @@ export async function createEvalRun(input: {
       status: 'draft',
       phase: 'transcribing',
       runMode,
-      judgeEnabled: runMode === 'full',
-      judgeMetrics,
+      judgeEnabled: false,
+      judgeMetrics: null,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -674,6 +669,29 @@ export async function getEvalRunCompareUrls(
   }
 
   return { dataset_item_id: datasetItemId, attempt_id: resolvedAttemptId, comparisons };
+}
+
+export async function updateEvalRun(
+  runId: string,
+  input: { name?: string; description?: string | null },
+) {
+  const existing = await getEvalRunById(runId);
+  if (!existing) throw new Error('Eval run not found');
+
+  const name = input.name !== undefined ? input.name.trim() : existing.name;
+  if (!name || name.length > 256) throw new Error('Run name must be 1–256 characters');
+
+  const [row] = await db
+    .update(appEvalRuns)
+    .set({
+      name,
+      ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRuns.id, runId))
+    .returning();
+
+  return toRunPublic(row!);
 }
 
 export async function deleteEvalRun(runId: string): Promise<void> {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Eye, FolderOpen, History, Loader2, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
+import { Eye, FolderOpen, History, Loader2, Pencil, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
@@ -12,6 +12,7 @@ import {
   listEvalRuns,
   retryEvalRunJudge,
   startEvalRun,
+  updateEvalRun,
   type EvalRun,
   type EvalRunAttempt,
   type EvalRunDetail,
@@ -24,9 +25,10 @@ import {
   type EvalRunStatus,
 } from '../api/evaluation/runs.ts';
 import { listEvalDatasets, getEvalDatasetReferenceDownloadUrl, type EvalDataset } from '../api/evaluation/datasets.ts';
-import { EvalRunCreateModal, EvalRunFilesModal } from '../components/EvalRunModals.tsx';
+import { EvalRunCreateModal, EvalRunEditModal, EvalRunFilesModal } from '../components/EvalRunModals.tsx';
 import { TransientNotice } from '../components/TransientNotice.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
+import { NavPageIcon } from '../components/icons/NavIcons.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useTransientNotice } from '../hooks/useTransientNotice.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
@@ -317,11 +319,12 @@ function formatDurationMs(ms: number): string {
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   });
 }
 
@@ -1047,6 +1050,7 @@ export function EvaluationRunsListPage() {
   const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [filesTarget, setFilesTarget] = useState<EvalRun | null>(null);
+  const [editTarget, setEditTarget] = useState<EvalRun | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EvalRun | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -1083,19 +1087,24 @@ export function EvaluationRunsListPage() {
     name: string;
     description: string;
     pipelineConfigIds: string[];
-    runMode: EvalRunMode;
     datasetId: string;
   }) {
     const created = await createEvalRun({
       name: input.name,
       description: input.description || undefined,
       pipeline_config_ids: input.pipelineConfigIds,
-      run_mode: input.runMode,
       dataset_id: input.datasetId,
     });
     setModalOpen(false);
     await load();
     navigate(`/evaluation/runs/${created.run.id}`);
+  }
+
+  async function handleEditSave(input: { name: string; description: string | null }) {
+    if (!editTarget) return;
+    await updateEvalRun(editTarget.id, input);
+    setEditTarget(null);
+    await load();
   }
 
   async function handleDelete() {
@@ -1172,8 +1181,8 @@ export function EvaluationRunsListPage() {
               runs.map((run) => (
                 <tr key={run.id}>
                   <td>
-                    <Link to={`/evaluation/runs/${run.id}`} className="admin-link eval-run-list-name">
-                      <History {...iconProps({ size: 16 })} className="eval-run-list-icon" aria-hidden />
+                    <Link to={`/evaluation/runs/${run.id}`} className="eval-run-list-name">
+                      <NavPageIcon name="evaluation-run" size={16} className="eval-run-list-icon" aria-hidden />
                       {run.name}
                     </Link>
                   </td>
@@ -1191,14 +1200,24 @@ export function EvaluationRunsListPage() {
                   <td>
                     <div className="row-actions">
                       {canWrite ? (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title="Manage files"
-                          onClick={() => setFilesTarget(run)}
-                        >
-                          <FolderOpen {...iconProps()} aria-hidden />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Edit"
+                            onClick={() => setEditTarget(run)}
+                          >
+                            <Pencil {...iconProps()} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Manage files"
+                            onClick={() => setFilesTarget(run)}
+                          >
+                            <FolderOpen {...iconProps()} aria-hidden />
+                          </button>
+                        </>
                       ) : null}
                       <Link to={`/evaluation/runs/${run.id}`} className="icon-btn" title="View">
                         <Eye {...iconProps()} aria-hidden />
@@ -1228,6 +1247,14 @@ export function EvaluationRunsListPage() {
           datasets={datasets}
           onCancel={() => setModalOpen(false)}
           onCreate={handleCreate}
+        />
+      ) : null}
+
+      {editTarget ? (
+        <EvalRunEditModal
+          run={editTarget}
+          onCancel={() => setEditTarget(null)}
+          onSave={handleEditSave}
         />
       ) : null}
 
@@ -1402,7 +1429,13 @@ export function EvaluationRunDetailPage() {
             <p className="admin-toolbar-meta">
               {formatEvalRunStatus(displayRunStatus ?? detail.run.status)}
               {detail.run.status === 'running' ? ` · ${formatEvalRunPhase(detail.run.phase)}` : ''}
-              {detail.run.run_mode === 'full' ? ' · Full' : ' · Pipeline only'} · {detail.variants.length}{' '}
+              {(detail.attempts?.length ?? 0) > 0
+                ? detail.run.run_mode === 'full'
+                  ? ' · Full'
+                  : ' · Pipeline only'
+                : ''}
+              {' · '}
+              {detail.variants.length}{' '}
               pipeline
               {detail.variants.length === 1 ? '' : 's'} · {fileCount} current file{fileCount === 1 ? '' : 's'}
               {(detail.attempts?.length ?? 0) > 0

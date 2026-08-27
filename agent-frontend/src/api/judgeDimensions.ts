@@ -1,6 +1,6 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
-import { formatApiError } from './http.ts';
+import { readApiErrorMessage } from './http.ts';
 
 export type EvalJudgeDimensionScope = 'variant' | 'pairwise' | 'variant_vs_gt';
 export type EvalJudgeDimensionKind = 'geval_score' | 'geval_winner' | 'cer_score' | 'wer_score';
@@ -39,7 +39,7 @@ async function authFetch(path: string, init?: RequestInit) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
-  if (!response.ok) throw new Error(await formatApiError(response));
+  if (!response.ok) throw new Error(await readApiErrorMessage(response));
   if (response.status === 204) return null;
   return response.json();
 }

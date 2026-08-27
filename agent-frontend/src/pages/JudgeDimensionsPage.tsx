@@ -414,7 +414,7 @@ export function JudgeDimensionsPage() {
                       <span>Min variants</span>
                       <input
                         type="number"
-                        min={2}
+                        min={1}
                         value={form.min_variants}
                         onChange={(event) =>
                           setForm((prev) => ({ ...prev, min_variants: event.target.value }))

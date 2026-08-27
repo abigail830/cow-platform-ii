@@ -235,7 +235,6 @@ export async function createEvalRun(input: {
   name: string;
   description?: string;
   pipeline_config_ids: string[];
-  run_mode?: EvalRunMode;
 }): Promise<{ run: EvalRun; variants: EvalRunVariant[] }> {
   const data = await authFetch('/api/evaluation/runs', {
     method: 'POST',
@@ -264,6 +263,18 @@ export async function startEvalRun(
 
 export async function deleteEvalRun(runId: string): Promise<void> {
   await authFetch(`/api/evaluation/runs/${runId}`, { method: 'DELETE' });
+}
+
+export async function updateEvalRun(
+  runId: string,
+  input: { name?: string; description?: string | null },
+): Promise<EvalRun> {
+  const data = await authFetch(`/api/evaluation/runs/${runId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return data as EvalRun;
 }
 
 export async function listEvalRunFiles(

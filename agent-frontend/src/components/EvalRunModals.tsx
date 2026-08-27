@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
-import type { EvalRunProcessingOption, EvalRunMode } from '../api/evaluation/runs.ts';
+import type { EvalRunProcessingOption } from '../api/evaluation/runs.ts';
 import {
   deleteEvalRunFile,
   listEvalRunFiles,
@@ -20,7 +20,6 @@ type EvalRunCreateModalProps = {
     name: string;
     description: string;
     pipelineConfigIds: string[];
-    runMode: EvalRunMode;
     datasetId: string;
   }) => Promise<void>;
 };
@@ -31,7 +30,6 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
   const [datasetId, setDatasetId] = useState('');
   const [mediaTab, setMediaTab] = useState<'audio'>('audio');
   const [selectedPipelineIds, setSelectedPipelineIds] = useState<string[]>([]);
-  const [runMode, setRunMode] = useState<EvalRunMode>('full');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -53,7 +51,6 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
         name: name.trim(),
         description: description.trim(),
         pipelineConfigIds: selectedPipelineIds,
-        runMode,
         datasetId,
       });
     } catch (err) {
@@ -79,8 +76,9 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
           Name the evaluation set, then configure type-specific settings. Audio runs compare ASR pipelines on the
           same recordings.
         </p>
-        <form onSubmit={(event) => void handleSubmit(event)}>
-          <div className="form-grid">
+        <form className="eval-run-create-form" onSubmit={(event) => void handleSubmit(event)}>
+          <div className="eval-run-create-form-body">
+            <div className="form-grid">
             <label className="form-field form-field-wide">
               <span>Name</span>
               <input
@@ -181,46 +179,11 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
                     </div>
                   )}
                 </div>
-                <div className="form-field form-field-wide">
-                  <span>Default run mode</span>
-                  <p className="admin-form-hint eval-run-mode-hint">
-                    Saved on the run as the default. You can start another run in either mode from the detail page.
-                  </p>
-                  <div className="eval-run-mode-options">
-                    <label className="form-radio">
-                      <input
-                        type="radio"
-                        name="eval-run-mode"
-                        value="pipeline_only"
-                        checked={runMode === 'pipeline_only'}
-                        onChange={() => setRunMode('pipeline_only')}
-                        disabled={busy}
-                      />
-                      <span>
-                        Pipeline only{' '}
-                        <span className="admin-muted">— stop after transcription finishes</span>
-                      </span>
-                    </label>
-                    <label className="form-radio">
-                      <input
-                        type="radio"
-                        name="eval-run-mode"
-                        value="full"
-                        checked={runMode === 'full'}
-                        onChange={() => setRunMode('full')}
-                        disabled={busy}
-                      />
-                      <span>
-                        Full{' '}
-                        <span className="admin-muted">— auto-compare all files before marking complete</span>
-                      </span>
-                    </label>
-                  </div>
-                </div>
               </>
             ) : null}
           </div>
-          {error ? <p className="error">{error}</p> : null}
+            {error ? <p className="error">{error}</p> : null}
+          </div>
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
               Cancel
@@ -419,6 +382,85 @@ export function EvalRunFilesModal({
             </div>
           </div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+type EvalRunEditModalProps = {
+  run: { id: string; name: string; description: string | null };
+  onCancel: () => void;
+  onSave: (input: { name: string; description: string | null }) => Promise<void>;
+};
+
+export function EvalRunEditModal({ run, onCancel, onSave }: EvalRunEditModalProps) {
+  const [name, setName] = useState(run.name);
+  const [description, setDescription] = useState(run.description ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) {
+      setError('Run name is required');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await onSave({
+        name: name.trim(),
+        description: description.trim() || null,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save run');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div
+        className="modal-card model-config-form"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="eval-run-edit-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="eval-run-edit-title">Edit run</h2>
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <div className="form-grid">
+            <label className="form-field form-field-wide">
+              <span>Name</span>
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={256}
+                disabled={busy}
+                autoFocus
+              />
+            </label>
+            <label className="form-field form-field-wide">
+              <span>Description</span>
+              <textarea
+                rows={3}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                disabled={busy}
+              />
+            </label>
+          </div>
+          {error ? <p className="error">{error}</p> : null}
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={busy || !name.trim()}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

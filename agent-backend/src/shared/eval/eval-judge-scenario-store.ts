@@ -133,8 +133,8 @@ export async function createEvalJudgeScenario(input: {
   if (!input.label.trim()) throw new Error('label is required');
 
   const minVariants = input.minVariants ?? 2;
-  if (!Number.isInteger(minVariants) || minVariants < 2) {
-    throw new Error('min_variants must be an integer >= 2');
+  if (!Number.isInteger(minVariants) || minVariants < 1) {
+    throw new Error('min_variants must be an integer >= 1');
   }
 
   const dimensions = validateJudgeDimensions(input.dimensions);
@@ -183,8 +183,8 @@ export async function updateEvalJudgeScenario(
   if (input.description !== undefined) patch.description = input.description?.trim() || null;
   if (input.requiresGroundTruth !== undefined) patch.requiresGroundTruth = input.requiresGroundTruth;
   if (input.minVariants !== undefined) {
-    if (!Number.isInteger(input.minVariants) || input.minVariants < 2) {
-      throw new Error('min_variants must be an integer >= 2');
+    if (!Number.isInteger(input.minVariants) || input.minVariants < 1) {
+      throw new Error('min_variants must be an integer >= 1');
     }
     patch.minVariants = input.minVariants;
   }
