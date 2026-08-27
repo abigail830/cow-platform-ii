@@ -1,6 +1,14 @@
 import { apiUrl } from '../base.ts';
 import { getToken } from '../auth.ts';
 import { formatApiError } from '../http.ts';
+import { sha256HexFromFile } from '../../shared/file-hash.ts';
+import { putFileToPresignedUrl } from '../direct-upload.ts';
+import {
+  deleteEvalDatasetItem,
+  listEvalDatasetItems,
+  uploadEvalDatasetItem,
+  type EvalDatasetItem,
+} from './datasets.ts';
 
 export type EvalRunStatus =
   | 'draft'
@@ -104,6 +112,7 @@ export type EvalRunDatasetItemRef = {
   id: string;
   name: string;
   file_type: string;
+  size_bytes?: number;
 };
 
 export type EvalRunDetail = {
@@ -150,6 +159,25 @@ async function authFetch(path: string, init?: RequestInit) {
   return data;
 }
 
+function isRunFilesRouteMissingError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const message = err.message.toLowerCase();
+  return (
+    message.includes('unexpected server response (404)') ||
+    message.includes('http 404') ||
+    message.includes('not found')
+  );
+}
+
+function toRunFileRef(item: EvalDatasetItem): EvalRunDatasetItemRef {
+  return {
+    id: item.id,
+    name: item.name,
+    file_type: item.file_type,
+    size_bytes: item.size_bytes,
+  };
+}
+
 export function formatEvalRunStatus(status: EvalRunStatus): string {
   if (status === 'completed_with_errors') return 'Completed with errors';
   return status.charAt(0).toUpperCase() + status.slice(1);
@@ -178,7 +206,7 @@ export async function listEvalRuns(): Promise<EvalRun[]> {
 }
 
 export async function createEvalRun(input: {
-  dataset_id: string;
+  dataset_id?: string;
   name: string;
   description?: string;
   pipeline_config_ids: string[];
@@ -211,6 +239,94 @@ export async function startEvalRun(
 
 export async function deleteEvalRun(runId: string): Promise<void> {
   await authFetch(`/api/evaluation/runs/${runId}`, { method: 'DELETE' });
+}
+
+export async function listEvalRunFiles(
+  runId: string,
+  datasetId?: string,
+): Promise<EvalRunDatasetItemRef[]> {
+  try {
+    const data = await authFetch(`/api/evaluation/runs/${runId}/files`);
+    return (data.items as EvalRunDatasetItemRef[]) ?? [];
+  } catch (err) {
+    if (datasetId && isRunFilesRouteMissingError(err)) {
+      const items = await listEvalDatasetItems(datasetId);
+      return items.map(toRunFileRef);
+    }
+    throw err;
+  }
+}
+
+type UploadInitResponse = {
+  item_id: string;
+  s3_key: string;
+  file_hash: string;
+  upload_url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  skip_upload?: boolean;
+};
+
+export async function uploadEvalRunFile(
+  runId: string,
+  file: File,
+  datasetId?: string,
+): Promise<EvalRunDatasetItemRef> {
+  try {
+    const fileHash = await sha256HexFromFile(file);
+    const init = (await authFetch(`/api/evaluation/runs/${runId}/files/upload-init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: file.name,
+        file_hash: fileHash,
+        size_bytes: file.size,
+        content_type: file.type || undefined,
+      }),
+    })) as UploadInitResponse;
+
+    if (!init.skip_upload) {
+      const uploadUrl = init.upload_url;
+      if (!uploadUrl) throw new Error('Server did not return an upload URL');
+      await putFileToPresignedUrl(uploadUrl, file, init.headers ?? {}, init.method ?? 'PUT');
+    }
+
+    const completed = await authFetch(`/api/evaluation/runs/${runId}/files/upload-complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_id: init.item_id,
+        filename: file.name,
+        file_hash: fileHash,
+        s3_key: init.s3_key,
+        size_bytes: file.size,
+      }),
+    });
+
+    return completed as EvalRunDatasetItemRef;
+  } catch (err) {
+    if (datasetId && isRunFilesRouteMissingError(err)) {
+      const item = await uploadEvalDatasetItem(datasetId, file);
+      return toRunFileRef(item);
+    }
+    throw err;
+  }
+}
+
+export async function deleteEvalRunFile(
+  runId: string,
+  itemId: string,
+  datasetId?: string,
+): Promise<void> {
+  try {
+    await authFetch(`/api/evaluation/runs/${runId}/files/${itemId}`, { method: 'DELETE' });
+  } catch (err) {
+    if (datasetId && isRunFilesRouteMissingError(err)) {
+      await deleteEvalDatasetItem(datasetId, itemId);
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function getEvalRunCompare(

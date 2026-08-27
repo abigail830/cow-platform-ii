@@ -2981,6 +2981,18 @@ textarea {
   color: #64748b;
 }
 
+.eval-run-files-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.eval-run-files-modal .eval-run-files-table-wrap {
+  margin-bottom: 1rem;
+}
+
+.eval-run-files-delete-backdrop {
+  z-index: 2;
+}
+
 .document-delete-confirm-body {
   margin: 0 0 1rem;
   display: flex;

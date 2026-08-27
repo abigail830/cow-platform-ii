@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Eye, GitCompare, History, Loader2, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
-import { getEvalDataset, listEvalDatasets, type EvalDataset } from '../api/evaluation/datasets.ts';
+import { Eye, FolderOpen, GitCompare, History, Loader2, Play, Plus, RotateCw, Trash2, Upload } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
@@ -12,6 +11,7 @@ import {
   listEvalRunProcessingOptions,
   listEvalRuns,
   startEvalRun,
+  uploadEvalRunFile,
   type EvalRun,
   type EvalRunAttempt,
   type EvalRunDetail,
@@ -23,7 +23,7 @@ import {
   type EvalRunProcessingOption,
   type EvalRunStatus,
 } from '../api/evaluation/runs.ts';
-import { EvalRunCreateModal } from '../components/EvalRunModals.tsx';
+import { EvalRunCreateModal, EvalRunFilesModal } from '../components/EvalRunModals.tsx';
 import { TransientNotice } from '../components/TransientNotice.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
@@ -234,7 +234,6 @@ function EvalRunPipelineOutput({
 function EvalRunAttemptSection({
   attempt,
   variants,
-  datasetItemRows,
   runStatus,
   starting,
   defaultOpen,
@@ -242,7 +241,6 @@ function EvalRunAttemptSection({
 }: {
   attempt: EvalRunAttempt;
   variants: EvalRunDetail['variants'];
-  datasetItemRows: Array<{ id: string; name: string }>;
   runStatus: EvalRunStatus;
   starting: boolean;
   defaultOpen: boolean;
@@ -254,6 +252,16 @@ function EvalRunAttemptSection({
       map.set(`${item.variant_id}:${item.dataset_item_id}`, item);
     }
     return map;
+  }, [attempt.items]);
+
+  const datasetItemRows = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const item of attempt.items) {
+      if (item.dataset_item_name) {
+        names.set(item.dataset_item_id, item.dataset_item_name);
+      }
+    }
+    return [...names.entries()].map(([id, name]) => ({ id, name }));
   }, [attempt.items]);
 
   const compareByDatasetItem = useMemo(() => {
@@ -383,27 +391,23 @@ export function EvaluationRunsListPage() {
   const canWrite = useMemo(() => hasPermission(user, 'evaluation:runs', 'write'), [user]);
 
   const [runs, setRuns] = useState<EvalRun[]>([]);
-  const [datasets, setDatasets] = useState<EvalDataset[]>([]);
   const [pipelines, setPipelines] = useState<EvalRunProcessingOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [filesTarget, setFilesTarget] = useState<EvalRun | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EvalRun | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const datasetNameById = useMemo(() => new Map(datasets.map((d) => [d.id, d.name])), [datasets]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [runRows, datasetRows, options] = await Promise.all([
+      const [runRows, options] = await Promise.all([
         listEvalRuns(),
-        listEvalDatasets(),
         listEvalRunProcessingOptions(),
       ]);
       setRuns(runRows);
-      setDatasets(datasetRows.filter((d) => d.media_type === 'audio'));
       setPipelines(options.transcription_pipelines);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load evaluation runs');
@@ -425,17 +429,19 @@ export function EvaluationRunsListPage() {
   async function handleCreate(input: {
     name: string;
     description: string;
-    datasetId: string;
     pipelineConfigIds: string[];
     runMode: EvalRunMode;
+    files: File[];
   }) {
     const created = await createEvalRun({
-      dataset_id: input.datasetId,
       name: input.name,
       description: input.description || undefined,
       pipeline_config_ids: input.pipelineConfigIds,
       run_mode: input.runMode,
     });
+    for (const file of input.files) {
+      await uploadEvalRunFile(created.run.id, file, created.run.dataset_id);
+    }
     setModalOpen(false);
     await load();
     navigate(`/evaluation/runs/${created.run.id}`);
@@ -461,8 +467,8 @@ export function EvaluationRunsListPage() {
       <header className="admin-header">
         <AdminPageTitle main={LIST_PAGE.titleMain} accent={LIST_PAGE.titleAccent} />
         <AdminPageDescription>
-          Compare multiple ASR pipelines on the same audio dataset. Create a run, start transcription, then
-          review transcripts side by side.
+          Compare multiple ASR pipelines on the same audio files. Create an evaluation set, manage files on the
+          list page, then start transcription from the detail page.
         </AdminPageDescription>
       </header>
 
@@ -483,7 +489,6 @@ export function EvaluationRunsListPage() {
           <thead>
             <tr>
               <th>Name</th>
-              <th>Dataset</th>
               <th>Files</th>
               <th>Last run</th>
               <th aria-label="Actions" />
@@ -492,20 +497,20 @@ export function EvaluationRunsListPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="admin-table-empty">
+                <td colSpan={4} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
             ) : runs.length === 0 ? (
               <tr>
-                <td colSpan={5} className="admin-table-empty">
+                <td colSpan={4} className="admin-table-empty">
                   No evaluation runs yet.{' '}
                   {canWrite ? (
                     <>
                       <button type="button" className="btn-link" onClick={openCreateModal}>
                         Create one
                       </button>{' '}
-                      after uploading a dataset.
+                      and upload audio files.
                     </>
                   ) : (
                     'Ask an admin to create one.'
@@ -521,11 +526,39 @@ export function EvaluationRunsListPage() {
                       {run.name}
                     </Link>
                   </td>
-                  <td>{datasetNameById.get(run.dataset_id) ?? run.dataset_id.slice(0, 8)}</td>
-                  <td>{run.file_count ?? '—'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn-link eval-run-files-count"
+                      onClick={() => setFilesTarget(run)}
+                      title="Manage files"
+                    >
+                      {run.file_count ?? 0}
+                    </button>
+                  </td>
                   <td>{run.last_run_at ? formatDateTime(run.last_run_at) : '—'}</td>
                   <td>
                     <div className="row-actions">
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Manage files"
+                          onClick={() => setFilesTarget(run)}
+                        >
+                          <FolderOpen {...iconProps()} aria-hidden />
+                        </button>
+                      ) : null}
+                      {canWrite && run.status !== 'running' ? (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Upload files"
+                          onClick={() => setFilesTarget(run)}
+                        >
+                          <Upload {...iconProps()} aria-hidden />
+                        </button>
+                      ) : null}
                       <Link to={`/evaluation/runs/${run.id}`} className="icon-btn" title="View">
                         <Eye {...iconProps()} aria-hidden />
                       </Link>
@@ -550,10 +583,22 @@ export function EvaluationRunsListPage() {
 
       {modalOpen ? (
         <EvalRunCreateModal
-          datasets={datasets}
           pipelines={pipelines}
           onCancel={() => setModalOpen(false)}
           onCreate={handleCreate}
+        />
+      ) : null}
+
+      {filesTarget ? (
+        <EvalRunFilesModal
+          runId={filesTarget.id}
+          datasetId={filesTarget.dataset_id}
+          runName={filesTarget.name}
+          runStatus={filesTarget.status}
+          fileCount={filesTarget.file_count ?? 0}
+          canWrite={canWrite}
+          onCancel={() => setFilesTarget(null)}
+          onChanged={() => void load()}
         />
       ) : null}
 
@@ -586,7 +631,6 @@ export function EvaluationRunDetailPage() {
   const canWrite = useMemo(() => hasPermission(user, 'evaluation:runs', 'write'), [user]);
 
   const [detail, setDetail] = useState<EvalRunDetail | null>(null);
-  const [datasetItemCount, setDatasetItemCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [startingMode, setStartingMode] = useState<EvalRunMode | null>(null);
@@ -602,12 +646,6 @@ export function EvaluationRunDetailPage() {
     try {
       const detailData = await getEvalRunDetail(runId);
       setDetail(detailData);
-      try {
-        const dataset = await getEvalDataset(detailData.run.dataset_id);
-        setDatasetItemCount(dataset.item_count);
-      } catch {
-        setDatasetItemCount(null);
-      }
     } catch (err) {
       if (!options?.silent) {
         showNotice(err instanceof Error ? err.message : 'Failed to load run', 'error');
@@ -633,27 +671,11 @@ export function EvaluationRunDetailPage() {
   const displayRunStatus = starting ? 'running' : detail?.run.status;
   const isRunActive = displayRunStatus === 'running';
   const activeRunMode = starting && startingMode ? startingMode : detail?.run.run_mode;
-  const canTriggerRun = canWrite && detail != null && !starting && !isRunActive;
+  const canTriggerRun =
+    canWrite && detail != null && !starting && !isRunActive && (detail.dataset_items?.length ?? 0) > 0;
   const RunActionIcon = detail?.run.status === 'draft' ? Play : RotateCw;
 
-  const datasetItemRows = useMemo(() => {
-    if (!detail) return [];
-    if (detail.dataset_items?.length) {
-      return detail.dataset_items.map((row) => ({ id: row.id, name: row.name }));
-    }
-    const names = new Map<string, string>();
-    for (const attempt of detail.attempts ?? []) {
-      for (const item of attempt.items) {
-        if (item.dataset_item_name) names.set(item.dataset_item_id, item.dataset_item_name);
-      }
-    }
-    return [...names.entries()].map(([id, name]) => ({ id, name }));
-  }, [detail]);
-
-  const fileCount =
-    detail?.run.status === 'draft'
-      ? (datasetItemCount ?? detail?.dataset_items?.length ?? 0)
-      : datasetItemRows.length;
+  const fileCount = detail?.dataset_items?.length ?? 0;
 
   if (!canRead) return <Navigate to="/agents/playground" replace />;
   if (!runId) return <Navigate to="/evaluation/runs" replace />;
@@ -740,7 +762,7 @@ export function EvaluationRunDetailPage() {
               {detail.run.status === 'running' ? ` · ${formatEvalRunPhase(detail.run.phase)}` : ''}
               {detail.run.run_mode === 'full' ? ' · Full' : ' · Pipeline only'} · {detail.variants.length}{' '}
               pipeline
-              {detail.variants.length === 1 ? '' : 's'} · {fileCount} file{fileCount === 1 ? '' : 's'}
+              {detail.variants.length === 1 ? '' : 's'} · {fileCount} current file{fileCount === 1 ? '' : 's'}
               {(detail.attempts?.length ?? 0) > 0
                 ? ` · ${detail.attempts.length} run${detail.attempts.length === 1 ? '' : 's'}`
                 : ''}
@@ -803,7 +825,20 @@ export function EvaluationRunDetailPage() {
           <p className="admin-muted">Evaluation run not found.</p>
         ) : detail.run.status === 'draft' && (detail.attempts?.length ?? 0) === 0 ? (
           <p className="admin-muted">
-            Ready to transcribe {fileCount} file{fileCount === 1 ? '' : 's'}. Choose a run mode above.
+            {fileCount > 0 ? (
+              <>
+                Ready to transcribe {fileCount} current file{fileCount === 1 ? '' : 's'}. Choose a run mode
+                above.
+              </>
+            ) : (
+              <>
+                No audio files yet.{' '}
+                <Link to="/evaluation/runs" className="admin-link">
+                  Manage files on the list page
+                </Link>{' '}
+                before starting.
+              </>
+            )}
           </p>
         ) : (detail.attempts?.length ?? 0) === 0 ? (
           <p className="admin-muted">No run history yet.</p>
@@ -813,7 +848,6 @@ export function EvaluationRunDetailPage() {
               key={attempt.id}
               attempt={attempt}
               variants={detail.variants}
-              datasetItemRows={datasetItemRows}
               runStatus={displayRunStatus ?? detail.run.status}
               starting={starting}
               defaultOpen={index === 0}

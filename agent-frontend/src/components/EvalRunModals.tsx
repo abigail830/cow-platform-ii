@@ -1,29 +1,32 @@
-import { useState } from 'react';
-import type { EvalDataset } from '../api/evaluation/datasets.ts';
+import { useCallback, useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import type { EvalRunProcessingOption, EvalRunMode } from '../api/evaluation/runs.ts';
+import {
+  deleteEvalRunFile,
+  listEvalRunFiles,
+  uploadEvalRunFile,
+  type EvalRunDatasetItemRef,
+} from '../api/evaluation/runs.ts';
+import { formatEvalFileBytes } from '../api/evaluation/datasets.ts';
+import { EvalDatasetFileDropzone } from './EvalDatasetModals.tsx';
+import { iconProps } from './icons/icon-props.ts';
 
 type EvalRunCreateModalProps = {
-  datasets: EvalDataset[];
   pipelines: EvalRunProcessingOption[];
   onCancel: () => void;
   onCreate: (input: {
     name: string;
     description: string;
-    datasetId: string;
     pipelineConfigIds: string[];
     runMode: EvalRunMode;
+    files: File[];
   }) => Promise<void>;
 };
 
-export function EvalRunCreateModal({
-  datasets,
-  pipelines,
-  onCancel,
-  onCreate,
-}: EvalRunCreateModalProps) {
+export function EvalRunCreateModal({ pipelines, onCancel, onCreate }: EvalRunCreateModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [datasetId, setDatasetId] = useState(datasets[0]?.id ?? '');
+  const [files, setFiles] = useState<File[]>([]);
   const [selectedPipelineIds, setSelectedPipelineIds] = useState<string[]>([]);
   const [runMode, setRunMode] = useState<EvalRunMode>('full');
   const [busy, setBusy] = useState(false);
@@ -37,16 +40,16 @@ export function EvalRunCreateModal({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!name.trim() || !datasetId || selectedPipelineIds.length === 0) return;
+    if (!name.trim() || selectedPipelineIds.length === 0) return;
     setBusy(true);
     setError('');
     try {
       await onCreate({
         name: name.trim(),
         description: description.trim(),
-        datasetId,
         pipelineConfigIds: selectedPipelineIds,
         runMode,
+        files,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create run');
@@ -55,7 +58,7 @@ export function EvalRunCreateModal({
     }
   }
 
-  const canSubmit = Boolean(name.trim() && datasetId && selectedPipelineIds.length > 0);
+  const canSubmit = Boolean(name.trim() && selectedPipelineIds.length > 0);
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
@@ -68,8 +71,8 @@ export function EvalRunCreateModal({
       >
         <h2 id="eval-run-create-title">New evaluation run</h2>
         <p className="admin-form-hint">
-          Pick an audio dataset and two or more ASR pipelines to transcribe the same files for side-by-side
-          comparison.
+          Create an evaluation set, add audio files, and pick two or more ASR pipelines to compare on the same
+          recordings.
         </p>
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div className="form-grid">
@@ -92,21 +95,11 @@ export function EvalRunCreateModal({
                 disabled={busy}
               />
             </label>
-            <label className="form-field form-field-wide">
-              <span>Dataset</span>
-              <select
-                value={datasetId}
-                onChange={(event) => setDatasetId(event.target.value)}
-                disabled={busy || datasets.length === 0}
-              >
-                {datasets.length === 0 ? <option value="">No audio datasets</option> : null}
-                {datasets.map((dataset) => (
-                  <option key={dataset.id} value={dataset.id}>
-                    {dataset.name} · {dataset.item_count} file{dataset.item_count === 1 ? '' : 's'}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="form-field form-field-wide">
+              <span>Audio files</span>
+              <p className="admin-form-hint">Optional now — you can also upload or remove files from the list page.</p>
+              <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} disabled={busy} />
+            </div>
             <div className="form-field form-field-wide">
               <span>Pipelines to compare</span>
               {pipelines.length === 0 ? (
@@ -177,6 +170,195 @@ export function EvalRunCreateModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+type EvalRunFilesModalProps = {
+  runId: string;
+  datasetId: string;
+  runName: string;
+  runStatus: string;
+  fileCount: number;
+  canWrite: boolean;
+  onCancel: () => void;
+  onChanged: () => void;
+};
+
+export function EvalRunFilesModal({
+  runId,
+  datasetId,
+  runName,
+  runStatus,
+  fileCount,
+  canWrite,
+  onCancel,
+  onChanged,
+}: EvalRunFilesModalProps) {
+  const [items, setItems] = useState<EvalRunDatasetItemRef[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<EvalRunDatasetItemRef | null>(null);
+
+  const filesLocked = runStatus === 'running';
+
+  const loadItems = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setItems(await listEvalRunFiles(runId, datasetId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load files');
+    } finally {
+      setLoading(false);
+    }
+  }, [runId, datasetId]);
+
+  useEffect(() => {
+    void loadItems();
+  }, [loadItems]);
+
+  async function handleUpload(event: React.FormEvent) {
+    event.preventDefault();
+    if (files.length === 0 || filesLocked) return;
+    setBusy(true);
+    setError('');
+    try {
+      for (const file of files) {
+        await uploadEvalRunFile(runId, file, datasetId);
+      }
+      setFiles([]);
+      await loadItems();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget || filesLocked) return;
+    setBusy(true);
+    setError('');
+    try {
+      await deleteEvalRunFile(runId, deleteTarget.id, datasetId);
+      setDeleteTarget(null);
+      await loadItems();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete file');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div
+        className="modal-card model-config-form eval-run-files-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="eval-run-files-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="eval-run-files-title">Manage files</h2>
+        <p className="admin-form-hint">
+          {runName} · {loading ? fileCount : items.length} file
+          {(loading ? fileCount : items.length) === 1 ? '' : 's'}
+          {filesLocked ? ' · Run in progress — files are locked until it finishes.' : ''}
+        </p>
+
+        {loading ? (
+          <p className="admin-muted">Loading files…</p>
+        ) : items.length === 0 ? (
+          <p className="admin-muted">No files yet. Upload audio below.</p>
+        ) : (
+          <div className="admin-table-wrap eval-run-files-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Size</th>
+                  {canWrite ? <th aria-label="Actions" /> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.name}</td>
+                    <td>{item.size_bytes != null ? formatEvalFileBytes(item.size_bytes) : '—'}</td>
+                    {canWrite ? (
+                      <td>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Delete file"
+                          disabled={busy || filesLocked}
+                          onClick={() => setDeleteTarget(item)}
+                        >
+                          <Trash2 {...iconProps()} aria-hidden />
+                        </button>
+                      </td>
+                    ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {canWrite ? (
+          <form onSubmit={(event) => void handleUpload(event)}>
+            <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} disabled={busy || filesLocked} />
+            {error ? <p className="error">{error}</p> : null}
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+                Close
+              </button>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={busy || files.length === 0 || filesLocked}
+              >
+                {busy ? 'Uploading…' : 'Upload'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onCancel}>
+              Close
+            </button>
+          </div>
+        )}
+
+        {deleteTarget ? (
+          <div className="modal-backdrop eval-run-files-delete-backdrop" onClick={() => setDeleteTarget(null)}>
+            <div
+              className="modal-card"
+              role="dialog"
+              aria-modal="true"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h3>Delete file?</h3>
+              <p>
+                Remove <strong>{deleteTarget.name}</strong> from this evaluation set?
+              </p>
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setDeleteTarget(null)} disabled={busy}>
+                  Cancel
+                </button>
+                <button type="button" className="btn-primary" onClick={() => void handleDelete()} disabled={busy}>
+                  {busy ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

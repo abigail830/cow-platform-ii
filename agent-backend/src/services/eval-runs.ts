@@ -12,7 +12,7 @@ import {
   type EvalRunStatus,
 } from '../db/index.ts';
 import { getPipelineConfigById } from '../shared/pipeline-config-store.ts';
-import { getEvalDatasetById, listEvalDatasetItems } from './eval-datasets.ts';
+import { getEvalDatasetById, createEvalDataset, deleteEvalDataset, listEvalDatasetItems } from './eval-datasets.ts';
 import { computeEvalRunCompletion, isTerminalEvalRunItemStage, evalRunItemDispatchClaimed } from './eval-run-phase.ts';
 import { evalRunItemToPublic, snapshotConfigYaml } from './eval-pipeline-jobs.ts';
 import { orchestrateEvalRunDispatch } from './eval-run-dispatch.ts';
@@ -156,7 +156,7 @@ export async function getEvalRunById(id: string) {
 }
 
 export async function createEvalRun(input: {
-  datasetId: string;
+  datasetId?: string | null;
   name: string;
   description?: string | null;
   pipelineConfigIds: string[];
@@ -171,14 +171,21 @@ export async function createEvalRun(input: {
     throw new Error('At least one pipeline is required');
   }
 
-  const dataset = await getEvalDatasetById(input.datasetId);
-  if (!dataset) throw new Error('Dataset not found');
-  if (dataset.mediaType !== 'audio') {
-    throw new Error('Only audio datasets are supported in this version');
+  let datasetId = input.datasetId?.trim() || '';
+  if (datasetId) {
+    const dataset = await getEvalDatasetById(datasetId);
+    if (!dataset) throw new Error('Dataset not found');
+    if (dataset.mediaType !== 'audio') {
+      throw new Error('Only audio datasets are supported in this version');
+    }
+  } else {
+    const dataset = await createEvalDataset({
+      name,
+      description: input.description?.trim() || null,
+      createdBy: input.createdBy ?? null,
+    });
+    datasetId = dataset.id;
   }
-
-  const items = await listEvalDatasetItems(input.datasetId);
-  if (items.length === 0) throw new Error('Dataset has no files');
 
   const variants: Array<{
     pipelineConfigId: string;
@@ -210,7 +217,7 @@ export async function createEvalRun(input: {
   const [run] = await db
     .insert(appEvalRuns)
     .values({
-      datasetId: input.datasetId,
+      datasetId,
       name,
       description: input.description?.trim() || null,
       status: 'draft',
@@ -591,7 +598,36 @@ export async function deleteEvalRun(runId: string): Promise<void> {
   if (!run) throw new Error('Eval run not found');
   if (run.status === 'running') throw new Error('Cannot delete a running eval run');
 
+  const datasetId = run.datasetId;
   await db.delete(appEvalRuns).where(eq(appEvalRuns.id, runId));
+
+  const [otherRun] = await db
+    .select({ id: appEvalRuns.id })
+    .from(appEvalRuns)
+    .where(eq(appEvalRuns.datasetId, datasetId))
+    .limit(1);
+  if (!otherRun) {
+    try {
+      await deleteEvalDataset(datasetId);
+    } catch {
+      // Dataset may already be gone or shared storage cleanup failed; run row is deleted.
+    }
+  }
+}
+
+export async function getEvalRunDatasetId(runId: string): Promise<string> {
+  const run = await getEvalRunById(runId);
+  if (!run) throw new Error('Eval run not found');
+  return run.datasetId;
+}
+
+export async function assertEvalRunFilesMutable(runId: string): Promise<string> {
+  const run = await getEvalRunById(runId);
+  if (!run) throw new Error('Eval run not found');
+  if (run.status === 'running') {
+    throw new Error('Cannot change files while this evaluation run is in progress');
+  }
+  return run.datasetId;
 }
 
 export async function listEvalRunProcessingOptions() {
