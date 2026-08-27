@@ -135,6 +135,7 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
             per_dimension[dimension["id"]] = {
                 "label": dimension.get("label"),
                 "score": scored.score,
+                "score_max": scored.score_max,
                 "reason": scored.reason,
             }
         variant_results.append(
@@ -168,6 +169,7 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
             payload["winner_variant_id"] = winner_variant_id
         else:
             payload["score"] = scored.score
+            payload["score_max"] = scored.score_max
         pairwise[dimension["id"]] = payload
 
     result = {

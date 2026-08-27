@@ -372,6 +372,8 @@ export async function retryEvalRunJudgeJob(
     throw new Error('Compare is already running for this file');
   }
 
+  const dimensions = await snapshotEvalJudgeDimensions(job.scenarioId);
+
   await db
     .update(appEvalRunJudgeJobs)
     .set({
@@ -379,6 +381,7 @@ export async function retryEvalRunJudgeJob(
       errorMessage: null,
       summaryMetrics: null,
       resultS3Key: null,
+      dimensionsSnapshot: dimensions,
       updatedAt: new Date(),
     })
     .where(eq(appEvalRunJudgeJobs.id, job.id));

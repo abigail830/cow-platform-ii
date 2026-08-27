@@ -34,9 +34,11 @@ import { fetchPresignedStorageText } from '../api/storage-fetch.ts';
 
 const LIST_PAGE = getNavPage('/evaluation/runs')!;
 
-/** DeepEval GEval normalizes raw 0–10 judge scores to 0–1 in stored metrics. */
-function formatGevalNormalizedScore(score: number): string {
-  return `${(score * 10).toFixed(1)}/10`;
+/** Format judge score for display. New results store raw rubric scale; legacy rows store DeepEval 0–1. */
+function formatJudgeScore(score: number, scoreMax?: number): string {
+  const max = scoreMax ?? 10;
+  const display = scoreMax != null ? score : score * max;
+  return `${display.toFixed(1)}/${max}`;
 }
 
 function itemDispatchClaimed(item: EvalRunItem | undefined): boolean {
@@ -287,6 +289,139 @@ function EvalRunJudgeDimensionItem({
   );
 }
 
+function EvalRunJudgeVariantCompareRow({
+  dimensionLabel,
+  cells,
+  expanded,
+  isExpandable,
+  onToggle,
+}: {
+  dimensionLabel: string;
+  cells: Array<{ value: string; trimmedReason: string; isLongReason: boolean }>;
+  expanded: boolean;
+  isExpandable: boolean;
+  onToggle: () => void;
+}) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+    if (!isExpandable) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onToggle();
+    }
+  };
+
+  return (
+    <tr
+      className={isExpandable ? 'eval-run-judge-variant-row is-expandable' : 'eval-run-judge-variant-row'}
+      role={isExpandable ? 'button' : undefined}
+      tabIndex={isExpandable ? 0 : undefined}
+      aria-expanded={isExpandable ? expanded : undefined}
+      onClick={isExpandable ? onToggle : undefined}
+      onKeyDown={handleKeyDown}
+    >
+      <td className="eval-run-judge-variant-table-dimension">
+        <div className="eval-run-judge-variant-table-dimension-inner">
+          <span className="eval-run-judge-variant-table-dimension-label">{dimensionLabel}</span>
+          {isExpandable ? (
+            <ChevronDown
+              {...iconProps({ size: 14 })}
+              className={`eval-run-judge-dimension-chevron${expanded ? ' is-expanded' : ''}`}
+              aria-hidden
+            />
+          ) : null}
+        </div>
+      </td>
+      {cells.map((cell, index) => (
+        <td key={index} className="eval-run-judge-variant-table-pipeline">
+          <span className="eval-run-judge-dimension-value">{cell.value}</span>
+          {cell.trimmedReason && (!cell.isLongReason || expanded) ? (
+            <p className="eval-run-judge-dimension-reason">{cell.trimmedReason}</p>
+          ) : null}
+          {cell.isLongReason && !expanded ? (
+            <p className="eval-run-judge-dimension-reason-hint">Show reason</p>
+          ) : null}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+function EvalRunJudgeVariantCompareTable({
+  variantScores,
+  variantById,
+}: {
+  variantScores: Record<string, Record<string, { label?: string; score?: number; score_max?: number; reason?: string }>>;
+  variantById: Map<string, string>;
+}) {
+  const variantEntries = Object.entries(variantScores);
+  const [expandedDimensions, setExpandedDimensions] = useState<Set<string>>(() => new Set());
+
+  const dimensionOrder: string[] = [];
+  const dimensionLabels = new Map<string, string>();
+  for (const [, dimensions] of variantEntries) {
+    for (const [dimensionId, row] of Object.entries(dimensions)) {
+      if (!dimensionOrder.includes(dimensionId)) dimensionOrder.push(dimensionId);
+      if (!dimensionLabels.has(dimensionId)) dimensionLabels.set(dimensionId, row.label ?? dimensionId);
+    }
+  }
+
+  const toggleDimension = (dimensionId: string, isExpandable: boolean) => {
+    if (!isExpandable) return;
+    setExpandedDimensions((current) => {
+      const next = new Set(current);
+      if (next.has(dimensionId)) next.delete(dimensionId);
+      else next.add(dimensionId);
+      return next;
+    });
+  };
+
+  return (
+    <div className="admin-table-wrap eval-run-judge-variant-table-wrap">
+      <table className="admin-table eval-run-judge-variant-table">
+        <thead>
+          <tr>
+            <th scope="col">Dimension</th>
+            {variantEntries.map(([variantId]) => (
+              <th key={variantId} scope="col">
+                {variantById.get(variantId) ?? variantId}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {dimensionOrder.map((dimensionId) => {
+            const cells = variantEntries.map(([, dimensions]) => {
+              const row = dimensions[dimensionId];
+              const trimmedReason = row?.reason?.trim() ?? '';
+              return {
+                value:
+                  typeof row?.score === 'number'
+                    ? formatJudgeScore(row.score, row.score_max)
+                    : '—',
+                trimmedReason,
+                isLongReason: trimmedReason.length > REASON_COLLAPSE_THRESHOLD,
+              };
+            });
+            const isExpandable = cells.some((cell) => cell.isLongReason);
+            const expanded = expandedDimensions.has(dimensionId);
+
+            return (
+              <EvalRunJudgeVariantCompareRow
+                key={dimensionId}
+                dimensionLabel={dimensionLabels.get(dimensionId) ?? dimensionId}
+                cells={cells}
+                expanded={expanded}
+                isExpandable={isExpandable}
+                onToggle={() => toggleDimension(dimensionId, isExpandable)}
+              />
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function EvalRunJudgeScores({
   job,
   variants,
@@ -299,17 +434,25 @@ function EvalRunJudgeScores({
   const metrics = job.summary_metrics;
   const variantScores = metrics.variant_scores as Record<
     string,
-    Record<string, { label?: string; score?: number; reason?: string }>
+    Record<string, { label?: string; score?: number; score_max?: number; reason?: string }>
   > | undefined;
   const pairwise = metrics.pairwise as Record<
     string,
-    { label?: string; score?: number; winner?: string; winner_variant_id?: string | null; reason?: string }
+    {
+      label?: string;
+      score?: number;
+      score_max?: number;
+      winner?: string;
+      winner_variant_id?: string | null;
+      reason?: string;
+    }
   > | undefined;
 
   const variantById = new Map(variants.map((variant) => [variant.id, variant.display_name]));
 
   function formatPairwiseValue(row: {
     score?: number;
+    score_max?: number;
     winner?: string;
     winner_variant_id?: string | null;
   }): string {
@@ -317,7 +460,7 @@ function EvalRunJudgeScores({
       if (row.winner === 'tie') return 'Tie';
       return variantById.get(row.winner_variant_id ?? '') ?? row.winner.toUpperCase();
     }
-    if (typeof row.score === 'number') return formatGevalNormalizedScore(row.score);
+    if (typeof row.score === 'number') return formatJudgeScore(row.score, row.score_max);
     return '—';
   }
 
@@ -326,23 +469,7 @@ function EvalRunJudgeScores({
       {variantScores && Object.keys(variantScores).length > 0 ? (
         <div className="eval-run-judge-section">
           <p className="eval-run-judge-section-title">Per pipeline</p>
-          <div className="eval-run-judge-score-grid">
-            {Object.entries(variantScores).map(([variantId, dimensions]) => (
-              <div key={variantId} className="eval-run-judge-score-card">
-                <p className="eval-run-judge-score-card-title">{variantById.get(variantId) ?? variantId}</p>
-                <ul className="eval-run-judge-dimension-list">
-                  {Object.entries(dimensions).map(([dimensionId, row]) => (
-                    <EvalRunJudgeDimensionItem
-                      key={dimensionId}
-                      label={row.label ?? dimensionId}
-                      value={typeof row.score === 'number' ? formatGevalNormalizedScore(row.score) : '—'}
-                      reason={row.reason}
-                    />
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <EvalRunJudgeVariantCompareTable variantScores={variantScores} variantById={variantById} />
         </div>
       ) : null}
 

@@ -1,4 +1,5 @@
 import { DEFAULT_EVAL_JUDGE_SCENARIO_ID } from '../../shared/eval/eval-judge-constants.ts';
+import { normalizeEvalJudgeDimensions } from '../../shared/eval/eval-judge-criteria.ts';
 
 export { DEFAULT_EVAL_JUDGE_SCENARIO_ID };
 
@@ -12,6 +13,7 @@ export type EvalJudgeDimensionDefinition = {
   kind: EvalJudgeDimensionKind;
   weight: number;
   criteria: string;
+  evaluation_steps?: string[];
 };
 
 export type EvalJudgeScenarioDefinition = {
@@ -43,7 +45,7 @@ export async function snapshotEvalJudgeDimensions(
 ): Promise<EvalJudgeDimensionDefinition[]> {
   const scenario = await getEvalJudgeScenario(scenarioId);
   if (!scenario) throw new Error(`Unknown eval judge scenario: ${scenarioId}`);
-  return scenario.dimensions.map((dimension) => ({ ...dimension }));
+  return normalizeEvalJudgeDimensions(scenario.dimensions.map((dimension) => ({ ...dimension })));
 }
 
 export async function listEvalJudgeScenarios(): Promise<EvalJudgeScenarioDefinition[]> {

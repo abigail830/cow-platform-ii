@@ -3064,6 +3064,43 @@ textarea {
   font-weight: 600;
 }
 
+.eval-run-judge-variant-table-wrap {
+  margin-top: 0.15rem;
+}
+
+.eval-run-judge-variant-table th:first-child {
+  width: 28%;
+}
+
+.eval-run-judge-variant-table-dimension-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.eval-run-judge-variant-table-dimension-label {
+  font-weight: 500;
+  color: var(--text-primary, #111827);
+}
+
+.eval-run-judge-variant-row.is-expandable {
+  cursor: pointer;
+}
+
+.eval-run-judge-variant-row.is-expandable:hover .eval-run-judge-variant-table-dimension-label {
+  color: var(--text-primary, #111827);
+}
+
+.eval-run-judge-variant-table-pipeline {
+  vertical-align: top;
+}
+
+.eval-run-judge-variant-table-pipeline .eval-run-judge-dimension-value {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
 .eval-run-judge-score-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

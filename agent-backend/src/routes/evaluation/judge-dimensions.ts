@@ -60,6 +60,7 @@ judgeDimensions.post(
         kind: 'geval_score' | 'geval_winner';
         weight: number;
         criteria: string;
+        evaluation_steps?: string[];
       }>;
       is_enabled?: boolean;
     }>();
@@ -107,6 +108,7 @@ judgeDimensions.patch(
         kind: 'geval_score' | 'geval_winner';
         weight: number;
         criteria: string;
+        evaluation_steps?: string[];
       }>;
       is_enabled?: boolean;
     }>();

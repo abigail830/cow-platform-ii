@@ -1,4 +1,4 @@
-"""DeepEval GEval wrappers for reference-free ASR judge dimensions."""
+"""DeepEval GEval wrappers — criteria come from judge dimension config only."""
 
 from __future__ import annotations
 
@@ -9,29 +9,15 @@ from typing import Any
 from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
-# DeepEval GEval default: judge LLM returns an integer 0–10, then normalizes to 0–1 in metric.score.
-# Dimension criteria must describe the 0–10 scale; API/UI display multiplies normalized scores by 10.
-GEVAL_RAW_SCORE_MIN = 0
-GEVAL_RAW_SCORE_MAX = 10
-GEVAL_PASS_THRESHOLD = 0.5  # normalized; equals raw score 5/10
+GEVAL_PASS_THRESHOLD = 0.5
 
 
 @dataclass
 class JudgeScore:
     score: float | None
+    score_max: float | None
     winner: str | None
     reason: str
-
-
-def geval_raw_score(normalized_score: float) -> float:
-    """Convert DeepEval's normalized 0–1 score back to the raw 0–10 GEval scale."""
-    span = GEVAL_RAW_SCORE_MAX - GEVAL_RAW_SCORE_MIN
-    return normalized_score * span + GEVAL_RAW_SCORE_MIN
-
-
-def format_geval_score(normalized_score: float) -> str:
-    """Format a normalized GEval score for human-readable display."""
-    return f"{geval_raw_score(normalized_score):.1f}/10"
 
 
 def _judge_model(context: dict[str, Any]):
@@ -55,14 +41,53 @@ def _judge_model(context: dict[str, Any]):
     )
 
 
-def _build_geval(name: str, criteria: str, params: list[LLMTestCaseParams], context: dict[str, Any]) -> GEval:
-    return GEval(
-        name=name,
-        criteria=criteria,
-        evaluation_params=params,
-        threshold=GEVAL_PASS_THRESHOLD,
-        model=_judge_model(context),
-    )
+def _coerce_evaluation_steps(raw: Any) -> list[str] | None:
+    if not isinstance(raw, list):
+        return None
+    steps = [str(step).strip() for step in raw if str(step).strip()]
+    return steps or None
+
+
+def _build_geval(
+    name: str,
+    criteria: str,
+    params: list[LLMTestCaseParams],
+    context: dict[str, Any],
+    evaluation_steps: Any = None,
+) -> GEval:
+    criteria_text = str(criteria or "").strip()
+    if not criteria_text:
+        raise RuntimeError(f"Eval judge dimension {name!r} is missing criteria")
+    kwargs: dict[str, Any] = {
+        "name": name,
+        "criteria": criteria_text,
+        "evaluation_params": params,
+        "threshold": GEVAL_PASS_THRESHOLD,
+        "model": _judge_model(context),
+    }
+    steps = _coerce_evaluation_steps(evaluation_steps)
+    if steps:
+        kwargs["evaluation_steps"] = steps
+    return GEval(**kwargs)
+
+
+def _raw_geval_score(metric: GEval) -> tuple[float | None, float | None]:
+    """Map DeepEval metric.score back to the rubric scale (default 0–10)."""
+    if metric.score is None:
+        return None, None
+    lo, hi = metric.score_range
+    span = hi - lo
+    if span <= 0:
+        return float(metric.score), hi
+    return float(metric.score) * span + lo, hi
+
+
+def _score_from_metric(metric: GEval, *, winner: bool) -> JudgeScore:
+    if winner:
+        reason = metric.reason or ""
+        return JudgeScore(score=None, score_max=None, winner=_parse_winner(reason), reason=reason)
+    score, score_max = _raw_geval_score(metric)
+    return JudgeScore(score=score, score_max=score_max, winner=None, reason=metric.reason or "")
 
 
 def score_variant_dimension(transcript: str, dimension: dict[str, Any], context: dict[str, Any]) -> JudgeScore:
@@ -71,12 +96,11 @@ def score_variant_dimension(transcript: str, dimension: dict[str, Any], context:
         dimension["criteria"],
         [LLMTestCaseParams.ACTUAL_OUTPUT],
         context,
+        dimension.get("evaluation_steps"),
     )
     test_case = LLMTestCase(input="", actual_output=transcript)
     metric.measure(test_case)
-    score = float(metric.score) if metric.score is not None else None
-    reason = metric.reason or ""
-    return JudgeScore(score=score, winner=None, reason=reason)
+    return _score_from_metric(metric, winner=False)
 
 
 def score_pairwise_dimension(
@@ -85,23 +109,17 @@ def score_pairwise_dimension(
     dimension: dict[str, Any],
     context: dict[str, Any],
 ) -> JudgeScore:
-    kind = dimension.get("kind", "geval_score")
     metric = _build_geval(
         dimension["label"],
         dimension["criteria"],
         [LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
         context,
+        dimension.get("evaluation_steps"),
     )
     test_case = LLMTestCase(input=transcript_a, actual_output=transcript_b)
     metric.measure(test_case)
-    reason = metric.reason or ""
-
-    if kind == "geval_winner":
-        winner = _parse_winner(reason)
-        return JudgeScore(score=None, winner=winner, reason=reason)
-
-    score = float(metric.score) if metric.score is not None else None
-    return JudgeScore(score=score, winner=None, reason=reason)
+    kind = dimension.get("kind", "geval_score")
+    return _score_from_metric(metric, winner=kind == "geval_winner")
 
 
 def _parse_winner(reason: str) -> str | None:

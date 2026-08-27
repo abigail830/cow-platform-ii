@@ -12,6 +12,8 @@ export type EvalJudgeDimension = {
   kind: EvalJudgeDimensionKind;
   weight: number;
   criteria: string;
+  /** Optional GEval steps; omit to let DeepEval generate from criteria. */
+  evaluation_steps?: string[];
 };
 
 export type EvalJudgeScenario = {

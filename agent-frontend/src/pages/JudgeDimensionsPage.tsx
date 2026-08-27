@@ -17,7 +17,10 @@ import { hasPermission } from '../shared/permissions.ts';
 
 const PAGE = getNavPage('/evaluation/judge-dimensions')!;
 
-type DimensionForm = EvalJudgeDimension;
+type DimensionForm = EvalJudgeDimension & {
+  /** Form-only: one evaluation step per line; saved as evaluation_steps when non-empty. */
+  evaluation_steps_text?: string;
+};
 type ScenarioForm = {
   scenario_key: string;
   label: string;
@@ -29,6 +32,18 @@ type ScenarioForm = {
 };
 
 type FormTab = 'general' | number;
+
+function parseEvaluationSteps(text: string): string[] | undefined {
+  const steps = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return steps.length > 0 ? steps : undefined;
+}
+
+function evaluationStepsToText(steps?: string[]): string {
+  return steps?.join('\n') ?? '';
+}
 
 function emptyDimension(): DimensionForm {
   return {
@@ -61,7 +76,10 @@ function scenarioToForm(scenario: EvalJudgeScenario): ScenarioForm {
     requires_ground_truth: scenario.requires_ground_truth,
     min_variants: String(scenario.min_variants),
     is_enabled: scenario.is_enabled,
-    dimensions: scenario.dimensions.map((dimension) => ({ ...dimension })),
+    dimensions: scenario.dimensions.map((dimension) => ({
+      ...dimension,
+      evaluation_steps_text: evaluationStepsToText(dimension.evaluation_steps),
+    })),
   };
 }
 
@@ -168,13 +186,18 @@ export function JudgeDimensionsPage() {
       requires_ground_truth: form.requires_ground_truth,
       min_variants: minVariants,
       is_enabled: form.is_enabled,
-      dimensions: form.dimensions.map((dimension) => ({
-        ...dimension,
-        id: dimension.id.trim(),
-        label: dimension.label.trim(),
-        criteria: dimension.criteria.trim(),
-        weight: Number(dimension.weight),
-      })),
+      dimensions: form.dimensions.map((dimension) => {
+        const evaluation_steps = parseEvaluationSteps(dimension.evaluation_steps_text ?? '');
+        return {
+          id: dimension.id.trim(),
+          label: dimension.label.trim(),
+          scope: dimension.scope,
+          kind: dimension.kind,
+          criteria: dimension.criteria.trim(),
+          weight: Number(dimension.weight),
+          ...(evaluation_steps ? { evaluation_steps } : {}),
+        };
+      }),
     };
 
     try {
@@ -493,9 +516,30 @@ export function JudgeDimensionsPage() {
                         onChange={(event) =>
                           updateDimension(activeDimensionIndex, { criteria: event.target.value })
                         }
-                        placeholder="Evaluation rubric for DeepEval GEval. Score dimensions should ask for an integer 0–10 with clear anchors at 0 and 10."
+                        placeholder="Describe what to evaluate. For score dimensions, state an integer 0–10 rubric (0 = worst, 10 = best) with clear anchors."
                         required
                       />
+                      {activeDimension.kind === 'geval_score' ? (
+                        <p className="form-field-hint">
+                          Define the evaluation criterion and 0–10 scale here. Do not use a 0–1 scale.
+                        </p>
+                      ) : null}
+                    </label>
+                    <label className="form-field form-field-wide">
+                      <span>Evaluation steps (optional)</span>
+                      <textarea
+                        rows={6}
+                        className="judge-dimension-criteria"
+                        value={activeDimension.evaluation_steps_text ?? ''}
+                        onChange={(event) =>
+                          updateDimension(activeDimensionIndex, { evaluation_steps_text: event.target.value })
+                        }
+                        placeholder={'One step per line. Leave empty to let DeepEval generate steps from criteria.\nExample:\nRead the transcript.\nCheck sentence boundaries and punctuation.\nAssign an integer score from 0 to 10.'}
+                      />
+                      <p className="form-field-hint">
+                        Maps to GEval <code>evaluation_steps</code>. When blank, DeepEval derives steps from criteria
+                        automatically.
+                      </p>
                     </label>
                     {form.dimensions.length > 1 ? (
                       <div className="form-field form-field-wide judge-dimension-remove-row">

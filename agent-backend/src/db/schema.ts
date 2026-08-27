@@ -1270,6 +1270,8 @@ export type EvalJudgeDimensionRecord = {
   kind: 'geval_score' | 'geval_winner';
   weight: number;
   criteria: string;
+  /** Optional GEval evaluation_steps; omit to let DeepEval generate from criteria. */
+  evaluation_steps?: string[];
 };
 
 export const appEvalJudgeScenarios = pgTable(

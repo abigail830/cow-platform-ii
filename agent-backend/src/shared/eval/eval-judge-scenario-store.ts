@@ -4,9 +4,11 @@ import type {
   EvalJudgeDimensionDefinition,
   EvalJudgeScenarioDefinition,
 } from '../../services/eval/eval-judge-dimensions.ts';
+import { validateJudgeDimensions } from './eval-judge-dimension-validate.ts';
+
+export { validateJudgeDimensions };
 
 const SCENARIO_KEY_RE = /^[a-z][a-z0-9_]*$/;
-const DIMENSION_ID_RE = /^[a-z][a-z0-9_]*$/;
 
 export type EvalJudgeScenarioPublic = {
   id: string;
@@ -47,43 +49,6 @@ function toScenarioDefinition(row: typeof appEvalJudgeScenarios.$inferSelect): E
     min_variants: row.minVariants,
     dimensions: row.dimensions as EvalJudgeDimensionDefinition[],
   };
-}
-
-export function validateJudgeDimensions(
-  dimensions: EvalJudgeDimensionRecord[],
-): EvalJudgeDimensionDefinition[] {
-  if (!Array.isArray(dimensions) || dimensions.length === 0) {
-    throw new Error('At least one dimension is required');
-  }
-
-  const seen = new Set<string>();
-  return dimensions.map((dimension, index) => {
-    const id = String(dimension.id ?? '').trim();
-    const label = String(dimension.label ?? '').trim();
-    const criteria = String(dimension.criteria ?? '').trim();
-    const scope = dimension.scope;
-    const kind = dimension.kind;
-    const weight = Number(dimension.weight);
-
-    if (!id || !DIMENSION_ID_RE.test(id)) {
-      throw new Error(`Dimension ${index + 1}: id must be a lowercase slug`);
-    }
-    if (seen.has(id)) throw new Error(`Duplicate dimension id: ${id}`);
-    seen.add(id);
-    if (!label) throw new Error(`Dimension ${id}: label is required`);
-    if (!criteria) throw new Error(`Dimension ${id}: criteria (evaluation prompt) is required`);
-    if (scope !== 'variant' && scope !== 'pairwise') {
-      throw new Error(`Dimension ${id}: scope must be variant or pairwise`);
-    }
-    if (kind !== 'geval_score' && kind !== 'geval_winner') {
-      throw new Error(`Dimension ${id}: kind must be geval_score or geval_winner`);
-    }
-    if (!Number.isFinite(weight) || weight <= 0) {
-      throw new Error(`Dimension ${id}: weight must be a positive number`);
-    }
-
-    return { id, label, scope, kind, weight, criteria };
-  });
 }
 
 export async function listEvalJudgeScenarioRows(options?: {
