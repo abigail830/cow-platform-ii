@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { CircleHelp, Plus, Search, Trash2 } from 'lucide-react';
 import {
   createJudgeScenario,
   deleteJudgeScenario,
@@ -16,6 +16,19 @@ import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
 const PAGE = getNavPage('/evaluation/judge-dimensions')!;
+
+function DimensionFieldTooltip({ label, text }: { label: string; text: string }) {
+  return (
+    <span className="field-tooltip">
+      <button type="button" className="field-tooltip-trigger" aria-label={`${label} help`}>
+        <CircleHelp {...iconProps({ size: 14 })} aria-hidden />
+      </button>
+      <span className="field-tooltip-panel" role="tooltip">
+        {text}
+      </span>
+    </span>
+  );
+}
 
 type DimensionForm = EvalJudgeDimension & {
   /** Form-only: one evaluation step per line; saved as evaluation_steps when non-empty. */
@@ -508,7 +521,15 @@ export function JudgeDimensionsPage() {
                       />
                     </label>
                     <label className="form-field form-field-wide">
-                      <span>Criteria (GEval prompt)</span>
+                      <span className="form-field-label-row">
+                        Criteria (GEval prompt)
+                        {activeDimension.kind === 'geval_score' ? (
+                          <DimensionFieldTooltip
+                            label="Criteria"
+                            text="Define the evaluation criterion and 0–10 scale here."
+                          />
+                        ) : null}
+                      </span>
                       <textarea
                         rows={10}
                         className="judge-dimension-criteria"
@@ -519,14 +540,15 @@ export function JudgeDimensionsPage() {
                         placeholder="Describe what to evaluate. For score dimensions, state an integer 0–10 rubric (0 = worst, 10 = best) with clear anchors."
                         required
                       />
-                      {activeDimension.kind === 'geval_score' ? (
-                        <p className="form-field-hint">
-                          Define the evaluation criterion and 0–10 scale here. Do not use a 0–1 scale.
-                        </p>
-                      ) : null}
                     </label>
                     <label className="form-field form-field-wide">
-                      <span>Evaluation steps (optional)</span>
+                      <span className="form-field-label-row">
+                        Evaluation steps (optional)
+                        <DimensionFieldTooltip
+                          label="Evaluation steps"
+                          text="Maps to GEval evaluation_steps. When blank, DeepEval derives steps from criteria automatically."
+                        />
+                      </span>
                       <textarea
                         rows={6}
                         className="judge-dimension-criteria"
@@ -536,10 +558,6 @@ export function JudgeDimensionsPage() {
                         }
                         placeholder={'One step per line. Leave empty to let DeepEval generate steps from criteria.\nExample:\nRead the transcript.\nCheck sentence boundaries and punctuation.\nAssign an integer score from 0 to 10.'}
                       />
-                      <p className="form-field-hint">
-                        Maps to GEval <code>evaluation_steps</code>. When blank, DeepEval derives steps from criteria
-                        automatically.
-                      </p>
                     </label>
                     {form.dimensions.length > 1 ? (
                       <div className="form-field form-field-wide judge-dimension-remove-row">
