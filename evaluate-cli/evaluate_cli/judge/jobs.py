@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import requests
@@ -125,8 +123,3 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
         },
     }
     return result, summary
-
-
-def load_dimension_catalog() -> dict[str, Any]:
-    catalog_path = Path(__file__).resolve().parent.parent / "judge_dimensions.json"
-    return json.loads(catalog_path.read_text(encoding="utf-8"))

@@ -17,6 +17,7 @@ import { BuiltinAgentsPage } from './pages/BuiltinAgentsPage.tsx';
 import { AsrHotwordsPage } from './pages/AsrHotwordsPage.tsx';
 import { BuiltinAgentEditPage } from './pages/BuiltinAgentEditPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
+import { JudgeDimensionsPage } from './pages/JudgeDimensionsPage.tsx';
 import { AudioLayout } from './pages/AudioLayout.tsx';
 import { AudioDetailPage } from './pages/AudioDetailPage.tsx';
 import { AudioCaptureListPage } from './pages/AudioCaptureListPage.tsx';
@@ -60,8 +61,8 @@ export default function App() {
           <Route path="/admin/builtin-agents/new" element={<BuiltinAgentEditPage />} />
           <Route path="/admin/builtin-agents/:id" element={<BuiltinAgentEditPage />} />
           <Route path="/admin/pipelines" element={<PipelinesConfigPage />} />
-          <Route path="/admin/asr-hotwords" element={<AsrHotwordsPage />} />
           <Route path="/admin/storage" element={<ObjectStoragePage />} />
+          <Route path="/knowledge/asr-hotwords" element={<AsrHotwordsPage />} />
           <Route path="/knowledge/hybrid-search" element={<HybridSearchPage />} />
           <Route path="/knowledge/knowledge-bases" element={<KnowledgeBasesListPage />} />
           <Route path="/knowledge/knowledge-bases/:knowledgeBaseId" element={<KnowledgeBaseDetailRouter />} />
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="/evaluation/datasets/:datasetId" element={<EvalDatasetDetailPage />} />
           <Route path="/evaluation/runs" element={<EvaluationRunsListPage />} />
           <Route path="/evaluation/runs/:runId" element={<EvaluationRunDetailPage />} />
+          <Route path="/evaluation/judge-dimensions" element={<JudgeDimensionsPage />} />
           <Route path="/knowledge/documents" element={<DocumentsLayout />}>
             <Route index element={<DocumentsListPage />} />
             <Route path=":documentId" element={<DocumentDetailPage />} />

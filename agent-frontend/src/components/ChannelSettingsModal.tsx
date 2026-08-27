@@ -327,7 +327,7 @@ export function ChannelSettingsModal({
               <div className="channel-hotwords-tab">
                 <p className="admin-form-hint channel-hotwords-tab-intro">
                   Read-only list of ASR hotwords linked to this channel. Edit associations in{' '}
-                  <Link to="/admin/asr-hotwords" onClick={onCancel}>ASR Hotwords</Link>.
+                  <Link to="/knowledge/asr-hotwords" onClick={onCancel}>ASR Hotwords</Link>.
                 </p>
                 {channelHotwordsLoading ? (
                   <p className="admin-form-hint">Loading hotwords…</p>

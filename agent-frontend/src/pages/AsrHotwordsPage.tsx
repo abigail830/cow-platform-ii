@@ -22,7 +22,7 @@ import { iconProps } from '../components/icons/icon-props.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
-const PAGE = getNavPage('/admin/asr-hotwords')!;
+const PAGE = getNavPage('/knowledge/asr-hotwords')!;
 
 type FormState = {
   text: string;
@@ -49,7 +49,7 @@ function formFromHotword(hotword: AsrHotword): FormState {
 export function AsrHotwordsPage() {
   const { user } = useAppOutletContext();
   const canWrite = useMemo(
-    () => hasPermission(user, 'platform-basic:asr-hotwords', 'write'),
+    () => hasPermission(user, 'knowledge-management:asr-hotwords', 'write'),
     [user],
   );
 

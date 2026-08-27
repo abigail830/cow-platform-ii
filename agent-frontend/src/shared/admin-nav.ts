@@ -1,6 +1,7 @@
 export type NavPageIcon =
   | 'models'
   | 'pipelines'
+  | 'judge-dimensions'
   | 'storage'
   | 'builtin-agents'
   | 'asr-hotwords'
@@ -52,14 +53,6 @@ export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
     titleAccent: 'Agents',
     permissionKey: 'platform-basic:builtin-agents',
     icon: 'builtin-agents',
-  },
-  {
-    path: '/admin/asr-hotwords',
-    navLabel: 'ASR Hotwords',
-    titleMain: 'ASR',
-    titleAccent: 'Hotwords',
-    permissionKey: 'platform-basic:asr-hotwords',
-    icon: 'asr-hotwords',
   },
   {
     path: '/admin/storage',
@@ -116,6 +109,14 @@ export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
     icon: 'audio',
   },
   {
+    path: '/knowledge/asr-hotwords',
+    navLabel: 'ASR Hotwords',
+    titleMain: 'ASR',
+    titleAccent: 'Hotwords',
+    permissionKey: 'knowledge-management:asr-hotwords',
+    icon: 'asr-hotwords',
+  },
+  {
     path: '/knowledge/documents',
     navLabel: 'Document',
     titleMain: 'Document',
@@ -159,6 +160,14 @@ export const EVALUATION_PAGES: readonly NavPage[] = [
     titleAccent: '',
     permissionKey: 'evaluation:runs',
     icon: 'evaluation-run',
+  },
+  {
+    path: '/evaluation/judge-dimensions',
+    navLabel: 'Judge Dimensions',
+    titleMain: 'Judge',
+    titleAccent: 'Dimensions',
+    permissionKey: 'evaluation:judge-dimensions',
+    icon: 'judge-dimensions',
   },
 ];
 

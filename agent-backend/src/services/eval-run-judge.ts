@@ -146,10 +146,10 @@ export async function startEvalRunJudgePhase(
       (run.judgeMetrics[0] as { scenario_id: string }).scenario_id) ||
     DEFAULT_EVAL_JUDGE_SCENARIO_ID;
 
-  const scenario = getEvalJudgeScenario(scenarioId);
+  const scenario = await getEvalJudgeScenario(scenarioId);
   if (!scenario) throw new Error(`Unknown eval judge scenario: ${scenarioId}`);
 
-  const dimensions = snapshotEvalJudgeDimensions(scenarioId);
+  const dimensions = await snapshotEvalJudgeDimensions(scenarioId);
   const datasetItems = await db
     .select({ id: appEvalDatasetItems.id })
     .from(appEvalDatasetItems)

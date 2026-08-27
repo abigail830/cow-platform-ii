@@ -11,6 +11,7 @@ import {
   Highlighter,
   KeyRound,
   Library,
+  ListChecks,
   Package,
   Search,
   ShieldCheck,
@@ -24,6 +25,7 @@ import { iconProps } from './icon-props.ts';
 const NAV_ICONS: Record<NavPageIcon, LucideIcon> = {
   models: Boxes,
   pipelines: GitBranch,
+  'judge-dimensions': ListChecks,
   'builtin-agents': Bot,
   'asr-hotwords': Highlighter,
   storage: Database,

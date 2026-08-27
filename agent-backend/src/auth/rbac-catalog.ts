@@ -7,7 +7,6 @@ export const PLATFORM_BASIC_RESOURCES = {
   STORAGE: 'storage',
   PIPELINES: 'pipelines',
   BUILTIN_AGENTS: 'builtin-agents',
-  ASR_HOTWORDS: 'asr-hotwords',
 } as const;
 
 export type PlatformBasicResource = (typeof PLATFORM_BASIC_RESOURCES)[keyof typeof PLATFORM_BASIC_RESOURCES];
@@ -22,6 +21,7 @@ export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'knowledge-management' as const;
 
 export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
   AUDIO: 'audio',
+  ASR_HOTWORDS: 'asr-hotwords',
   DOCUMENTS: 'documents',
   KNOWLEDGE_BASES: 'knowledge-bases',
   HYBRID_SEARCH: 'hybrid-search',
@@ -36,6 +36,7 @@ export const EVALUATION_CATEGORY = 'evaluation' as const;
 export const EVALUATION_RESOURCES = {
   DATASETS: 'datasets',
   RUNS: 'runs',
+  JUDGE_DIMENSIONS: 'judge-dimensions',
 } as const;
 
 export type EvaluationResource = (typeof EVALUATION_RESOURCES)[keyof typeof EVALUATION_RESOURCES];
@@ -94,13 +95,6 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
       '/api/builtin-agents/*',
     ],
   },
-  {
-    resource: PLATFORM_BASIC_RESOURCES.ASR_HOTWORDS,
-    label: 'ASR hotwords',
-    description: 'Manage ASR hotwords and channel associations for transcription pipelines.',
-    routePatterns: ['/admin/asr-hotwords'],
-    apiPatterns: ['/api/admin/asr-hotwords', '/api/admin/asr-hotwords/*'],
-  },
 ];
 
 const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
@@ -115,6 +109,13 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
       '/api/audios',
       '/api/audios/*',
     ],
+  },
+  {
+    resource: KNOWLEDGE_MANAGEMENT_RESOURCES.ASR_HOTWORDS,
+    label: 'ASR hotwords',
+    description: 'Manage ASR hotwords and channel associations for transcription pipelines.',
+    routePatterns: ['/knowledge/asr-hotwords'],
+    apiPatterns: ['/api/knowledge/asr-hotwords', '/api/knowledge/asr-hotwords/*'],
   },
   {
     resource: KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS,
@@ -151,6 +152,13 @@ const EVALUATION_RESOURCE_DEFS: ResourceDefinition[] = [
     description: 'Pipeline comparison and LLM judge evaluation runs.',
     routePatterns: ['/evaluation/runs'],
     apiPatterns: ['/api/evaluation/runs', '/api/evaluation/runs/*'],
+  },
+  {
+    resource: EVALUATION_RESOURCES.JUDGE_DIMENSIONS,
+    label: 'Judge dimensions',
+    description: 'LLM-as-judge evaluation scenarios and dimension criteria for eval compare.',
+    routePatterns: ['/evaluation/judge-dimensions'],
+    apiPatterns: ['/api/evaluation/judge-dimensions', '/api/evaluation/judge-dimensions/*'],
   },
 ];
 
@@ -299,6 +307,10 @@ export const OBSOLETE_PERMISSION_KEYS = [
   'agent:session-explorer:write',
   'knowledge-management:hybrid-search:read',
   'knowledge-management:hybrid-search:write',
+  'platform-basic:asr-hotwords:read',
+  'platform-basic:asr-hotwords:write',
+  'platform-basic:judge-dimensions:read',
+  'platform-basic:judge-dimensions:write',
 ] as const;
 
 export function permissionKey(category: string, resource: string, access: AccessLevel): string {

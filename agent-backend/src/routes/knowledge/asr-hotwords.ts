@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rbac-catalog.ts';
+import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
@@ -17,7 +17,7 @@ asrHotwords.use('*', requireAuth);
 
 asrHotwords.get(
   '/',
-  requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.ASR_HOTWORDS, 'read'),
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.ASR_HOTWORDS, 'read'),
   async (c) => {
     const search = c.req.query('search')?.trim() || undefined;
     const page = Number(c.req.query('page') ?? 1);
@@ -29,7 +29,7 @@ asrHotwords.get(
 
 asrHotwords.get(
   '/:id',
-  requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.ASR_HOTWORDS, 'read'),
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.ASR_HOTWORDS, 'read'),
   async (c) => {
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Hotword id is required' }, 400);
@@ -41,7 +41,7 @@ asrHotwords.get(
 
 asrHotwords.post(
   '/',
-  requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.ASR_HOTWORDS, 'write'),
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.ASR_HOTWORDS, 'write'),
   async (c) => {
     const user = getUser(c);
     const body = await c.req.json<{
@@ -76,7 +76,7 @@ asrHotwords.post(
 
 asrHotwords.patch(
   '/:id',
-  requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.ASR_HOTWORDS, 'write'),
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.ASR_HOTWORDS, 'write'),
   async (c) => {
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Hotword id is required' }, 400);
@@ -106,7 +106,7 @@ asrHotwords.patch(
 
 asrHotwords.delete(
   '/:id',
-  requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.ASR_HOTWORDS, 'write'),
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.ASR_HOTWORDS, 'write'),
   async (c) => {
     const id = routeParam(c, 'id');
     if (!id) return c.json({ error: 'Hotword id is required' }, 400);

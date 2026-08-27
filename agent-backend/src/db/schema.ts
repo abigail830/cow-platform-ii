@@ -1263,6 +1263,33 @@ export const appEvalRunComparisons = pgTable(
   ],
 );
 
+export type EvalJudgeDimensionRecord = {
+  id: string;
+  label: string;
+  scope: 'variant' | 'pairwise';
+  kind: 'geval_score' | 'geval_winner';
+  weight: number;
+  criteria: string;
+};
+
+export const appEvalJudgeScenarios = pgTable(
+  'app_eval_judge_scenarios',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scenarioKey: text('scenario_key').notNull().unique(),
+    label: text('label').notNull(),
+    description: text('description'),
+    requiresGroundTruth: boolean('requires_ground_truth').notNull().default(false),
+    minVariants: integer('min_variants').notNull().default(2),
+    dimensions: jsonb('dimensions').$type<EvalJudgeDimensionRecord[]>().notNull(),
+    isSystem: boolean('is_system').notNull().default(false),
+    isEnabled: boolean('is_enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_eval_judge_scenarios_enabled').on(t.isEnabled, t.scenarioKey)],
+);
+
 export const appEvalRunJudgeJobs = pgTable(
   'app_eval_run_judge_jobs',
   {

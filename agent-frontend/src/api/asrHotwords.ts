@@ -48,7 +48,7 @@ export async function listAsrHotwords(params?: {
   if (params?.page) query.set('page', String(params.page));
   if (params?.limit) query.set('limit', String(params.limit));
   const suffix = query.toString() ? `?${query.toString()}` : '';
-  const data = await authFetch(`/api/admin/asr-hotwords${suffix}`);
+  const data = await authFetch(`/api/knowledge/asr-hotwords${suffix}`);
   return {
     hotwords: (data.hotwords as AsrHotword[]) ?? [],
     total: Number(data.total ?? 0),
@@ -64,7 +64,7 @@ export async function createAsrHotword(input: {
   note?: string | null;
   channel_ids?: string[];
 }): Promise<AsrHotword> {
-  const data = await authFetch('/api/admin/asr-hotwords', {
+  const data = await authFetch('/api/knowledge/asr-hotwords', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -88,7 +88,7 @@ export async function updateAsrHotword(
     channel_ids?: string[];
   },
 ): Promise<AsrHotword> {
-  const data = await authFetch(`/api/admin/asr-hotwords/${id}`, {
+  const data = await authFetch(`/api/knowledge/asr-hotwords/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -97,5 +97,5 @@ export async function updateAsrHotword(
 }
 
 export async function deleteAsrHotword(id: string): Promise<void> {
-  await authFetch(`/api/admin/asr-hotwords/${id}`, { method: 'DELETE' });
+  await authFetch(`/api/knowledge/asr-hotwords/${id}`, { method: 'DELETE' });
 }

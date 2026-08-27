@@ -38,7 +38,7 @@ import {
   DEFAULT_EVAL_JUDGE_SCENARIO_ID,
   snapshotEvalJudgeDimensions,
 } from './eval-judge-dimensions.ts';
-import { resolveEvalJudgeConfigYaml } from '../shared/eval-judge-workflow.ts';
+import { resolveEvalJudgeConfigYaml, resolveEvalJudgeScenarioId, parseEvalJudgeScenarioId } from '../shared/eval-judge-workflow.ts';
 
 const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
   'Worker exited without updating job status (check GitHub Actions logs).';
@@ -224,6 +224,10 @@ export async function createEvalRun(input: {
 
   const runMode = input.runMode === 'full' ? 'full' : 'pipeline_only';
   const judgeConfigYaml = runMode === 'full' ? await resolveEvalJudgeConfigYaml() : null;
+  const judgeScenarioId =
+    judgeConfigYaml != null ? parseEvalJudgeScenarioId(judgeConfigYaml) : DEFAULT_EVAL_JUDGE_SCENARIO_ID;
+  const judgeDimensions =
+    runMode === 'full' ? await snapshotEvalJudgeDimensions(judgeScenarioId) : null;
 
   const [run] = await db
     .insert(appEvalRuns)
@@ -239,8 +243,8 @@ export async function createEvalRun(input: {
         runMode === 'full'
           ? [
               {
-                scenario_id: DEFAULT_EVAL_JUDGE_SCENARIO_ID,
-                dimensions: snapshotEvalJudgeDimensions(),
+                scenario_id: judgeScenarioId,
+                dimensions: judgeDimensions,
                 config_yaml: judgeConfigYaml,
               },
             ]
@@ -304,6 +308,11 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
     : run.runMode;
 
   if (options?.runMode) {
+    const judgeConfigYaml = runMode === 'full' ? await resolveEvalJudgeConfigYaml() : null;
+    const judgeScenarioId = runMode === 'full' ? await resolveEvalJudgeScenarioId() : DEFAULT_EVAL_JUDGE_SCENARIO_ID;
+    const judgeDimensions =
+      runMode === 'full' ? await snapshotEvalJudgeDimensions(judgeScenarioId) : null;
+
     await db
       .update(appEvalRuns)
       .set({
@@ -313,9 +322,9 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
           runMode === 'full'
             ? [
                 {
-                  scenario_id: DEFAULT_EVAL_JUDGE_SCENARIO_ID,
-                  dimensions: snapshotEvalJudgeDimensions(),
-                  config_yaml: await resolveEvalJudgeConfigYaml(),
+                  scenario_id: judgeScenarioId,
+                  dimensions: judgeDimensions,
+                  config_yaml: judgeConfigYaml,
                 },
               ]
             : null,

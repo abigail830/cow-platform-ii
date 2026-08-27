@@ -9,12 +9,29 @@ from typing import Any
 from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
+# DeepEval GEval default: judge LLM returns an integer 0–10, then normalizes to 0–1 in metric.score.
+# Dimension criteria must describe the 0–10 scale; API/UI display multiplies normalized scores by 10.
+GEVAL_RAW_SCORE_MIN = 0
+GEVAL_RAW_SCORE_MAX = 10
+GEVAL_PASS_THRESHOLD = 0.5  # normalized; equals raw score 5/10
+
 
 @dataclass
 class JudgeScore:
     score: float | None
     winner: str | None
     reason: str
+
+
+def geval_raw_score(normalized_score: float) -> float:
+    """Convert DeepEval's normalized 0–1 score back to the raw 0–10 GEval scale."""
+    span = GEVAL_RAW_SCORE_MAX - GEVAL_RAW_SCORE_MIN
+    return normalized_score * span + GEVAL_RAW_SCORE_MIN
+
+
+def format_geval_score(normalized_score: float) -> str:
+    """Format a normalized GEval score for human-readable display."""
+    return f"{geval_raw_score(normalized_score):.1f}/10"
 
 
 def _judge_model(context: dict[str, Any]):
@@ -43,7 +60,7 @@ def _build_geval(name: str, criteria: str, params: list[LLMTestCaseParams], cont
         name=name,
         criteria=criteria,
         evaluation_params=params,
-        threshold=0.5,
+        threshold=GEVAL_PASS_THRESHOLD,
         model=_judge_model(context),
     )
 

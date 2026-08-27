@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Eye, FolderOpen, GitCompare, History, Loader2, Play, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Eye, FolderOpen, GitCompare, History, Loader2, Play, Plus, Trash2 } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
@@ -33,6 +33,11 @@ import { hasPermission } from '../shared/permissions.ts';
 import { fetchPresignedStorageText } from '../api/storage-fetch.ts';
 
 const LIST_PAGE = getNavPage('/evaluation/runs')!;
+
+/** DeepEval GEval normalizes raw 0–10 judge scores to 0–1 in stored metrics. */
+function formatGevalNormalizedScore(score: number): string {
+  return `${(score * 10).toFixed(1)}/10`;
+}
 
 function itemDispatchClaimed(item: EvalRunItem | undefined): boolean {
   if (!item?.metrics || typeof item.metrics !== 'object' || Array.isArray(item.metrics)) return false;
@@ -224,6 +229,64 @@ function attemptStatusBadge(attempt: EvalRunAttempt): { label: string; className
   };
 }
 
+const REASON_COLLAPSE_THRESHOLD = 120;
+
+function EvalRunJudgeDimensionItem({
+  label,
+  value,
+  reason,
+}: {
+  label: string;
+  value: string;
+  reason?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const trimmedReason = reason?.trim() ?? '';
+  const isLongReason = trimmedReason.length > REASON_COLLAPSE_THRESHOLD;
+  const showReason = trimmedReason && (!isLongReason || expanded);
+
+  const toggleExpanded = () => {
+    if (isLongReason) setExpanded((current) => !current);
+  };
+
+  const handleHeadKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!isLongReason) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleExpanded();
+    }
+  };
+
+  return (
+    <li className="eval-run-judge-dimension-item">
+      <div
+        className={`eval-run-judge-dimension-head${isLongReason ? ' is-expandable' : ''}`}
+        role={isLongReason ? 'button' : undefined}
+        tabIndex={isLongReason ? 0 : undefined}
+        aria-expanded={isLongReason ? expanded : undefined}
+        onClick={toggleExpanded}
+        onKeyDown={handleHeadKeyDown}
+      >
+        <span className="eval-run-judge-dimension-label">{label}</span>
+        <span className="eval-run-judge-dimension-head-end">
+          <span className="eval-run-judge-dimension-value">{value}</span>
+          {isLongReason ? (
+            <ChevronDown
+              {...iconProps({ size: 14 })}
+              className={`eval-run-judge-dimension-chevron${expanded ? ' is-expanded' : ''}`}
+              aria-hidden
+            />
+          ) : null}
+        </span>
+      </div>
+      {showReason ? <p className="eval-run-judge-dimension-reason">{trimmedReason}</p> : null}
+      {isLongReason && !expanded ? (
+        <p className="eval-run-judge-dimension-reason-hint">Show reason</p>
+      ) : null}
+    </li>
+  );
+}
+
 function EvalRunJudgeScores({
   job,
   variants,
@@ -245,6 +308,19 @@ function EvalRunJudgeScores({
 
   const variantById = new Map(variants.map((variant) => [variant.id, variant.display_name]));
 
+  function formatPairwiseValue(row: {
+    score?: number;
+    winner?: string;
+    winner_variant_id?: string | null;
+  }): string {
+    if (row.winner) {
+      if (row.winner === 'tie') return 'Tie';
+      return variantById.get(row.winner_variant_id ?? '') ?? row.winner.toUpperCase();
+    }
+    if (typeof row.score === 'number') return formatGevalNormalizedScore(row.score);
+    return '—';
+  }
+
   return (
     <div className="eval-run-judge-scores">
       {variantScores && Object.keys(variantScores).length > 0 ? (
@@ -256,12 +332,12 @@ function EvalRunJudgeScores({
                 <p className="eval-run-judge-score-card-title">{variantById.get(variantId) ?? variantId}</p>
                 <ul className="eval-run-judge-dimension-list">
                   {Object.entries(dimensions).map(([dimensionId, row]) => (
-                    <li key={dimensionId}>
-                      <span className="eval-run-judge-dimension-label">{row.label ?? dimensionId}</span>
-                      <span className="eval-run-judge-dimension-value">
-                        {typeof row.score === 'number' ? row.score.toFixed(2) : '—'}
-                      </span>
-                    </li>
+                    <EvalRunJudgeDimensionItem
+                      key={dimensionId}
+                      label={row.label ?? dimensionId}
+                      value={typeof row.score === 'number' ? formatGevalNormalizedScore(row.score) : '—'}
+                      reason={row.reason}
+                    />
                   ))}
                 </ul>
               </div>
@@ -275,18 +351,12 @@ function EvalRunJudgeScores({
           <p className="eval-run-judge-section-title">Pairwise</p>
           <ul className="eval-run-judge-dimension-list eval-run-judge-dimension-list-pairwise">
             {Object.entries(pairwise).map(([dimensionId, row]) => (
-              <li key={dimensionId}>
-                <span className="eval-run-judge-dimension-label">{row.label ?? dimensionId}</span>
-                <span className="eval-run-judge-dimension-value">
-                  {row.winner
-                    ? row.winner === 'tie'
-                      ? 'Tie'
-                      : variantById.get(row.winner_variant_id ?? '') ?? row.winner.toUpperCase()
-                    : typeof row.score === 'number'
-                      ? row.score.toFixed(2)
-                      : '—'}
-                </span>
-              </li>
+              <EvalRunJudgeDimensionItem
+                key={dimensionId}
+                label={row.label ?? dimensionId}
+                value={formatPairwiseValue(row)}
+                reason={row.reason}
+              />
             ))}
           </ul>
         </div>

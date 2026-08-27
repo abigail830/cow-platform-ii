@@ -52,6 +52,8 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
   'knowledge-manager': [
     'knowledge-management:audio:read',
     'knowledge-management:audio:write',
+    'knowledge-management:asr-hotwords:read',
+    'knowledge-management:asr-hotwords:write',
     'knowledge-management:documents:read',
     'knowledge-management:documents:write',
     'knowledge-management:knowledge-bases:read',
@@ -191,6 +193,66 @@ async function migrateLegacyHybridSearchGrants(
   }
 }
 
+async function migrateRenamedPermissionGrants(
+  permissions: Awaited<ReturnType<typeof upsertPermission>>[],
+) {
+  const renames: Array<{ from: string; to: string }> = [
+    { from: 'platform-basic:asr-hotwords:read', to: 'knowledge-management:asr-hotwords:read' },
+    { from: 'platform-basic:asr-hotwords:write', to: 'knowledge-management:asr-hotwords:write' },
+    { from: 'platform-basic:judge-dimensions:read', to: 'evaluation:judge-dimensions:read' },
+    { from: 'platform-basic:judge-dimensions:write', to: 'evaluation:judge-dimensions:write' },
+  ];
+
+  for (const { from, to } of renames) {
+    const legacy = permissions.find((row) => row.key === from);
+    const target = permissions.find((row) => row.key === to);
+    if (!legacy || !target) continue;
+
+    const grants = await db
+      .select({
+        roleId: appRolePermissions.roleId,
+        accessLevel: appRolePermissions.accessLevel,
+      })
+      .from(appRolePermissions)
+      .where(eq(appRolePermissions.permissionId, legacy.id));
+
+    for (const grant of grants) {
+      await db
+        .insert(appRolePermissions)
+        .values({
+          roleId: grant.roleId,
+          permissionId: target.id,
+          accessLevel: grant.accessLevel,
+        })
+        .onConflictDoUpdate({
+          target: [appRolePermissions.roleId, appRolePermissions.permissionId],
+          set: { accessLevel: grant.accessLevel },
+        });
+    }
+  }
+
+  const evalRunsWrite = permissions.find((row) => row.key === 'evaluation:runs:write');
+  const judgeRead = permissions.find((row) => row.key === 'evaluation:judge-dimensions:read');
+  const judgeWrite = permissions.find((row) => row.key === 'evaluation:judge-dimensions:write');
+  if (!evalRunsWrite || !judgeRead || !judgeWrite) return;
+
+  const evalRunWriters = await db
+    .select({ roleId: appRolePermissions.roleId })
+    .from(appRolePermissions)
+    .where(eq(appRolePermissions.permissionId, evalRunsWrite.id));
+
+  for (const grant of evalRunWriters) {
+    await db
+      .insert(appRolePermissions)
+      .values({ roleId: grant.roleId, permissionId: judgeWrite.id, accessLevel: 'write' })
+      .onConflictDoNothing();
+    await db
+      .insert(appRolePermissions)
+      .values({ roleId: grant.roleId, permissionId: judgeRead.id, accessLevel: 'read' })
+      .onConflictDoNothing();
+  }
+}
+
 async function removeObsoletePermissions() {
   const keys = [...OBSOLETE_PERMISSION_KEYS];
   if (keys.length === 0) return;
@@ -220,6 +282,7 @@ export async function syncRbac(): Promise<{ permissionCount: number }> {
   }
 
   await migrateLegacyHybridSearchGrants(permissions);
+  await migrateRenamedPermissionGrants(permissions);
   await removeObsoletePermissions();
 
   const adminRole = await upsertSystemRole(ADMIN_ROLE);

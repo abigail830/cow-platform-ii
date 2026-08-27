@@ -1,10 +1,11 @@
 /**
- * Eval judge (Full-mode compare) workflow YAML — model_name only; credentials from platform.
+ * Eval judge (Full-mode compare) workflow YAML — model_name + scenario_id; credentials from platform.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { DEFAULT_EVAL_JUDGE_SCENARIO_ID } from '../shared/eval-judge-constants.ts';
 
 export const EVAL_JUDGE_COMPARE_PIPELINE_NAME = 'eval-judge-compare';
 
@@ -21,7 +22,7 @@ export function defaultEvalJudgeConfigYaml(): string {
   return cachedDefaultYaml;
 }
 
-export function parseEvalJudgeModelName(configYaml: string, pipelineName = EVAL_JUDGE_COMPARE_PIPELINE_NAME): string {
+function parseEvalJudgeConfigRoot(configYaml: string, pipelineName = EVAL_JUDGE_COMPARE_PIPELINE_NAME) {
   let data: unknown;
   try {
     data = parseYaml(configYaml);
@@ -32,7 +33,11 @@ export function parseEvalJudgeModelName(configYaml: string, pipelineName = EVAL_
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error('Eval judge config YAML must be a mapping at the root');
   }
-  const map = data as Record<string, unknown>;
+  return data as Record<string, unknown>;
+}
+
+export function parseEvalJudgeModelName(configYaml: string, pipelineName = EVAL_JUDGE_COMPARE_PIPELINE_NAME): string {
+  const map = parseEvalJudgeConfigRoot(configYaml, pipelineName);
   const top = String(map.model_name ?? '').trim();
   if (top) return top;
 
@@ -48,10 +53,28 @@ export function parseEvalJudgeModelName(configYaml: string, pipelineName = EVAL_
   );
 }
 
+export function parseEvalJudgeScenarioId(
+  configYaml: string,
+  pipelineName = EVAL_JUDGE_COMPARE_PIPELINE_NAME,
+): string {
+  const map = parseEvalJudgeConfigRoot(configYaml, pipelineName);
+  const top = String(map.scenario_id ?? '').trim();
+  if (top) return top;
+
+  const judge = map.judge;
+  if (judge && typeof judge === 'object' && !Array.isArray(judge)) {
+    const nested = String((judge as Record<string, unknown>).scenario_id ?? '').trim();
+    if (nested) return nested;
+  }
+
+  return DEFAULT_EVAL_JUDGE_SCENARIO_ID;
+}
+
 export function snapshotEvalJudgeConfigYaml(raw?: string | null): string {
   const text = raw?.trim();
   if (!text) return defaultEvalJudgeConfigYaml();
   parseEvalJudgeModelName(text);
+  parseEvalJudgeScenarioId(text);
   return text;
 }
 
@@ -63,4 +86,12 @@ export async function resolveEvalJudgeConfigYaml(): Promise<string> {
     return snapshotEvalJudgeConfigYaml(pipeline.configYaml);
   }
   return defaultEvalJudgeConfigYaml();
+}
+
+export async function resolveEvalJudgeScenarioId(): Promise<string> {
+  const configYaml = await resolveEvalJudgeConfigYaml();
+  const scenarioId = parseEvalJudgeScenarioId(configYaml);
+  const { assertEvalJudgeScenarioExists } = await import('../services/eval-judge-dimensions.ts');
+  await assertEvalJudgeScenarioExists(scenarioId);
+  return scenarioId;
 }
