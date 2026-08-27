@@ -28,4 +28,10 @@ describe('validateJudgeDimensions evaluation_steps', () => {
     const [row] = validateJudgeDimensions([{ ...base, evaluation_steps: ['', '   '] }]);
     assert.equal(row.evaluation_steps, undefined);
   });
+
+  it('stores geval criteria verbatim including blank lines', () => {
+    const criteria = 'First paragraph.\n\nSecond paragraph with 0 to 10 scale.\n\nExplain your score in 1–2 sentences.';
+    const [row] = validateJudgeDimensions([{ ...base, criteria }]);
+    assert.equal(row.criteria, criteria);
+  });
 });

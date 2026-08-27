@@ -33,6 +33,7 @@ export type EvalJudgeScenario = {
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
   const response = await fetch(apiUrl(path), {
+    cache: 'no-store',
     ...init,
     headers: {
       ...(init?.headers ?? {}),
@@ -57,6 +58,11 @@ export async function listJudgeScenarios(options?: {
   if (options?.limit) params.set('limit', String(options.limit));
   const suffix = params.toString() ? `?${params.toString()}` : '';
   return authFetch(`/api/evaluation/judge-dimensions${suffix}`);
+}
+
+export async function getJudgeScenario(id: string): Promise<EvalJudgeScenario> {
+  const data = await authFetch(`/api/evaluation/judge-dimensions/${id}`);
+  return (data as { scenario: EvalJudgeScenario }).scenario;
 }
 
 export async function createJudgeScenario(input: {
@@ -87,7 +93,7 @@ export async function updateJudgeScenario(
   },
 ): Promise<{ scenario: EvalJudgeScenario }> {
   return authFetch(`/api/evaluation/judge-dimensions/${id}`, {
-    method: 'PATCH',
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });

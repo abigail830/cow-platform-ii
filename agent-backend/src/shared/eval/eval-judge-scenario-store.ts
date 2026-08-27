@@ -188,7 +188,17 @@ export async function updateEvalJudgeScenario(
     }
     patch.minVariants = input.minVariants;
   }
-  if (input.dimensions !== undefined) patch.dimensions = validateJudgeDimensions(input.dimensions);
+  if (input.dimensions !== undefined) {
+    patch.dimensions = validateJudgeDimensions(input.dimensions);
+  } else if (
+    input.label !== undefined ||
+    input.description !== undefined ||
+    input.requiresGroundTruth !== undefined ||
+    input.minVariants !== undefined ||
+    input.isEnabled !== undefined
+  ) {
+    throw new Error('dimensions is required when updating a judge scenario');
+  }
   if (input.isEnabled !== undefined) patch.isEnabled = input.isEnabled;
 
   const [row] = await db

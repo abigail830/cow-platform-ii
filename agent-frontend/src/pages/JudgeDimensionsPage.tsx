@@ -4,6 +4,7 @@ import { CircleHelp, Plus, Search, Trash2 } from 'lucide-react';
 import {
   createJudgeScenario,
   deleteJudgeScenario,
+  getJudgeScenario,
   listJudgeScenarios,
   updateJudgeScenario,
   type EvalJudgeDimension,
@@ -149,12 +150,20 @@ export function JudgeDimensionsPage() {
     setFormOpen(true);
   }
 
-  function openEdit(scenario: EvalJudgeScenario) {
-    setEditing(scenario);
-    setForm(scenarioToForm(scenario));
-    setActiveTab('general');
+  async function openEdit(scenario: EvalJudgeScenario) {
     setFormError('');
-    setFormOpen(true);
+    setFormBusy(true);
+    try {
+      const fresh = await getJudgeScenario(scenario.id);
+      setEditing(fresh);
+      setForm(scenarioToForm(fresh));
+      setActiveTab('general');
+      setFormOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load scenario');
+    } finally {
+      setFormBusy(false);
+    }
   }
 
   function updateDimension(index: number, patch: Partial<DimensionForm>) {
@@ -214,15 +223,24 @@ export function JudgeDimensionsPage() {
     };
 
     try {
+      let saved: EvalJudgeScenario;
       if (editing) {
-        await updateJudgeScenario(editing.id, payload);
+        const result = await updateJudgeScenario(editing.id, payload);
+        saved = result.scenario;
       } else {
-        await createJudgeScenario({
+        const result = await createJudgeScenario({
           scenario_key: form.scenario_key.trim(),
           ...payload,
         });
+        saved = result.scenario;
       }
+      setScenarios((prev) => {
+        const index = prev.findIndex((row) => row.id === saved.id);
+        if (index === -1) return [saved, ...prev];
+        return prev.map((row) => (row.id === saved.id ? saved : row));
+      });
       setFormOpen(false);
+      setEditing(null);
       await load();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to save scenario');
@@ -313,7 +331,8 @@ export function JudgeDimensionsPage() {
                             type="button"
                             className="icon-btn"
                             title="Edit"
-                            onClick={() => openEdit(scenario)}
+                            onClick={() => void openEdit(scenario)}
+                            disabled={formBusy}
                           >
                             <IconEdit />
                           </button>
@@ -539,6 +558,7 @@ export function JudgeDimensionsPage() {
                         ) : null}
                       </span>
                       <textarea
+                        key={`${activeDimensionIndex}-${activeDimension.id}-criteria`}
                         rows={10}
                         className="judge-dimension-criteria"
                         value={activeDimension.criteria}
@@ -558,6 +578,7 @@ export function JudgeDimensionsPage() {
                         />
                       </span>
                       <textarea
+                        key={`${activeDimensionIndex}-${activeDimension.id}-steps`}
                         rows={6}
                         className="judge-dimension-criteria"
                         value={activeDimension.evaluation_steps_text ?? ''}

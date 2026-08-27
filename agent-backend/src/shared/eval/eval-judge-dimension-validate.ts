@@ -1,6 +1,5 @@
 import type { EvalJudgeDimensionRecord } from '../../db/schema.ts';
 import type { EvalJudgeDimensionDefinition } from '../../services/eval/eval-judge-dimensions.ts';
-import { normalizeEvalJudgeGevalCriteria } from './eval-judge-criteria.ts';
 
 const DIMENSION_ID_RE = /^[a-z][a-z0-9_]*$/;
 
@@ -84,10 +83,7 @@ export function validateJudgeDimensions(
       scope,
       kind,
       weight,
-      criteria:
-        kind === 'cer_score' || kind === 'wer_score'
-          ? resolvedCriteria
-          : normalizeEvalJudgeGevalCriteria(resolvedCriteria, kind),
+      criteria: resolvedCriteria,
       ...(evaluationSteps ? { evaluation_steps: evaluationSteps } : {}),
     };
   });

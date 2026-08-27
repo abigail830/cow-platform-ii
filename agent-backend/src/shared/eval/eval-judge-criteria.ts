@@ -6,7 +6,7 @@ export const GEVAL_INTEGER_SCALE_HINT =
 
 const ZERO_TO_ONE_PATTERNS: RegExp[] = [
   /Score from 0 \([^)]+\) to 1 \([^)]+\)\.?/gi,
-  /Score from 0 to 1\.?/gi,
+  /Score from 0 to 1(?!\d)\.?/gi,
   /Score 0 if ([^,]+),\s*1 if ([^.]+)\.?/gi,
   /\b0–1 scale\b/gi,
   /\b0-1 scale\b/gi,
@@ -14,6 +14,15 @@ const ZERO_TO_ONE_PATTERNS: RegExp[] = [
 
 function mentionsZeroToTenScale(text: string): boolean {
   return /\b0\s*[–-]\s*10\b|\b0 to 10\b/i.test(text);
+}
+
+function collapseHorizontalWhitespace(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => line.replace(/[ \t]{2,}/g, ' ').trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function stripZeroToOneScalePhrases(text: string): string {
@@ -25,7 +34,19 @@ function stripZeroToOneScalePhrases(text: string): string {
       result = result.replace(pattern, '');
     }
   }
-  return result.replace(/\s{2,}/g, ' ').trim();
+  return collapseHorizontalWhitespace(result);
+}
+
+function hasIntegerScaleHint(text: string): boolean {
+  return (
+    mentionsZeroToTenScale(text) ||
+    /Do not use a 0[–-]1 scale or decimals/i.test(text) ||
+    text.includes(GEVAL_INTEGER_SCALE_HINT)
+  );
+}
+
+function hasExplainInstruction(text: string): boolean {
+  return /Explain your (score|decision)/i.test(text);
 }
 
 export function normalizeEvalJudgeGevalCriteria(
@@ -38,12 +59,12 @@ export function normalizeEvalJudgeGevalCriteria(
 
   let text = stripZeroToOneScalePhrases(trimmed);
 
-  if (!mentionsZeroToTenScale(text)) {
-    text = `${text} ${GEVAL_INTEGER_SCALE_HINT}`.trim();
+  if (!hasIntegerScaleHint(text)) {
+    text = `${text}\n\n${GEVAL_INTEGER_SCALE_HINT}`.trim();
   }
 
-  if (!/Explain your (score|decision)/i.test(text)) {
-    text = `${text} Explain your score in 1–2 sentences.`.trim();
+  if (!hasExplainInstruction(text)) {
+    text = `${text}\n\nExplain your score in 1–2 sentences.`.trim();
   }
 
   return text;

@@ -89,7 +89,7 @@ judgeDimensions.post(
   },
 );
 
-judgeDimensions.patch(
+judgeDimensions.put(
   '/:id',
   requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.JUDGE_DIMENSIONS, 'write'),
   async (c) => {
@@ -112,6 +112,10 @@ judgeDimensions.patch(
       }>;
       is_enabled?: boolean;
     }>();
+
+    if (!Array.isArray(body.dimensions)) {
+      return c.json({ error: 'dimensions is required' }, 400);
+    }
 
     try {
       const scenario = await updateEvalJudgeScenario(id, {

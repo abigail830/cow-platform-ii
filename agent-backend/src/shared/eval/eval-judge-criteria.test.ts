@@ -24,4 +24,21 @@ describe('normalizeEvalJudgeGevalCriteria', () => {
     const winner = 'Reply with A, B, or TIE. Explain your decision in 1–2 sentences.';
     assert.equal(normalizeEvalJudgeGevalCriteria(winner, 'geval_winner'), winner);
   });
+
+  it('preserves paragraph breaks when normalizing legacy criteria', () => {
+    const legacy =
+      'Line one about the task.\n\nScore 0 if bad, 1 if good.\n\nLine three with bands 0–2 = poor; 9–10 = great.';
+    const normalized = normalizeEvalJudgeGevalCriteria(legacy, 'geval_score');
+    assert.match(normalized, /Line one about the task\.\n\n/);
+    assert.doesNotMatch(normalized, /Do not use a or decimals/);
+  });
+
+  it('does not duplicate integer scale hints when already present', () => {
+    const criteria =
+      'Evaluate artifacts.\n\nAssign an integer score from 0 to 10 only.\n\nExplain your score in 1–2 sentences.';
+    const once = normalizeEvalJudgeGevalCriteria(criteria, 'geval_score');
+    const twice = normalizeEvalJudgeGevalCriteria(once, 'geval_score');
+    assert.equal(once, twice);
+    assert.doesNotMatch(once, /Do not use a or decimals/);
+  });
 });
