@@ -4,7 +4,7 @@ import { MAX_SKILL_EXTRACTED_BYTES } from '../../storage/skill-files.ts';
 import { appSkillFiles, appSkills, db } from '../../db/index.ts';
 import { parseSkillZipBuffer } from './parse-skill-zip.ts';
 import { getReservedSkillNames } from './reserved-names.ts';
-import { isServerlessRuntime } from '../pipeline-worker-mode.ts';
+import { isServerlessRuntime } from '../pipeline/pipeline-worker-mode.ts';
 
 export async function runSkillImport(skillId: string): Promise<void> {
   const [row] = await db.select().from(appSkills).where(eq(appSkills.id, skillId)).limit(1);

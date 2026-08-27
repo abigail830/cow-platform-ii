@@ -2,7 +2,7 @@ import {
   readStorageText,
   storagePrefixFromS3Key,
 } from '../storage/document-content.ts';
-import { isServerlessRuntime } from '../services/pipeline-worker-mode.ts';
+import { isServerlessRuntime } from '../services/pipeline/pipeline-worker-mode.ts';
 import {
   DEFAULT_PAGE_SIZE,
   DEFAULT_SECTION_MAX_CHARS,

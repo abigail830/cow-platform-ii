@@ -6,12 +6,12 @@ import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
 import { invalidateCatalogAgentRuntimeCache } from '../../agent-catalog/resolve-agent-runtime.ts';
-import { invalidateModelConfigCache } from '../../shared/model-registry.ts';
+import { invalidateModelConfigCache } from '../../shared/model/model-registry.ts';
 import {
   decryptModelConfigApiKey,
   hasStoredModelConfigApiKey,
   sealModelConfigApiKeyForStorage,
-} from '../../shared/model-config-secret.ts';
+} from '../../shared/model/model-config-secret.ts';
 
 const models = new Hono();
 

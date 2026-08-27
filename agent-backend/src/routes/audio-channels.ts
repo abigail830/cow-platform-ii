@@ -16,8 +16,8 @@ import {
   getAudioChannelById,
   listAudioChannelTree,
   updateAudioChannel,
-} from '../services/audios.ts';
-import { listHotwordsForChannel } from '../services/asr-hotwords.ts';
+} from '../services/audio/audios.ts';
+import { listHotwordsForChannel } from '../services/audio/asr-hotwords.ts';
 
 const channels = new Hono();
 
@@ -28,10 +28,10 @@ channels.get(
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO, 'read'),
   async (c) => {
     try {
-      const { listPipelineConfigs } = await import('../shared/pipeline-config-store.ts');
-      const { isAudioAsyncPipelineName } = await import('../services/audio-pipeline-names.ts');
+      const { listPipelineConfigs } = await import('../shared/pipeline/pipeline-config-store.ts');
+      const { isAudioAsyncPipelineName } = await import('../services/audio/audio-pipeline-names.ts');
       const { isCapturePostProcessPipelineName } = await import(
-        '../services/capture-post-process-pipeline-names.ts'
+        '../services/capture/capture-post-process-pipeline-names.ts'
       );
 
       const { pipelines } = await listPipelineConfigs({ enabledOnly: true, limit: 100 });

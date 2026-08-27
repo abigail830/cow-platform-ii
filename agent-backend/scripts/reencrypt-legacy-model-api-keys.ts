@@ -6,7 +6,7 @@ import { closePool } from '../src/db/pool.ts';
 import {
   encryptModelConfigApiKey,
   isEncryptedStoredModelApiKey,
-} from '../src/shared/model-config-secret.ts';
+} from '../src/shared/model/model-config-secret.ts';
 
 /** One-time data migration: seal legacy plaintext model API keys in DB. */
 export async function reencryptLegacyModelApiKeys(): Promise<number> {

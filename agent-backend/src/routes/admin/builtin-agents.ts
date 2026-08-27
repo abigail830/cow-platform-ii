@@ -16,7 +16,7 @@ import { WORKFLOW_VARIABLES } from '../../builtin-agents/defaults.ts';
 import { getAllBuiltinAgentsUsageStats, getBuiltinAgentUsageStats, listBuiltinAgentRuns } from '../../builtin-agents/agent-stats.ts';
 import { normalizeSyncAgentDraft } from '../../builtin-agents/normalize-sync-agent-draft.ts';
 import { runSyncAgent, type SyncAgentDraftDef } from '../../builtin-agents/sync-agent-runner.ts';
-import { resolveModelCliParams } from '../../services/model-cli-params.ts';
+import { resolveModelCliParams } from '../../services/models/model-cli-params.ts';
 
 const builtinAgents = new Hono();
 

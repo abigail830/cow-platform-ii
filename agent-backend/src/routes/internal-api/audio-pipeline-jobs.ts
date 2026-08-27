@@ -8,9 +8,9 @@ import {
   resolveAudioPipelineJobErrorMessage,
   updateAudioPipelineJob,
   type AudioPipelineJobStage,
-} from '../../services/audio-pipeline-jobs.ts';
-import { spawnAsyncAudioPipelineWorker } from '../../services/audio-pipeline-runner.ts';
-import { syncEvalRunItemFromAudioPipelineJob } from '../../services/eval-audio-bridge.ts';
+} from '../../services/audio/audio-pipeline-jobs.ts';
+import { spawnAsyncAudioPipelineWorker } from '../../services/audio/audio-pipeline-runner.ts';
+import { syncEvalRunItemFromAudioPipelineJob } from '../../services/eval/eval-audio-bridge.ts';
 
 const audioPipelineJobs = new Hono();
 

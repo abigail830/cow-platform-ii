@@ -1,5 +1,5 @@
-import { embeddingSupportsDimensions } from '../../shared/embedding-provider.ts';
-import { outboundFetch } from '../../shared/outbound-fetch.ts';
+import { embeddingSupportsDimensions } from '../../shared/model/embedding-provider.ts';
+import { outboundFetch } from '../../shared/lib/outbound-fetch.ts';
 import type { EmbeddingClient, ModelConnection } from '../ports.ts';
 
 function embeddingsUrl(baseUrl: string): string {

@@ -11,7 +11,7 @@ import {
   type ResourceType,
 } from '../db/index.ts';
 import { loadUserAccessProfile } from './rbac.ts';
-import type { ChannelNode } from '../services/documents.ts';
+import type { ChannelNode } from '../services/documents/documents.ts';
 import {
   buildChannelAncestorChain,
   filterChannelTreeWithAccess,
@@ -629,7 +629,7 @@ export async function lookupUsersForSharing(search: string | undefined, limit = 
 }
 
 export async function getDocumentChannelIdForDocument(documentId: string): Promise<string | null> {
-  const { getDocumentById } = await import('../services/documents.ts');
+  const { getDocumentById } = await import('../services/documents/documents.ts');
   const doc = await getDocumentById(documentId);
   return doc?.channelId ?? null;
 }

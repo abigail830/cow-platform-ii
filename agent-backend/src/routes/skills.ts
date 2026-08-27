@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getUser, requireAuth } from '../auth/jwt.ts';
 import { requireResourcePermission } from '../auth/require-permission.ts';
-import { isServerlessRuntime } from '../services/pipeline-worker-mode.ts';
+import { isServerlessRuntime } from '../services/pipeline/pipeline-worker-mode.ts';
 import { StorageNotConfiguredError } from '../storage/s3-client.ts';
 import { isStorageEnabled } from '../storage/s3-config.ts';
 import { initSkillUpload } from '../services/skills/skill-upload.ts';

@@ -36,8 +36,8 @@ import { runWithAgentRequestContext } from './flue/agent-request-context.ts';
 import { agentInstanceStreamRegistry } from './flue/agent-instance-stream-registry.ts';
 import { fixAgentAttachmentResponseHeaders } from './flue/attachment-response-headers.ts';
 import { isAgentLiveSseRequest, parseAgentInstancePath } from './flue/agent-instance-path.ts';
-import { recoverOrphanedPipelineWorkOnStartup, startPipelinePollScheduler } from './services/pipeline-poller.ts';
-import { cleanupExpiredSessionFiles } from './services/session-files-cleanup.ts';
+import { recoverOrphanedPipelineWorkOnStartup, startPipelinePollScheduler } from './services/pipeline/pipeline-poller.ts';
+import { cleanupExpiredSessionFiles } from './services/session/session-files-cleanup.ts';
 
 registerModelProviders();
 void recoverOrphanedPipelineWorkOnStartup()

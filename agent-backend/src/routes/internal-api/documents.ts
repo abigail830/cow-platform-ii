@@ -7,13 +7,13 @@ import {
   getChannelById,
   getDocumentById,
   updateDocumentMetadata,
-} from '../../services/documents.ts';
+} from '../../services/documents/documents.ts';
 import {
   buildDocumentImportContext,
-} from '../../services/knowledge-bases.ts';
+} from '../../services/kb/knowledge-bases.ts';
 import {
   metadataNeedsExtraction,
-} from '../../services/document-metadata-extraction.ts';
+} from '../../services/documents/document-metadata-extraction.ts';
 import { uploadDocumentObject, StorageNotConfiguredError } from '../../storage/document-files.ts';
 import { isStorageEnabled } from '../../storage/s3-config.ts';
 

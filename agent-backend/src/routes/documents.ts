@@ -29,7 +29,7 @@ import {
   validateDocumentFilename,
   validateFileHash,
 } from '../storage/document-files.ts';
-import { initDocumentUpload } from '../services/document-upload.ts';
+import { initDocumentUpload } from '../services/documents/document-upload.ts';
 import {
   createDocumentRecord,
   deleteDocument,
@@ -40,9 +40,9 @@ import {
   listDocuments,
   moveDocument,
   updateDocumentMetadata,
-} from '../services/documents.ts';
-import { autoStartPipelineAfterUpload } from '../services/auto-pipeline.ts';
-import { startDocumentPipeline } from '../services/pipeline-runner.ts';
+} from '../services/documents/documents.ts';
+import { autoStartPipelineAfterUpload } from '../services/pipeline/auto-pipeline.ts';
+import { startDocumentPipeline } from '../services/pipeline/pipeline-runner.ts';
 
 const documents = new Hono();
 

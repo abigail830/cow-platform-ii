@@ -1,5 +1,5 @@
 import { getPool } from '../db/pool.ts';
-import { toAgentInstanceId } from '../shared/agent-instance-id.ts';
+import { toAgentInstanceId } from '../shared/model/agent-instance-id.ts';
 
 /** Prefix of `flue_agent_submissions.session_key` for a Flue agent instance. */
 export function flueSubmissionSessionKeyPrefix(instanceId: string): string {

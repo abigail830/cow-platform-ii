@@ -19,7 +19,7 @@ import {
 } from '@a2a-js/sdk';
 import { extractTextFromA2aMessage } from './extract-text.ts';
 import { invokeFlueAgent } from './invoke-agent.ts';
-import { absolutizePublicApiUrl } from '../../shared/publish-artifact-tools.ts';
+import { absolutizePublicApiUrl } from '../../shared/session/publish-artifact-tools.ts';
 
 const activeAborts = new Map<string, AbortController>();
 

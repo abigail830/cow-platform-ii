@@ -10,7 +10,7 @@ import {
   NO_RESOURCE_ACCESS,
   FULL_RESOURCE_ACCESS,
 } from './resource-access-utils.ts';
-import type { ChannelNode } from '../services/documents.ts';
+import type { ChannelNode } from '../services/documents/documents.ts';
 
 describe('resource-access helpers', () => {
   it('mergeResourcePermissions unions flags', () => {

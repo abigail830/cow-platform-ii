@@ -8,7 +8,7 @@ import { signAttachmentAccessToken, verifyAttachmentAccessToken } from '../src/a
 import {
   agentConversationStreamPath,
   conversationIdFromInstanceId,
-} from '../src/shared/agent-instance-id.ts';
+} from '../src/shared/model/agent-instance-id.ts';
 import { resolveFlueConversationId } from '../src/flue/resolve-flue-conversation-id.ts';
 import db from '../src/db.ts';
 

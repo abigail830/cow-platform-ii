@@ -4,7 +4,7 @@ import { OPENKMS_API_KEY_HEADER } from '../auth/openkms-headers.ts';
 import { isApiKeyToken } from '../auth/api-key.ts';
 import { resolveUserFromApiKey } from '../auth/resolve-user-api-key.ts';
 import { verifyToken, type AuthUser } from '../auth/jwt.ts';
-import { decodeUserIdFromInstanceId } from '../shared/agent-instance-id.ts';
+import { decodeUserIdFromInstanceId } from '../shared/model/agent-instance-id.ts';
 
 async function resolveUserById(userId: string): Promise<AuthUser | null> {
   const [row] = await db

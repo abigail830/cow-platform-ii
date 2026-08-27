@@ -17,7 +17,7 @@ import {
 import {
   agentConversationStreamPath,
   toAgentInstanceId,
-} from '../shared/agent-instance-id.ts';
+} from '../shared/model/agent-instance-id.ts';
 import { countSessionTurnsFromSubmissions } from './session-explorer-turn-count.ts';
 
 const sessionExplorer = new Hono();

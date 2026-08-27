@@ -15,9 +15,9 @@ import {
   type BuiltinAgentOverride,
   type ResolvedBuiltinAgent,
 } from './resolve-workflow-agent.ts';
-import { outboundFetch } from '../shared/outbound-fetch.ts';
-import { callModelChatCompletion } from '../services/model-chat-completions.ts';
-import { resolveModelCliParams } from '../services/model-cli-params.ts';
+import { outboundFetch } from '../shared/lib/outbound-fetch.ts';
+import { callModelChatCompletion } from '../services/models/model-chat-completions.ts';
+import { resolveModelCliParams } from '../services/models/model-cli-params.ts';
 
 const AUDIT_CONTENT_MAX = 8000;
 const LLM_TIMEOUT_MS = Number(process.env.SYNC_AGENT_TIMEOUT_MS ?? 120_000);

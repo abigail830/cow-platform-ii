@@ -1,7 +1,7 @@
 import { eq, inArray, and } from 'drizzle-orm';
 import { appAudioChannels, appResourceGrants, appUsers, db } from '../db/index.ts';
 import { loadUserAccessProfile } from './rbac.ts';
-import type { AudioChannelNode } from '../services/audios.ts';
+import type { AudioChannelNode } from '../services/audio/audios.ts';
 import {
   buildChannelAncestorChain,
   filterChannelTreeWithAccess,
@@ -161,7 +161,7 @@ export async function buildAudioChannelTreeForUser(
 }
 
 export async function getAudioChannelIdForAudio(audioId: string): Promise<string | null> {
-  const { getAudioById } = await import('../services/audios.ts');
+  const { getAudioById } = await import('../services/audio/audios.ts');
   const audio = await getAudioById(audioId);
   return audio?.channelId ?? null;
 }

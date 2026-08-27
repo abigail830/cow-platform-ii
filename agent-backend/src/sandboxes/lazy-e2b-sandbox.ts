@@ -1,7 +1,7 @@
 import { createSandboxSessionEnv } from '@flue/runtime';
 import type { FileStat, SandboxApi, SandboxFactory, SessionEnv } from '@flue/runtime';
 import type { Sandbox as E2BSandbox } from 'e2b';
-import { createPublishArtifactAgentTool } from '../shared/publish-artifact-tools.ts';
+import { createPublishArtifactAgentTool } from '../shared/session/publish-artifact-tools.ts';
 import { E2BSandboxApi } from './e2b.ts';
 import type { E2bAcquireOptions } from './e2b-session-manager.ts';
 import { e2bSessionManager } from './e2b-session-manager.ts';

@@ -13,14 +13,14 @@ import {
   listEvalRunProcessingOptions,
   listEvalRuns,
   startEvalRun,
-} from '../../services/eval-runs.ts';
+} from '../../services/eval/eval-runs.ts';
 import {
   deleteEvalDatasetItem,
   finalizeEvalDatasetItemUpload,
   initEvalDatasetItemUpload,
   listEvalDatasetItems,
-} from '../../services/eval-datasets.ts';
-import { formatEvalDatasetDbError } from '../../services/eval-dataset-db-error.ts';
+} from '../../services/eval/eval-datasets.ts';
+import { formatEvalDatasetDbError } from '../../services/eval/eval-dataset-db-error.ts';
 import { isStorageEnabled } from '../../storage/s3-config.ts';
 import { StorageNotConfiguredError } from '../../storage/s3-client.ts';
 
@@ -137,7 +137,7 @@ runs.post(
 
     try {
       const attemptId = c.req.query('attempt_id')?.trim() || undefined;
-      const { retryEvalRunJudgeJob } = await import('../../services/eval-run-judge.ts');
+      const { retryEvalRunJudgeJob } = await import('../../services/eval/eval-run-judge.ts');
       await retryEvalRunJudgeJob(id, datasetItemId, attemptId);
       const detail = await getEvalRunDetail(id);
       return c.json(detail, 202);

@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
 import { routeParam } from '../../http/route-param.ts';
-import { buildEvalJudgeJobContext, getEvalJudgeJobById, updateEvalJudgeJob } from '../../services/eval-judge-jobs.ts';
-import { finalizeEvalJudgeJobFromWorker } from '../../services/eval-run-judge.ts';
+import { buildEvalJudgeJobContext, getEvalJudgeJobById, updateEvalJudgeJob } from '../../services/eval/eval-judge-jobs.ts';
+import { finalizeEvalJudgeJobFromWorker } from '../../services/eval/eval-run-judge.ts';
 import type { EvalRunJudgeStatus } from '../../db/index.ts';
 
 const evalJudgeJobs = new Hono();

@@ -9,7 +9,7 @@ import {
   getAsrHotwordById,
   listAsrHotwords,
   updateAsrHotword,
-} from '../../services/asr-hotwords.ts';
+} from '../../services/audio/asr-hotwords.ts';
 
 const asrHotwords = new Hono();
 

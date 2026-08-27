@@ -3,7 +3,7 @@ import { loadAllAgentSpecs } from './discover.ts';
 import { warmCatalogAgentRuntimes } from './resolve-agent-runtime.ts';
 import { getAgentRegistry, initAgentRegistry } from './registry.ts';
 import { loadStudioAgentRows, studioRowToLoadedSpec } from './studio-spec.ts';
-import { refreshModelConfigCache } from '../shared/model-registry.ts';
+import { refreshModelConfigCache } from '../shared/model/model-registry.ts';
 
 let booted = false;
 let bootPromise: Promise<void> | null = null;

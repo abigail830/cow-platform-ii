@@ -7,8 +7,8 @@ import {
   markCaptureForJobStage,
   updateCapturePipelineJob,
   type CapturePipelineJobStage,
-} from '../../services/audio-capture-pipeline-jobs.ts';
-import { spawnCapturePostProcessWorker } from '../../services/audio-capture-pipeline-runner.ts';
+} from '../../services/audio/audio-capture-pipeline-jobs.ts';
+import { spawnCapturePostProcessWorker } from '../../services/audio/audio-capture-pipeline-runner.ts';
 
 const audioCapturePipelineJobs = new Hono();
 

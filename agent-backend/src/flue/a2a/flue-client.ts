@@ -1,6 +1,6 @@
 import { createFlueClient } from '@flue/sdk';
 import { signToken } from '../../auth/jwt.ts';
-import { toAgentInstanceId } from '../../shared/agent-instance-id.ts';
+import { toAgentInstanceId } from '../../shared/model/agent-instance-id.ts';
 import { readPublicApiUrl } from './config.ts';
 import { ensureA2aConversation } from './conversation.ts';
 import { getA2aServiceUserId } from './service-user.ts';

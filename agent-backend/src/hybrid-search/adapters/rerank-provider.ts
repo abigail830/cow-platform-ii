@@ -1,4 +1,4 @@
-import { outboundFetch } from '../../shared/outbound-fetch.ts';
+import { outboundFetch } from '../../shared/lib/outbound-fetch.ts';
 
 export type RerankApiStyle = 'cohere_compatible' | 'openai_reranks' | 'dashscope_native';
 

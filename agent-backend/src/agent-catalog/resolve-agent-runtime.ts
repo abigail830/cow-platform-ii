@@ -1,7 +1,7 @@
-import { resolveAgentModel } from '../shared/resolve-agent-model.ts';
-import { resolveAgentThinkingLevel } from '../shared/resolve-agent-thinking-level.ts';
+import { resolveAgentModel } from '../shared/model/resolve-agent-model.ts';
+import { resolveAgentThinkingLevel } from '../shared/model/resolve-agent-thinking-level.ts';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import { createSessionFileTools } from '../shared/session-file-tools.ts';
+import { createSessionFileTools } from '../shared/session/session-file-tools.ts';
 import { getAgentRequestContext } from '../flue/agent-request-context.ts';
 import { augmentInstructionsWithAgentContext } from './agent-context.ts';
 import { connectAgentMcpTools } from './load-mcp.ts';

@@ -3,7 +3,7 @@ import { appUserDatasources, db } from '../db/index.ts';
 import {
   decryptModelConfigApiKey,
   sealModelConfigApiKeyForStorage,
-} from '../shared/model-config-secret.ts';
+} from '../shared/model/model-config-secret.ts';
 import {
   DEFAULT_MAX_ROWS,
   DEFAULT_STATEMENT_TIMEOUT_MS,

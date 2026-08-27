@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { appUserPreferences, db } from '../../db/index.ts';
-import { getDefaultModelConfig } from '../../shared/model-config-store.ts';
+import { getDefaultModelConfig } from '../../shared/model/model-config-store.ts';
 import {
   DEFAULT_HYBRID_SEARCH_PREFERENCES,
   HYBRID_SEARCH_PREF_KEY,

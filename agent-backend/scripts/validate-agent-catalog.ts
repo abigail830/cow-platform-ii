@@ -5,7 +5,7 @@ import { discoverAgentDirectories, loadAgentSpec } from '../src/agent-catalog/di
 import { agentCatalogRoot, resolveCatalogPath } from '../src/agent-catalog/paths.ts';
 import { resolveMcpServerUrl } from '../src/agent-catalog/load-mcp.ts';
 import { closePool } from '../src/db/pool.ts';
-import { getModelConfigByName } from '../src/shared/model-config-store.ts';
+import { getModelConfigByName } from '../src/shared/model/model-config-store.ts';
 
 const CHAT_AGENT_API_TYPES = new Set(['chat-completions']);
 

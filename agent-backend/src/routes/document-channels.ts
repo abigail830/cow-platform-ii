@@ -16,7 +16,7 @@ import {
   getChannelById,
   listChannelTree,
   updateChannel,
-} from '../services/documents.ts';
+} from '../services/documents/documents.ts';
 
 const channels = new Hono();
 
@@ -26,8 +26,8 @@ channels.get(
   '/processing-options',
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
-    const { listPipelineConfigs } = await import('../shared/pipeline-config-store.ts');
-    const { isDocumentAsyncPipelineName } = await import('../services/pipeline-jobs.ts');
+    const { listPipelineConfigs } = await import('../shared/pipeline/pipeline-config-store.ts');
+    const { isDocumentAsyncPipelineName } = await import('../services/pipeline/pipeline-jobs.ts');
 
     const { pipelines } = await listPipelineConfigs({ enabledOnly: true, limit: 100 });
     const documentPipelines = pipelines.filter((pipeline) =>

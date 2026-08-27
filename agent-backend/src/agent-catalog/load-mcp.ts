@@ -10,7 +10,7 @@ import {
   createAgentRequestForwardingFetch,
   getAgentRequestContext,
 } from '../flue/agent-request-context.ts';
-import { decryptModelConfigApiKey } from '../shared/model-config-secret.ts';
+import { decryptModelConfigApiKey } from '../shared/model/model-config-secret.ts';
 import type { LoadedAgentSpec, McpServerYaml } from './schema.ts';
 
 const connectionCache = new Map<string, McpServerConnection[]>();

@@ -34,10 +34,10 @@ import {
   getAudioPublicById,
   getAudioStats,
   listAudios,
-} from '../services/audios.ts';
-import { autoStartAudioPipelineAfterUpload } from '../services/auto-audio-pipeline.ts';
-import { startAudioPipeline } from '../services/audio-pipeline-runner.ts';
-import { isTranscriptSourceMetadata } from '../services/capture-transcript-upload.ts';
+} from '../services/audio/audios.ts';
+import { autoStartAudioPipelineAfterUpload } from '../services/pipeline/auto-audio-pipeline.ts';
+import { startAudioPipeline } from '../services/audio/audio-pipeline-runner.ts';
+import { isTranscriptSourceMetadata } from '../services/capture/capture-transcript-upload.ts';
 
 const audios = new Hono();
 

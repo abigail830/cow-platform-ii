@@ -7,8 +7,8 @@ import {
   markDocumentForJobStage,
   updatePipelineJob,
   type PipelineJobStage,
-} from '../../services/pipeline-jobs.ts';
-import { spawnAsyncPipelineWorker } from '../../services/pipeline-runner.ts';
+} from '../../services/pipeline/pipeline-jobs.ts';
+import { spawnAsyncPipelineWorker } from '../../services/pipeline/pipeline-runner.ts';
 
 const pipelineJobs = new Hono();
 

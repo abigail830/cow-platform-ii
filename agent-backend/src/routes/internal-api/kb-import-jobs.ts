@@ -6,7 +6,7 @@ import {
   getKbImportJobById,
   updateKbImportJob,
   type KbImportJobStatus,
-} from '../../services/knowledge-bases.ts';
+} from '../../services/kb/knowledge-bases.ts';
 
 const kbImportJobs = new Hono();
 

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
-import { resolveModelCliParams } from '../../services/model-cli-params.ts';
+import { resolveModelCliParams } from '../../services/models/model-cli-params.ts';
 
 const models = new Hono();
 

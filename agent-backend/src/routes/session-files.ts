@@ -2,11 +2,11 @@ import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
 import { getUser, requireAuth } from '../auth/jwt.ts';
 import { ownsConversation } from '../auth/permissions.ts';
-import { conversationIdFromInstanceId } from '../shared/agent-instance-id.ts';
+import { conversationIdFromInstanceId } from '../shared/model/agent-instance-id.ts';
 import {
   completeSessionFileBlobUpload,
   initSessionFileUpload,
-} from '../services/session-file-upload.ts';
+} from '../services/session/session-file-upload.ts';
 import {
   deleteSessionFile,
   listSessionFileItems,

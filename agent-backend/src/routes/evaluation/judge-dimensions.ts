@@ -9,7 +9,7 @@ import {
   getEvalJudgeScenarioRowById,
   listEvalJudgeScenarioRows,
   updateEvalJudgeScenario,
-} from '../../shared/eval-judge-scenario-store.ts';
+} from '../../shared/eval/eval-judge-scenario-store.ts';
 
 const judgeDimensions = new Hono();
 

@@ -35,22 +35,22 @@ import {
   listAudioCaptures,
   reorderCaptureSegments,
   updateAudioCapture,
-} from '../services/audio-captures.ts';
-import { createAudioRecord } from '../services/audios.ts';
-import { autoStartAudioPipelineAfterUpload } from '../services/auto-audio-pipeline.ts';
-import { startCapturePostProcess } from '../services/audio-capture-pipeline-runner.ts';
+} from '../services/capture/audio-captures.ts';
+import { createAudioRecord } from '../services/audio/audios.ts';
+import { autoStartAudioPipelineAfterUpload } from '../services/pipeline/auto-audio-pipeline.ts';
+import { startCapturePostProcess } from '../services/audio/audio-capture-pipeline-runner.ts';
 import {
   AUDIO_CAPTURE_AUDIENCES,
   AUDIO_CAPTURE_INPUT_MODES,
   AUDIO_CAPTURE_RECORDING_MODES,
 } from '../db/schema.ts';
-import { initAudioSegmentUpload } from '../services/capture-audio-upload.ts';
+import { initAudioSegmentUpload } from '../services/capture/capture-audio-upload.ts';
 import {
   completeTranscriptSegmentDirectUpload,
   completeTranscriptSegmentUpload,
   createAndAttachTranscriptSegment,
   initTranscriptSegmentUpload,
-} from '../services/capture-transcript-upload.ts';
+} from '../services/capture/capture-transcript-upload.ts';
 
 const audioCaptures = new Hono();
 

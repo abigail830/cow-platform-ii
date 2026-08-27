@@ -16,7 +16,7 @@ import {
   setSessionFileContentCacheKey,
 } from './repository.ts';
 import type { SessionFileListItem, SessionFileRecord } from './types.ts';
-import { extractSessionFileText } from '../../shared/session-file-extract.ts';
+import { extractSessionFileText } from '../../shared/session/session-file-extract.ts';
 import {
   blobContentCacheKey,
   blobOriginalKey,

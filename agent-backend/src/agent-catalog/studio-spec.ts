@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { join } from 'node:path';
-import { agentAssetsRoot } from '../agent-catalog/paths.ts';
-import type { LoadedAgentSpec, SandboxYaml } from '../agent-catalog/schema.ts';
-import { a2aYamlSchema, sandboxSchema } from '../agent-catalog/schema.ts';
+import { agentAssetsRoot } from './paths.ts';
+import type { LoadedAgentSpec, SandboxYaml } from './schema.ts';
+import { a2aYamlSchema, sandboxSchema } from './schema.ts';
 import { appModelConfigs, appStudioAgents, db } from '../db/index.ts';
 
 export type StudioAgentRow = typeof appStudioAgents.$inferSelect;

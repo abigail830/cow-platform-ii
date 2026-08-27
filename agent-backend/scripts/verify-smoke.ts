@@ -1,7 +1,7 @@
 import './load-env.ts';
 import { createFlueClient } from '@flue/sdk';
 import { getPool, closePool } from '../src/db/pool.ts';
-import { toAgentInstanceId } from '../src/shared/agent-instance-id.ts';
+import { toAgentInstanceId } from '../src/shared/model/agent-instance-id.ts';
 
 const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:8787';
 const EMAIL = process.env.SMOKE_EMAIL ?? 'user@example.com';

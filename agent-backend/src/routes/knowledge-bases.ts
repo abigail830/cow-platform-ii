@@ -13,7 +13,7 @@ import {
   handlePutResourceAccess,
   handleTransferResourceOwner,
 } from './resource-access-handlers.ts';
-import { spawnKbImportWorker } from '../services/kb-import-runner.ts';
+import { spawnKbImportWorker } from '../services/kb/kb-import-runner.ts';
 import {
   batchDraftKbFaqs,
   batchPublishKbFaqs,
@@ -26,12 +26,12 @@ import {
   startKbFaqExtractJob,
   startKbFaqIndexJob,
   updateKbFaq,
-} from '../services/kb-faqs.ts';
+} from '../services/kb/kb-faqs.ts';
 import {
   deleteKbChunksForDocument,
   listIndexedDocuments,
   listKbChunksForDocument,
-} from '../services/kb-chunks.ts';
+} from '../services/kb/kb-chunks.ts';
 import {
   createKnowledgeBase,
   deleteKnowledgeBase,
@@ -51,7 +51,7 @@ import {
   toKbImportJobPublic,
   updateKnowledgeBase,
   type KnowledgeBaseType,
-} from '../services/knowledge-bases.ts';
+} from '../services/kb/knowledge-bases.ts';
 
 const knowledgeBases = new Hono();
 
@@ -67,7 +67,7 @@ knowledgeBases.get(
     'read',
   ),
   async (c) => {
-    const { listRagPipelineOptions } = await import('../shared/rag-pipeline-binding.ts');
+    const { listRagPipelineOptions } = await import('../shared/kb/rag-pipeline-binding.ts');
     const options = await listRagPipelineOptions();
     return c.json(options);
   },
@@ -81,7 +81,7 @@ knowledgeBases.get(
     'read',
   ),
   async (c) => {
-    const { listFaqPipelineOptions } = await import('../shared/faq-pipeline-binding.ts');
+    const { listFaqPipelineOptions } = await import('../shared/kb/faq-pipeline-binding.ts');
     const options = await listFaqPipelineOptions();
     return c.json(options);
   },

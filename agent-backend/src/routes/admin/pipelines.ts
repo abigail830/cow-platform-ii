@@ -3,15 +3,15 @@ import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rb
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
-import { readCliPackagedDefaultConfigYaml } from '../../shared/cli-workflow-defaults.ts';
-import { normalizePipelineConfigYaml } from '../../shared/pipeline-config-yaml.ts';
+import { readCliPackagedDefaultConfigYaml } from '../../shared/pipeline/cli-workflow-defaults.ts';
+import { normalizePipelineConfigYaml } from '../../shared/pipeline/pipeline-config-yaml.ts';
 import {
   createPipelineConfig,
   deletePipelineConfig,
   getPipelineConfigById,
   listPipelineConfigs,
   updatePipelineConfig,
-} from '../../shared/pipeline-config-store.ts';
+} from '../../shared/pipeline/pipeline-config-store.ts';
 
 const pipelines = new Hono();
 

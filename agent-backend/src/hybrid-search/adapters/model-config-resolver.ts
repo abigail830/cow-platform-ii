@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { appModelConfigs, db } from '../../db/index.ts';
-import { resolveModelCliParams } from '../../services/model-cli-params.ts';
+import { resolveModelCliParams } from '../../services/models/model-cli-params.ts';
 import type { ModelConfigResolver, ModelConnection } from '../ports.ts';
 
 function toConnection(

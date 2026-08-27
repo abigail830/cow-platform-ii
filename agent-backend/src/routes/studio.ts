@@ -34,7 +34,7 @@ import { reloadFlueRuntimeFromRegistry } from '../flue-vercel-init.ts';
 import {
   hasStoredModelConfigApiKey,
   sealModelConfigApiKeyForStorage,
-} from '../shared/model-config-secret.ts';
+} from '../shared/model/model-config-secret.ts';
 import {
   assertDatasourceIdsOwnedByUser,
   createDatasourceForUser,

@@ -5,23 +5,23 @@ import {
   batchInsertKbChunks,
   deleteKbChunksForDocument,
   type KbChunkBatchItem,
-} from '../../services/kb-chunks.ts';
+} from '../../services/kb/kb-chunks.ts';
 import {
   upsertKbChunkDocumentFromWorker,
   type KbChunkDocumentIndexStatus,
-} from '../../services/kb-chunk-documents.ts';
+} from '../../services/kb/kb-chunk-documents.ts';
 import {
   getKbWorkerConfig,
   getKnowledgeBaseById,
   upsertKbItemFromWorker,
   type KbItemImportStatus,
-} from '../../services/knowledge-bases.ts';
+} from '../../services/kb/knowledge-bases.ts';
 import {
   batchCreateKbFaqsFromWorker,
   getKbFaqsForWorker,
   refreshFaqDocMetadataForIndex,
   updateKbFaqFromWorker,
-} from '../../services/kb-faqs.ts';
+} from '../../services/kb/kb-faqs.ts';
 
 const knowledgeBasesInternal = new Hono();
 

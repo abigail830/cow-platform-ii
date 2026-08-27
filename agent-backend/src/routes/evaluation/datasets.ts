@@ -14,8 +14,8 @@ import {
   listEvalDatasetItems,
   listEvalDatasets,
   updateEvalDataset,
-} from '../../services/eval-datasets.ts';
-import { formatEvalDatasetDbError } from '../../services/eval-dataset-db-error.ts';
+} from '../../services/eval/eval-datasets.ts';
+import { formatEvalDatasetDbError } from '../../services/eval/eval-dataset-db-error.ts';
 import { isStorageEnabled } from '../../storage/s3-config.ts';
 import { StorageNotConfiguredError } from '../../storage/s3-client.ts';
 

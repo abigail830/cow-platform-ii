@@ -6,9 +6,9 @@ import {
   getEvalRunItemById,
   markEvalRunItemForJobStage,
   updateEvalRunItem,
-} from '../../services/eval-pipeline-jobs.ts';
-import { resolveEvalPipelineJobErrorMessage } from '../../services/eval-pipeline-jobs.ts';
-import { spawnAsyncEvalPipelineWorker } from '../../services/eval-pipeline-runner.ts';
+} from '../../services/eval/eval-pipeline-jobs.ts';
+import { resolveEvalPipelineJobErrorMessage } from '../../services/eval/eval-pipeline-jobs.ts';
+import { spawnAsyncEvalPipelineWorker } from '../../services/eval/eval-pipeline-runner.ts';
 import type { EvalRunItemStage } from '../../db/index.ts';
 
 const evalPipelineJobs = new Hono();

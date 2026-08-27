@@ -4,14 +4,14 @@
  * Run: cd agent-backend && npm run verify:eval-pipeline-dispatch
  */
 import './load-env.ts';
-import { getPipelineConfigByPipelineName } from '../src/shared/pipeline-config-store.ts';
+import { getPipelineConfigByPipelineName } from '../src/shared/pipeline/pipeline-config-store.ts';
 import {
   normalizeAsyncWorkerCliArgs,
   parseAsyncWorkerTemplate,
   pipelineTemplateToCliArgs,
-} from '../src/shared/pipeline-command-template.ts';
-import { resolveAudioPipelineGithubConfig } from '../src/services/audio-pipeline-github-actions.ts';
-import { defaultAudioPipelineWorkflowFile } from '../src/services/audio-pipeline-jobs.ts';
+} from '../src/shared/pipeline/pipeline-command-template.ts';
+import { resolveAudioPipelineGithubConfig } from '../src/services/audio/audio-pipeline-github-actions.ts';
+import { defaultAudioPipelineWorkflowFile } from '../src/services/audio/audio-pipeline-jobs.ts';
 
 const TEST_JOB_ID = '00000000-0000-0000-0000-000000000001';
 const PIPELINES = ['aliyun-fun-asr-transcribe', 'aliyun-qwen-audio-transcribe'] as const;
