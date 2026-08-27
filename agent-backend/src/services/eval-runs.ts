@@ -2,6 +2,7 @@ import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   appEvalDatasetItems,
   appEvalRunComparisons,
+  appEvalRunJudgeJobs,
   appEvalRunItems,
   appEvalRunAttempts,
   appEvalRunVariants,
@@ -22,6 +23,10 @@ import { getStorageReadUrl } from '../storage/document-files.ts';
 import { shouldFailStaleAudioJob } from './audio-pipeline-stale.ts';
 import { startEvalRunComparePhase } from './eval-run-compare.ts';
 import {
+  migrateEvalRunComparePhaseToJudge,
+  startEvalRunJudgePhase,
+} from './eval-run-judge.ts';
+import {
   createEvalRunAttempt,
   getLatestEvalRunAttempt,
   listEvalRunAttempts,
@@ -33,6 +38,7 @@ import {
   DEFAULT_EVAL_JUDGE_SCENARIO_ID,
   snapshotEvalJudgeDimensions,
 } from './eval-judge-dimensions.ts';
+import { snapshotEvalJudgeConfigYaml } from '../shared/eval-judge-workflow.ts';
 
 const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
   'Worker exited without updating job status (check GitHub Actions logs).';
@@ -234,6 +240,7 @@ export async function createEvalRun(input: {
               {
                 scenario_id: DEFAULT_EVAL_JUDGE_SCENARIO_ID,
                 dimensions: snapshotEvalJudgeDimensions(),
+                config_yaml: snapshotEvalJudgeConfigYaml(),
               },
             ]
           : null,
@@ -307,6 +314,7 @@ export async function startEvalRun(runId: string, options?: { runMode?: EvalRunM
                 {
                   scenario_id: DEFAULT_EVAL_JUDGE_SCENARIO_ID,
                   dimensions: snapshotEvalJudgeDimensions(),
+                  config_yaml: snapshotEvalJudgeConfigYaml(),
                 },
               ]
             : null,
@@ -400,14 +408,14 @@ export async function maybeFinalizeEvalRunPhase(runId: string): Promise<void> {
   if (!run || run.status !== 'running') return;
 
   if (run.phase === 'comparing') {
-    const { maybeFinalizeEvalRunComparePhase } = await import('./eval-run-compare.ts');
-    await maybeFinalizeEvalRunComparePhase(runId);
+    const { reconcileAndResumeEvalRunComparePhase } = await import('./eval-run-compare.ts');
+    await reconcileAndResumeEvalRunComparePhase(runId);
     return;
   }
 
   if (run.phase === 'judging') {
-    const { maybeFinalizeEvalRunJudgePhase } = await import('./eval-run-judge.ts');
-    await maybeFinalizeEvalRunJudgePhase(runId);
+    const { reconcileAndResumeEvalRunJudgePhase } = await import('./eval-run-judge.ts');
+    await reconcileAndResumeEvalRunJudgePhase(runId);
     return;
   }
 
@@ -426,7 +434,17 @@ export async function maybeFinalizeEvalRunPhase(runId: string): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(appEvalRuns.id, runId));
+
+    if (run.judgeEnabled) {
+      await startEvalRunJudgePhase(runId, attempt?.id);
+      const { reconcileAndResumeEvalRunJudgePhase } = await import('./eval-run-judge.ts');
+      await reconcileAndResumeEvalRunJudgePhase(runId);
+      return;
+    }
+
     await startEvalRunComparePhase(runId, attempt?.id);
+    const { reconcileAndResumeEvalRunComparePhase } = await import('./eval-run-compare.ts');
+    await reconcileAndResumeEvalRunComparePhase(runId);
     return;
   }
 
@@ -502,6 +520,14 @@ export async function getEvalRunDetail(runId: string) {
   if (!run) throw new Error('Eval run not found');
 
   await reconcileStaleEvalRunItems(runId);
+  await migrateEvalRunComparePhaseToJudge(runId);
+  const runAfterMigrate = await getEvalRunById(runId);
+  if (runAfterMigrate?.phase !== 'comparing' || !runAfterMigrate.judgeEnabled) {
+    const { reconcileAndResumeEvalRunComparePhase } = await import('./eval-run-compare.ts');
+    await reconcileAndResumeEvalRunComparePhase(runId);
+  }
+  const { reconcileAndResumeEvalRunJudgePhase } = await import('./eval-run-judge.ts');
+  await reconcileAndResumeEvalRunJudgePhase(runId);
   const refreshed = (await getEvalRunById(runId))!;
 
   const variants = await db
@@ -516,6 +542,11 @@ export async function getEvalRunDetail(runId: string) {
     .from(appEvalRunComparisons)
     .where(eq(appEvalRunComparisons.runId, runId));
 
+  const judgeJobs = await db
+    .select()
+    .from(appEvalRunJudgeJobs)
+    .where(eq(appEvalRunJudgeJobs.runId, runId));
+
   const datasetItems = await db
     .select()
     .from(appEvalDatasetItems)
@@ -527,6 +558,7 @@ export async function getEvalRunDetail(runId: string) {
     attempts.map(async (attempt) => {
       const attemptItems = items.filter((item) => item.attemptId === attempt.id);
       const attemptComparisons = comparisons.filter((row) => row.attemptId === attempt.id);
+      const attemptJudgeJobs = judgeJobs.filter((row) => row.attemptId === attempt.id);
       const enrichedItems = await Promise.all(
         attemptItems.map((item) =>
           enrichEvalRunItemPublic(
@@ -548,6 +580,24 @@ export async function getEvalRunDetail(runId: string) {
           error_message: row.errorMessage,
           updated_at: row.updatedAt.toISOString(),
         })),
+        judge_jobs: await Promise.all(
+          attemptJudgeJobs.map(async (row) => ({
+            id: row.id,
+            run_id: row.runId,
+            attempt_id: row.attemptId,
+            dataset_item_id: row.datasetItemId,
+            dataset_item_name: datasetItemById.get(row.datasetItemId)?.name ?? '',
+            scenario_id: row.scenarioId,
+            status: row.status,
+            error_message: row.errorMessage,
+            summary_metrics: row.summaryMetrics,
+            result_url:
+              row.status === 'done' && row.resultS3Key
+                ? await getStorageReadUrl(row.resultS3Key, 3600)
+                : null,
+            updated_at: row.updatedAt.toISOString(),
+          })),
+        ),
       };
     }),
   );
@@ -563,6 +613,9 @@ export async function getEvalRunDetail(runId: string) {
       : [],
     comparisons: latestAttempt
       ? attemptDetails.find((attempt) => attempt.id === latestAttempt.id)?.comparisons ?? []
+      : [],
+    judge_jobs: latestAttempt
+      ? attemptDetails.find((attempt) => attempt.id === latestAttempt.id)?.judge_jobs ?? []
       : [],
     dataset_items: datasetItems.map((row) => ({
       id: row.id,

@@ -10,7 +10,23 @@ import {
   type EvalRunJudgeStatus,
 } from '../db/index.ts';
 import { readStorageText } from '../storage/document-content.ts';
+import {
+  defaultEvalJudgeConfigYaml,
+  parseEvalJudgeModelName,
+} from '../shared/eval-judge-workflow.ts';
 import type { EvalJudgeDimensionDefinition } from './eval-judge-dimensions.ts';
+import { resolveModelCliParams } from './model-cli-params.ts';
+
+function evalJudgeConfigYamlFromRun(
+  judgeMetrics: Record<string, unknown>[] | null | undefined,
+): string {
+  const first = Array.isArray(judgeMetrics) ? judgeMetrics[0] : null;
+  if (first && typeof first === 'object' && typeof first.config_yaml === 'string') {
+    const trimmed = first.config_yaml.trim();
+    if (trimmed) return trimmed;
+  }
+  return defaultEvalJudgeConfigYaml();
+}
 
 export async function getEvalJudgeJobById(id: string) {
   const [row] = await db
@@ -75,6 +91,18 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     throw new Error('At least two successful transcripts are required for judge evaluation');
   }
 
+  const configYaml = evalJudgeConfigYamlFromRun(run.judgeMetrics as Record<string, unknown>[] | null);
+  const modelDisplayName = parseEvalJudgeModelName(configYaml);
+  const modelParams = await resolveModelCliParams({
+    modelName: modelDisplayName,
+    expectedApiType: 'chat-completions',
+  });
+  if (!modelParams.api_key || !modelParams.base_url) {
+    throw new Error(
+      `Model config "${modelDisplayName}" is missing api_key or base_url for eval judge (chat-completions)`,
+    );
+  }
+
   return {
     job_id: job.id,
     run_id: job.runId,
@@ -84,8 +112,14 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     scenario_id: job.scenarioId,
     dimensions: job.dimensionsSnapshot as EvalJudgeDimensionDefinition[],
     transcripts,
+    config_yaml: configYaml,
     llm: {
-      model: process.env.EVAL_JUDGE_MODEL?.trim() || process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini',
+      model_config_id: modelParams.model_id,
+      config_name: modelParams.config_name,
+      api_type: modelParams.api_type,
+      base_url: modelParams.base_url,
+      model_name: modelParams.model_name,
+      api_key: modelParams.api_key,
     },
   };
 }

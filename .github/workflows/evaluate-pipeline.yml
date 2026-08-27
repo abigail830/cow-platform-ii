@@ -128,8 +128,16 @@ jobs:
           OPENKMS_CLI_BASIC_PASSWORD: ${{ secrets.OPENKMS_CLI_BASIC_PASSWORD }}
         run: |
           JOB_ID="${{ inputs.job_id }}"
-          curl -fsS -X PATCH "${OPENKMS_API_URL%/}/internal-api/eval-pipeline/jobs/${JOB_ID}" \
+          ARGS_JSON='${{ inputs.worker_cli_args }}'
+          if [ -n "$ARGS_JSON" ] && [ "$ARGS_JSON" != "null" ] && echo "$ARGS_JSON" | python3 -c 'import json,sys; args=json.loads(sys.stdin.read()); sys.exit(0 if args and args[0]=="judge" else 1)' 2>/dev/null; then
+            PATCH_URL="${OPENKMS_API_URL%/}/internal-api/eval-judge/jobs/${JOB_ID}"
+            PAYLOAD='{"status":"failed","error_message":"GitHub Actions worker failed before eval judge completed"}'
+          else
+            PATCH_URL="${OPENKMS_API_URL%/}/internal-api/eval-pipeline/jobs/${JOB_ID}"
+            PAYLOAD='{"stage":"failed","error_message":"GitHub Actions worker failed before eval pipeline completed"}'
+          fi
+          curl -fsS -X PATCH "$PATCH_URL" \
             -u "${OPENKMS_CLI_BASIC_USER}:${OPENKMS_CLI_BASIC_PASSWORD}" \
             -H "Content-Type: application/json" \
-            -d '{"stage":"failed","error_message":"GitHub Actions worker failed before eval pipeline completed"}' \
-            || echo "::warning::Could not mark eval pipeline job as failed"
+            -d "$PAYLOAD" \
+            || echo "::warning::Could not mark eval worker job as failed"

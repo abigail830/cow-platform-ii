@@ -24,6 +24,8 @@ export type EvalRunMode = 'pipeline_only' | 'full';
 
 export type EvalRunCompareStatus = 'pending' | 'running' | 'done' | 'failed';
 
+export type EvalRunJudgeStatus = 'pending' | 'running' | 'done' | 'failed';
+
 export type EvalRun = {
   id: string;
   dataset_id: string;
@@ -88,6 +90,20 @@ export type EvalRunCompareRow = {
   updated_at: string;
 };
 
+export type EvalRunJudgeRow = {
+  id: string;
+  run_id: string;
+  attempt_id: string;
+  dataset_item_id: string;
+  dataset_item_name: string;
+  scenario_id: string;
+  status: EvalRunJudgeStatus;
+  error_message: string | null;
+  summary_metrics: Record<string, unknown> | null;
+  result_url: string | null;
+  updated_at: string;
+};
+
 export type EvalRunAttempt = {
   id: string;
   run_id: string;
@@ -106,6 +122,7 @@ export type EvalRunAttempt = {
   failed_compare_items: number;
   items: EvalRunItem[];
   comparisons: EvalRunCompareRow[];
+  judge_jobs: EvalRunJudgeRow[];
 };
 
 export type EvalRunDatasetItemRef = {
@@ -121,6 +138,7 @@ export type EvalRunDetail = {
   attempts: EvalRunAttempt[];
   items: EvalRunItem[];
   comparisons: EvalRunCompareRow[];
+  judge_jobs: EvalRunJudgeRow[];
   dataset_items: EvalRunDatasetItemRef[];
 };
 
@@ -186,7 +204,7 @@ export function formatEvalRunStatus(status: EvalRunStatus): string {
 export function formatEvalRunPhase(phase: string): string {
   if (phase === 'transcribing') return 'Transcribing';
   if (phase === 'comparing') return 'Comparing';
-  if (phase === 'judging') return 'Judging';
+  if (phase === 'judging') return 'Comparing';
   if (phase === 'done') return 'Done';
   return phase.charAt(0).toUpperCase() + phase.slice(1);
 }

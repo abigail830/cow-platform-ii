@@ -4,9 +4,11 @@ import {
   appEvalRunAttempts,
   appEvalRunItems,
   appEvalRunJudgeJobs,
+  appEvalRunVariants,
   appEvalRuns,
   db,
   type EvalRunJudgeStatus,
+  type EvalRunStatus,
 } from '../db/index.ts';
 import { uploadAudioObject } from '../storage/audio-files.ts';
 import { buildEvalRunJudgeResultKey } from '../storage/eval-run-files.ts';
@@ -18,6 +20,11 @@ import {
 import { spawnAsyncEvalJudgeWorker } from './eval-judge-runner.ts';
 
 export const EVAL_RUN_DEFAULT_JUDGE_CONCURRENCY = 2;
+
+/** Judge runs on GHA; reset stale `running` rows so reconcile can re-dispatch. */
+const EVAL_JUDGE_STALE_MS = Number(process.env.EVAL_JUDGE_STALE_MS ?? 45 * 60 * 1000);
+
+const EVAL_JUDGE_DISPATCH_BATCH = Number(process.env.EVAL_JUDGE_DISPATCH_BATCH ?? 2);
 
 function isTerminalJudgeStatus(status: string): boolean {
   return status === 'done' || status === 'failed';
@@ -32,8 +39,17 @@ function computeJudgeCompletion(jobs: Array<{ status: string }>) {
     else if (job.status === 'failed') failed += 1;
     else if (!isTerminalJudgeStatus(job.status)) return null;
   }
-  const status = failed > 0 && completed === 0 ? 'failed' : 'completed';
-  return { completed, failed, status: status as 'completed' | 'failed' };
+
+  let status: EvalRunStatus;
+  if (completed === 0) {
+    status = 'failed';
+  } else if (failed > 0) {
+    status = 'completed_with_errors';
+  } else {
+    status = 'completed';
+  }
+
+  return { completed, failed, total: jobs.length, status };
 }
 
 export async function dispatchEvalRunJudgeJobsWithConcurrency(
@@ -62,6 +78,29 @@ export async function dispatchEvalRunJudgeJobsWithConcurrency(
   await Promise.all(workers);
 }
 
+async function syncTranscribeCountsOnRun(runId: string, attemptId: string): Promise<void> {
+  const items = await db
+    .select()
+    .from(appEvalRunItems)
+    .where(eq(appEvalRunItems.attemptId, attemptId));
+  let completedRunItems = 0;
+  let failedRunItems = 0;
+  for (const item of items) {
+    if (item.stage === 'done') completedRunItems += 1;
+    else if (item.stage === 'failed' || item.stage === 'cancelled') failedRunItems += 1;
+  }
+
+  await db
+    .update(appEvalRuns)
+    .set({ completedRunItems, failedRunItems, updatedAt: new Date() })
+    .where(eq(appEvalRuns.id, runId));
+
+  await db
+    .update(appEvalRunAttempts)
+    .set({ completedRunItems, failedRunItems, updatedAt: new Date() })
+    .where(eq(appEvalRunAttempts.id, attemptId));
+}
+
 export async function startEvalRunJudgePhase(
   runId: string,
   attemptId?: string,
@@ -80,6 +119,24 @@ export async function startEvalRunJudgePhase(
         .limit(1)
     )[0]?.id;
   if (!resolvedAttemptId) return;
+
+  const [existingJob] = await db
+    .select({ id: appEvalRunJudgeJobs.id })
+    .from(appEvalRunJudgeJobs)
+    .where(eq(appEvalRunJudgeJobs.attemptId, resolvedAttemptId))
+    .limit(1);
+  if (existingJob) {
+    await syncTranscribeCountsOnRun(runId, resolvedAttemptId);
+    await db
+      .update(appEvalRuns)
+      .set({ phase: 'judging', status: 'running', updatedAt: new Date() })
+      .where(eq(appEvalRuns.id, runId));
+    await db
+      .update(appEvalRunAttempts)
+      .set({ phase: 'judging', status: 'running', updatedAt: new Date() })
+      .where(eq(appEvalRunAttempts.id, resolvedAttemptId));
+    return;
+  }
 
   const scenarioId =
     (Array.isArray(run.judgeMetrics) &&
@@ -114,33 +171,37 @@ export async function startEvalRunJudgePhase(
       return doneCount >= scenario.min_variants;
     });
 
+  await syncTranscribeCountsOnRun(runId, resolvedAttemptId);
+
   if (eligibleDatasetItemIds.length === 0) {
     await db
       .update(appEvalRuns)
-      .set({ phase: 'done', status: 'completed', updatedAt: new Date() })
+      .set({ phase: 'done', status: 'failed', updatedAt: new Date() })
       .where(eq(appEvalRuns.id, runId));
+    const { syncEvalRunAttemptFromRun } = await import('./eval-run-attempts.ts');
+    await syncEvalRunAttemptFromRun(resolvedAttemptId, runId);
     return;
   }
 
-  const judgeRows = await db
-    .insert(appEvalRunJudgeJobs)
-    .values(
-      eligibleDatasetItemIds.map((datasetItemId) => ({
-        runId,
-        attemptId: resolvedAttemptId,
-        datasetItemId,
-        scenarioId,
-        dimensionsSnapshot: dimensions,
-        status: 'pending' as EvalRunJudgeStatus,
-      })),
-    )
-    .returning();
+  await db.insert(appEvalRunJudgeJobs).values(
+    eligibleDatasetItemIds.map((datasetItemId) => ({
+      runId,
+      attemptId: resolvedAttemptId,
+      datasetItemId,
+      scenarioId,
+      dimensionsSnapshot: dimensions,
+      status: 'pending' as EvalRunJudgeStatus,
+    })),
+  );
 
   await db
     .update(appEvalRuns)
     .set({
       phase: 'judging',
       status: 'running',
+      totalCompareItems: eligibleDatasetItemIds.length,
+      completedCompareItems: 0,
+      failedCompareItems: 0,
       updatedAt: new Date(),
     })
     .where(eq(appEvalRuns.id, runId));
@@ -150,11 +211,113 @@ export async function startEvalRunJudgePhase(
     .set({
       phase: 'judging',
       status: 'running',
+      totalCompareItems: eligibleDatasetItemIds.length,
+      completedCompareItems: 0,
+      failedCompareItems: 0,
       updatedAt: new Date(),
     })
     .where(eq(appEvalRunAttempts.id, resolvedAttemptId));
 
-  void dispatchEvalRunJudgeJobsWithConcurrency(judgeRows.map((row) => row.id));
+  // GHA dispatch is resumed on GET detail / reconcile — not fire-and-forget here (Vercel).
+}
+
+/** Full-mode runs stuck in legacy inline compare phase → start judge instead. */
+export async function migrateEvalRunComparePhaseToJudge(runId: string): Promise<void> {
+  const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
+  if (!run || run.status !== 'running' || run.phase !== 'comparing' || !run.judgeEnabled) return;
+
+  const attempt = (
+    await db
+      .select()
+      .from(appEvalRunAttempts)
+      .where(eq(appEvalRunAttempts.runId, runId))
+      .orderBy(desc(appEvalRunAttempts.attemptNumber))
+      .limit(1)
+  )[0];
+  if (!attempt) return;
+
+  await startEvalRunJudgePhase(runId, attempt.id);
+}
+
+async function syncEvalRunJudgeProgressCounts(runId: string, attemptId: string): Promise<void> {
+  const jobs = await db
+    .select()
+    .from(appEvalRunJudgeJobs)
+    .where(eq(appEvalRunJudgeJobs.attemptId, attemptId));
+
+  let completedCompareItems = 0;
+  let failedCompareItems = 0;
+  for (const job of jobs) {
+    if (job.status === 'done') completedCompareItems += 1;
+    else if (job.status === 'failed') failedCompareItems += 1;
+  }
+
+  await db
+    .update(appEvalRuns)
+    .set({
+      totalCompareItems: jobs.length,
+      completedCompareItems,
+      failedCompareItems,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRuns.id, runId));
+
+  await db
+    .update(appEvalRunAttempts)
+    .set({
+      totalCompareItems: jobs.length,
+      completedCompareItems,
+      failedCompareItems,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRunAttempts.id, attemptId));
+}
+
+export async function reconcileAndResumeEvalRunJudgePhase(runId: string): Promise<void> {
+  const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
+  if (!run || run.status !== 'running' || run.phase !== 'judging') return;
+
+  const attempt = (
+    await db
+      .select()
+      .from(appEvalRunAttempts)
+      .where(eq(appEvalRunAttempts.runId, runId))
+      .orderBy(desc(appEvalRunAttempts.attemptNumber))
+      .limit(1)
+  )[0];
+  if (!attempt) return;
+
+  const jobs = await db
+    .select()
+    .from(appEvalRunJudgeJobs)
+    .where(eq(appEvalRunJudgeJobs.attemptId, attempt.id));
+
+  const now = Date.now();
+  const pendingIds: string[] = [];
+  for (const job of jobs) {
+    if (job.status === 'pending') {
+      pendingIds.push(job.id);
+      continue;
+    }
+    if (job.status === 'running' && now - job.updatedAt.getTime() > EVAL_JUDGE_STALE_MS) {
+      await db
+        .update(appEvalRunJudgeJobs)
+        .set({ status: 'pending', errorMessage: null, updatedAt: new Date() })
+        .where(eq(appEvalRunJudgeJobs.id, job.id));
+      pendingIds.push(job.id);
+    }
+  }
+
+  await syncEvalRunJudgeProgressCounts(runId, attempt.id);
+
+  if (pendingIds.length === 0) {
+    await maybeFinalizeEvalRunJudgePhase(runId);
+    return;
+  }
+
+  const batch = pendingIds.slice(0, Math.max(1, EVAL_JUDGE_DISPATCH_BATCH));
+  await dispatchEvalRunJudgeJobsWithConcurrency(batch);
+  await maybeFinalizeEvalRunJudgePhase(runId);
 }
 
 export async function finalizeEvalJudgeJobFromWorker(input: {
@@ -190,6 +353,7 @@ export async function finalizeEvalJudgeJobFromWorker(input: {
     })
     .where(eq(appEvalRunJudgeJobs.id, input.jobId));
 
+  await syncEvalRunJudgeProgressCounts(job.runId, job.attemptId);
   await maybeFinalizeEvalRunJudgePhase(job.runId);
 }
 
@@ -223,12 +387,21 @@ export async function maybeFinalizeEvalRunJudgePhase(runId: string): Promise<voi
       status: completion.status,
       phase: 'done',
       summaryMetrics,
+      completedCompareItems: completion.completed,
+      failedCompareItems: completion.failed,
+      totalCompareItems: completion.total,
       updatedAt: new Date(),
     })
     .where(eq(appEvalRuns.id, runId));
 
   const { syncEvalRunAttemptFromRun } = await import('./eval-run-attempts.ts');
   await syncEvalRunAttemptFromRun(attempt.id, runId);
+
+  const variantStatus = completion.status === 'failed' ? 'failed' : 'done';
+  await db
+    .update(appEvalRunVariants)
+    .set({ status: variantStatus, updatedAt: new Date() })
+    .where(eq(appEvalRunVariants.runId, runId));
 }
 
 function aggregateJudgeSummaryMetrics(

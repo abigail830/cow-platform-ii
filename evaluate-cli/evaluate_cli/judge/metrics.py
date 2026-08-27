@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -18,25 +17,35 @@ class JudgeScore:
     reason: str
 
 
-def _model_name(context: dict[str, Any]) -> str | None:
+def _judge_model(context: dict[str, Any]):
     llm = context.get("llm") or {}
-    model = llm.get("model")
-    if isinstance(model, str) and model.strip():
-        return model.strip()
-    env_model = os.getenv("EVAL_JUDGE_MODEL") or os.getenv("OPENAI_MODEL")
-    return env_model.strip() if env_model else None
+    model_name = llm.get("model_name")
+    base_url = llm.get("base_url")
+    api_key = llm.get("api_key")
+    if not isinstance(model_name, str) or not model_name.strip():
+        raise RuntimeError("Eval judge context missing llm.model_name (resolve via config_yaml model_name)")
+    if not isinstance(base_url, str) or not base_url.strip():
+        raise RuntimeError("Eval judge context missing llm.base_url")
+    if not isinstance(api_key, str) or not api_key.strip():
+        raise RuntimeError("Eval judge context missing llm.api_key")
+
+    from deepeval.models import GPTModel
+
+    return GPTModel(
+        model=model_name.strip(),
+        base_url=base_url.strip(),
+        api_key=api_key.strip(),
+    )
 
 
-def _build_geval(name: str, criteria: str, params: list[LLMTestCaseParams], model: str | None) -> GEval:
-    kwargs: dict[str, Any] = {
-        "name": name,
-        "criteria": criteria,
-        "evaluation_params": params,
-        "threshold": 0.5,
-    }
-    if model:
-        kwargs["model"] = model
-    return GEval(**kwargs)
+def _build_geval(name: str, criteria: str, params: list[LLMTestCaseParams], context: dict[str, Any]) -> GEval:
+    return GEval(
+        name=name,
+        criteria=criteria,
+        evaluation_params=params,
+        threshold=0.5,
+        model=_judge_model(context),
+    )
 
 
 def score_variant_dimension(transcript: str, dimension: dict[str, Any], context: dict[str, Any]) -> JudgeScore:
@@ -44,7 +53,7 @@ def score_variant_dimension(transcript: str, dimension: dict[str, Any], context:
         dimension["label"],
         dimension["criteria"],
         [LLMTestCaseParams.ACTUAL_OUTPUT],
-        _model_name(context),
+        context,
     )
     test_case = LLMTestCase(input="", actual_output=transcript)
     metric.measure(test_case)
@@ -64,7 +73,7 @@ def score_pairwise_dimension(
         dimension["label"],
         dimension["criteria"],
         [LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
-        _model_name(context),
+        context,
     )
     test_case = LLMTestCase(input=transcript_a, actual_output=transcript_b)
     metric.measure(test_case)

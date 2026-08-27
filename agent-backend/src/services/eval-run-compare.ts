@@ -16,6 +16,11 @@ import { computeEvalRunCompareCompletion } from './eval-run-phase.ts';
 
 export const EVAL_RUN_DEFAULT_COMPARE_CONCURRENCY = 3;
 
+/** Compare runs inline on the backend (not GHA). Stale `running` rows are reset on detail reads. */
+const EVAL_COMPARE_STALE_MS = Number(process.env.EVAL_COMPARE_STALE_MS ?? 5 * 60 * 1000);
+
+const EVAL_COMPARE_RESUME_BATCH = Number(process.env.EVAL_COMPARE_RESUME_BATCH ?? 3);
+
 function wordCount(text: string): number {
   const trimmed = text.trim();
   if (!trimmed) return 0;
@@ -107,7 +112,102 @@ export async function runEvalRunCompare(comparisonId: string): Promise<void> {
       .where(eq(appEvalRunComparisons.id, comparisonId));
   }
 
+  await syncEvalRunCompareProgressCounts(comparison.runId, comparison.attemptId);
   await maybeFinalizeEvalRunComparePhase(comparison.runId);
+}
+
+async function syncEvalRunCompareProgressCounts(runId: string, attemptId: string): Promise<void> {
+  const comparisons = await db
+    .select()
+    .from(appEvalRunComparisons)
+    .where(eq(appEvalRunComparisons.attemptId, attemptId));
+
+  let completedCompareItems = 0;
+  let failedCompareItems = 0;
+  for (const row of comparisons) {
+    if (row.status === 'done') completedCompareItems += 1;
+    else if (row.status === 'failed') failedCompareItems += 1;
+  }
+
+  const items = await db
+    .select()
+    .from(appEvalRunItems)
+    .where(eq(appEvalRunItems.attemptId, attemptId));
+  let completedRunItems = 0;
+  let failedRunItems = 0;
+  for (const item of items) {
+    if (item.stage === 'done') completedRunItems += 1;
+    else if (item.stage === 'failed' || item.stage === 'cancelled') failedRunItems += 1;
+  }
+
+  await db
+    .update(appEvalRuns)
+    .set({
+      completedCompareItems,
+      failedCompareItems,
+      completedRunItems,
+      failedRunItems,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRuns.id, runId));
+
+  await db
+    .update(appEvalRunAttempts)
+    .set({
+      completedCompareItems,
+      failedCompareItems,
+      completedRunItems,
+      failedRunItems,
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRunAttempts.id, attemptId));
+}
+
+export async function reconcileAndResumeEvalRunComparePhase(runId: string): Promise<void> {
+  const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, runId)).limit(1);
+  if (!run || run.status !== 'running' || run.phase !== 'comparing') return;
+
+  const attempt = (
+    await db
+      .select()
+      .from(appEvalRunAttempts)
+      .where(eq(appEvalRunAttempts.runId, runId))
+      .orderBy(desc(appEvalRunAttempts.attemptNumber))
+      .limit(1)
+  )[0];
+  if (!attempt) return;
+
+  const comparisons = await db
+    .select()
+    .from(appEvalRunComparisons)
+    .where(eq(appEvalRunComparisons.attemptId, attempt.id));
+
+  const now = Date.now();
+  const pendingIds: string[] = [];
+  for (const row of comparisons) {
+    if (row.status === 'pending') {
+      pendingIds.push(row.id);
+      continue;
+    }
+    if (row.status === 'running' && now - row.updatedAt.getTime() > EVAL_COMPARE_STALE_MS) {
+      await db
+        .update(appEvalRunComparisons)
+        .set({ status: 'pending', errorMessage: null, updatedAt: new Date() })
+        .where(eq(appEvalRunComparisons.id, row.id));
+      pendingIds.push(row.id);
+    }
+  }
+
+  await syncEvalRunCompareProgressCounts(runId, attempt.id);
+
+  if (pendingIds.length === 0) {
+    await maybeFinalizeEvalRunComparePhase(runId);
+    return;
+  }
+
+  const batch = pendingIds.slice(0, Math.max(1, EVAL_COMPARE_RESUME_BATCH));
+  await dispatchEvalRunComparisonsWithConcurrency(batch, 1);
+  await maybeFinalizeEvalRunComparePhase(runId);
 }
 
 export async function dispatchEvalRunComparisonsWithConcurrency(
@@ -156,6 +256,13 @@ export async function startEvalRunComparePhase(
     )[0]?.id;
   if (!resolvedAttemptId) return;
 
+  const [existingComparison] = await db
+    .select({ id: appEvalRunComparisons.id })
+    .from(appEvalRunComparisons)
+    .where(eq(appEvalRunComparisons.attemptId, resolvedAttemptId))
+    .limit(1);
+  if (existingComparison) return;
+
   const datasetItems = await db
     .select({ id: appEvalDatasetItems.id })
     .from(appEvalDatasetItems)
@@ -176,6 +283,17 @@ export async function startEvalRunComparePhase(
     )
     .returning();
 
+  const attemptItems = await db
+    .select()
+    .from(appEvalRunItems)
+    .where(eq(appEvalRunItems.attemptId, resolvedAttemptId));
+  let completedRunItems = 0;
+  let failedRunItems = 0;
+  for (const item of attemptItems) {
+    if (item.stage === 'done') completedRunItems += 1;
+    else if (item.stage === 'failed' || item.stage === 'cancelled') failedRunItems += 1;
+  }
+
   await db
     .update(appEvalRuns)
     .set({
@@ -184,6 +302,8 @@ export async function startEvalRunComparePhase(
       totalCompareItems: comparisonRows.length,
       completedCompareItems: 0,
       failedCompareItems: 0,
+      completedRunItems,
+      failedRunItems,
       updatedAt: new Date(),
     })
     .where(eq(appEvalRuns.id, runId));
@@ -196,11 +316,13 @@ export async function startEvalRunComparePhase(
       totalCompareItems: comparisonRows.length,
       completedCompareItems: 0,
       failedCompareItems: 0,
+      completedRunItems,
+      failedRunItems,
       updatedAt: new Date(),
     })
     .where(eq(appEvalRunAttempts.id, resolvedAttemptId));
 
-  void dispatchEvalRunComparisonsWithConcurrency(comparisonRows.map((row) => row.id));
+  // Compare work is resumed on GET detail / reconcile — not fire-and-forget here (Vercel kills the process).
 }
 
 export async function maybeFinalizeEvalRunComparePhase(runId: string): Promise<void> {

@@ -17,6 +17,8 @@ import {
   type EvalRunDetail,
   type EvalRunCompareRow,
   type EvalRunCompareStatus,
+  type EvalRunJudgeRow,
+  type EvalRunJudgeStatus,
   type EvalRunItem,
   type EvalRunItemStage,
   type EvalRunMode,
@@ -156,12 +158,157 @@ function evalItemDurationLabel(item: EvalRunItem | undefined): string | null {
   return formatted || null;
 }
 
+function judgeStatusLabel(status: EvalRunJudgeStatus): string {
+  if (status === 'done') return 'Compared';
+  if (status === 'failed') return 'Compare failed';
+  if (status === 'running') return 'Comparing…';
+  return 'Pending';
+}
+
+function judgeStatusClass(status: EvalRunJudgeStatus): string {
+  if (status === 'done') return 'document-status-badge status-completed';
+  if (status === 'failed') return 'document-status-badge status-failed';
+  if (status === 'running') return 'document-status-badge status-running';
+  return 'document-status-badge';
+}
+
+function activeJudgeFileName(attempt: EvalRunAttempt): string | null {
+  const running = attempt.judge_jobs.find((row) => row.status === 'running');
+  if (running?.dataset_item_name) return running.dataset_item_name;
+  const pending = attempt.judge_jobs.find((row) => row.status === 'pending');
+  if (pending?.dataset_item_name) return pending.dataset_item_name;
+  return null;
+}
+
+function activeCompareFileName(attempt: EvalRunAttempt): string | null {
+  const running = attempt.comparisons.find((row) => row.status === 'running');
+  if (running?.dataset_item_name) return running.dataset_item_name;
+  const pending = attempt.comparisons.find((row) => row.status === 'pending');
+  if (pending?.dataset_item_name) return pending.dataset_item_name;
+  return null;
+}
+
 function attemptProgressLabel(attempt: EvalRunAttempt): string {
+  if (attempt.phase === 'judging' && attempt.status === 'running') {
+    const done =
+      attempt.judge_jobs.length > 0
+        ? attempt.judge_jobs.filter((row) => row.status === 'done').length
+        : attempt.completed_compare_items;
+    const total =
+      attempt.judge_jobs.length > 0
+        ? attempt.judge_jobs.length
+        : attempt.total_compare_items;
+    if (total === 0) return 'Comparing';
+    const active = activeJudgeFileName(attempt);
+    const progress = `${done}/${total} comparing`;
+    return active ? `${progress} · ${active}` : progress;
+  }
+  if (attempt.phase === 'comparing' && attempt.status === 'running') {
+    const done = attempt.completed_compare_items;
+    const total = attempt.total_compare_items;
+    if (total === 0) return 'Comparing';
+    const active = activeCompareFileName(attempt);
+    const progress = `${done}/${total} comparing`;
+    return active ? `${progress} · ${active}` : progress;
+  }
+  if (attempt.phase === 'judging' && attempt.status === 'running') {
+    return 'Comparing';
+  }
+
   const done = attempt.completed_run_items;
   const total = attempt.total_run_items;
   if (total === 0) return 'No items';
-  if (attempt.status === 'running') return `${done}/${total} in progress`;
+  if (attempt.status === 'running') {
+    if (attempt.phase === 'transcribing') return `${done}/${total} transcribing`;
+    return `${done}/${total} in progress`;
+  }
   return `${done}/${total} succeeded${attempt.failed_run_items ? ` · ${attempt.failed_run_items} failed` : ''}`;
+}
+
+function attemptStatusBadge(attempt: EvalRunAttempt): { label: string; className: string; showSpinner: boolean } {
+  if (attempt.status === 'running' && (attempt.phase === 'comparing' || attempt.phase === 'judging')) {
+    return {
+      label: `${formatEvalRunPhase(attempt.phase)}…`,
+      className: 'document-status-badge status-running eval-run-status-badge',
+      showSpinner: true,
+    };
+  }
+  return {
+    label: formatEvalRunStatus(attempt.status),
+    className: `document-status-badge eval-run-status-badge ${stageClass(attempt.status)}`,
+    showSpinner: false,
+  };
+}
+
+function EvalRunJudgeScores({
+  job,
+  variants,
+}: {
+  job: EvalRunJudgeRow | undefined;
+  variants: EvalRunDetail['variants'];
+}) {
+  if (!job?.summary_metrics || job.status !== 'done') return null;
+
+  const metrics = job.summary_metrics;
+  const variantScores = metrics.variant_scores as Record<
+    string,
+    Record<string, { label?: string; score?: number; reason?: string }>
+  > | undefined;
+  const pairwise = metrics.pairwise as Record<
+    string,
+    { label?: string; score?: number; winner?: string; winner_variant_id?: string | null; reason?: string }
+  > | undefined;
+
+  const variantById = new Map(variants.map((variant) => [variant.id, variant.display_name]));
+
+  return (
+    <div className="eval-run-judge-scores">
+      {variantScores && Object.keys(variantScores).length > 0 ? (
+        <div className="eval-run-judge-section">
+          <p className="eval-run-judge-section-title">Per pipeline</p>
+          <div className="eval-run-judge-score-grid">
+            {Object.entries(variantScores).map(([variantId, dimensions]) => (
+              <div key={variantId} className="eval-run-judge-score-card">
+                <p className="eval-run-judge-score-card-title">{variantById.get(variantId) ?? variantId}</p>
+                <ul className="eval-run-judge-dimension-list">
+                  {Object.entries(dimensions).map(([dimensionId, row]) => (
+                    <li key={dimensionId}>
+                      <span className="eval-run-judge-dimension-label">{row.label ?? dimensionId}</span>
+                      <span className="eval-run-judge-dimension-value">
+                        {typeof row.score === 'number' ? row.score.toFixed(2) : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {pairwise && Object.keys(pairwise).length > 0 ? (
+        <div className="eval-run-judge-section">
+          <p className="eval-run-judge-section-title">Pairwise</p>
+          <ul className="eval-run-judge-dimension-list eval-run-judge-dimension-list-pairwise">
+            {Object.entries(pairwise).map(([dimensionId, row]) => (
+              <li key={dimensionId}>
+                <span className="eval-run-judge-dimension-label">{row.label ?? dimensionId}</span>
+                <span className="eval-run-judge-dimension-value">
+                  {row.winner
+                    ? row.winner === 'tie'
+                      ? 'Tie'
+                      : variantById.get(row.winner_variant_id ?? '') ?? row.winner.toUpperCase()
+                    : typeof row.score === 'number'
+                      ? row.score.toFixed(2)
+                      : '—'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function TranscriptPreview({ url }: { url: string }) {
@@ -272,8 +419,18 @@ function EvalRunAttemptSection({
     return map;
   }, [attempt.comparisons]);
 
+  const judgeByDatasetItem = useMemo(() => {
+    const map = new Map<string, EvalRunJudgeRow>();
+    for (const row of attempt.judge_jobs) {
+      map.set(row.dataset_item_id, row);
+    }
+    return map;
+  }, [attempt.judge_jobs]);
+
   const isComparingPhase = attempt.phase === 'comparing' && attempt.status === 'running';
+  const isJudgingPhase = attempt.phase === 'judging' && attempt.status === 'running';
   const durationLabel = attempt.duration_ms ? formatDurationMs(attempt.duration_ms) : null;
+  const statusBadge = attemptStatusBadge(attempt);
 
   return (
     <details className="eval-run-attempt" open={defaultOpen}>
@@ -282,8 +439,11 @@ function EvalRunAttemptSection({
           <History {...iconProps({ size: 16 })} className="eval-run-attempt-icon" aria-hidden />
           Run #{attempt.attempt_number} · {formatDateTime(attempt.started_at)}
         </span>
-        <span className={`document-status-badge eval-run-status-badge ${stageClass(attempt.status)}`}>
-          {formatEvalRunStatus(attempt.status)}
+        <span className={statusBadge.className}>
+          {statusBadge.showSpinner ? (
+            <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
+          ) : null}
+          {statusBadge.label}
         </span>
         <span className="admin-muted eval-run-attempt-meta">
           {attempt.run_mode === 'full' ? 'Full' : 'Pipeline only'} · {attemptProgressLabel(attempt)}
@@ -345,28 +505,38 @@ function EvalRunAttemptSection({
 
                 {attempt.run_mode === 'full' ? (
                   <div className="eval-run-compare-row">
-                    {isComparingPhase || compareByDatasetItem.has(row.id) ? (
+                    {isJudgingPhase || judgeByDatasetItem.has(row.id) ? (
+                      <span
+                        className={`${judgeStatusClass(judgeByDatasetItem.get(row.id)?.status ?? 'pending')} eval-run-status-badge`}
+                      >
+                        {judgeByDatasetItem.get(row.id)?.status === 'running' ? (
+                          <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
+                        ) : null}
+                        {judgeStatusLabel(judgeByDatasetItem.get(row.id)?.status ?? 'pending')}
+                      </span>
+                    ) : isComparingPhase || compareByDatasetItem.has(row.id) ? (
                       <span
                         className={`${compareStatusClass(compareByDatasetItem.get(row.id)?.status ?? 'pending')} eval-run-status-badge`}
                       >
-                        {(compareByDatasetItem.get(row.id)?.status ??
-                          (isComparingPhase ? 'running' : 'pending')) === 'running' ? (
+                        {compareByDatasetItem.get(row.id)?.status === 'running' ? (
                           <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
                         ) : null}
-                        {compareStatusLabel(
-                          compareByDatasetItem.get(row.id)?.status ??
-                            (isComparingPhase ? 'running' : 'pending'),
-                        )}
+                        {compareStatusLabel(compareByDatasetItem.get(row.id)?.status ?? 'pending')}
                       </span>
                     ) : null}
+                    {judgeByDatasetItem.get(row.id)?.error_message ? (
+                      <p className="admin-error eval-run-cell-error">{judgeByDatasetItem.get(row.id)?.error_message}</p>
+                    ) : null}
+                    <EvalRunJudgeScores job={judgeByDatasetItem.get(row.id)} variants={variants} />
                     <button
                       type="button"
                       className="btn-secondary eval-run-compare-btn"
                       onClick={() => onCompare(row.id, attempt.id)}
                       disabled={
-                        isComparingPhase ||
-                        (compareByDatasetItem.get(row.id)?.status !== 'done' &&
-                          attempt.status === 'running')
+                        variants.filter(
+                          (variant) =>
+                            itemByVariantAndDataset.get(`${variant.id}:${row.id}`)?.stage === 'done',
+                        ).length < 2
                       }
                     >
                       <GitCompare {...iconProps()} aria-hidden />
