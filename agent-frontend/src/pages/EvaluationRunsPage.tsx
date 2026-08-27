@@ -17,7 +17,6 @@ import {
   type EvalRunDetail,
   type EvalRunDatasetItemRef,
   type EvalRunJudgeRow,
-  type EvalRunJudgeStatus,
   type EvalRunItem,
   type EvalRunItemStage,
   type EvalRunMode,
@@ -50,6 +49,168 @@ function formatJudgeScore(
   const max = scoreMax ?? 10;
   const display = scoreMax != null ? score : score * max;
   return `${display.toFixed(1)}/${max}`;
+}
+
+/** Compact score for collapsed file summary (e.g. 20.0%｜6.0｜8.0｜9.0). */
+function formatJudgeScoreCompact(
+  score: number,
+  scoreMax?: number,
+  options?: { kind?: string; lowerIsBetter?: boolean },
+): string {
+  const kind = options?.kind;
+  if (kind === 'cer_score' || kind === 'wer_score' || options?.lowerIsBetter) {
+    return `${(score * 100).toFixed(1)}%`;
+  }
+  const max = scoreMax ?? 10;
+  const display = scoreMax != null ? score : score * max;
+  return display.toFixed(1);
+}
+
+function buildJudgeScoreSummary(
+  job: EvalRunJudgeRow | undefined,
+  variants: EvalRunDetail['variants'],
+): string | null {
+  if (!job?.summary_metrics || job.status !== 'done') return null;
+
+  const variantScores = job.summary_metrics.variant_scores as
+    | Record<string, Record<string, JudgeDimensionRow>>
+    | undefined;
+  if (!variantScores || Object.keys(variantScores).length === 0) return null;
+
+  const variantId =
+    variants.find((variant) => variantScores[variant.id])?.id ?? Object.keys(variantScores)[0];
+  const dimensions = variantId ? variantScores[variantId] : undefined;
+  if (!dimensions) return null;
+
+  const parts = Object.values(dimensions).map((row) => {
+    if (typeof row.score !== 'number') return '—';
+    return formatJudgeScoreCompact(row.score, row.score_max, {
+      kind: row.kind,
+      lowerIsBetter: row.lower_is_better,
+    });
+  });
+
+  return parts.length > 0 ? parts.join('｜') : null;
+}
+
+type PipelineDotState = 'complete' | 'active' | 'failed' | 'pending';
+
+function pipelineDotClass(state: PipelineDotState): string {
+  if (state === 'complete') return 'pipeline-step-dot complete';
+  if (state === 'active') return 'pipeline-step-dot active';
+  if (state === 'failed') return 'pipeline-step-dot failed';
+  return 'pipeline-step-dot';
+}
+
+function pipelineSegmentClass(left: PipelineDotState, right: PipelineDotState): string {
+  if (right === 'failed') return 'failed';
+  if (left === 'complete') return 'complete';
+  if (left === 'failed') return 'failed';
+  return 'pending';
+}
+
+function resolveFileTranscribeState(
+  cells: Array<EvalRunItem | undefined>,
+  runStatus: EvalRunStatus,
+  starting: boolean,
+): PipelineDotState {
+  const items = cells.filter((cell): cell is EvalRunItem => cell != null);
+  if (items.length === 0) return 'pending';
+
+  if (items.some((item) => item.stage === 'failed' || item.stage === 'cancelled')) return 'failed';
+  if (items.every((item) => item.stage === 'done')) return 'complete';
+  if (
+    starting ||
+    items.some((item) => isEvalItemActive(item, runStatus) || isEvalItemQueued(item, runStatus))
+  ) {
+    return 'active';
+  }
+  if (items.some((item) => item.stage === 'transcribing' || item.stage === 'submitted')) return 'active';
+  return 'pending';
+}
+
+function resolveFileCompareState(
+  job: EvalRunJudgeRow | undefined,
+  isJudgingPhase: boolean,
+): PipelineDotState {
+  if (job?.status === 'done') return 'complete';
+  if (job?.status === 'failed') return 'failed';
+  if (job?.status === 'running') return 'active';
+  if (job?.status === 'pending' && isJudgingPhase) return 'active';
+  if (isJudgingPhase && !job) return 'pending';
+  return 'pending';
+}
+
+function fileTranscribeDurationLabel(
+  variants: EvalRunDetail['variants'],
+  itemByVariantAndDataset: Map<string, EvalRunItem>,
+  datasetItemId: string,
+): string | null {
+  let bestMs = -1;
+  let label: string | null = null;
+  for (const variant of variants) {
+    const cell = itemByVariantAndDataset.get(`${variant.id}:${datasetItemId}`);
+    const ms =
+      cell?.duration_ms ??
+      (cell?.metrics && typeof cell.metrics === 'object' && !Array.isArray(cell.metrics)
+        ? ((cell.metrics as Record<string, unknown>).asr_duration_ms as number | undefined) ??
+          ((cell.metrics as Record<string, unknown>).worker_duration_ms as number | undefined)
+        : undefined);
+    if (typeof ms === 'number' && ms > bestMs) {
+      bestMs = ms;
+      label = evalItemDurationLabel(cell);
+    }
+  }
+  return label;
+}
+
+function EvalRunFilePipelineStepper({
+  transcribeState,
+  compareState,
+}: {
+  transcribeState: PipelineDotState;
+  compareState: PipelineDotState | null;
+}) {
+  const steps =
+    compareState == null
+      ? [{ key: 'transcribe', label: 'Transcribe', state: transcribeState }]
+      : [
+          { key: 'transcribe', label: 'Transcribe', state: transcribeState },
+          { key: 'compare', label: 'Compare', state: compareState },
+        ];
+  const lastIndex = steps.length - 1;
+
+  return (
+    <div
+      className={`document-pipeline-stepper eval-run-file-stepper${steps.length === 1 ? ' is-single' : ''}`}
+      aria-label="File pipeline progress"
+    >
+      {steps.map((step, index) => (
+        <div key={step.key} className="pipeline-track-node">
+          <div className="pipeline-dot-row">
+            <span
+              className={`pipeline-step-segment${
+                index > 0
+                  ? ` ${pipelineSegmentClass(steps[index - 1].state, step.state)}`
+                  : ' is-empty'
+              }`}
+              aria-hidden="true"
+            />
+            <span className={pipelineDotClass(step.state)} aria-hidden="true" />
+            <span
+              className={`pipeline-step-segment${
+                index < lastIndex
+                  ? ` ${pipelineSegmentClass(step.state, steps[index + 1].state)}`
+                  : ' is-empty'
+              }`}
+              aria-hidden="true"
+            />
+          </div>
+          <span className="pipeline-step-label">{step.label}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function itemDispatchClaimed(item: EvalRunItem | undefined): boolean {
@@ -180,20 +341,6 @@ function evalItemDurationLabel(item: EvalRunItem | undefined): string | null {
   if (durationMs == null) return null;
   const formatted = formatDurationMs(durationMs);
   return formatted || null;
-}
-
-function judgeStatusLabel(status: EvalRunJudgeStatus): string {
-  if (status === 'done') return 'Compared';
-  if (status === 'failed') return 'Compare failed';
-  if (status === 'running') return 'Comparing…';
-  return 'Pending';
-}
-
-function judgeStatusClass(status: EvalRunJudgeStatus): string {
-  if (status === 'done') return 'document-status-badge status-completed';
-  if (status === 'failed') return 'document-status-badge status-failed';
-  if (status === 'running') return 'document-status-badge status-running';
-  return 'document-status-badge';
 }
 
 function activeJudgeFileName(attempt: EvalRunAttempt): string | null {
@@ -570,7 +717,6 @@ function EvalRunFileTranscriptSection({
   if (showCompare) {
     return (
       <div className="eval-run-transcript-compare-section">
-        <p className="eval-run-judge-section-title">Transcript comparison</p>
         {loading ? <p className="admin-muted">Loading ground truth…</p> : null}
         {error ? <p className="admin-error">{error}</p> : null}
         {referenceUrl ? (
@@ -643,38 +789,6 @@ function TranscriptPreview({ url }: { url: string }) {
   if (loadingText) return <p className="admin-muted">Loading transcript…</p>;
   if (error) return <p className="admin-error">{error}</p>;
   return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
-}
-
-function resolveJudgeUiStatus(
-  job: EvalRunJudgeRow | undefined,
-  isJudgingPhase: boolean,
-): EvalRunJudgeStatus | null {
-  if (job?.status) return job.status;
-  if (isJudgingPhase) return 'running';
-  return null;
-}
-
-function EvalRunJudgeChip({
-  job,
-  isJudgingPhase,
-}: {
-  job: EvalRunJudgeRow | undefined;
-  isJudgingPhase: boolean;
-}) {
-  const status = resolveJudgeUiStatus(job, isJudgingPhase);
-  if (!status) return null;
-
-  return (
-    <span className="eval-run-compare-chip">
-      <span className="eval-run-compare-chip-name">Compare</span>
-      <span className={`${judgeStatusClass(status)} eval-run-status-badge`}>
-        {status === 'running' ? (
-          <Loader2 {...iconProps({ size: 12, className: 'icon-btn-spin' })} aria-hidden />
-        ) : null}
-        {judgeStatusLabel(status)}
-      </span>
-    </span>
-  );
 }
 
 function EvalRunPipelineOutput({
@@ -831,62 +945,63 @@ function EvalRunAttemptSection({
               doneVariantCount >= minVariantsForRetry &&
               judgeJob != null &&
               judgeJob.status === 'failed';
+            const judgeScoreSummary = buildJudgeScoreSummary(judgeJob, variants);
+            const fileCells = variants.map((variant) =>
+              itemByVariantAndDataset.get(`${variant.id}:${row.id}`),
+            );
+            const transcribeState = resolveFileTranscribeState(
+              fileCells,
+              itemRunStatus,
+              itemStarting,
+            );
+            const compareState =
+              attempt.run_mode === 'full' ? resolveFileCompareState(judgeJob, isJudgingPhase) : null;
+            const transcribeDuration = fileTranscribeDurationLabel(
+              variants,
+              itemByVariantAndDataset,
+              row.id,
+            );
 
             return (
             <details key={row.id} className="eval-run-file-block">
               <summary className="eval-run-file-summary">
                 <span className="eval-run-file-name">{row.name}</span>
-                <div className="eval-run-file-pipeline-row">
-                  <div className="eval-run-pipeline-group">
-                    {variants.map((variant) => {
-                      const cell = itemByVariantAndDataset.get(`${variant.id}:${row.id}`);
-                      const duration = evalItemDurationLabel(cell);
-                      return (
-                        <span key={variant.id} className="eval-run-pipeline-chip">
-                          <span className="eval-run-pipeline-chip-name" title={variant.display_name}>
-                            {variant.display_name}
-                          </span>
-                          <span className="eval-run-pipeline-chip-status">
-                            <EvalRunItemStatusBadge
-                              item={cell}
-                              runStatus={itemRunStatus}
-                              starting={itemStarting}
-                            />
-                          </span>
-                          <span className="eval-run-pipeline-chip-duration admin-muted">
-                            {duration ?? '—'}
-                          </span>
-                        </span>
-                      );
-                    })}
-                  </div>
-                  {attempt.run_mode === 'full' ? (
-                    <div className="eval-run-compare-group">
-                      <EvalRunJudgeChip
-                        job={judgeJob}
-                        isJudgingPhase={isJudgingPhase}
-                      />
-                      {canRetryCompare ? (
-                        <button
-                          type="button"
-                          className="btn-secondary eval-run-compare-btn eval-run-compare-btn-inline"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            onRetryCompare(row.id, attempt.id);
-                          }}
-                          disabled={retryingDatasetItemId === row.id}
-                        >
-                          {retryingDatasetItemId === row.id ? (
-                            <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
-                          ) : (
-                            <RotateCw {...iconProps()} aria-hidden />
-                          )}
-                          Retry compare
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
+                <div className="eval-run-file-summary-stepper">
+                  <EvalRunFilePipelineStepper
+                    transcribeState={transcribeState}
+                    compareState={compareState}
+                  />
                 </div>
+                <span className="eval-run-file-duration admin-muted">
+                  {transcribeDuration ?? '—'}
+                </span>
+                <span className="eval-run-file-scores">
+                  {judgeScoreSummary ? (
+                    <span className="eval-run-judge-score-summary" title="Dimension scores">
+                      {judgeScoreSummary}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="eval-run-file-summary-actions">
+                  {canRetryCompare ? (
+                    <button
+                      type="button"
+                      className="btn-secondary eval-run-compare-btn eval-run-compare-btn-inline"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        onRetryCompare(row.id, attempt.id);
+                      }}
+                      disabled={retryingDatasetItemId === row.id}
+                      title="Retry compare"
+                    >
+                      {retryingDatasetItemId === row.id ? (
+                        <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                      ) : (
+                        <RotateCw {...iconProps()} aria-hidden />
+                      )}
+                    </button>
+                  ) : null}
+                </span>
               </summary>
 
               <div className="eval-run-file-body">

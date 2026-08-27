@@ -2955,9 +2955,10 @@ textarea {
 }
 
 .eval-run-file-summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem 3.5rem 13rem 1.75rem;
   align-items: center;
-  gap: 0.75rem;
+  column-gap: 0.75rem;
   padding: 0.375rem 0.75rem;
   cursor: pointer;
   list-style: none;
@@ -2968,12 +2969,43 @@ textarea {
 }
 
 .eval-run-file-name {
-  flex-shrink: 0;
+  min-width: 0;
   font-weight: 500;
-  max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.eval-run-file-summary-stepper {
+  justify-self: center;
+  width: 7.5rem;
+}
+
+.eval-run-file-stepper.document-pipeline-stepper {
+  --pipeline-stepper-width: 7.5rem;
+  --pipeline-step-count: 2;
+  width: 7.5rem;
+}
+
+.eval-run-file-duration {
+  justify-self: end;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.eval-run-file-scores {
+  justify-self: end;
+  min-width: 0;
+  text-align: right;
+}
+
+.eval-run-file-summary-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 1.5rem;
 }
 
 .eval-run-file-pipeline-row {
@@ -3172,6 +3204,14 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.eval-run-judge-score-summary {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  white-space: nowrap;
 }
 
 .eval-run-judge-scores {
@@ -3454,7 +3494,20 @@ textarea {
 
 @media (max-width: 768px) {
   .eval-run-file-summary {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0.5rem;
+  }
+
+  .eval-run-file-summary-stepper,
+  .eval-run-file-duration,
+  .eval-run-file-scores,
+  .eval-run-file-summary-actions {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .eval-run-file-summary-stepper {
+    width: 7.5rem;
   }
 
   .eval-run-transcript-compare {

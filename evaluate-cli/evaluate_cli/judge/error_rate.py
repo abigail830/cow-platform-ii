@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 
@@ -22,7 +23,9 @@ class ErrorRateResult:
 
 
 def normalize_asr_text(text: str) -> str:
-    return re.sub(r"\s+", "", text.strip())
+    """Collapse whitespace and drop punctuation — standard ASR CER/WER prep."""
+    collapsed = re.sub(r"\s+", "", text.strip())
+    return "".join(ch for ch in collapsed if not unicodedata.category(ch).startswith("P"))
 
 
 def tokenize_words(text: str) -> list[str]:

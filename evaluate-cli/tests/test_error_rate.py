@@ -41,8 +41,17 @@ def test_extract_transcript_plain_text_from_markdown() -> None:
     assert extract_transcript_plain_text(raw) == "我希望個疫情快啲完。"
 
 
+def test_compute_character_error_rate_ignores_punctuation() -> None:
+    result = compute_character_error_rate("我希望個疫症快啲完", "我希望個疫情快啲完。")
+    assert result.reference_length == 9
+    assert result.substitutions == 1
+    assert result.insertions == 0
+    assert result.deletions == 0
+    assert result.error_rate == 1 / 9
+
+
 def test_compute_character_error_rate_on_plain_transcript_body() -> None:
-    reference = "我希望個疫症快啲完。"
+    reference = "我希望個疫症快啲完"
     hypothesis = """# file.mp3
 - ASR: fun-asr
 ## [00:00:01] Speaker 1
@@ -52,10 +61,10 @@ def test_compute_character_error_rate_on_plain_transcript_body() -> None:
         reference,
         extract_transcript_plain_text(hypothesis),
     )
-    assert result.reference_length == 10
+    assert result.reference_length == 9
     assert result.insertions == 0
     assert result.substitutions == 1
-    assert result.error_rate == 0.1
+    assert result.error_rate == 1 / 9
 
 
 def test_score_error_rate_dimension_returns_lower_is_better() -> None:
