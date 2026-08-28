@@ -29,7 +29,12 @@ def normalize_asr_text(text: str) -> str:
 
 
 def tokenize_words(text: str) -> list[str]:
-    return [token for token in re.split(r"\s+", text.strip()) if token]
+    """Split on whitespace after dropping punctuation — aligned with CER prep."""
+    without_punct = "".join(
+        ch if not unicodedata.category(ch).startswith("P") else " "
+        for ch in text.strip()
+    )
+    return [token for token in re.split(r"\s+", without_punct.strip()) if token]
 
 
 def _levenshtein_counts(ref: list[str], hyp: list[str]) -> tuple[int, int, int, int]:

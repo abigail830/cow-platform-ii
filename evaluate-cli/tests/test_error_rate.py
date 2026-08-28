@@ -29,6 +29,21 @@ def test_compute_word_error_rate() -> None:
     assert result.error_rate == 0.5
 
 
+def test_compute_word_error_rate_ignores_punctuation() -> None:
+    result = compute_word_error_rate("hello, world!", "hello world")
+    assert result.reference_length == 2
+    assert result.substitutions == 0
+    assert result.insertions == 0
+    assert result.deletions == 0
+    assert result.error_rate == 0.0
+
+
+def test_compute_word_error_rate_punctuation_only_diff() -> None:
+    result = compute_word_error_rate("我希望個疫症快啲完。", "我希望個疫症快啲完")
+    assert result.reference_length == 1
+    assert result.error_rate == 0.0
+
+
 def test_extract_transcript_plain_text_from_markdown() -> None:
     raw = """# common_voice_yue_40508644.mp3
 
