@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Eye, FolderOpen, History, Loader2, Pencil, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
+import { ChevronDown, Eye, FolderOpen, Loader2, Pencil, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
@@ -423,9 +423,60 @@ type JudgeDimensionRow = {
   score_max?: number;
   lower_is_better?: boolean;
   reason?: string;
-  winner?: string;
+  winner?: string | null;
   winner_variant_id?: string | null;
 };
+
+function parsePairwiseWinnerFromReason(reason: string): 'a' | 'b' | 'tie' | null {
+  const text = reason.trim().toUpperCase();
+  if (!text) return null;
+  if (/\bTIE\b/.test(text)) return 'tie';
+  if (/\bVARIANT A\b|\bTRANSCRIPT A\b|\bINPUT\b|\bA WINS\b|\bWINNER: A\b|\bCHOICE: A\b|\bSELECT A\b/.test(text)) {
+    return 'a';
+  }
+  if (/\bVARIANT B\b|\bTRANSCRIPT B\b|\bACTUAL OUTPUT\b|\bACTUAL\b|\bB WINS\b|\bWINNER: B\b|\bCHOICE: B\b|\bSELECT B\b/.test(text)) {
+    return 'b';
+  }
+  if (/^A[.\s:)/\-—]/.test(text) || /^WINNER:\s*A\b/.test(text)) return 'a';
+  if (/^B[.\s:)/\-—]/.test(text) || /^WINNER:\s*B\b/.test(text)) return 'b';
+  return null;
+}
+
+function resolvePairwiseWinnerLabel(
+  row: JudgeDimensionRow,
+  variants: EvalRunDetail['variants'],
+  variantById: Map<string, string>,
+): string | null {
+  const normalizedWinner = row.winner?.trim().toLowerCase();
+  if (normalizedWinner === 'tie') return 'Tie';
+  if (row.winner_variant_id) {
+    return variantById.get(row.winner_variant_id) ?? null;
+  }
+  const winnerKey =
+    normalizedWinner === 'a' || normalizedWinner === 'b' || normalizedWinner === 'tie'
+      ? normalizedWinner
+      : parsePairwiseWinnerFromReason(row.reason ?? '');
+  if (winnerKey === 'tie') return 'Tie';
+  if (winnerKey === 'a' && variants[0]) {
+    return variantById.get(variants[0].id) ?? 'A';
+  }
+  if (winnerKey === 'b' && variants[1]) {
+    return variantById.get(variants[1].id) ?? 'B';
+  }
+
+  const reason = row.reason?.trim() ?? '';
+  if (reason) {
+    const names = variants
+      .map((variant) => variant.display_name.trim())
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length);
+    for (const name of names) {
+      if (reason.includes(name)) return name;
+    }
+  }
+
+  return null;
+}
 
 function EvalRunJudgeDimensionTable({
   rows,
@@ -478,38 +529,111 @@ function buildJudgeDimensionTableRows(
   }));
 }
 
-function EvalRunJudgeVariantCompareTable({
+function EvalRunJudgeMultiVariantCompareTable({
   variantScores,
   variantById,
+  variantOrder,
 }: {
   variantScores: Record<string, Record<string, JudgeDimensionRow>>;
   variantById: Map<string, string>;
+  variantOrder: string[];
 }) {
-  const variantEntries = Object.entries(variantScores);
-  const multipleVariants = variantEntries.length > 1;
+  const dimensionIds: string[] = [];
+  const dimensionLabels = new Map<string, string>();
+
+  for (const variantId of variantOrder) {
+    const dimensions = variantScores[variantId];
+    if (!dimensions) continue;
+    for (const [dimensionId, row] of Object.entries(dimensions)) {
+      if (dimensionIds.includes(dimensionId)) continue;
+      dimensionIds.push(dimensionId);
+      dimensionLabels.set(dimensionId, row.label ?? dimensionId);
+    }
+  }
+
+  if (dimensionIds.length === 0) return null;
+
+  function formatVariantValue(row: JudgeDimensionRow | undefined): string {
+    if (!row || typeof row.score !== 'number') return '—';
+    return formatJudgeScore(row.score, row.score_max, {
+      kind: row.kind,
+      lowerIsBetter: row.lower_is_better,
+    });
+  }
 
   return (
-    <div className="eval-run-judge-variant-score-groups">
-      {variantEntries.map(([variantId, dimensions]) => {
-        const rows = buildJudgeDimensionTableRows(dimensions, (row) =>
-          typeof row.score === 'number'
-            ? formatJudgeScore(row.score, row.score_max, {
-                kind: row.kind,
-                lowerIsBetter: row.lower_is_better,
-              })
-            : '—',
-        );
-
-        return (
-          <div key={variantId} className="eval-run-judge-section">
-            {multipleVariants ? (
-              <p className="eval-run-judge-section-title">{variantById.get(variantId) ?? variantId}</p>
-            ) : null}
-            <EvalRunJudgeDimensionTable rows={rows} />
-          </div>
-        );
-      })}
+    <div className="admin-table-wrap eval-run-judge-variant-table-wrap">
+      <table className="admin-table eval-run-judge-variant-table">
+        <thead>
+          <tr>
+            <th scope="col">Dimension</th>
+            {variantOrder.map((variantId) => (
+              <th key={variantId} scope="col">
+                {variantById.get(variantId) ?? variantId}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {dimensionIds.map((dimensionId) => (
+            <tr key={dimensionId}>
+              <td className="eval-run-judge-dimension-table-label">
+                {dimensionLabels.get(dimensionId) ?? dimensionId}
+              </td>
+              {variantOrder.map((variantId) => {
+                const row = variantScores[variantId]?.[dimensionId];
+                const reason = row?.reason?.trim() ?? '';
+                return (
+                  <td key={variantId} className="eval-run-judge-variant-table-pipeline">
+                    <span className="eval-run-judge-dimension-value">{formatVariantValue(row)}</span>
+                    {reason ? (
+                      <p className="eval-run-judge-dimension-reason">{reason}</p>
+                    ) : (
+                      <span className="admin-muted">—</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
+  );
+}
+
+function EvalRunJudgeVariantCompareTable({
+  variantScores,
+  variantById,
+  variantOrder,
+}: {
+  variantScores: Record<string, Record<string, JudgeDimensionRow>>;
+  variantById: Map<string, string>;
+  variantOrder: string[];
+}) {
+  const activeVariantIds = variantOrder.filter((variantId) => variantScores[variantId]);
+
+  if (activeVariantIds.length === 0) return null;
+
+  if (activeVariantIds.length === 1) {
+    const variantId = activeVariantIds[0];
+    const rows = buildJudgeDimensionTableRows(variantScores[variantId], (row) =>
+      typeof row.score === 'number'
+        ? formatJudgeScore(row.score, row.score_max, {
+            kind: row.kind,
+            lowerIsBetter: row.lower_is_better,
+          })
+        : '—',
+    );
+    return <EvalRunJudgeDimensionTable rows={rows} />;
+  }
+
+  return (
+    <EvalRunJudgeMultiVariantCompareTable
+      variantScores={variantScores}
+      variantById={variantById}
+      variantOrder={activeVariantIds}
+    />
   );
 }
 
@@ -529,10 +653,8 @@ function EvalRunJudgeScores({
   const variantById = new Map(variants.map((variant) => [variant.id, variant.display_name]));
 
   function formatPairwiseValue(row: JudgeDimensionRow): string {
-    if (row.winner) {
-      if (row.winner === 'tie') return 'Tie';
-      return variantById.get(row.winner_variant_id ?? '') ?? row.winner.toUpperCase();
-    }
+    const winnerLabel = resolvePairwiseWinnerLabel(row, variants, variantById);
+    if (winnerLabel) return winnerLabel;
     if (typeof row.score === 'number') {
       return formatJudgeScore(row.score, row.score_max, {
         kind: row.kind,
@@ -552,7 +674,11 @@ function EvalRunJudgeScores({
       {variantScores && Object.keys(variantScores).length > 0 ? (
         <div className="eval-run-judge-section">
           <p className="eval-run-judge-section-title">Per pipeline</p>
-          <EvalRunJudgeVariantCompareTable variantScores={variantScores} variantById={variantById} />
+          <EvalRunJudgeVariantCompareTable
+            variantScores={variantScores}
+            variantById={variantById}
+            variantOrder={variants.map((variant) => variant.id)}
+          />
         </div>
       ) : null}
 
@@ -894,8 +1020,9 @@ function EvalRunAttemptSection({
     <details className="eval-run-attempt" open={defaultOpen}>
       <summary className="eval-run-attempt-summary">
         <span className="eval-run-attempt-title">
-          <History {...iconProps({ size: 16 })} className="eval-run-attempt-icon" aria-hidden />
-          Run #{attempt.attempt_number} · {formatDateTime(attempt.started_at)}
+          <NavPageIcon name="evaluation-run" size={16} className="eval-run-attempt-icon" aria-hidden />
+          <span className="eval-run-attempt-name">Run #{attempt.attempt_number}</span>
+          <span className="eval-run-attempt-time">· {formatDateTime(attempt.started_at)}</span>
         </span>
         <span className={statusBadge.className}>
           {statusBadge.showSpinner ? (
@@ -907,25 +1034,28 @@ function EvalRunAttemptSection({
           {attempt.run_mode === 'full' ? 'Full' : 'Pipeline only'} · {attemptProgressLabel(attempt)}
           {durationLabel ? ` · ${durationLabel}` : ''}
         </span>
-        {showEvaluate ? (
-          <button
-            type="button"
-            className="btn-secondary eval-run-evaluate-btn"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onEvaluate(attempt.id);
-            }}
-            disabled={isEvaluating}
-          >
-            {isEvaluating ? (
-              <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
-            ) : (
-              <Scale {...iconProps()} aria-hidden />
-            )}
-            Evaluate
-          </button>
-        ) : null}
+        <span className="eval-run-attempt-summary-end">
+          {showEvaluate ? (
+            <button
+              type="button"
+              className="btn-secondary eval-run-evaluate-btn"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onEvaluate(attempt.id);
+              }}
+              disabled={isEvaluating}
+            >
+              {isEvaluating ? (
+                <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+              ) : (
+                <Scale {...iconProps()} aria-hidden />
+              )}
+              Evaluate
+            </button>
+          ) : null}
+          <ChevronDown {...iconProps({ size: 16 })} className="eval-run-attempt-chevron" aria-hidden />
+        </span>
       </summary>
 
       <div className="eval-run-attempt-body">

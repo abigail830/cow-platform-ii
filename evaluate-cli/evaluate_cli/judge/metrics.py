@@ -172,14 +172,22 @@ def score_pairwise_dimension(
 
 def _parse_winner(reason: str) -> str | None:
     text = reason.strip().upper()
+    if not text:
+        return None
     if re.search(r"\bTIE\b", text):
         return "tie"
-    if re.search(r"\bVARIANT A\b|\bTRANSCRIPT A\b|\bINPUT\b|\bA WINS\b|\bWINNER: A\b", text):
+    if re.search(
+        r"\bVARIANT A\b|\bTRANSCRIPT A\b|\bINPUT\b|\bA WINS\b|\bWINNER: A\b|\bCHOICE: A\b|\bSELECT A\b",
+        text,
+    ):
         return "a"
-    if re.search(r"\bVARIANT B\b|\bTRANSCRIPT B\b|\bACTUAL\b|\bB WINS\b|\bWINNER: B\b", text):
+    if re.search(
+        r"\bVARIANT B\b|\bTRANSCRIPT B\b|\bACTUAL OUTPUT\b|\bACTUAL\b|\bB WINS\b|\bWINNER: B\b|\bCHOICE: B\b|\bSELECT B\b",
+        text,
+    ):
         return "b"
-    if text.startswith("A"):
+    if re.match(r"^A[.\s:)/\-—]", text) or re.match(r"^WINNER:\s*A\b", text):
         return "a"
-    if text.startswith("B"):
+    if re.match(r"^B[.\s:)/\-—]", text) or re.match(r"^WINNER:\s*B\b", text):
         return "b"
     return None
