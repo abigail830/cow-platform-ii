@@ -17,6 +17,7 @@ import {
 import { audioPipelineProviderForName } from '../audio/audio-pipeline-names.ts';
 import { spawnAsyncAudioPipelineWorker } from '../audio/audio-pipeline-runner.ts';
 import { getEvalRunItemById, snapshotConfigYaml, updateEvalRunItem } from './eval-pipeline-jobs.ts';
+import { resolveEvalRunItemAsrVocabularyId } from './eval-run-hotwords.ts';
 import { ensureEvalShadowAudioForDatasetItem } from './eval-shadow-audio.ts';
 
 export async function createEvalTranscribeAudioPipelineJob(
@@ -48,6 +49,7 @@ export async function createEvalTranscribeAudioPipelineJob(
     pipelineName: evalRunItem.pipelineName,
     provider,
     configYaml: snapshotConfigYaml(evalRunItem.configYaml),
+    asrVocabularyIdSnapshot: await resolveEvalRunItemAsrVocabularyId(evalRunItem),
     evalRunItemId: evalRunItem.id,
   });
 

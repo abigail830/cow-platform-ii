@@ -1110,6 +1110,17 @@ export type EvalRunJudgeStatus = (typeof EVAL_RUN_JUDGE_STATUSES)[number];
 export const EVAL_RUN_ITEM_STAGES = ['submitted', 'transcribing', 'done', 'failed', 'cancelled'] as const;
 export type EvalRunItemStage = (typeof EVAL_RUN_ITEM_STAGES)[number];
 
+export type EvalRunAsrHotword = {
+  text: string;
+  weight: number;
+  lang?: string | null;
+};
+
+export type EvalRunAttemptAsrVocabularyEntry = {
+  vocabulary_id: string;
+  target_model: string;
+};
+
 export const appEvalRuns = pgTable(
   'app_eval_runs',
   {
@@ -1132,6 +1143,7 @@ export const appEvalRuns = pgTable(
     completedCompareItems: integer('completed_compare_items').notNull().default(0),
     failedCompareItems: integer('failed_compare_items').notNull().default(0),
     summaryMetrics: jsonb('summary_metrics').$type<Record<string, unknown> | null>(),
+    asrHotwords: jsonb('asr_hotwords').$type<EvalRunAsrHotword[] | null>(),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -1184,6 +1196,10 @@ export const appEvalRunAttempts = pgTable(
     totalCompareItems: integer('total_compare_items').notNull().default(0),
     completedCompareItems: integer('completed_compare_items').notNull().default(0),
     failedCompareItems: integer('failed_compare_items').notNull().default(0),
+    asrHotwordsSnapshot: jsonb('asr_hotwords_snapshot').$type<EvalRunAsrHotword[] | null>(),
+    asrVocabularyByPipeline: jsonb('asr_vocabulary_by_pipeline').$type<
+      Record<string, EvalRunAttemptAsrVocabularyEntry> | null
+    >(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

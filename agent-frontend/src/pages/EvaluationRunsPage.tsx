@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, Eye, FolderOpen, Loader2, Pencil, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
+import { ChevronDown, Eye, FolderOpen, Highlighter, Loader2, Pencil, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
 import {
   createEvalRun,
   deleteEvalRun,
@@ -26,6 +26,7 @@ import {
 } from '../api/evaluation/runs.ts';
 import { listEvalDatasets, type EvalDataset } from '../api/evaluation/datasets.ts';
 import { EvalRunCreateModal, EvalRunEditModal, EvalRunFilesModal } from '../components/EvalRunModals.tsx';
+import { EvalRunHotwordsDrawer } from '../components/EvalRunHotwordsDrawer.tsx';
 import { TransientNotice } from '../components/TransientNotice.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { NavPageIcon } from '../components/icons/NavIcons.tsx';
@@ -1445,6 +1446,7 @@ export function EvaluationRunsListPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [filesTarget, setFilesTarget] = useState<EvalRun | null>(null);
   const [editTarget, setEditTarget] = useState<EvalRun | null>(null);
+  const [hotwordsTarget, setHotwordsTarget] = useState<EvalRun | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EvalRun | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -1605,6 +1607,14 @@ export function EvaluationRunsListPage() {
                   <td>{run.last_run_at ? formatDateTime(run.last_run_at) : '—'}</td>
                   <td>
                     <div className="row-actions">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="ASR hotwords"
+                        onClick={() => setHotwordsTarget(run)}
+                      >
+                        <Highlighter {...iconProps()} aria-hidden />
+                      </button>
                       {canWrite ? (
                         <>
                           <button
@@ -1674,6 +1684,15 @@ export function EvaluationRunsListPage() {
           canWrite={canWrite}
           onCancel={() => setFilesTarget(null)}
           onChanged={() => void load()}
+        />
+      ) : null}
+
+      {hotwordsTarget ? (
+        <EvalRunHotwordsDrawer
+          run={hotwordsTarget}
+          canWrite={canWrite}
+          onClose={() => setHotwordsTarget(null)}
+          onSaved={() => void load()}
         />
       ) : null}
 

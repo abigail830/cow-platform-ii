@@ -23,6 +23,12 @@ export type EvalRunItemStage = 'submitted' | 'transcribing' | 'done' | 'failed' 
 
 export type EvalRunMode = 'pipeline_only' | 'full';
 
+export type EvalRunAsrHotword = {
+  text: string;
+  weight: number;
+  lang: string | null;
+};
+
 export type EvalRunCompareStatus = 'pending' | 'running' | 'done' | 'failed';
 
 export type EvalRunJudgeStatus = 'pending' | 'running' | 'done' | 'failed';
@@ -44,6 +50,8 @@ export type EvalRun = {
   completed_compare_items: number;
   failed_compare_items: number;
   summary_metrics: Record<string, unknown> | null;
+  asr_hotwords?: EvalRunAsrHotword[];
+  asr_hotword_count?: number;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -277,6 +285,23 @@ export async function updateEvalRun(
     body: JSON.stringify(input),
   });
   return data as EvalRun;
+}
+
+export async function getEvalRunHotwords(runId: string): Promise<EvalRunAsrHotword[]> {
+  const data = await authFetch(`/api/evaluation/runs/${runId}/hotwords`);
+  return (data.hotwords as EvalRunAsrHotword[]) ?? [];
+}
+
+export async function updateEvalRunHotwords(
+  runId: string,
+  hotwords: Array<{ text: string; weight: number; lang?: string | null }>,
+): Promise<EvalRunAsrHotword[]> {
+  const data = await authFetch(`/api/evaluation/runs/${runId}/hotwords`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hotwords }),
+  });
+  return (data.hotwords as EvalRunAsrHotword[]) ?? [];
 }
 
 export async function listEvalRunFiles(

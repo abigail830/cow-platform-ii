@@ -97,6 +97,8 @@ function toRunPublic(row: typeof appEvalRuns.$inferSelect) {
     completed_compare_items: row.completedCompareItems,
     failed_compare_items: row.failedCompareItems,
     summary_metrics: row.summaryMetrics,
+    asr_hotwords: row.asrHotwords ?? [],
+    asr_hotword_count: row.asrHotwords?.length ?? 0,
     created_by: row.createdBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),

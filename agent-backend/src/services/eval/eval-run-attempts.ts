@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import {
   appEvalRunAttempts,
+  appEvalRuns,
   db,
   type EvalRunMode,
   type EvalRunPhase,
@@ -62,6 +63,13 @@ export async function createEvalRunAttempt(input: {
   const attemptNumber = (latest?.attemptNumber ?? 0) + 1;
   const now = new Date();
 
+  const [run] = await db
+    .select({ asrHotwords: appEvalRuns.asrHotwords })
+    .from(appEvalRuns)
+    .where(eq(appEvalRuns.id, input.runId))
+    .limit(1);
+  if (!run) throw new Error('Eval run not found');
+
   const [row] = await db
     .insert(appEvalRunAttempts)
     .values({
@@ -72,6 +80,8 @@ export async function createEvalRunAttempt(input: {
       runMode: input.runMode,
       startedAt: now,
       updatedAt: now,
+      asrHotwordsSnapshot: run.asrHotwords ?? null,
+      asrVocabularyByPipeline: null,
     })
     .returning();
   return row!;

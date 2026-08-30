@@ -470,6 +470,13 @@
       "when": 1785223000000,
       "tag": "0066_eval_dataset_reference_text",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1785224000000,
+      "tag": "0067_eval_run_asr_hotwords",
+      "breakpoints": true
     }
   ]
 }

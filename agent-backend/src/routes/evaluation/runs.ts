@@ -4,6 +4,10 @@ import { requireAuth, getUser } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
 import {
+  getEvalRunHotwords,
+  updateEvalRunHotwords,
+} from '../../services/eval/eval-run-hotwords.ts';
+import {
   createEvalRun,
   deleteEvalRun,
   assertEvalRunFilesMutable,
@@ -344,6 +348,43 @@ runs.delete(
       return c.json({ ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete file';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+runs.put(
+  '/:id/hotwords',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.RUNS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Run id is required' }, 400);
+
+    const body = await c.req.json<{ hotwords?: unknown }>().catch(() => ({}));
+    try {
+      const hotwords = await updateEvalRunHotwords(id, body.hotwords ?? []);
+      return c.json({ hotwords });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update hotwords';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+runs.get(
+  '/:id/hotwords',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.RUNS, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Run id is required' }, 400);
+
+    try {
+      const hotwords = await getEvalRunHotwords(id);
+      return c.json({ hotwords });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load hotwords';
       const status = message.includes('not found') ? 404 : 400;
       return c.json({ error: message }, status);
     }
