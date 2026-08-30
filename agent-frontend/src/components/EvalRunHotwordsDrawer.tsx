@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Highlighter, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Download, Highlighter, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import {
   getEvalRunHotwords,
   updateEvalRunHotwords,
   type EvalRun,
   type EvalRunAsrHotword,
 } from '../api/evaluation/runs.ts';
+import { downloadTextFile, sanitizeDownloadFilename, withDownloadExtension } from '../shared/download-text.ts';
 import { iconProps } from './icons/icon-props.ts';
 
 type HotwordDraft = {
@@ -41,6 +42,39 @@ function draftToHotword(draft: HotwordDraft): EvalRunAsrHotword {
   };
 }
 
+function parseImportedHotwords(raw: unknown): EvalRunAsrHotword[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray((raw as { hotwords?: unknown }).hotwords)
+      ? (raw as { hotwords: unknown[] }).hotwords
+      : null;
+  if (!list) {
+    throw new Error('Expected a JSON array of hotwords or { "hotwords": [...] }');
+  }
+
+  return list.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`hotwords[${index}] must be an object`);
+    }
+    const row = item as Record<string, unknown>;
+    const text = typeof row.text === 'string' ? row.text.trim() : '';
+    if (!text) throw new Error(`hotwords[${index}].text is required`);
+    const weight = Number(row.weight);
+    if (!Number.isFinite(weight)) {
+      throw new Error(`hotwords[${index}].weight must be a number`);
+    }
+    const lang =
+      row.lang == null || row.lang === ''
+        ? null
+        : String(row.lang).trim() || null;
+    return { text, weight, lang };
+  });
+}
+
+function hotwordsExportFilename(runName: string): string {
+  return withDownloadExtension(`${sanitizeDownloadFilename(runName)}-asr-hotwords`, 'json');
+}
+
 export function EvalRunHotwordsDrawer({
   run,
   canWrite,
@@ -55,6 +89,8 @@ export function EvalRunHotwordsDrawer({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [form, setForm] = useState<HotwordDraft>(emptyDraft());
   const [formError, setFormError] = useState('');
+  const [importNotice, setImportNotice] = useState('');
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     if (!run) return;
@@ -77,6 +113,7 @@ export function EvalRunHotwordsDrawer({
       setEditingIndex(null);
       setForm(emptyDraft());
       setError('');
+      setImportNotice('');
       return;
     }
     void load();
@@ -122,6 +159,7 @@ export function EvalRunHotwordsDrawer({
     if (!run) return;
     setSaving(true);
     setError('');
+    setImportNotice('');
     try {
       const saved = await updateEvalRunHotwords(
         run.id,
@@ -138,6 +176,45 @@ export function EvalRunHotwordsDrawer({
       setError(err instanceof Error ? err.message : 'Failed to save hotwords');
     } finally {
       setSaving(false);
+    }
+  }
+
+  function handleExport() {
+    if (!run) return;
+    const payload = hotwords.map((row) => ({
+      text: row.text,
+      weight: row.weight,
+      lang: row.lang,
+    }));
+    downloadTextFile(
+      `${JSON.stringify(payload, null, 2)}\n`,
+      hotwordsExportFilename(run.name),
+      'application/json;charset=utf-8',
+    );
+  }
+
+  function handleImportClick() {
+    importInputRef.current?.click();
+  }
+
+  async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setError('');
+    setImportNotice('');
+    try {
+      const raw = JSON.parse(await file.text()) as unknown;
+      const imported = parseImportedHotwords(raw);
+      setHotwords(imported);
+      setImportNotice(
+        imported.length === 0
+          ? 'Imported an empty list. Click Save hotwords to apply.'
+          : `Imported ${imported.length} hotword${imported.length === 1 ? '' : 's'}. Click Save hotwords to apply.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import hotwords');
     }
   }
 
@@ -166,16 +243,40 @@ export function EvalRunHotwordsDrawer({
           </p>
 
           {error ? <p className="admin-error">{error}</p> : null}
+          {importNotice ? <p className="admin-muted">{importNotice}</p> : null}
 
-          {canWrite ? (
-            <div className="admin-toolbar eval-run-hotwords-toolbar">
-              <div className="admin-toolbar-left" />
+          <div className="admin-toolbar eval-run-hotwords-toolbar">
+            <div className="admin-toolbar-left">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleExport}
+                disabled={loading}
+              >
+                <Download {...iconProps()} aria-hidden />
+                Export
+              </button>
+              {canWrite ? (
+                <button type="button" className="btn-secondary" onClick={handleImportClick}>
+                  <Upload {...iconProps()} aria-hidden />
+                  Import
+                </button>
+              ) : null}
+            </div>
+            {canWrite ? (
               <button type="button" className="btn-secondary" onClick={openCreate}>
                 <Plus {...iconProps()} aria-hidden />
                 Add hotword
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={(event) => void handleImportFile(event)}
+          />
 
           <div className="admin-table-wrap">
             <table className="admin-table">
