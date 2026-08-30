@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
 
 from deepeval.metrics import GEval, FaithfulnessMetric, ContextualRecallMetric, ContextualPrecisionMetric
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
+from tenacity import RetryError
 
 from evaluate_cli.judge.error_rate import compute_character_error_rate, compute_word_error_rate
 from evaluate_cli.judge.hotword_metrics import compute_hotword_metrics
 
 GEVAL_PASS_THRESHOLD = 0.5
 DEEPEVAL_RAG_PASS_THRESHOLD = 0.5
+# Full document markdown can trigger many Faithfulness claim checks; cap input size.
+DEEPEVAL_RAG_MAX_CHARS = int(os.getenv("DEEPEVAL_RAG_MAX_CHARS", "12000"))
+DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS = os.getenv(
+    "DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE",
+    "180",
+)
 
 DEEPEVAL_RAG_KINDS = frozenset({
     "faithfulness_score",
@@ -101,15 +109,39 @@ def _score_from_metric(metric: GEval, *, winner: bool) -> JudgeScore:
     return JudgeScore(score=score, score_max=score_max, winner=None, reason=metric.reason or "")
 
 
+def _ensure_deepeval_timeout() -> None:
+    if os.getenv("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE") is None:
+        os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS
+
+
+def _truncate_for_deepeval_rag(text: str, *, field_label: str) -> tuple[str, str | None]:
+    normalized = (text or "").strip()
+    if len(normalized) <= DEEPEVAL_RAG_MAX_CHARS:
+        return normalized, None
+    return (
+        normalized[:DEEPEVAL_RAG_MAX_CHARS],
+        (
+            f"{field_label} truncated to {DEEPEVAL_RAG_MAX_CHARS} chars for DeepEval "
+            f"(original {len(normalized)} chars)."
+        ),
+    )
+
+
 def score_deepeval_rag_dimension(
     reference: str,
     transcript: str,
     dimension: dict[str, Any],
     context: dict[str, Any],
 ) -> JudgeScore:
+    _ensure_deepeval_timeout()
+
     kind = str(dimension.get("kind", "")).strip()
     label = str(dimension.get("label") or kind)
     model = _judge_model(context)
+
+    reference, reference_note = _truncate_for_deepeval_rag(reference, field_label="Reference")
+    transcript, transcript_note = _truncate_for_deepeval_rag(transcript, field_label="Parsed output")
+    truncation_notes = [note for note in (reference_note, transcript_note) if note]
 
     if kind == "faithfulness_score":
         metric: Any = FaithfulnessMetric(
@@ -151,9 +183,24 @@ def score_deepeval_rag_dimension(
     else:
         raise RuntimeError(f"Unsupported DeepEval RAG kind: {kind!r}")
 
-    metric.measure(test_case)
+    try:
+        metric.measure(test_case)
+    except (TimeoutError, RetryError) as exc:
+        detail = exc
+        if isinstance(exc, RetryError) and exc.last_attempt.failed:
+            detail = exc.last_attempt.exception() or exc
+        return JudgeScore(
+            score=None,
+            score_max=1.0,
+            winner=None,
+            reason=f"{label} timed out during DeepEval scoring: {detail}",
+            lower_is_better=False,
+        )
+
     score = float(metric.score) if metric.score is not None else None
     reason = metric.reason or f"{label} score unavailable."
+    if truncation_notes:
+        reason = f"{' '.join(truncation_notes)} {reason}"
     return JudgeScore(score=score, score_max=1.0, winner=None, reason=reason, lower_is_better=False)
 
 

@@ -109,6 +109,70 @@ def test_score_deepeval_rag_faithfulness_builds_test_case(monkeypatch) -> None:
     assert result.score_max == 1.0
 
 
+def test_score_deepeval_rag_truncates_long_markdown(monkeypatch) -> None:
+    captured: dict = {}
+
+    class FakeFaithfulnessMetric:
+        score = 0.9
+        reason = "ok"
+
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+        def measure(self, test_case) -> None:
+            captured["test_case"] = test_case
+
+    monkeypatch.setattr("evaluate_cli.judge.metrics.DEEPEVAL_RAG_MAX_CHARS", 20)
+    monkeypatch.setattr("evaluate_cli.judge.metrics.FaithfulnessMetric", FakeFaithfulnessMetric)
+    monkeypatch.setattr(
+        "evaluate_cli.judge.metrics._judge_model",
+        lambda _ctx: object(),
+    )
+
+    from evaluate_cli.judge.metrics import score_deepeval_rag_dimension
+
+    long_reference = "gold " * 100
+    long_transcript = "parsed " * 100
+    result = score_deepeval_rag_dimension(
+        long_reference,
+        long_transcript,
+        {"label": "Faithfulness", "kind": "faithfulness_score"},
+        {},
+    )
+
+    test_case = captured["test_case"]
+    assert len(test_case.actual_output) == 20
+    assert len(test_case.retrieval_context[0]) == 20
+    assert "truncated to 20 chars" in result.reason
+
+
+def test_score_deepeval_rag_timeout_returns_null_score(monkeypatch) -> None:
+    class FakeFaithfulnessMetric:
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        def measure(self, _test_case) -> None:
+            raise TimeoutError("call timed out after 88.5s")
+
+    monkeypatch.setattr("evaluate_cli.judge.metrics.FaithfulnessMetric", FakeFaithfulnessMetric)
+    monkeypatch.setattr(
+        "evaluate_cli.judge.metrics._judge_model",
+        lambda _ctx: object(),
+    )
+
+    from evaluate_cli.judge.metrics import score_deepeval_rag_dimension
+
+    result = score_deepeval_rag_dimension(
+        "gold markdown",
+        "parsed markdown",
+        {"label": "Faithfulness", "kind": "faithfulness_score"},
+        {},
+    )
+
+    assert result.score is None
+    assert "timed out" in result.reason.lower()
+
+
 def test_score_deepeval_rag_recall_uses_parse_as_retrieval_context(monkeypatch) -> None:
     captured: dict = {}
 
