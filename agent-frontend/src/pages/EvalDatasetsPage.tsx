@@ -502,7 +502,7 @@ export function EvalDatasetDetailPage() {
   if (!datasetId) return <Navigate to="/evaluation/datasets" replace />;
 
   return (
-    <div className="admin-page">
+    <div className="admin-page eval-dataset-detail-page">
       <Link to="/evaluation/datasets" className="kb-back-link">
         ← back DataSet
       </Link>
@@ -568,8 +568,8 @@ export function EvalDatasetDetailPage() {
 
       {error ? <p className="admin-error">{error}</p> : null}
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
+      <div className="admin-table-wrap eval-dataset-items-table-wrap">
+        <table className="admin-table eval-dataset-items-table">
           <thead>
             <tr>
               <th>File</th>
