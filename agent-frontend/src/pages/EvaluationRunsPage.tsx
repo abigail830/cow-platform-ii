@@ -160,7 +160,7 @@ function fileTranscribeDurationLabel(
         : undefined);
     if (typeof ms === 'number' && ms > bestMs) {
       bestMs = ms;
-      label = evalItemDurationLabel(cell);
+      label = evalItemTranscribeMetricsLabel(cell);
     }
   }
   return label;
@@ -316,6 +316,11 @@ function formatDurationMs(ms: number): string {
   return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
 
+function formatRtf(rtf: number): string {
+  if (!Number.isFinite(rtf) || rtf < 0) return '';
+  return `${rtf.toFixed(2)}×`;
+}
+
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -344,6 +349,26 @@ function evalItemDurationLabel(item: EvalRunItem | undefined): string | null {
   if (durationMs == null) return null;
   const formatted = formatDurationMs(durationMs);
   return formatted || null;
+}
+
+function evalItemTranscribeMetricsLabel(item: EvalRunItem | undefined): string | null {
+  const duration = evalItemDurationLabel(item);
+  const rtf = item?.rtf;
+  if (duration && rtf != null) return `${duration} · RTF ${formatRtf(rtf)}`;
+  if (duration) return duration;
+  if (rtf != null) return `RTF ${formatRtf(rtf)}`;
+  return null;
+}
+
+function formatTranscribeSummaryLine(transcribe: unknown): string | null {
+  if (!transcribe || typeof transcribe !== 'object' || Array.isArray(transcribe)) return null;
+  const byVariant = (transcribe as { by_variant?: Record<string, { display_name?: string; rtf?: number }> })
+    .by_variant;
+  if (!byVariant) return null;
+  const parts = Object.values(byVariant)
+    .filter((row) => typeof row.rtf === 'number')
+    .map((row) => `${row.display_name ?? 'Variant'} RTF ${formatRtf(row.rtf!)}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 function activeJudgeFileName(attempt: EvalRunAttempt): string | null {
@@ -931,7 +956,7 @@ function EvalRunPipelineOutput({
   runStatus: EvalRunStatus;
   starting: boolean;
 }) {
-  const duration = evalItemDurationLabel(cell);
+  const duration = evalItemTranscribeMetricsLabel(cell);
 
   return (
     <div className="eval-run-pipeline-col">
@@ -969,6 +994,7 @@ function EvalRunAttemptSection({
   evaluatingAttemptId,
   onRetryCompare,
   onEvaluate,
+  transcribeSummary,
 }: {
   attempt: EvalRunAttempt;
   variants: EvalRunDetail['variants'];
@@ -982,6 +1008,7 @@ function EvalRunAttemptSection({
   evaluatingAttemptId: string | null;
   onRetryCompare: (datasetItemId: string, attemptId: string) => void;
   onEvaluate: (attemptId: string) => void;
+  transcribeSummary?: unknown;
 }) {
   const itemByVariantAndDataset = useMemo(() => {
     const map = new Map<string, EvalRunItem>();
@@ -1011,6 +1038,7 @@ function EvalRunAttemptSection({
 
   const isJudgingPhase = attempt.phase === 'judging' && attempt.status === 'running';
   const durationLabel = attempt.duration_ms ? formatDurationMs(attempt.duration_ms) : null;
+  const transcribeSummaryLabel = formatTranscribeSummaryLine(transcribeSummary);
   const statusBadge = attemptStatusBadge(attempt);
   const showEvaluate =
     canWrite && canEvaluateAttempt(attempt, runStatus, starting);
@@ -1033,6 +1061,7 @@ function EvalRunAttemptSection({
         <span className="admin-muted eval-run-attempt-meta">
           {attempt.run_mode === 'full' ? 'Full' : 'Pipeline only'} · {attemptProgressLabel(attempt)}
           {durationLabel ? ` · ${durationLabel}` : ''}
+          {transcribeSummaryLabel ? ` · ${transcribeSummaryLabel}` : ''}
         </span>
         <span className="eval-run-attempt-summary-end">
           {showEvaluate ? (
@@ -1664,6 +1693,7 @@ export function EvaluationRunDetailPage() {
               evaluatingAttemptId={evaluatingAttemptId}
               onRetryCompare={(datasetItemId, attemptId) => void handleRetryCompare(datasetItemId, attemptId)}
               onEvaluate={(attemptId) => void handleEvaluate(attemptId)}
+              transcribeSummary={index === 0 ? detail.run.summary_metrics?.transcribe : undefined}
             />
           ))
         )}

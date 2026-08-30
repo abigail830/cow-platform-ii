@@ -360,7 +360,9 @@ type EvalDatasetReferenceImportModalProps = {
   datasetName: string;
   items: EvalDatasetItem[];
   onCancel: () => void;
-  onImport: (rows: Array<{ itemId: string; reference: string }>) => Promise<void>;
+  onImport: (
+    rows: Array<{ itemId: string; reference: string; durationSec: number | null }>,
+  ) => Promise<void>;
 };
 
 export function EvalDatasetReferenceImportModal({
@@ -394,8 +396,12 @@ export function EvalDatasetReferenceImportModal({
   }
 
   const matchedRows =
-    preview?.rows.filter((row) => itemByName.has(row.filename) && !preview.duplicateFilenames.includes(row.filename)) ??
-    [];
+    preview?.rows.filter(
+      (row) =>
+        itemByName.has(row.filename) &&
+        !preview.duplicateFilenames.includes(row.filename) &&
+        (row.reference.length > 0 || row.durationSec != null),
+    ) ?? [];
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -409,6 +415,7 @@ export function EvalDatasetReferenceImportModal({
       const payload = matchedRows.map((row) => ({
         itemId: itemByName.get(row.filename)!.id,
         reference: row.reference,
+        durationSec: row.durationSec,
       }));
       await onImport(payload);
     } catch (err) {
@@ -433,8 +440,10 @@ export function EvalDatasetReferenceImportModal({
           <span className="eval-dataset-reference-import-dataset-name">{datasetName}</span>
         </p>
         <p className="eval-dataset-reference-import-format">
-          CSV or TSV with columns filename (full name including extension, e.g. clip001.wav) and
-          reference (transcript text). Filename must match an uploaded audio file exactly.
+          CSV or TSV with columns <strong>filename</strong> (e.g. clip001.wav),{' '}
+          <strong>reference</strong> (transcript text), and optional <strong>duration_sec</strong>{' '}
+          (audio length in seconds for RTF). Filename must match an uploaded audio file exactly.
+          Provide reference and/or duration_sec per row.
         </p>
         <form onSubmit={(event) => void handleSubmit(event)}>
           <EvalDatasetFileDropzone
@@ -488,7 +497,7 @@ export function EvalDatasetReferenceImportModal({
               {busy
                 ? 'Importing…'
                 : preview
-                  ? `Import ${matchedRows.length} reference(s)`
+                  ? `Import ${matchedRows.length} row(s)`
                   : 'Import'}
             </button>
           </div>
@@ -561,6 +570,93 @@ export function EvalDatasetReferenceUploadModal({
             </button>
             <button type="submit" className="btn-primary" disabled={busy || !referenceText.trim()}>
               {busy ? 'Uploading…' : 'Upload reference'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+type EvalDatasetDurationEditModalProps = {
+  item: EvalDatasetItem;
+  onCancel: () => void;
+  onSave: (durationSec: number | null) => Promise<void>;
+};
+
+export function EvalDatasetDurationEditModal({
+  item,
+  onCancel,
+  onSave,
+}: EvalDatasetDurationEditModalProps) {
+  const initialDuration =
+    typeof item.metadata?.duration_sec === 'number'
+      ? String(item.metadata.duration_sec)
+      : typeof item.metadata?.duration_seconds === 'number'
+        ? String(item.metadata.duration_seconds)
+        : '';
+  const [durationText, setDurationText] = useState(initialDuration);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const trimmed = durationText.trim();
+    let durationSec: number | null = null;
+    if (trimmed) {
+      const parsed = Number.parseFloat(trimmed);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        setError('Duration must be a positive number (seconds), or leave empty to clear');
+        return;
+      }
+      durationSec = Math.round(parsed * 1000) / 1000;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await onSave(durationSec);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save duration');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div
+        className="modal-card model-config-form"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="eval-dataset-duration-edit-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="eval-dataset-duration-edit-title">Edit audio duration</h2>
+        <p className="admin-form-hint">
+          Used as the RTF denominator for <strong>{item.name}</strong>. Upload auto-detects duration
+          when possible; you can override it here.
+        </p>
+        <form onSubmit={(event) => void handleSubmit(event)}>
+          <label className="form-field form-field-wide">
+            <span>Duration (seconds)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              value={durationText}
+              onChange={(event) => setDurationText(event.target.value)}
+              placeholder="e.g. 12.5"
+              disabled={busy}
+              autoFocus
+            />
+          </label>
+          {error ? <p className="error">{error}</p> : null}
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : 'Save'}
             </button>
           </div>
         </form>

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Download, FileText, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { Download, Clock3, FileText, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
 import {
   createEvalDataset,
   deleteEvalDataset,
   deleteEvalDatasetItem,
+  evalDatasetItemDurationSec,
   formatEvalFileBytes,
   getEvalDataset,
   getEvalDatasetItemDownloadUrl,
@@ -12,6 +13,7 @@ import {
   listEvalDatasetItems,
   listEvalDatasets,
   updateEvalDataset,
+  updateEvalDatasetItemDuration,
   uploadEvalDatasetItem,
   uploadEvalDatasetReference,
   type EvalDataset,
@@ -19,12 +21,15 @@ import {
 } from '../api/evaluation/datasets.ts';
 import {
   EvalDatasetCreateModal,
+  EvalDatasetDurationEditModal,
   EvalDatasetEditModal,
   EvalDatasetReferenceImportModal,
   EvalDatasetReferenceUploadModal,
   EvalDatasetUploadModal,
 } from '../components/EvalDatasetModals.tsx';
+import { formatDatasetItemDuration } from '../shared/reference-import.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
+import { NavPageIcon } from '../components/icons/NavIcons.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
@@ -178,13 +183,13 @@ export function EvalDatasetsListPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={5} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={5} className="admin-table-empty">
                   No datasets yet.
                 </td>
               </tr>
@@ -192,12 +197,22 @@ export function EvalDatasetsListPage() {
               filteredItems.map((row) => (
                 <tr key={row.id}>
                   <td>
-                    <Link to={`/evaluation/datasets/${row.id}`} className="admin-link">
-                      {row.name}
-                    </Link>
-                    {row.description ? (
-                      <div className="admin-muted">{row.description}</div>
-                    ) : null}
+                    <div className="eval-dataset-list-entry">
+                      <NavPageIcon
+                        name="evaluation-dataset"
+                        size={16}
+                        className="eval-dataset-list-icon"
+                        aria-hidden
+                      />
+                      <div className="eval-dataset-list-text">
+                        <Link to={`/evaluation/datasets/${row.id}`} className="eval-dataset-list-name">
+                          {row.name}
+                        </Link>
+                        {row.description ? (
+                          <div className="admin-muted eval-dataset-list-desc">{row.description}</div>
+                        ) : null}
+                      </div>
+                    </div>
                   </td>
                   <td>{mediaTypeLabel(row.media_type)}</td>
                   <td>{row.item_count}</td>
@@ -307,6 +322,7 @@ export function EvalDatasetDetailPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [referenceImportOpen, setReferenceImportOpen] = useState(false);
   const [referenceUploadTarget, setReferenceUploadTarget] = useState<EvalDatasetItem | null>(null);
+  const [durationEditTarget, setDurationEditTarget] = useState<EvalDatasetItem | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [forbidden, setForbidden] = useState(false);
@@ -383,12 +399,26 @@ export function EvalDatasetDetailPage() {
     }
   }
 
-  async function handleImportReferences(rows: Array<{ itemId: string; reference: string }>) {
+  async function handleImportReferences(
+    rows: Array<{ itemId: string; reference: string; durationSec: number | null }>,
+  ) {
     if (!datasetId) return;
     for (const row of rows) {
-      await uploadEvalDatasetReference(datasetId, row.itemId, row.reference);
+      if (row.reference.trim()) {
+        await uploadEvalDatasetReference(datasetId, row.itemId, row.reference);
+      }
+      if (row.durationSec != null) {
+        await updateEvalDatasetItemDuration(datasetId, row.itemId, row.durationSec, 'import');
+      }
     }
     setReferenceImportOpen(false);
+    await load();
+  }
+
+  async function handleSaveDuration(itemId: string, durationSec: number | null) {
+    if (!datasetId) return;
+    await updateEvalDatasetItemDuration(datasetId, itemId, durationSec);
+    setDurationEditTarget(null);
     await load();
   }
 
@@ -473,6 +503,7 @@ export function EvalDatasetDetailPage() {
               <th>File</th>
               <th>Type</th>
               <th>Size</th>
+              <th>Duration</th>
               <th>Reference</th>
               <th>Uploaded</th>
               <th aria-label="Actions" />
@@ -481,13 +512,13 @@ export function EvalDatasetDetailPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={7} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={7} className="admin-table-empty">
                   {items.length === 0 ? (
                     <>
                       No files yet.{' '}
@@ -510,6 +541,7 @@ export function EvalDatasetDetailPage() {
                   <td>{item.name}</td>
                   <td>{item.file_type}</td>
                   <td>{formatEvalFileBytes(item.size_bytes)}</td>
+                  <td>{formatDatasetItemDuration(evalDatasetItemDurationSec(item))}</td>
                   <td>{item.reference_s3_key ? 'Uploaded' : 'Missing'}</td>
                   <td>{new Date(item.created_at).toLocaleString()}</td>
                   <td>
@@ -534,6 +566,14 @@ export function EvalDatasetDetailPage() {
                       ) : null}
                       {canWrite ? (
                         <>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Edit duration"
+                            onClick={() => setDurationEditTarget(item)}
+                          >
+                            <Clock3 {...iconProps()} aria-hidden />
+                          </button>
                           <button
                             type="button"
                             className="icon-btn"
@@ -575,6 +615,14 @@ export function EvalDatasetDetailPage() {
           item={referenceUploadTarget}
           onCancel={() => setReferenceUploadTarget(null)}
           onUpload={(referenceText) => handleUploadReference(referenceUploadTarget.id, referenceText)}
+        />
+      ) : null}
+
+      {durationEditTarget ? (
+        <EvalDatasetDurationEditModal
+          item={durationEditTarget}
+          onCancel={() => setDurationEditTarget(null)}
+          onSave={(durationSec) => handleSaveDuration(durationEditTarget.id, durationSec)}
         />
       ) : null}
 

@@ -48,6 +48,7 @@ export type AudioPipelineJobContext = {
   input_uri: string;
   s3_prefix: string;
   api_url: string;
+  audio_duration_sec: number | null;
 };
 
 export async function createAudioPipelineJob(input: {
@@ -182,6 +183,7 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
   let inputUri = `s3://${s3.bucket}/${audio.s3Key}`;
   let s3Prefix = s3PrefixFromKey(audio.s3Key) || audioStoragePrefix(audio.fileHash);
   let displayName = audio.name;
+  let audioDurationSec: number | null = null;
 
   if (job.evalRunItemId) {
     const { buildEvalLinkedAudioPipelineContextOverrides } = await import('../eval/eval-audio-bridge.ts');
@@ -190,6 +192,7 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
       inputUri = overrides.input_uri;
       s3Prefix = overrides.s3_prefix;
       displayName = overrides.dataset_item_name;
+      audioDurationSec = overrides.audio_duration_sec;
     }
   }
 
@@ -214,6 +217,7 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
     input_uri: inputUri,
     s3_prefix: s3Prefix,
     api_url: apiUrl,
+    audio_duration_sec: audioDurationSec,
   };
 }
 

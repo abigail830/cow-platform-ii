@@ -3,6 +3,7 @@ import { getToken } from '../auth.ts';
 import { formatApiError } from '../http.ts';
 import { sha256HexFromFile } from '../../shared/file-hash.ts';
 import { putFileToPresignedUrl } from '../direct-upload.ts';
+import { readAudioDurationSec } from '../../shared/audio-duration.ts';
 import {
   deleteEvalDatasetItem,
   listEvalDatasetItems,
@@ -75,6 +76,8 @@ export type EvalRunItem = {
   error_message: string | null;
   metrics: Record<string, unknown> | null;
   duration_ms: number | null;
+  audio_duration_sec: number | null;
+  rtf: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -310,6 +313,7 @@ export async function uploadEvalRunFile(
 ): Promise<EvalRunDatasetItemRef> {
   try {
     const fileHash = await sha256HexFromFile(file);
+    const durationSec = await readAudioDurationSec(file);
     const init = (await authFetch(`/api/evaluation/runs/${runId}/files/upload-init`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -336,6 +340,7 @@ export async function uploadEvalRunFile(
         file_hash: fileHash,
         s3_key: init.s3_key,
         size_bytes: file.size,
+        ...(durationSec != null ? { duration_sec: durationSec } : {}),
       }),
     });
 

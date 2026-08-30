@@ -5,6 +5,7 @@ import {
   db,
   type AudioPipelineJobStage,
 } from '../../db/index.ts';
+import { parseDatasetItemDurationSec } from '../../shared/eval/eval-audio-duration.ts';
 import {
   evalRunAsrResultKey,
   evalRunTranscriptKey,
@@ -27,6 +28,21 @@ export async function createEvalTranscribeAudioPipelineJob(
   }
 
   const audioId = await ensureEvalShadowAudioForDatasetItem(evalRunItem.datasetItemId);
+  const [datasetItem] = await db
+    .select()
+    .from(appEvalDatasetItems)
+    .where(eq(appEvalDatasetItems.id, evalRunItem.datasetItemId))
+    .limit(1);
+  const durationSec = parseDatasetItemDurationSec(datasetItem?.metadata);
+  if (durationSec != null) {
+    await updateEvalRunItem(evalRunItem.id, {
+      metrics: {
+        audio_duration_sec: durationSec,
+        audio_duration_source: 'dataset',
+      },
+    });
+  }
+
   const job = await createAudioPipelineJob({
     audioId,
     pipelineName: evalRunItem.pipelineName,
@@ -96,7 +112,12 @@ export async function syncEvalRunItemFromAudioPipelineJob(
 
 export async function buildEvalLinkedAudioPipelineContextOverrides(
   evalRunItemId: string,
-): Promise<{ input_uri: string; s3_prefix: string; dataset_item_name: string } | null> {
+): Promise<{
+  input_uri: string;
+  s3_prefix: string;
+  dataset_item_name: string;
+  audio_duration_sec: number | null;
+} | null> {
   const [evalItem] = await db
     .select()
     .from(appEvalRunItems)
@@ -119,5 +140,6 @@ export async function buildEvalLinkedAudioPipelineContextOverrides(
     input_uri: `s3://${s3.bucket}/${datasetItem.s3Key}`,
     s3_prefix: evalItem.outputS3Prefix,
     dataset_item_name: datasetItem.name,
+    audio_duration_sec: parseDatasetItemDurationSec(datasetItem.metadata),
   };
 }

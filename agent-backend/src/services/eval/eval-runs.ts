@@ -34,6 +34,7 @@ import {
   toAttemptPublic,
 } from './eval-run-attempts.ts';
 import { enrichEvalRunItemPublic } from './eval-run-item-enrichment.ts';
+import { aggregateTranscribeSummaryMetrics } from './eval-transcribe-summary.ts';
 import { buildEvalRunJudgeMetrics } from './eval-run-judge-config.ts';
 
 const EVAL_RUN_WORKER_NO_STATUS_MESSAGE =
@@ -111,6 +112,39 @@ function toVariantPublic(row: typeof appEvalRunVariants.$inferSelect) {
     display_name: row.displayName,
     status: row.status,
   };
+}
+
+async function writeTranscribeSummaryMetrics(runId: string): Promise<void> {
+  const run = await getEvalRunById(runId);
+  if (!run) return;
+
+  const attempt = await getLatestEvalRunAttempt(runId);
+  if (!attempt) return;
+
+  const items = await db
+    .select()
+    .from(appEvalRunItems)
+    .where(eq(appEvalRunItems.attemptId, attempt.id));
+  const variants = await db
+    .select()
+    .from(appEvalRunVariants)
+    .where(eq(appEvalRunVariants.runId, runId));
+
+  const transcribe = aggregateTranscribeSummaryMetrics(items, variants);
+  if (Object.keys(transcribe.by_variant).length === 0) return;
+
+  const prior =
+    run.summaryMetrics && typeof run.summaryMetrics === 'object' && !Array.isArray(run.summaryMetrics)
+      ? (run.summaryMetrics as Record<string, unknown>)
+      : {};
+
+  await db
+    .update(appEvalRuns)
+    .set({
+      summaryMetrics: { ...prior, transcribe },
+      updatedAt: new Date(),
+    })
+    .where(eq(appEvalRuns.id, runId));
 }
 
 export async function listEvalRuns() {
@@ -412,6 +446,8 @@ export async function maybeFinalizeEvalRunPhase(runId: string): Promise<void> {
   const attempt = await getLatestEvalRunAttempt(runId);
 
   if (run.runMode === 'full' && completion.completedRunItems > 0) {
+    await writeTranscribeSummaryMetrics(runId);
+
     await db
       .update(appEvalRuns)
       .set({
@@ -433,6 +469,8 @@ export async function maybeFinalizeEvalRunPhase(runId: string): Promise<void> {
     await reconcileAndResumeEvalRunComparePhase(runId);
     return;
   }
+
+  await writeTranscribeSummaryMetrics(runId);
 
   await db
     .update(appEvalRuns)

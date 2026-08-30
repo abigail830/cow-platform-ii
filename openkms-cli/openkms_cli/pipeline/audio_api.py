@@ -75,6 +75,7 @@ def patch_audio_job(
     stage: str | None = None,
     external_job_id: str | None = None,
     error_message: str | None = None,
+    metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {}
     if stage is not None:
@@ -83,6 +84,8 @@ def patch_audio_job(
         body["external_job_id"] = external_job_id
     if error_message is not None:
         body["error_message"] = error_message
+    if metrics is not None:
+        body["metrics"] = metrics
     base = api_url.rstrip("/")
     return _request("PATCH", f"{base}/internal-api/audio-pipeline/jobs/{job_id}", json_body=body)
 

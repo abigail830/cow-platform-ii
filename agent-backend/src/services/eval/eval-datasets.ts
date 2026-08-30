@@ -17,6 +17,9 @@ import {
   validateFileHash,
 } from '../../storage/eval-dataset-files.ts';
 import { deleteEvalDatasetStorageObject } from '../../storage/eval-dataset-files.ts';
+import {
+  roundDurationSec,
+} from '../../shared/eval/eval-audio-duration.ts';
 import { formatEvalDatasetDbError } from './eval-dataset-db-error.ts';
 
 export type EvalDatasetRow = typeof appEvalDatasets.$inferSelect;
@@ -227,6 +230,55 @@ export async function initEvalDatasetItemUpload(input: {
   };
 }
 
+function buildDatasetItemMetadata(
+  durationSec?: number | null,
+  source: 'client' | 'manual' | 'import' = 'client',
+): Record<string, unknown> {
+  if (durationSec == null || !Number.isFinite(durationSec) || durationSec <= 0) {
+    return {};
+  }
+  return {
+    duration_sec: roundDurationSec(durationSec),
+    duration_source: source,
+  };
+}
+
+export async function updateEvalDatasetItemDuration(
+  datasetId: string,
+  itemId: string,
+  durationSec: number | null,
+  source: 'manual' | 'import' = 'manual',
+) {
+  const item = await getEvalDatasetItemById(datasetId, itemId);
+  if (!item) throw new Error('Dataset item not found');
+
+  const prior =
+    item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+      ? { ...(item.metadata as Record<string, unknown>) }
+      : {};
+
+  let metadata: Record<string, unknown>;
+  if (durationSec == null || !Number.isFinite(durationSec) || durationSec <= 0) {
+    const { duration_sec: _a, duration_seconds: _b, duration_source: _c, ...rest } = prior;
+    metadata = rest;
+  } else {
+    metadata = {
+      ...prior,
+      duration_sec: roundDurationSec(durationSec),
+      duration_source: source,
+    };
+  }
+
+  const [row] = await db
+    .update(appEvalDatasetItems)
+    .set({ metadata, updatedAt: new Date() })
+    .where(and(eq(appEvalDatasetItems.id, itemId), eq(appEvalDatasetItems.datasetId, datasetId)))
+    .returning();
+
+  if (!row) throw new Error('Dataset item not found');
+  return toItemPublic(row);
+}
+
 export async function finalizeEvalDatasetItemUpload(input: {
   datasetId: string;
   itemId: string;
@@ -234,6 +286,7 @@ export async function finalizeEvalDatasetItemUpload(input: {
   fileHash: string;
   s3Key: string;
   sizeBytes: number;
+  durationSec?: number | null;
   uploadedBy?: string | null;
 }) {
   const dataset = await getEvalDatasetById(input.datasetId);
@@ -274,6 +327,8 @@ export async function finalizeEvalDatasetItemUpload(input: {
         .where(eq(appEvalDatasetItems.datasetId, input.datasetId));
       const maxSort = siblings.reduce((max, row) => Math.max(max, row.sortOrder), -1);
 
+      const metadata = buildDatasetItemMetadata(input.durationSec);
+
       const [row] = await tx
         .insert(appEvalDatasetItems)
         .values({
@@ -285,6 +340,7 @@ export async function finalizeEvalDatasetItemUpload(input: {
           fileHash,
           s3Key: expectedKey,
           sortOrder: maxSort + 1,
+          metadata,
           uploadedBy: input.uploadedBy ?? null,
         })
         .returning();

@@ -17,6 +17,7 @@ import {
   listEvalDatasetItems,
   listEvalDatasets,
   updateEvalDataset,
+  updateEvalDatasetItemDuration,
 } from '../../services/eval/eval-datasets.ts';
 import { formatEvalDatasetDbError } from '../../services/eval/eval-dataset-db-error.ts';
 import { isStorageEnabled } from '../../storage/s3-config.ts';
@@ -198,6 +199,7 @@ datasets.post(
       file_hash?: string;
       s3_key?: string;
       size_bytes?: number;
+      duration_sec?: number;
     }>();
 
     const itemId = body.item_id?.trim() ?? '';
@@ -213,6 +215,11 @@ datasets.post(
     }
 
     try {
+      const durationSec =
+        body.duration_sec != null && Number.isFinite(Number(body.duration_sec))
+          ? Number(body.duration_sec)
+          : null;
+
       const item = await finalizeEvalDatasetItemUpload({
         datasetId: id,
         itemId,
@@ -220,6 +227,7 @@ datasets.post(
         fileHash: body.file_hash ?? '',
         s3Key,
         sizeBytes,
+        durationSec,
         uploadedBy: user.id,
       });
       return c.json(item, 201);
@@ -330,6 +338,44 @@ datasets.post(
     } catch (error) {
       if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
       const { message, status } = routeError(error, 'Reference upload complete failed');
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+datasets.patch(
+  '/:id/items/:itemId',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.DATASETS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    const itemId = routeParam(c, 'itemId');
+    if (!id || !itemId) return c.json({ error: 'Dataset id and item id are required' }, 400);
+
+    const body = await c.req.json<{ duration_sec?: number | null; duration_source?: 'manual' | 'import' }>();
+    if (body.duration_sec === undefined) {
+      return c.json({ error: 'duration_sec is required' }, 400);
+    }
+
+    const durationSec =
+      body.duration_sec == null
+        ? null
+        : Number.isFinite(Number(body.duration_sec))
+          ? Number(body.duration_sec)
+          : NaN;
+    if (body.duration_sec != null && (!Number.isFinite(durationSec) || durationSec! <= 0)) {
+      return c.json({ error: 'duration_sec must be a positive number or null' }, 400);
+    }
+
+    try {
+      const item = await updateEvalDatasetItemDuration(
+        id,
+        itemId,
+        durationSec,
+        body.duration_source === 'import' ? 'import' : 'manual',
+      );
+      return c.json(item);
+    } catch (error) {
+      const { message, status } = routeError(error, 'Failed to update dataset item');
       return c.json({ error: message }, status);
     }
   },

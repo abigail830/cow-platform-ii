@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
 import { routeParam } from '../../http/route-param.ts';
+import { enrichTranscribeMetrics } from '../../shared/eval/eval-audio-duration.ts';
 import {
   buildAudioPipelineJobContext,
   getAudioPipelineJobById,
@@ -10,6 +11,7 @@ import {
   type AudioPipelineJobStage,
 } from '../../services/audio/audio-pipeline-jobs.ts';
 import { spawnAsyncAudioPipelineWorker } from '../../services/audio/audio-pipeline-runner.ts';
+import { updateEvalRunItem } from '../../services/eval/eval-pipeline-jobs.ts';
 import { syncEvalRunItemFromAudioPipelineJob } from '../../services/eval/eval-audio-bridge.ts';
 
 const audioPipelineJobs = new Hono();
@@ -38,10 +40,19 @@ audioPipelineJobs.patch('/:id', async (c) => {
     stage?: AudioPipelineJobStage;
     external_job_id?: string | null;
     error_message?: string | null;
+    metrics?: Record<string, unknown> | null;
   }>();
 
   const job = await getAudioPipelineJobById(id);
   if (!job) return c.json({ error: 'Audio pipeline job not found' }, 404);
+
+  if (body.metrics !== undefined && job.evalRunItemId) {
+    const metrics =
+      body.metrics == null
+        ? null
+        : enrichTranscribeMetrics(body.metrics as Record<string, unknown>);
+    await updateEvalRunItem(job.evalRunItemId, { metrics });
+  }
 
   const updated = await updateAudioPipelineJob(job.id, {
     stage: body.stage,

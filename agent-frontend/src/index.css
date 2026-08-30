@@ -3607,14 +3607,43 @@ textarea {
   font-weight: 500;
 }
 
-.eval-run-list-name:hover {
+.eval-dataset-list-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.eval-dataset-list-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.eval-dataset-list-name {
+  color: var(--brand-orange);
+  text-decoration: none;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.eval-dataset-list-desc {
+  line-height: 1.25;
+  margin: 0;
+}
+
+.eval-run-list-name:hover,
+.eval-dataset-list-name:hover {
   color: var(--brand-orange-hover);
   text-decoration: underline;
 }
 
-.eval-run-list-icon {
+.eval-run-list-icon,
+.eval-dataset-list-icon {
   flex-shrink: 0;
   color: var(--brand-orange);
+  align-self: center;
 }
 
 .eval-run-files-count {

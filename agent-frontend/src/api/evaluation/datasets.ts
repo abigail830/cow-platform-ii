@@ -3,6 +3,8 @@ import { getToken } from '../auth.ts';
 import { formatApiError } from '../http.ts';
 import { sha256HexFromFile } from '../../shared/file-hash.ts';
 import { putFileToPresignedUrl } from '../direct-upload.ts';
+import { readAudioDurationSec } from '../../shared/audio-duration.ts';
+import { datasetItemDurationSec } from '../../shared/reference-import.ts';
 
 export type EvalDataset = {
   id: string;
@@ -56,6 +58,10 @@ export function formatEvalFileBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function evalDatasetItemDurationSec(item: EvalDatasetItem): number | null {
+  return datasetItemDurationSec(item.metadata);
 }
 
 export async function listEvalDatasets(): Promise<EvalDataset[]> {
@@ -128,6 +134,7 @@ type UploadInitResponse = {
 
 export async function uploadEvalDatasetItem(datasetId: string, file: File): Promise<EvalDatasetItem> {
   const fileHash = await sha256HexFromFile(file);
+  const durationSec = await readAudioDurationSec(file);
   const init = (await authFetch(`/api/evaluation/datasets/${datasetId}/items/upload-init`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -154,10 +161,25 @@ export async function uploadEvalDatasetItem(datasetId: string, file: File): Prom
       file_hash: fileHash,
       s3_key: init.s3_key,
       size_bytes: file.size,
+      ...(durationSec != null ? { duration_sec: durationSec } : {}),
     }),
   });
 
   return completed as EvalDatasetItem;
+}
+
+export async function updateEvalDatasetItemDuration(
+  datasetId: string,
+  itemId: string,
+  durationSec: number | null,
+  source: 'manual' | 'import' = 'manual',
+): Promise<EvalDatasetItem> {
+  const data = await authFetch(`/api/evaluation/datasets/${datasetId}/items/${itemId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ duration_sec: durationSec, duration_source: source }),
+  });
+  return data as EvalDatasetItem;
 }
 
 type ReferenceUploadInitResponse = {

@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { enrichTranscribeMetrics } from '../../shared/eval/eval-audio-duration.ts';
 import { isTerminalEvalRunItemStage } from './eval-run-phase.ts';
 import {
   appEvalDatasetItems,
@@ -90,7 +91,7 @@ export async function updateEvalRunItem(
         existing?.metrics && typeof existing.metrics === 'object' && !Array.isArray(existing.metrics)
           ? (existing.metrics as Record<string, unknown>)
           : {};
-      mergedMetrics = { ...prior, ...input.metrics };
+      mergedMetrics = enrichTranscribeMetrics({ ...prior, ...input.metrics });
     }
   }
 

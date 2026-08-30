@@ -289,6 +289,7 @@ runs.post(
       file_hash?: string;
       s3_key?: string;
       size_bytes?: number;
+      duration_sec?: number;
     }>();
 
     const itemId = body.item_id?.trim() ?? '';
@@ -305,6 +306,11 @@ runs.post(
 
     try {
       const datasetId = await assertEvalRunFilesMutable(id);
+      const durationSec =
+        body.duration_sec != null && Number.isFinite(Number(body.duration_sec))
+          ? Number(body.duration_sec)
+          : null;
+
       const item = await finalizeEvalDatasetItemUpload({
         datasetId,
         itemId,
@@ -312,6 +318,7 @@ runs.post(
         fileHash: body.file_hash ?? '',
         s3Key,
         sizeBytes,
+        durationSec,
         uploadedBy: user.id,
       });
       return c.json(item, 201);

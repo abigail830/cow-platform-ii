@@ -627,7 +627,22 @@ export async function maybeFinalizeEvalRunJudgePhase(runId: string): Promise<voi
   const completion = computeJudgeCompletion(jobs);
   if (!completion) return;
 
-  const summaryMetrics = aggregateJudgeSummaryMetrics(jobs);
+  const [runRow] = await db
+    .select({ summaryMetrics: appEvalRuns.summaryMetrics })
+    .from(appEvalRuns)
+    .where(eq(appEvalRuns.id, runId))
+    .limit(1);
+  const priorTranscribe =
+    runRow?.summaryMetrics &&
+    typeof runRow.summaryMetrics === 'object' &&
+    !Array.isArray(runRow.summaryMetrics)
+      ? (runRow.summaryMetrics as Record<string, unknown>).transcribe
+      : undefined;
+
+  const summaryMetrics = {
+    ...aggregateJudgeSummaryMetrics(jobs),
+    ...(priorTranscribe !== undefined ? { transcribe: priorTranscribe } : {}),
+  };
 
   const attemptItems = await db
     .select()
