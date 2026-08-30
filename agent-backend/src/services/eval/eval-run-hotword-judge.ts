@@ -15,7 +15,8 @@ export const HOTWORD_JUDGE_DIMENSIONS: EvalJudgeDimensionDefinition[] = [
     weight: 1,
     criteria:
       'Deterministic hotword recall: matched term occurrences divided by reference occurrences. ' +
-      'Case-insensitive; punctuation, spaces, and hyphens ignored (reference/scripts algorithm).',
+      'Case-insensitive; punctuation, spaces, and hyphens ignored; CJK characters preserved ' +
+      '(reference/scripts algorithm).',
     pass_threshold: '>=90%',
   },
   {

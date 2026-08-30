@@ -4,6 +4,8 @@ from evaluate_cli.judge.hotword_metrics import clean_hotword_text, compute_hotwo
 def test_clean_hotword_text_strips_punctuation_and_case() -> None:
     assert clean_hotword_text("COVID-19") == "covid19"
     assert clean_hotword_text("Hello, World!") == "helloworld"
+    assert clean_hotword_text("内容分发网络") == "内容分发网络"
+    assert clean_hotword_text("大模型，测试！") == "大模型测试"
 
 
 def test_compute_hotword_metrics_counts_substrings() -> None:
@@ -40,3 +42,31 @@ def test_compute_hotword_metrics_no_reference_occurrences() -> None:
     assert result.recall is None
     assert result.precision is None
     assert result.f1 is None
+
+
+def test_compute_hotword_metrics_chinese_terms() -> None:
+    result = compute_hotword_metrics(
+        "我们使用大模型做内容分发网络优化，大模型效果很好。",
+        "我们使用大模型做内容分发网络优化。",
+        ["大模型", "内容分发网络"],
+    )
+    assert result.actual == 3
+    assert result.predicted == 2
+    assert result.correct == 2
+    assert result.recall == 2 / 3
+    assert result.precision == 1.0
+    assert result.f1 == 0.8
+
+
+def test_compute_hotword_metrics_mixed_chinese_english() -> None:
+    result = compute_hotword_metrics(
+        "部署 CDN 并使用大模型加速。",
+        "部署cdn并使用大模型加速。",
+        ["CDN", "大模型"],
+    )
+    assert result.actual == 2
+    assert result.predicted == 2
+    assert result.correct == 2
+    assert result.recall == 1.0
+    assert result.precision == 1.0
+    assert result.f1 == 1.0

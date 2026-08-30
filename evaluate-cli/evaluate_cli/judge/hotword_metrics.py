@@ -5,11 +5,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_HOTWORD_CLEAN_RE = re.compile(r"[^a-z0-9]+")
+# Keep ASCII alnum + CJK (reference/scripts/generate_combined_report.py clean()).
+_HOTWORD_CLEAN_RE = re.compile(r"[^a-z0-9\u4e00-\u9fff]+")
 
 
 def clean_hotword_text(text: str) -> str:
-    """Case-insensitive match; strip punctuation, spaces, hyphens."""
+    """Case-insensitive match; strip punctuation, spaces, hyphens; keep CJK."""
     return _HOTWORD_CLEAN_RE.sub("", text.lower())
 
 

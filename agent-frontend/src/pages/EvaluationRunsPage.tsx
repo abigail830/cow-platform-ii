@@ -43,13 +43,7 @@ const LIST_PAGE = getNavPage('/evaluation/runs')!;
 /** Format judge score for display. New results store raw rubric scale; legacy rows store DeepEval 0–1. */
 function isPercentDisplayKind(kind?: string, lowerIsBetter?: boolean): boolean {
   if (kind === 'cer_score' || kind === 'wer_score') return true;
-  if (
-    kind === 'hotword_recall_score' ||
-    kind === 'hotword_precision_score' ||
-    kind === 'hotword_f1_score'
-  ) {
-    return true;
-  }
+  if (isHotwordDimensionKind(kind)) return true;
   return Boolean(lowerIsBetter);
 }
 
@@ -414,6 +408,39 @@ type DimensionAverage = {
   pass_threshold?: string;
 };
 
+function isHotwordDimensionKind(kind?: string): boolean {
+  return (
+    kind === 'hotword_recall_score' ||
+    kind === 'hotword_precision_score' ||
+    kind === 'hotword_f1_score'
+  );
+}
+
+const HOTWORD_DIMENSION_KIND_ORDER: Record<string, number> = {
+  hotword_recall_score: 0,
+  hotword_precision_score: 1,
+  hotword_f1_score: 2,
+};
+
+/** Non-hotword columns first (discovery order); hotword recall / precision / F1 last. */
+function sortEvalDimensionColumns(columns: EvalDimensionColumn[]): EvalDimensionColumn[] {
+  const nonHotword: EvalDimensionColumn[] = [];
+  const hotword: EvalDimensionColumn[] = [];
+  for (const column of columns) {
+    if (isHotwordDimensionKind(column.kind)) {
+      hotword.push(column);
+    } else {
+      nonHotword.push(column);
+    }
+  }
+  hotword.sort(
+    (a, b) =>
+      (HOTWORD_DIMENSION_KIND_ORDER[a.kind ?? ''] ?? 99) -
+      (HOTWORD_DIMENSION_KIND_ORDER[b.kind ?? ''] ?? 99),
+  );
+  return [...nonHotword, ...hotword];
+}
+
 function collectJudgeDimensionColumns(
   attempt: EvalRunAttempt,
   variants: EvalRunDetail['variants'],
@@ -454,7 +481,7 @@ function collectJudgeDimensionColumns(
     }
   }
 
-  return columns;
+  return sortEvalDimensionColumns(columns);
 }
 
 function dimensionColumnShortLabel(column: EvalDimensionColumn): string {
