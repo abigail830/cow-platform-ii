@@ -1136,6 +1136,7 @@ function EvalRunAttemptSection({
   onEvaluate: (attemptId: string) => void;
 }) {
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
+  const [open, setOpen] = useState(defaultOpen);
 
   const itemByVariantAndDataset = useMemo(() => {
     const map = new Map<string, EvalRunItem>();
@@ -1213,8 +1214,20 @@ function EvalRunAttemptSection({
     5 + (showPipelineColumn ? 1 : 0) + dimensionColumns.length;
 
   return (
-    <details className="eval-run-attempt" open={defaultOpen}>
-      <summary className="eval-run-attempt-summary">
+    <div className={`eval-run-attempt${open ? ' is-open' : ''}`}>
+      <div
+        className="eval-run-attempt-summary"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setOpen((value) => !value);
+          }
+        }}
+      >
         <span className="eval-run-attempt-title">
           <NavPageIcon name="evaluation-run" size={16} className="eval-run-attempt-icon" aria-hidden />
           <span className="eval-run-attempt-name">Run #{attempt.attempt_number}</span>
@@ -1261,8 +1274,9 @@ function EvalRunAttemptSection({
           ) : null}
           <ChevronDown {...iconProps({ size: 16 })} className="eval-run-attempt-chevron" aria-hidden />
         </span>
-      </summary>
+      </div>
 
+      {open ? (
       <div className="eval-run-attempt-body">
         {tableRows.length === 0 ? (
           <p className="admin-muted">No files in this run.</p>
@@ -1428,7 +1442,8 @@ function EvalRunAttemptSection({
           </div>
         )}
       </div>
-    </details>
+      ) : null}
+    </div>
   );
 }
 
