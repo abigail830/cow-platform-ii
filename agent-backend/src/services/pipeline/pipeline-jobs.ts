@@ -58,6 +58,8 @@ export type PipelineJobContext = {
   };
   input_uri: string;
   s3_prefix: string;
+  /** Canonical document bundle prefix (doc.s3_key dir); UI reads artifacts here. */
+  document_s3_prefix: string;
   api_url: string;
 };
 
@@ -175,6 +177,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
 
   let inputUri = `s3://${s3.bucket}/${doc.s3Key}`;
   let s3Prefix = s3PrefixFromKey(doc.s3Key);
+  const documentS3Prefix = s3Prefix;
   let displayName = doc.name;
 
   if (job.evalRunItemId) {
@@ -208,6 +211,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     },
     input_uri: inputUri,
     s3_prefix: s3Prefix,
+    document_s3_prefix: documentS3Prefix,
     api_url: apiUrl,
   };
 }

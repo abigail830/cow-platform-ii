@@ -1,5 +1,4 @@
-import { Suspense } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import {
@@ -55,6 +54,21 @@ export function DocumentDetailPage() {
   );
 
   const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('document-detail-split', 50);
+  const prevDocumentStatusRef = useRef<string | null>(null);
+
+  const loadContent = useCallback(async () => {
+    if (!documentId) return;
+    setLoadingContent(true);
+    try {
+      const docContent = await fetchDocumentContent(documentId, { timeoutMs: 60_000 });
+      setContent(docContent);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load document content');
+      setContent(null);
+    } finally {
+      setLoadingContent(false);
+    }
+  }, [documentId]);
 
   const loadDetail = useCallback(async () => {
     if (!documentId) return;
@@ -77,16 +91,8 @@ export function DocumentDetailPage() {
       setLoadingDoc(false);
     }
 
-    try {
-      const docContent = await fetchDocumentContent(documentId, { timeoutMs: 60_000 });
-      setContent(docContent);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load document content');
-      setContent(null);
-    } finally {
-      setLoadingContent(false);
-    }
-  }, [documentId, setSelectedChannelId]);
+    await loadContent();
+  }, [documentId, loadContent, setSelectedChannelId]);
 
   useEffect(() => {
     void loadDetail();
@@ -103,6 +109,18 @@ export function DocumentDetailPage() {
   }, [documentId, document?.status]);
 
   useEffect(() => {
+    if (!document) return;
+    const prev = prevDocumentStatusRef.current;
+    prevDocumentStatusRef.current = document.status;
+    if (
+      prev === 'running' &&
+      (document.status === 'completed' || document.status === 'failed')
+    ) {
+      void loadContent();
+    }
+  }, [document, loadContent]);
+
+  useEffect(() => {
     setRightPanelTab(rightPanelTabFromView(deepLink.view));
   }, [deepLink.view]);
 
@@ -113,7 +131,11 @@ export function DocumentDetailPage() {
   const sheetCount = mindmap?.sheets?.length ?? 0;
   const showSheetFilter = isMindmapOutline && sheetCount > 1;
   const showOriginalPreview = supportsUdocViewer(document?.file_type);
-  const detailMetadata = content?.metadata ?? document?.metadata ?? {};
+  const detailMetadata = useMemo(() => {
+    const docMeta = document?.metadata ?? {};
+    const contentMeta = content?.metadata ?? {};
+    return { ...contentMeta, ...docMeta };
+  }, [content?.metadata, document?.metadata]);
   const rightPanelHeading =
     rightPanelTab === 'pageindex'
       ? isMindmapOutline

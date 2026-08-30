@@ -104,6 +104,7 @@ def upload_hash_dir(
     region: str,
 ) -> int:
     client = get_s3_client(endpoint_url, access_key, secret_key, region)
+    normalized_prefix = prefix.rstrip("/")
     count = 0
     for f in hash_dir.rglob("*"):
         if not f.is_file():
@@ -111,12 +112,63 @@ def upload_hash_dir(
         rel = f.relative_to(hash_dir).as_posix()
         client.put_object(
             Bucket=bucket,
-            Key=f"{prefix}/{rel}",
+            Key=f"{normalized_prefix}/{rel}",
             Body=f.read_bytes(),
             ContentType=content_type_for_path(rel),
         )
         count += 1
     return count
+
+
+def document_storage_prefix_from_ctx(ctx: dict[str, Any]) -> str:
+    """Prefix where the document detail UI reads parse artifacts (doc.s3_key directory)."""
+    explicit = str(ctx.get("document_s3_prefix") or "").strip().rstrip("/")
+    if explicit:
+        return explicit
+    doc = ctx.get("document") or {}
+    s3_key = str(doc.get("s3_key") or "").replace("\\", "/").strip()
+    if s3_key:
+        idx = s3_key.rfind("/")
+        return s3_key[:idx] if idx >= 0 else s3_key
+    return str(ctx.get("s3_prefix") or "").rstrip("/")
+
+
+def upload_hash_dir_to_document_bundle(
+    hash_dir: Path,
+    ctx: dict[str, Any],
+    *,
+    endpoint_url: str | None,
+    access_key: str,
+    secret_key: str,
+    region: str,
+    bucket: str,
+) -> int:
+    """Upload parse artifacts to eval output prefix and the document bundle prefix when they differ."""
+    output_prefix = str(ctx.get("s3_prefix") or "").rstrip("/")
+    document_prefix = document_storage_prefix_from_ctx(ctx)
+    total = upload_hash_dir(
+        hash_dir,
+        bucket=bucket,
+        prefix=output_prefix,
+        endpoint_url=endpoint_url,
+        access_key=access_key,
+        secret_key=secret_key,
+        region=region,
+    )
+    if document_prefix and document_prefix != output_prefix:
+        total += upload_hash_dir(
+            hash_dir,
+            bucket=bucket,
+            prefix=document_prefix,
+            endpoint_url=endpoint_url,
+            access_key=access_key,
+            secret_key=secret_key,
+            region=region,
+        )
+        console.print(
+            f"[dim]Mirrored artifacts to document bundle s3://{bucket}/{document_prefix}/[/dim]"
+        )
+    return total
 
 
 def layouts_from_result(result: dict[str, Any]) -> list[dict[str, Any]] | None:
@@ -274,16 +326,18 @@ def finalize_job_artifacts(
         page_index_strategy=page_index_strategy,
         doc_name=doc.get("name"),
     )
-    count = upload_hash_dir(
+    count = upload_hash_dir_to_document_bundle(
         hash_dir,
+        ctx,
         bucket=cfg.aws_bucket_name,
-        prefix=prefix,
         endpoint_url=cfg.aws_endpoint_url or None,
         access_key=cfg.aws_access_key_id,
         secret_key=cfg.aws_secret_access_key,
         region=cfg.aws_region,
     )
-    console.print(f"[green]Uploaded {count} files to s3://{cfg.aws_bucket_name}/{prefix}/[/green]")
+    console.print(
+        f"[green]Uploaded {count} files to s3://{cfg.aws_bucket_name}/{prefix.rstrip('/')}/[/green]"
+    )
 
     markdown = (result.get("markdown") or "").strip()
     if markdown:

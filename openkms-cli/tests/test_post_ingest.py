@@ -11,6 +11,7 @@ from openkms_cli.pipeline.post_ingest import (
     finalize_job_artifacts,
     layouts_from_result,
     original_basename_from_ctx,
+    upload_hash_dir_to_document_bundle,
     write_hash_dir_artifacts,
 )
 
@@ -65,7 +66,7 @@ def test_build_page_index_native_falls_back_layout_strategy(tmp_path: Path) -> N
 @patch("openkms_cli.pipeline.post_ingest.patch_job")
 @patch("openkms_cli.pipeline.post_ingest.complete_job_after_parse")
 @patch("openkms_cli.pipeline.post_ingest.sync_markdown_and_version", return_value=True)
-@patch("openkms_cli.pipeline.post_ingest.upload_hash_dir", return_value=3)
+@patch("openkms_cli.pipeline.post_ingest.upload_hash_dir_to_document_bundle", return_value=3)
 @patch("openkms_cli.pipeline.post_ingest.build_page_index", return_value="markdown-headings")
 def test_finalize_job_artifacts(
     mock_build: MagicMock,
@@ -108,3 +109,31 @@ def test_finalize_job_artifacts(
     mock_complete.assert_called_once()
     mock_complete.assert_called_with("http://api", "job-1", ctx, parse_result=result)
     mock_patch.assert_called()
+
+
+def test_upload_hash_dir_to_document_bundle_mirrors_when_prefixes_differ(tmp_path: Path) -> None:
+    hash_dir = tmp_path / "bundle"
+    hash_dir.mkdir()
+    (hash_dir / "markdown.md").write_text("# Doc", encoding="utf-8")
+
+    ctx = {
+        "s3_prefix": "eval-runs/run-1/items/item-1",
+        "document_s3_prefix": "datasets/ds-1/item-1",
+        "document": {"s3_key": "datasets/ds-1/item-1/original.jpg"},
+    }
+
+    with patch("openkms_cli.pipeline.post_ingest.upload_hash_dir", side_effect=[1, 1]) as mock_upload:
+        count = upload_hash_dir_to_document_bundle(
+            hash_dir,
+            ctx,
+            bucket="bucket",
+            endpoint_url=None,
+            access_key="ak",
+            secret_key="sk",
+            region="cn",
+        )
+
+    assert count == 2
+    assert mock_upload.call_count == 2
+    assert mock_upload.call_args_list[0].kwargs["prefix"] == "eval-runs/run-1/items/item-1"
+    assert mock_upload.call_args_list[1].kwargs["prefix"] == "datasets/ds-1/item-1"
