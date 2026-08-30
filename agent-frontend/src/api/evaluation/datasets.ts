@@ -77,6 +77,7 @@ export async function getEvalDataset(id: string): Promise<EvalDataset> {
 export async function createEvalDataset(input: {
   name: string;
   description?: string;
+  media_type?: 'audio' | 'document';
 }): Promise<EvalDataset> {
   const data = await authFetch('/api/evaluation/datasets', {
     method: 'POST',

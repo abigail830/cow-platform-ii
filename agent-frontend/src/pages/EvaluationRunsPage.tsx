@@ -44,7 +44,16 @@ const LIST_PAGE = getNavPage('/evaluation/runs')!;
 function isPercentDisplayKind(kind?: string, lowerIsBetter?: boolean): boolean {
   if (kind === 'cer_score' || kind === 'wer_score') return true;
   if (isHotwordDimensionKind(kind)) return true;
+  if (isDeepevalRagDimensionKind(kind)) return true;
   return Boolean(lowerIsBetter);
+}
+
+function isDeepevalRagDimensionKind(kind?: string): boolean {
+  return (
+    kind === 'faithfulness_score' ||
+    kind === 'contextual_recall_score' ||
+    kind === 'contextual_precision_score'
+  );
 }
 
 function formatJudgeScore(
@@ -1497,6 +1506,7 @@ export function EvaluationRunsListPage() {
 
   const [runs, setRuns] = useState<EvalRun[]>([]);
   const [pipelines, setPipelines] = useState<EvalRunProcessingOption[]>([]);
+  const [documentPipelines, setDocumentPipelines] = useState<EvalRunProcessingOption[]>([]);
   const [datasets, setDatasets] = useState<EvalDataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1518,7 +1528,8 @@ export function EvaluationRunsListPage() {
       ]);
       setRuns(runRows);
       setPipelines(options.transcription_pipelines);
-      setDatasets(datasetRows.filter((row) => row.media_type === 'audio'));
+      setDocumentPipelines(options.document_pipelines);
+      setDatasets(datasetRows);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load evaluation runs');
     } finally {
@@ -1716,7 +1727,8 @@ export function EvaluationRunsListPage() {
 
       {modalOpen ? (
         <EvalRunCreateModal
-          pipelines={pipelines}
+          audioPipelines={pipelines}
+          documentPipelines={documentPipelines}
           datasets={datasets}
           onCancel={() => setModalOpen(false)}
           onCreate={handleCreate}

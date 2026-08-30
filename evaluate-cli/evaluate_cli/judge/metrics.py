@@ -6,13 +6,20 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from deepeval.metrics import GEval
+from deepeval.metrics import GEval, FaithfulnessMetric, ContextualRecallMetric, ContextualPrecisionMetric
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from evaluate_cli.judge.error_rate import compute_character_error_rate, compute_word_error_rate
 from evaluate_cli.judge.hotword_metrics import compute_hotword_metrics
 
 GEVAL_PASS_THRESHOLD = 0.5
+DEEPEVAL_RAG_PASS_THRESHOLD = 0.5
+
+DEEPEVAL_RAG_KINDS = frozenset({
+    "faithfulness_score",
+    "contextual_recall_score",
+    "contextual_precision_score",
+})
 
 
 @dataclass
@@ -92,6 +99,62 @@ def _score_from_metric(metric: GEval, *, winner: bool) -> JudgeScore:
         return JudgeScore(score=None, score_max=None, winner=_parse_winner(reason), reason=reason)
     score, score_max = _raw_geval_score(metric)
     return JudgeScore(score=score, score_max=score_max, winner=None, reason=metric.reason or "")
+
+
+def score_deepeval_rag_dimension(
+    reference: str,
+    transcript: str,
+    dimension: dict[str, Any],
+    context: dict[str, Any],
+) -> JudgeScore:
+    kind = str(dimension.get("kind", "")).strip()
+    label = str(dimension.get("label") or kind)
+    model = _judge_model(context)
+
+    if kind == "faithfulness_score":
+        metric: Any = FaithfulnessMetric(
+            threshold=DEEPEVAL_RAG_PASS_THRESHOLD,
+            model=model,
+            include_reason=True,
+        )
+        test_case = LLMTestCase(
+            input="",
+            actual_output=transcript,
+            retrieval_context=[reference],
+        )
+    elif kind == "contextual_recall_score":
+        metric = ContextualRecallMetric(
+            threshold=DEEPEVAL_RAG_PASS_THRESHOLD,
+            model=model,
+            include_reason=True,
+        )
+        # RAG recall: each GT sentence should be attributable to the parse output.
+        test_case = LLMTestCase(
+            input="",
+            expected_output=reference,
+            actual_output=transcript,
+            retrieval_context=[transcript],
+        )
+    elif kind == "contextual_precision_score":
+        metric = ContextualPrecisionMetric(
+            threshold=DEEPEVAL_RAG_PASS_THRESHOLD,
+            model=model,
+            include_reason=True,
+        )
+        # RAG precision: parse output nodes should be relevant to the GT answer.
+        test_case = LLMTestCase(
+            input="Document parse evaluation",
+            expected_output=reference,
+            actual_output=transcript,
+            retrieval_context=[transcript],
+        )
+    else:
+        raise RuntimeError(f"Unsupported DeepEval RAG kind: {kind!r}")
+
+    metric.measure(test_case)
+    score = float(metric.score) if metric.score is not None else None
+    reason = metric.reason or f"{label} score unavailable."
+    return JudgeScore(score=score, score_max=1.0, winner=None, reason=reason, lower_is_better=False)
 
 
 def score_variant_dimension(transcript: str, dimension: dict[str, Any], context: dict[str, Any]) -> JudgeScore:

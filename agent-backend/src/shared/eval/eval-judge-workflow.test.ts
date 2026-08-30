@@ -3,11 +3,17 @@ import { describe, it } from 'node:test';
 import {
   defaultEvalJudgeConfigYaml,
   defaultEvalJudgeGtConfigYaml,
+  defaultEvalJudgeDocConfigYaml,
+  defaultEvalJudgeDocGtConfigYaml,
   parseEvalJudgeModelName,
   parseEvalJudgeScenarioId,
   snapshotEvalJudgeConfigYaml,
 } from './eval-judge-workflow.ts';
-import { EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME } from './eval-judge-constants.ts';
+import {
+  EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME,
+  EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME,
+  EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME,
+} from './eval-judge-constants.ts';
 
 describe('eval-judge-workflow', () => {
   it('loads packaged default with model_name and scenario_id', () => {
@@ -46,6 +52,24 @@ describe('eval-judge-workflow', () => {
     assert.equal(
       parseEvalJudgeScenarioId(yaml, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME),
       'asr_pipeline_compare_with_gt',
+    );
+  });
+
+  it('loads packaged document no-GT default with doc scenario', () => {
+    const yaml = defaultEvalJudgeDocConfigYaml();
+    assert.match(yaml, /model_name:/);
+    assert.equal(
+      parseEvalJudgeScenarioId(yaml, EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME),
+      'doc_parse_pipeline_compare_no_gt',
+    );
+  });
+
+  it('loads packaged document GT default with doc ground-truth scenario', () => {
+    const yaml = defaultEvalJudgeDocGtConfigYaml();
+    assert.match(yaml, /model_name:/);
+    assert.equal(
+      parseEvalJudgeScenarioId(yaml, EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME),
+      'doc_parse_pipeline_compare_with_gt',
     );
   });
 

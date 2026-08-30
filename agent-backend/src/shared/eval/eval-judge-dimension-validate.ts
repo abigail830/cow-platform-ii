@@ -68,10 +68,16 @@ export function validateJudgeDimensions(
       kind !== 'geval_score' &&
       kind !== 'geval_winner' &&
       kind !== 'cer_score' &&
-      kind !== 'wer_score'
+      kind !== 'wer_score' &&
+      kind !== 'hotword_recall_score' &&
+      kind !== 'hotword_precision_score' &&
+      kind !== 'hotword_f1_score' &&
+      kind !== 'faithfulness_score' &&
+      kind !== 'contextual_recall_score' &&
+      kind !== 'contextual_precision_score'
     ) {
       throw new Error(
-        `Dimension ${id}: kind must be geval_score, geval_winner, cer_score, or wer_score`,
+        `Dimension ${id}: kind must be geval_score, geval_winner, cer_score, wer_score, hotword_* , or DeepEval RAG score kinds`,
       );
     }
     const resolvedCriteria =

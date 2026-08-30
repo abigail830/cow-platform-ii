@@ -66,6 +66,7 @@ export async function createPipelineJob(input: {
   pipelineName: string;
   provider: PipelineProvider;
   configYaml?: string | null;
+  evalRunItemId?: string | null;
 }): Promise<typeof appPipelineJobs.$inferSelect> {
   const [row] = await db
     .insert(appPipelineJobs)
@@ -75,6 +76,7 @@ export async function createPipelineJob(input: {
       provider: input.provider,
       stage: 'submitted',
       configYaml: snapshotConfigYaml(input.configYaml),
+      evalRunItemId: input.evalRunItemId?.trim() || null,
     })
     .returning();
   return row!;
@@ -171,6 +173,22 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     process.env.OPENKMS_API_URL?.trim() ||
     `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
 
+  let inputUri = `s3://${s3.bucket}/${doc.s3Key}`;
+  let s3Prefix = s3PrefixFromKey(doc.s3Key);
+  let displayName = doc.name;
+
+  if (job.evalRunItemId) {
+    const { buildEvalLinkedDocumentPipelineContextOverrides } = await import(
+      '../eval/eval-document-bridge.ts'
+    );
+    const overrides = await buildEvalLinkedDocumentPipelineContextOverrides(job.evalRunItemId);
+    if (overrides) {
+      inputUri = overrides.input_uri;
+      s3Prefix = overrides.s3_prefix;
+      displayName = overrides.dataset_item_name;
+    }
+  }
+
   return {
     id: job.id,
     document_id: doc.id,
@@ -182,14 +200,14 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     error_message: job.errorMessage,
     document: {
       id: doc.id,
-      name: doc.name,
+      name: displayName,
       file_type: doc.fileType,
       s3_key: doc.s3Key,
       file_hash: doc.fileHash,
       channel_id: doc.channelId,
     },
-    input_uri: `s3://${s3.bucket}/${doc.s3Key}`,
-    s3_prefix: s3PrefixFromKey(doc.s3Key),
+    input_uri: inputUri,
+    s3_prefix: s3Prefix,
     api_url: apiUrl,
   };
 }

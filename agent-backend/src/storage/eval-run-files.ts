@@ -44,3 +44,17 @@ export function evalRunAsrResultKey(outputPrefix: string): string {
   validateKey(key);
   return key;
 }
+
+/** Document parse pipeline writes markdown.md (stored in transcript_s3_key for judge reuse). */
+export function evalRunDocumentMarkdownKey(outputPrefix: string): string {
+  const key = `${outputPrefix.replace(/\/?$/, '/')}markdown.md`;
+  validateKey(key);
+  return key;
+}
+
+/** Document parse pipeline writes result.json (stored in asr_result_s3_key). */
+export function evalRunDocumentParseResultKey(outputPrefix: string): string {
+  const key = `${outputPrefix.replace(/\/?$/, '/')}result.json`;
+  validateKey(key);
+  return key;
+}

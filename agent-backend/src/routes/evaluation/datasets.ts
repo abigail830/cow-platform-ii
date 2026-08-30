@@ -51,13 +51,18 @@ datasets.post(
   requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.DATASETS, 'write'),
   async (c) => {
     const user = getUser(c);
-    const body = await c.req.json<{ name?: string; description?: string | null }>();
+    const body = await c.req.json<{
+      name?: string;
+      description?: string | null;
+      media_type?: 'audio' | 'document';
+    }>();
     if (!body.name?.trim()) return c.json({ error: 'name is required' }, 400);
 
     try {
       const dataset = await createEvalDataset({
         name: body.name,
         description: body.description,
+        mediaType: body.media_type === 'document' ? 'document' : 'audio',
         createdBy: user.id,
       });
       return c.json(dataset, 201);

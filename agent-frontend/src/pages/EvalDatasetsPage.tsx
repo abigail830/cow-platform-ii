@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Download, Clock3, FileText, Loader2, Pause, Pencil, Play, Plus, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
+import { Download, Clock3, Eye, FileText, Loader2, Pause, Pencil, Play, Plus, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
+import { EvalDatasetItemPreviewDrawer } from '../components/EvalDatasetItemPreviewDrawer.tsx';
 import {
   createEvalDataset,
   deleteEvalDataset,
@@ -41,7 +42,8 @@ const LIST_PAGE = getNavPage('/evaluation/datasets')!;
 
 function mediaTypeLabel(mediaType: EvalDataset['media_type']): string {
   if (mediaType === 'audio') return 'Audio';
-  return 'Document';
+  if (mediaType === 'document') return 'Document';
+  return mediaType;
 }
 
 function EvalDatasetListRowActions({
@@ -139,10 +141,16 @@ export function EvalDatasetsListPage() {
     setCreateOpen(true);
   }
 
-  async function handleCreate(input: { name: string; description: string; files: File[] }) {
+  async function handleCreate(input: {
+    name: string;
+    description: string;
+    mediaType: 'audio' | 'document';
+    files: File[];
+  }) {
     const dataset = await createEvalDataset({
       name: input.name,
       description: input.description || undefined,
+      media_type: input.mediaType,
     });
     setCreateOpen(false);
     if (input.files.length > 0) {
@@ -301,6 +309,7 @@ export function EvalDatasetsListPage() {
       {uploadTarget ? (
         <EvalDatasetUploadModal
           datasetName={uploadTarget.name}
+          mediaType={uploadTarget.media_type}
           onCancel={() => setUploadTarget(null)}
           onStartUpload={(files) => handleUploadToDataset(uploadTarget.id, files)}
         />
@@ -358,7 +367,9 @@ export function EvalDatasetDetailPage() {
   const [retryingDurationIds, setRetryingDurationIds] = useState<Set<string>>(() => new Set());
   const [loadingAudioItemId, setLoadingAudioItemId] = useState<string | null>(null);
   const [audioPlayback, setAudioPlayback] = useState<{ itemId: string; playing: boolean } | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<EvalDatasetItem | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isDocumentDataset = dataset?.media_type === 'document';
 
   useEffect(() => {
     const audio = new Audio();
@@ -631,7 +642,7 @@ export function EvalDatasetDetailPage() {
               <th>File</th>
               <th>Type</th>
               <th>Size</th>
-              <th>Duration</th>
+              {!isDocumentDataset ? <th>Duration</th> : null}
               <th>Reference</th>
               <th>Uploaded</th>
               <th aria-label="Actions" />
@@ -640,20 +651,22 @@ export function EvalDatasetDetailPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="admin-table-empty">
+                <td colSpan={isDocumentDataset ? 6 : 7} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={7} className="admin-table-empty">
+                <td colSpan={isDocumentDataset ? 6 : 7} className="admin-table-empty">
                   {items.length === 0 ? (
                     <>
                       No files yet.{' '}
                       {canWrite ? (
                         <button type="button" className="btn-link" onClick={() => setUploadOpen(true)}>
-                          Upload audio samples
+                          {isDocumentDataset ? 'Upload documents' : 'Upload audio samples'}
                         </button>
+                      ) : isDocumentDataset ? (
+                        'Upload documents for evaluation.'
                       ) : (
                         'Upload audio samples for evaluation.'
                       )}
@@ -676,7 +689,7 @@ export function EvalDatasetDetailPage() {
                   <td>{item.name}</td>
                   <td>{item.file_type}</td>
                   <td>{formatEvalFileBytes(item.size_bytes)}</td>
-                  <td>{formatDatasetItemDuration(durationSec)}</td>
+                  {!isDocumentDataset ? <td>{formatDatasetItemDuration(durationSec)}</td> : null}
                   <td>
                     <span
                       className="eval-dataset-item-reference"
@@ -688,38 +701,49 @@ export function EvalDatasetDetailPage() {
                   <td>{new Date(item.created_at).toLocaleString()}</td>
                   <td>
                     <div className="row-actions">
+                      {isDocumentDataset ? (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="View file"
+                          onClick={() => setPreviewTarget(item)}
+                        >
+                          <Eye {...iconProps()} aria-hidden />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={
+                            isAudioLoading
+                              ? 'Loading audio…'
+                              : isAudioPlaying
+                                ? 'Pause audio'
+                                : 'Play audio'
+                          }
+                          disabled={isAudioLoading}
+                          onClick={() => void handleToggleAudioPlayback(item)}
+                        >
+                          {isAudioLoading ? (
+                            <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                          ) : isAudioPlaying ? (
+                            <Pause {...iconProps()} aria-hidden />
+                          ) : (
+                            <Play {...iconProps()} aria-hidden />
+                          )}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="icon-btn"
-                        title={
-                          isAudioLoading
-                            ? 'Loading audio…'
-                            : isAudioPlaying
-                              ? 'Pause audio'
-                              : 'Play audio'
-                        }
-                        disabled={isAudioLoading}
-                        onClick={() => void handleToggleAudioPlayback(item)}
-                      >
-                        {isAudioLoading ? (
-                          <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
-                        ) : isAudioPlaying ? (
-                          <Pause {...iconProps()} aria-hidden />
-                        ) : (
-                          <Play {...iconProps()} aria-hidden />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Download audio"
+                        title={isDocumentDataset ? 'Download file' : 'Download audio'}
                         onClick={() => void handleDownload(item)}
                       >
                         <Download {...iconProps()} aria-hidden />
                       </button>
                       {canWrite ? (
                         <>
-                          {durationSec == null ? (
+                          {!isDocumentDataset && durationSec == null ? (
                             <button
                               type="button"
                               className="icon-btn"
@@ -734,14 +758,16 @@ export function EvalDatasetDetailPage() {
                               )}
                             </button>
                           ) : null}
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="Edit duration"
-                            onClick={() => setDurationEditTarget(item)}
-                          >
-                            <Clock3 {...iconProps()} aria-hidden />
-                          </button>
+                          {!isDocumentDataset ? (
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Edit duration"
+                              onClick={() => setDurationEditTarget(item)}
+                            >
+                              <Clock3 {...iconProps()} aria-hidden />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="icon-btn"
@@ -798,8 +824,17 @@ export function EvalDatasetDetailPage() {
       {uploadOpen && dataset ? (
         <EvalDatasetUploadModal
           datasetName={dataset.name}
+          mediaType={dataset.media_type}
           onCancel={() => setUploadOpen(false)}
           onStartUpload={handleStartUpload}
+        />
+      ) : null}
+
+      {previewTarget ? (
+        <EvalDatasetItemPreviewDrawer
+          datasetId={datasetId}
+          item={previewTarget}
+          onClose={() => setPreviewTarget(null)}
         />
       ) : null}
 

@@ -530,6 +530,9 @@ export function JudgeDimensionsPage() {
                         <option value="geval_score">Score (0–10, GEval)</option>
                         <option value="cer_score">CER (deterministic)</option>
                         <option value="wer_score">WER (deterministic)</option>
+                        <option value="faithfulness_score">Faithfulness (DeepEval RAG)</option>
+                        <option value="contextual_recall_score">Contextual recall (DeepEval RAG)</option>
+                        <option value="contextual_precision_score">Contextual precision (DeepEval RAG)</option>
                         <option value="geval_winner">Winner (A/B/Tie)</option>
                       </select>
                     </label>
@@ -538,7 +541,7 @@ export function JudgeDimensionsPage() {
                         Pass threshold
                         <DimensionFieldTooltip
                           label="Pass threshold"
-                          text="Optional pass expression evaluated against each score. GEval (0–10): >=7 or >6. CER/WER: <0.3% or <0.003 (raw fraction). Failed scores appear red in eval results."
+                          text="Optional pass expression evaluated against each score. GEval (0–10): >=7. CER/WER: <0.3% or <15%. DeepEval RAG (0–100%): >=70%. Failed scores appear red in eval results."
                         />
                       </span>
                       <input
@@ -551,9 +554,13 @@ export function JudgeDimensionsPage() {
                         placeholder={
                           activeDimension.kind === 'cer_score' || activeDimension.kind === 'wer_score'
                             ? '<0.3%'
-                            : activeDimension.kind === 'geval_score'
-                              ? '>=7'
-                              : 'Not supported for winner kind'
+                            : activeDimension.kind === 'faithfulness_score' ||
+                                activeDimension.kind === 'contextual_recall_score' ||
+                                activeDimension.kind === 'contextual_precision_score'
+                              ? '>=70%'
+                              : activeDimension.kind === 'geval_score'
+                                ? '>=7'
+                                : 'Not supported for winner kind'
                         }
                         disabled={activeDimension.kind === 'geval_winner'}
                       />

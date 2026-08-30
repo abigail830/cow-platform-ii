@@ -12,6 +12,8 @@ import {
 } from './eval-run-phase.ts';
 import { updateEvalRunItem } from './eval-pipeline-jobs.ts';
 import { dispatchEvalTranscribeViaAudioPipeline } from './eval-audio-bridge.ts';
+import { dispatchEvalParseViaDocumentPipeline } from './eval-document-bridge.ts';
+import { getEvalDatasetById } from './eval-datasets.ts';
 
 import { groupEvalRunDispatchItemsByDatasetFile, type EvalRunDispatchItem } from './eval-run-dispatch-group.ts';
 
@@ -86,6 +88,15 @@ export async function dispatchNextEvalRunJob(runId: string): Promise<void> {
 
   if (items.some((item) => item.stage === 'transcribing')) return;
 
+  const dataset = await getEvalDatasetById(run.datasetId);
+  if (!dataset) return;
+
+  const dispatchPipelineJob =
+    dataset.mediaType === 'document'
+      ? dispatchEvalParseViaDocumentPipeline
+      : dispatchEvalTranscribeViaAudioPipeline;
+  const pipelineKind = dataset.mediaType === 'document' ? 'document-pipeline' : 'audio-pipeline';
+
   const datasetItems = await db
     .select({ id: appEvalDatasetItems.id })
     .from(appEvalDatasetItems)
@@ -118,9 +129,9 @@ export async function dispatchNextEvalRunJob(runId: string): Promise<void> {
     });
 
     try {
-      await dispatchEvalTranscribeViaAudioPipeline(nextItem.id, nextItem.pipelineName);
+      await dispatchPipelineJob(nextItem.id, nextItem.pipelineName);
       console.info(
-        `[eval-run] dispatched audio-pipeline job for eval item ${nextItem.id} pipeline=${nextItem.pipelineName} ` +
+        `[eval-run] dispatched ${pipelineKind} job for eval item ${nextItem.id} pipeline=${nextItem.pipelineName} ` +
           `dataset_item=${nextItem.datasetItemId}`,
       );
     } catch (error) {

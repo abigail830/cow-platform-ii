@@ -55,6 +55,16 @@ export function normalizeEvalJudgeGevalCriteria(
 ): string {
   const trimmed = criteria.trim();
   if (kind === 'geval_winner' || kind === 'cer_score' || kind === 'wer_score') return trimmed;
+  if (
+    kind === 'faithfulness_score' ||
+    kind === 'contextual_recall_score' ||
+    kind === 'contextual_precision_score' ||
+    kind === 'hotword_recall_score' ||
+    kind === 'hotword_precision_score' ||
+    kind === 'hotword_f1_score'
+  ) {
+    return trimmed;
+  }
   if (!trimmed) return `${GEVAL_INTEGER_SCALE_HINT} Explain your score in 1–2 sentences.`;
 
   let text = stripZeroToOneScalePhrases(trimmed);

@@ -5,6 +5,8 @@ import {
   buildEvalRunJudgeResultKey,
   buildEvalRunItemOutputPrefix,
   evalRunAsrResultKey,
+  evalRunDocumentMarkdownKey,
+  evalRunDocumentParseResultKey,
   evalRunTranscriptKey,
 } from './eval-run-files.ts';
 
@@ -26,6 +28,12 @@ describe('eval-run-files', () => {
     const prefix = buildEvalRunItemOutputPrefix(runId, attemptId, variantId, itemId);
     assert.equal(evalRunTranscriptKey(prefix), `${prefix}transcript.md`);
     assert.equal(evalRunAsrResultKey(prefix), `${prefix}asr_result.json`);
+  });
+
+  it('derives document parse artifact keys from output prefix', () => {
+    const prefix = buildEvalRunItemOutputPrefix(runId, attemptId, variantId, itemId);
+    assert.equal(evalRunDocumentMarkdownKey(prefix), `${prefix}markdown.md`);
+    assert.equal(evalRunDocumentParseResultKey(prefix), `${prefix}result.json`);
   });
 
   it('builds comparison keys scoped to attempt', () => {

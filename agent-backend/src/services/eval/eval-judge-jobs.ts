@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import {
   appEvalDatasetItems,
+  appEvalDatasets,
   appEvalRunAttempts,
   appEvalRunItems,
   appEvalRunJudgeJobs,
@@ -17,9 +18,20 @@ import {
   parseEvalJudgeModelName,
   resolveEvalJudgeConfigYaml,
   resolveEvalJudgeGtConfigYaml,
-  EVAL_JUDGE_COMPARE_PIPELINE_NAME,
+  resolveEvalJudgeDocConfigYaml,
+  resolveEvalJudgeDocGtConfigYaml,
 } from '../../shared/eval/eval-judge-workflow.ts';
-import { EVAL_JUDGE_GT_SCENARIO_ID, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME } from '../../shared/eval/eval-judge-constants.ts';
+import {
+  DEFAULT_EVAL_JUDGE_SCENARIO_ID,
+  DEFAULT_EVAL_JUDGE_DOC_SCENARIO_ID,
+  EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME,
+  EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME,
+  EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME,
+  EVAL_JUDGE_DOC_GT_SCENARIO_ID,
+  EVAL_JUDGE_GT_SCENARIO_ID,
+  isEvalJudgeGroundTruthScenario,
+  resolveEvalJudgePipelineNameForScenario,
+} from '../../shared/eval/eval-judge-constants.ts';
 import {
   isHotwordEvalEnabled,
   resolveEvalHotwordTerms,
@@ -54,6 +66,12 @@ export async function buildEvalJudgeJobContext(jobId: string) {
 
   const [run] = await db.select().from(appEvalRuns).where(eq(appEvalRuns.id, job.runId)).limit(1);
   if (!run) throw new Error('Eval run not found');
+
+  const [dataset] = await db
+    .select({ mediaType: appEvalDatasets.mediaType })
+    .from(appEvalDatasets)
+    .where(eq(appEvalDatasets.id, run.datasetId))
+    .limit(1);
 
   const [attempt] = await db
     .select()
@@ -122,13 +140,14 @@ export async function buildEvalJudgeJobContext(jobId: string) {
 
   const configYaml =
     evalJudgeConfigYamlFromRun(run.judgeMetrics as Record<string, unknown>[] | null) ??
-    (job.scenarioId === EVAL_JUDGE_GT_SCENARIO_ID
-      ? await resolveEvalJudgeGtConfigYaml()
-      : await resolveEvalJudgeConfigYaml());
-  const judgePipelineName =
-    job.scenarioId === EVAL_JUDGE_GT_SCENARIO_ID
-      ? EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME
-      : EVAL_JUDGE_COMPARE_PIPELINE_NAME;
+    (isEvalJudgeGroundTruthScenario(job.scenarioId)
+      ? job.scenarioId === EVAL_JUDGE_DOC_GT_SCENARIO_ID
+        ? await resolveEvalJudgeDocGtConfigYaml()
+        : await resolveEvalJudgeGtConfigYaml()
+      : job.scenarioId === DEFAULT_EVAL_JUDGE_DOC_SCENARIO_ID
+        ? await resolveEvalJudgeDocConfigYaml()
+        : await resolveEvalJudgeConfigYaml());
+  const judgePipelineName = resolveEvalJudgePipelineNameForScenario(job.scenarioId);
   const modelDisplayName = parseEvalJudgeModelName(configYaml, judgePipelineName);
   const modelParams = await resolveModelCliParams({
     modelName: modelDisplayName,
@@ -156,6 +175,7 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     dataset_item_id: job.datasetItemId,
     dataset_item_name: datasetItem.name,
     scenario_id: job.scenarioId,
+    media_type: dataset?.mediaType ?? 'audio',
     requires_ground_truth: scenario.requires_ground_truth,
     min_variants: minVariants,
     dimensions: job.dimensionsSnapshot as EvalJudgeDimensionDefinition[],

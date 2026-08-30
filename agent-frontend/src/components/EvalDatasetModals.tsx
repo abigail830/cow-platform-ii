@@ -11,6 +11,9 @@ import {
 export const EVAL_DATASET_AUDIO_ACCEPT =
   'audio/*,video/mp4,.m4a,.mp3,.wav,.flac,.aac,.amr,.ogg,.opus,.webm,.mp4';
 
+export const EVAL_DATASET_DOCUMENT_ACCEPT =
+  '.pdf,.png,.jpg,.jpeg,.webp,.docx,.pptx,.xlsx,.epub,.xmind,.md,.markdown,application/pdf,image/png,image/jpeg,image/webp';
+
 export const EVAL_DATASET_REFERENCE_MANIFEST_ACCEPT =
   '.csv,.tsv,.txt,text/csv,text/tab-separated-values';
 
@@ -138,13 +141,20 @@ export function EvalDatasetFileDropzone({
 
 type EvalDatasetUploadModalProps = {
   datasetName: string;
+  mediaType?: 'audio' | 'document';
   onCancel: () => void;
   onStartUpload: (files: File[]) => void;
 };
 
-export function EvalDatasetUploadModal({ datasetName, onCancel, onStartUpload }: EvalDatasetUploadModalProps) {
+export function EvalDatasetUploadModal({
+  datasetName,
+  mediaType = 'audio',
+  onCancel,
+  onStartUpload,
+}: EvalDatasetUploadModalProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState('');
+  const isDocument = mediaType === 'document';
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -166,9 +176,21 @@ export function EvalDatasetUploadModal({ datasetName, onCancel, onStartUpload }:
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="eval-dataset-upload-title">Upload files</h2>
-        <p className="admin-form-hint">Add audio samples to dataset: {datasetName}</p>
+        <p className="admin-form-hint">
+          Add {isDocument ? 'documents' : 'audio samples'} to dataset: {datasetName}
+        </p>
         <form onSubmit={handleSubmit}>
-          <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} />
+          <EvalDatasetFileDropzone
+            files={files}
+            onFilesChange={setFiles}
+            accept={isDocument ? EVAL_DATASET_DOCUMENT_ACCEPT : EVAL_DATASET_AUDIO_ACCEPT}
+            title={
+              isDocument
+                ? 'Drag and drop documents here, or click to browse (multiple files supported).'
+                : undefined
+            }
+            hint={isDocument ? 'PDF, DOCX, PPTX, XLSX, PNG, JPG, and more.' : undefined}
+          />
           {error ? <p className="error">{error}</p> : null}
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onCancel}>
@@ -186,12 +208,18 @@ export function EvalDatasetUploadModal({ datasetName, onCancel, onStartUpload }:
 
 type EvalDatasetCreateModalProps = {
   onCancel: () => void;
-  onCreate: (input: { name: string; description: string; files: File[] }) => Promise<void>;
+  onCreate: (input: {
+    name: string;
+    description: string;
+    mediaType: 'audio' | 'document';
+    files: File[];
+  }) => Promise<void>;
 };
 
 export function EvalDatasetCreateModal({ onCancel, onCreate }: EvalDatasetCreateModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [mediaType, setMediaType] = useState<'audio' | 'document'>('audio');
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -208,6 +236,7 @@ export function EvalDatasetCreateModal({ onCancel, onCreate }: EvalDatasetCreate
       await onCreate({
         name: name.trim(),
         description: description.trim(),
+        mediaType,
         files,
       });
     } catch (err) {
@@ -227,7 +256,10 @@ export function EvalDatasetCreateModal({ onCancel, onCreate }: EvalDatasetCreate
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="eval-dataset-create-title">New dataset</h2>
-        <p className="admin-form-hint">Create a test dataset and optionally upload audio files in one step.</p>
+        <p className="admin-form-hint">
+          Create a test dataset and optionally upload files in one step. Choose audio for ASR evaluation or
+          document for parse pipeline evaluation.
+        </p>
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div className="form-grid">
             <label className="form-field form-field-wide">
@@ -249,9 +281,38 @@ export function EvalDatasetCreateModal({ onCancel, onCreate }: EvalDatasetCreate
                 disabled={busy}
               />
             </label>
+            <label className="form-field form-field-wide">
+              <span>Media type</span>
+              <select
+                value={mediaType}
+                onChange={(event) => {
+                  setMediaType(event.target.value === 'document' ? 'document' : 'audio');
+                  setFiles([]);
+                }}
+                disabled={busy}
+              >
+                <option value="audio">Audio (ASR)</option>
+                <option value="document">Document (parse)</option>
+              </select>
+            </label>
             <div className="form-field form-field-wide">
-              <span>Audio files</span>
-              <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} disabled={busy} />
+              <span>{mediaType === 'document' ? 'Document files' : 'Audio files'}</span>
+              <EvalDatasetFileDropzone
+                files={files}
+                onFilesChange={setFiles}
+                disabled={busy}
+                accept={mediaType === 'document' ? EVAL_DATASET_DOCUMENT_ACCEPT : EVAL_DATASET_AUDIO_ACCEPT}
+                title={
+                  mediaType === 'document'
+                    ? 'Drag and drop documents here, or click to browse (multiple files supported).'
+                    : undefined
+                }
+                hint={
+                  mediaType === 'document'
+                    ? 'PDF, DOCX, PPTX, XLSX, PNG, JPG, and more.'
+                    : undefined
+                }
+              />
             </div>
           </div>
           {error ? <p className="error">{error}</p> : null}

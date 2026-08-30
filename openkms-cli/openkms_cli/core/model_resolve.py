@@ -38,6 +38,25 @@ def resolve_models_for_job(
     return out
 
 
+def resolve_metadata_models_for_job(
+    config: dict[str, Any],
+    *,
+    cfg: CliSettings | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Resolve only metadata_extract.model_name (chat-completions), not parse/VLM models."""
+    from openkms_cli.core.workflow_config import metadata_extract_section
+
+    meta = metadata_extract_section(config) or {}
+    model_name = str(meta.get("model_name") or "").strip()
+    if not model_name:
+        raise ModelResolveError("metadata_extract.model_name is required when metadata extraction is enabled")
+    return resolve_models_for_job(
+        {"metadata_extract": {"model_name": model_name}},
+        cfg=cfg,
+        api_type="chat-completions",
+    )
+
+
 def model_connection(params: dict[str, Any]) -> dict[str, Any]:
     """Shape expected by extract_metadata_sync / chat clients."""
     return {

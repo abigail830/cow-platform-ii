@@ -47,8 +47,17 @@ function isHotwordKind(context: JudgeThresholdScoreContext): boolean {
   );
 }
 
+function isDeepevalRagKind(context: JudgeThresholdScoreContext): boolean {
+  const kind = context.kind;
+  return (
+    kind === 'faithfulness_score' ||
+    kind === 'contextual_recall_score' ||
+    kind === 'contextual_precision_score'
+  );
+}
+
 function isFractionPercentKind(context: JudgeThresholdScoreContext): boolean {
-  return isErrorRateKind(context) || isHotwordKind(context);
+  return isErrorRateKind(context) || isHotwordKind(context) || isDeepevalRagKind(context);
 }
 
 /** Numeric value used when evaluating a threshold expression (matches UI display scale). */
@@ -112,9 +121,16 @@ export function evaluatePassThreshold(
       throw new Error('Hotword pass threshold requires % suffix, e.g. >=90%');
     }
     compareValue = score * 100;
+  } else if (isDeepevalRagKind(context)) {
+    if (!parsed.isPercent) {
+      throw new Error('DeepEval RAG pass threshold requires % suffix, e.g. >=70%');
+    }
+    compareValue = score * 100;
   } else {
     if (parsed.isPercent) {
-      throw new Error('Pass threshold with % is only supported for CER/WER and hotword dimensions');
+      throw new Error(
+        'Pass threshold with % is only supported for CER/WER, hotword, and DeepEval RAG dimensions',
+      );
     }
     compareValue = judgeScoreCompareValue(score, context);
   }
@@ -134,6 +150,16 @@ export function validatePassThresholdForDimension(
   parsePassThresholdExpression(raw);
   if (dimension.kind === 'geval_score' && raw.includes('%')) {
     throw new Error(`Dimension ${dimension.id}: use 0–10 expressions like >=7 for GEval scores`);
+  }
+  if (
+    (dimension.kind === 'faithfulness_score' ||
+      dimension.kind === 'contextual_recall_score' ||
+      dimension.kind === 'contextual_precision_score') &&
+    raw.includes('%') === false
+  ) {
+    throw new Error(
+      `Dimension ${dimension.id}: DeepEval RAG pass threshold requires % suffix, e.g. >=70%`,
+    );
   }
   return raw;
 }

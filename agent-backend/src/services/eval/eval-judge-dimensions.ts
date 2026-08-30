@@ -11,7 +11,10 @@ export type EvalJudgeDimensionKind =
   | 'wer_score'
   | 'hotword_recall_score'
   | 'hotword_precision_score'
-  | 'hotword_f1_score';
+  | 'hotword_f1_score'
+  | 'faithfulness_score'
+  | 'contextual_recall_score'
+  | 'contextual_precision_score';
 
 export type EvalJudgeDimensionDefinition = {
   id: string;

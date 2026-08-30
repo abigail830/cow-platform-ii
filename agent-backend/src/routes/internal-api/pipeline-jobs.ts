@@ -9,6 +9,7 @@ import {
   type PipelineJobStage,
 } from '../../services/pipeline/pipeline-jobs.ts';
 import { spawnAsyncPipelineWorker } from '../../services/pipeline/pipeline-runner.ts';
+import { syncEvalRunItemFromDocumentPipelineJob } from '../../services/eval/eval-document-bridge.ts';
 
 const pipelineJobs = new Hono();
 
@@ -84,7 +85,12 @@ pipelineJobs.patch('/:id', async (c) => {
   });
 
   if (body.stage) {
-    await markDocumentForJobStage(job.documentId, body.stage);
+    if (!job.evalRunItemId) {
+      await markDocumentForJobStage(job.documentId, body.stage);
+    }
+    if (job.evalRunItemId) {
+      await syncEvalRunItemFromDocumentPipelineJob(job.id);
+    }
   }
 
   return c.json({ ok: true, job: updated });

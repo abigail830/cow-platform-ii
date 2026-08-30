@@ -761,12 +761,14 @@ export const appPipelineJobs = pgTable(
     /** Snapshot of pipeline config_yaml at job create; null = CLI uses packaged default. */
     configYaml: text('config_yaml'),
     errorMessage: text('error_message'),
+    evalRunItemId: uuid('eval_run_item_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
     index('idx_pipeline_jobs_document').on(t.documentId, t.createdAt),
     index('idx_pipeline_jobs_stage').on(t.stage, t.provider),
+    index('idx_pipeline_jobs_eval_item').on(t.evalRunItemId),
   ],
 );
 
@@ -1233,6 +1235,9 @@ export const appEvalRunItems = pgTable(
     audioPipelineJobId: uuid('audio_pipeline_job_id').references(() => appAudioPipelineJobs.id, {
       onDelete: 'set null',
     }),
+    documentPipelineJobId: uuid('document_pipeline_job_id').references(() => appPipelineJobs.id, {
+      onDelete: 'set null',
+    }),
     transcriptS3Key: text('transcript_s3_key'),
     asrResultS3Key: text('asr_result_s3_key'),
     errorMessage: text('error_message'),
@@ -1245,6 +1250,7 @@ export const appEvalRunItems = pgTable(
     index('idx_eval_run_items_attempt').on(t.attemptId, t.stage),
     index('idx_eval_run_items_variant').on(t.variantId),
     index('idx_eval_run_items_audio_job').on(t.audioPipelineJobId),
+    index('idx_eval_run_items_document_job').on(t.documentPipelineJobId),
     uniqueIndex('uq_eval_run_items_attempt_variant_item').on(
       t.attemptId,
       t.variantId,
@@ -1290,7 +1296,10 @@ export type EvalJudgeDimensionRecord = {
     | 'wer_score'
     | 'hotword_recall_score'
     | 'hotword_precision_score'
-    | 'hotword_f1_score';
+    | 'hotword_f1_score'
+    | 'faithfulness_score'
+    | 'contextual_recall_score'
+    | 'contextual_precision_score';
   weight: number;
   criteria: string;
   /** Optional GEval evaluation_steps; omit to let DeepEval generate from criteria. */

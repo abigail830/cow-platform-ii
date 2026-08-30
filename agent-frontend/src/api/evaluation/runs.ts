@@ -229,10 +229,12 @@ export function formatEvalRunPhase(phase: string): string {
 
 export async function listEvalRunProcessingOptions(): Promise<{
   transcription_pipelines: EvalRunProcessingOption[];
+  document_pipelines: EvalRunProcessingOption[];
 }> {
   const data = await authFetch('/api/evaluation/runs/options');
   return {
     transcription_pipelines: (data.transcription_pipelines as EvalRunProcessingOption[]) ?? [],
+    document_pipelines: (data.document_pipelines as EvalRunProcessingOption[]) ?? [],
   };
 }
 

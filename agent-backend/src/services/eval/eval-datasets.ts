@@ -3,8 +3,8 @@ import { appEvalDatasetItems, appEvalDatasets, db } from '../../db/index.ts';
 import type { EvalDatasetKind, EvalMediaType } from '../../db/index.ts';
 import {
   buildEvalDatasetItemS3Key,
+  evalDatasetFileTypeFromExtension,
   extensionFromFilename,
-  fileTypeFromExtension,
   getEvalDatasetItemReadUrl,
   getEvalDatasetItemUploadUrl,
   guessEvalDatasetContentType,
@@ -237,11 +237,8 @@ export async function initEvalDatasetItemUpload(input: {
 }) {
   const dataset = await getEvalDatasetById(input.datasetId);
   if (!dataset) throw new Error('Dataset not found');
-  if (dataset.mediaType !== 'audio') {
-    throw new Error('Only audio datasets are supported in this version');
-  }
 
-  const filename = validateEvalDatasetFilename(input.filename);
+  const filename = validateEvalDatasetFilename(input.filename, dataset.mediaType);
   const fileHash = validateFileHash(input.fileHash);
   const sizeBytes = input.sizeBytes;
 
@@ -265,7 +262,7 @@ export async function initEvalDatasetItemUpload(input: {
   const ext = extensionFromFilename(filename);
   const itemId = newEvalDatasetItemId();
   const s3Key = buildEvalDatasetItemS3Key(input.datasetId, itemId, ext);
-  const contentType = input.contentType?.trim() || guessEvalDatasetContentType(ext);
+  const contentType = input.contentType?.trim() || guessEvalDatasetContentType(ext, dataset.mediaType);
   const uploadUrl = await getEvalDatasetItemUploadUrl(s3Key, contentType);
 
   return {
@@ -472,7 +469,7 @@ export async function finalizeEvalDatasetItemUpload(input: {
   const dataset = await getEvalDatasetById(input.datasetId);
   if (!dataset) throw new Error('Dataset not found');
 
-  const filename = validateEvalDatasetFilename(input.filename);
+  const filename = validateEvalDatasetFilename(input.filename, dataset.mediaType);
   const fileHash = validateFileHash(input.fileHash);
   const ext = extensionFromFilename(filename);
   const expectedKey = buildEvalDatasetItemS3Key(input.datasetId, input.itemId, ext);
@@ -515,7 +512,7 @@ export async function finalizeEvalDatasetItemUpload(input: {
           id: input.itemId,
           datasetId: input.datasetId,
           name: filename,
-          fileType: fileTypeFromExtension(ext),
+          fileType: evalDatasetFileTypeFromExtension(ext, dataset.mediaType),
           sizeBytes,
           fileHash,
           s3Key: expectedKey,

@@ -47,8 +47,17 @@ function isHotwordKind(context: JudgeThresholdScoreContext): boolean {
   );
 }
 
+function isDeepevalRagKind(context: JudgeThresholdScoreContext): boolean {
+  const kind = context.kind;
+  return (
+    kind === 'faithfulness_score' ||
+    kind === 'contextual_recall_score' ||
+    kind === 'contextual_precision_score'
+  );
+}
+
 function isFractionPercentKind(context: JudgeThresholdScoreContext): boolean {
-  return isErrorRateKind(context) || isHotwordKind(context);
+  return isErrorRateKind(context) || isHotwordKind(context) || isDeepevalRagKind(context);
 }
 
 export function judgeScoreCompareValue(
@@ -102,6 +111,11 @@ export function evaluatePassThreshold(
       thresholdValue = parsed.value;
     }
   } else if (isHotwordKind(context)) {
+    if (!parsed.isPercent) {
+      return null;
+    }
+    compareValue = score * 100;
+  } else if (isDeepevalRagKind(context)) {
     if (!parsed.isPercent) {
       return null;
     }

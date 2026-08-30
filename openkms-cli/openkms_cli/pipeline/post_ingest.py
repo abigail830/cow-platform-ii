@@ -286,7 +286,11 @@ def run_metadata_extraction_from_ctx(
     *,
     workflow_config: dict[str, Any] | None = None,
 ) -> None:
-    from openkms_cli.core.model_resolve import ModelResolveError, model_connection, resolve_models_for_job
+    from openkms_cli.core.model_resolve import (
+        ModelResolveError,
+        model_connection,
+        resolve_metadata_models_for_job,
+    )
     from openkms_cli.core.workflow_config import (
         metadata_extract_enabled,
         metadata_extract_section,
@@ -303,7 +307,7 @@ def run_metadata_extraction_from_ctx(
 
     meta = metadata_extract_section(config) or {}
     try:
-        resolved = resolve_models_for_job(config, api_type="chat-completions")
+        resolved = resolve_metadata_models_for_job(config)
     except ModelResolveError as e:
         raise RuntimeError(str(e)) from e
 

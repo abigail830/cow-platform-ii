@@ -12,6 +12,8 @@ from openkms_cli.core.settings import get_cli_settings
 from openkms_cli.pipeline.storage import get_s3_client
 
 from evaluate_cli.judge.metrics import (
+    DEEPEVAL_RAG_KINDS,
+    score_deepeval_rag_dimension,
     score_error_rate_dimension,
     score_hotword_dimension,
     score_pairwise_dimension,
@@ -146,6 +148,12 @@ def _load_reference_text(context: dict[str, Any]) -> str:
     raise RuntimeError("Missing reference or reference_url in judge job context")
 
 
+def _normalize_judge_text(raw: str, context: dict[str, Any]) -> str:
+    if context.get("media_type") == "document":
+        return (raw or "").strip()
+    return extract_transcript_plain_text(raw)
+
+
 def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     raw_transcripts = context.get("transcripts") or []
     transcripts = []
@@ -153,7 +161,7 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
         if not isinstance(entry, dict):
             continue
         raw_text = _load_transcript_text(entry)
-        transcripts.append({**entry, "transcript": extract_transcript_plain_text(raw_text)})
+        transcripts.append({**entry, "transcript": _normalize_judge_text(raw_text, context)})
 
     min_variants = int(context.get("min_variants") or 2)
     if len(transcripts) < min_variants:
@@ -191,6 +199,13 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
                         entry["transcript"],
                         dimension,
                         hotword_terms,
+                    )
+                elif kind in DEEPEVAL_RAG_KINDS:
+                    scored = score_deepeval_rag_dimension(
+                        reference_text,
+                        entry["transcript"],
+                        dimension,
+                        context,
                     )
                 else:
                     scored = score_variant_vs_gt_dimension(

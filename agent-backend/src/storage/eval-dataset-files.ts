@@ -1,16 +1,23 @@
-import { randomUUID } from 'node:crypto';
 import {
   extensionFromFilename,
   fileTypeFromExtension,
-  guessAudioContentType,
+  guessDocumentContentType,
+  validateDocumentFilename,
   validateFileHash,
+} from './document-files.ts';
+import {
+  extensionFromFilename as audioExtensionFromFilename,
+  fileTypeFromExtension as audioFileTypeFromExtension,
+  guessAudioContentType,
 } from './audio-files.ts';
+import type { EvalMediaType } from '../db/schema.ts';
 import {
   assertStorageClient,
   DeleteObjectCommand,
 } from './s3-client.ts';
 import { getStorageReadUrl, getStorageUploadUrl } from './document-files.ts';
 import { validateKey } from './prefix-utils.ts';
+import { randomUUID } from 'node:crypto';
 
 export const EVAL_DATASETS_PREFIX = 'datasets/';
 export const MAX_EVAL_DATASET_ITEM_BYTES = 500 * 1024 * 1024;
@@ -28,7 +35,30 @@ const ACCEPTED_AUDIO_EXTENSIONS = new Set([
   'mp4',
 ]);
 
-export function validateEvalDatasetFilename(filename: string): string {
+const ACCEPTED_DOCUMENT_EXTENSIONS = new Set([
+  'pdf',
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+  'docx',
+  'pptx',
+  'xlsx',
+  'epub',
+  'xmind',
+  'md',
+  'markdown',
+]);
+
+export function acceptedExtensionsForEvalMediaType(mediaType: EvalMediaType): Set<string> {
+  return mediaType === 'document' ? ACCEPTED_DOCUMENT_EXTENSIONS : ACCEPTED_AUDIO_EXTENSIONS;
+}
+
+export function validateEvalDatasetFilename(filename: string, mediaType: EvalMediaType = 'audio'): string {
+  if (mediaType === 'document') {
+    return validateDocumentFilename(filename);
+  }
+
   const trimmed = filename.trim();
   if (!trimmed || trimmed.length > 512) {
     throw new Error('Filename must be 1–512 characters');
@@ -36,7 +66,7 @@ export function validateEvalDatasetFilename(filename: string): string {
   if (trimmed.includes('/') || trimmed.includes('\\') || trimmed.includes('..')) {
     throw new Error('Invalid filename');
   }
-  const ext = extensionFromFilename(trimmed);
+  const ext = audioExtensionFromFilename(trimmed);
   if (!ext || !ACCEPTED_AUDIO_EXTENSIONS.has(ext)) {
     throw new Error(
       `Unsupported file type. Accepted: ${[...ACCEPTED_AUDIO_EXTENSIONS].sort().join(', ')}`,
@@ -59,12 +89,21 @@ export function newEvalDatasetItemId(): string {
   return randomUUID();
 }
 
-export function guessEvalDatasetContentType(ext: string): string {
+export function guessEvalDatasetContentType(ext: string, mediaType: EvalMediaType = 'audio'): string {
+  if (mediaType === 'document') {
+    return guessDocumentContentType(ext);
+  }
   if (ext === 'mp4') return 'video/mp4';
   return guessAudioContentType(ext);
 }
 
-export { extensionFromFilename, fileTypeFromExtension, validateFileHash };
+export function evalDatasetFileTypeFromExtension(ext: string, mediaType: EvalMediaType = 'audio'): string {
+  return mediaType === 'document'
+    ? fileTypeFromExtension(ext)
+    : audioFileTypeFromExtension(ext);
+}
+
+export { extensionFromFilename, validateFileHash };
 
 export async function getEvalDatasetItemReadUrl(key: string): Promise<string> {
   validateKey(key);

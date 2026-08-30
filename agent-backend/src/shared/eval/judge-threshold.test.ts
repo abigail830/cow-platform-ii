@@ -61,6 +61,17 @@ describe('judge-threshold', () => {
     );
   });
 
+  it('evaluates DeepEval RAG thresholds with percent suffix', () => {
+    assert.equal(
+      evaluatePassThreshold(0.82, '>=70%', { kind: 'faithfulness_score', scoreMax: 1 }),
+      true,
+    );
+    assert.equal(
+      evaluatePassThreshold(0.65, '>=70%', { kind: 'contextual_recall_score', scoreMax: 1 }),
+      false,
+    );
+  });
+
   it('maps error-rate scores to percentage display values', () => {
     assert.equal(judgeScoreCompareValue(0.133, { kind: 'cer_score' }), 13.3);
   });

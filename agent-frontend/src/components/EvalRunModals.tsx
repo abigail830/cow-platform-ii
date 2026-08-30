@@ -13,7 +13,8 @@ import { EvalDatasetFileDropzone } from './EvalDatasetModals.tsx';
 import { iconProps } from './icons/icon-props.ts';
 
 type EvalRunCreateModalProps = {
-  pipelines: EvalRunProcessingOption[];
+  audioPipelines: EvalRunProcessingOption[];
+  documentPipelines: EvalRunProcessingOption[];
   datasets: EvalDataset[];
   onCancel: () => void;
   onCreate: (input: {
@@ -24,16 +25,24 @@ type EvalRunCreateModalProps = {
   }) => Promise<void>;
 };
 
-export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: EvalRunCreateModalProps) {
+export function EvalRunCreateModal({
+  audioPipelines,
+  documentPipelines,
+  datasets,
+  onCancel,
+  onCreate,
+}: EvalRunCreateModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [datasetId, setDatasetId] = useState('');
-  const [mediaTab, setMediaTab] = useState<'audio'>('audio');
+  const [mediaTab, setMediaTab] = useState<'audio' | 'document'>('audio');
   const [selectedPipelineIds, setSelectedPipelineIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const selectedDataset = datasets.find((row) => row.id === datasetId) ?? null;
+  const tabDatasets = datasets.filter((row) => row.media_type === mediaTab);
+  const pipelines = mediaTab === 'document' ? documentPipelines : audioPipelines;
+  const selectedDataset = tabDatasets.find((row) => row.id === datasetId) ?? null;
 
   function togglePipeline(id: string) {
     setSelectedPipelineIds((prev) =>
@@ -73,8 +82,8 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
       >
         <h2 id="eval-run-create-title">New evaluation run</h2>
         <p className="admin-form-hint">
-          Name the evaluation set, then configure type-specific settings. Audio runs compare ASR pipelines on the
-          same recordings.
+          Name the evaluation set, then configure type-specific settings. Audio runs compare ASR pipelines;
+          document runs compare parse pipelines (DocumentMind, Baidu, Paddle, etc.) on the same files.
         </p>
         <form className="eval-run-create-form" onSubmit={(event) => void handleSubmit(event)}>
           <div className="eval-run-create-form-body">
@@ -106,24 +115,40 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
               role="tab"
               aria-selected={mediaTab === 'audio'}
               className={`modal-tab${mediaTab === 'audio' ? ' active' : ''}`}
-              onClick={() => setMediaTab('audio')}
+              onClick={() => {
+                setMediaTab('audio');
+                setDatasetId('');
+                setSelectedPipelineIds([]);
+              }}
             >
               Audio
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mediaTab === 'document'}
+              className={`modal-tab${mediaTab === 'document' ? ' active' : ''}`}
+              onClick={() => {
+                setMediaTab('document');
+                setDatasetId('');
+                setSelectedPipelineIds([]);
+              }}
+            >
+              Document
             </button>
           </div>
 
           <div className="eval-run-create-tab-body form-grid">
-            {mediaTab === 'audio' ? (
-              <>
+            <>
                 <div className="form-field form-field-wide">
                   <span>Dataset</span>
-                  {datasets.length === 0 ? (
+                  {tabDatasets.length === 0 ? (
                     <p className="admin-muted">
-                      No datasets yet.{' '}
+                      No {mediaTab} datasets yet.{' '}
                       <Link to="/evaluation/datasets" className="btn-link">
                         Create a dataset
                       </Link>{' '}
-                      and upload audio files first.
+                      and upload {mediaTab === 'document' ? 'documents' : 'audio files'} first.
                     </p>
                   ) : (
                     <>
@@ -134,7 +159,7 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
                         required
                       >
                         <option value="">Select a dataset…</option>
-                        {datasets.map((dataset) => (
+                        {tabDatasets.map((dataset) => (
                           <option key={dataset.id} value={dataset.id}>
                             {dataset.name} ({dataset.item_count} file{dataset.item_count === 1 ? '' : 's'})
                           </option>
@@ -142,7 +167,7 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
                       </select>
                       {selectedDataset && selectedDataset.item_count === 0 ? (
                         <p className="error eval-run-create-dataset-warning">
-                          This dataset has no audio files. Upload files on the{' '}
+                          This dataset has no files. Upload files on the{' '}
                           <Link to={`/evaluation/datasets/${selectedDataset.id}`} className="btn-link">
                             dataset page
                           </Link>{' '}
@@ -150,7 +175,7 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
                         </p>
                       ) : selectedDataset ? (
                         <p className="admin-form-hint">
-                          Audio files and references are managed on the dataset page — not here.
+                          Files and ground-truth references are managed on the dataset page — not here.
                         </p>
                       ) : null}
                     </>
@@ -159,7 +184,10 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
                 <div className="form-field form-field-wide">
                   <span>Pipelines to compare</span>
                   {pipelines.length === 0 ? (
-                    <p className="admin-muted">No enabled async transcription pipelines found.</p>
+                    <p className="admin-muted">
+                      No enabled async {mediaTab === 'document' ? 'document parse' : 'transcription'} pipelines
+                      found.
+                    </p>
                   ) : (
                     <div className="eval-run-pipeline-list">
                       {pipelines.map((pipeline) => (
@@ -180,7 +208,6 @@ export function EvalRunCreateModal({ pipelines, datasets, onCancel, onCreate }: 
                   )}
                 </div>
               </>
-            ) : null}
           </div>
             {error ? <p className="error">{error}</p> : null}
           </div>

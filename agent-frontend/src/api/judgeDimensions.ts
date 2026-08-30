@@ -3,7 +3,14 @@ import { getToken } from './auth.ts';
 import { readApiErrorMessage } from './http.ts';
 
 export type EvalJudgeDimensionScope = 'variant' | 'pairwise' | 'variant_vs_gt';
-export type EvalJudgeDimensionKind = 'geval_score' | 'geval_winner' | 'cer_score' | 'wer_score';
+export type EvalJudgeDimensionKind =
+  | 'geval_score'
+  | 'geval_winner'
+  | 'cer_score'
+  | 'wer_score'
+  | 'faithfulness_score'
+  | 'contextual_recall_score'
+  | 'contextual_precision_score';
 
 export type EvalJudgeDimension = {
   id: string;

@@ -19,6 +19,10 @@ import { evalRunItemToPublic, snapshotConfigYaml } from './eval-pipeline-jobs.ts
 import { orchestrateEvalRunDispatch } from './eval-run-dispatch.ts';
 import { buildEvalRunItemOutputPrefix } from '../../storage/eval-run-files.ts';
 import { isAudioAsyncPipelineName, audioPipelineProviderForName } from '../audio/audio-pipeline-names.ts';
+import {
+  isDocumentAsyncPipelineName,
+  pipelineProviderForName,
+} from '../pipeline/pipeline-jobs.ts';
 import { getStorageReadUrl } from '../../storage/document-files.ts';
 import { shouldFailStaleAudioJob } from '../audio/audio-pipeline-stale.ts';
 import { startEvalRunComparePhase } from './eval-run-compare.ts';
@@ -66,7 +70,7 @@ function shouldFailStaleEvalRunItem(
     }
   }
 
-  if (item.audioPipelineJobId) {
+  if (item.audioPipelineJobId || item.documentPipelineJobId) {
     return { stale: false };
   }
 
@@ -216,9 +220,6 @@ export async function createEvalRun(input: {
   if (!datasetId) throw new Error('dataset_id is required');
   const dataset = await getEvalDatasetById(datasetId);
   if (!dataset) throw new Error('Dataset not found');
-  if (dataset.mediaType !== 'audio') {
-    throw new Error('Only audio datasets are supported in this version');
-  }
 
   const variants: Array<{
     pipelineConfigId: string;
@@ -231,12 +232,25 @@ export async function createEvalRun(input: {
     const pipeline = await getPipelineConfigById(pipelineConfigId);
     if (!pipeline) throw new Error(`Pipeline not found: ${pipelineConfigId}`);
     if (!pipeline.isEnabled) throw new Error(`Pipeline is disabled: ${pipeline.name}`);
-    if (!isAudioAsyncPipelineName(pipeline.pipelineName)) {
-      throw new Error(`Pipeline must be an async audio transcribe pipeline: ${pipeline.pipelineName}`);
+
+    if (dataset.mediaType === 'audio') {
+      if (!isAudioAsyncPipelineName(pipeline.pipelineName)) {
+        throw new Error(`Pipeline must be an async audio transcribe pipeline: ${pipeline.pipelineName}`);
+      }
+      if (!audioPipelineProviderForName(pipeline.pipelineName)) {
+        throw new Error(`Unsupported async audio pipeline: ${pipeline.pipelineName}`);
+      }
+    } else if (dataset.mediaType === 'document') {
+      if (!isDocumentAsyncPipelineName(pipeline.pipelineName)) {
+        throw new Error(`Pipeline must be an async document parse pipeline: ${pipeline.pipelineName}`);
+      }
+      if (!pipelineProviderForName(pipeline.pipelineName)) {
+        throw new Error(`Unsupported async document pipeline: ${pipeline.pipelineName}`);
+      }
+    } else {
+      throw new Error(`Unsupported dataset media type: ${dataset.mediaType}`);
     }
-    if (!audioPipelineProviderForName(pipeline.pipelineName)) {
-      throw new Error(`Unsupported async audio pipeline: ${pipeline.pipelineName}`);
-    }
+
     variants.push({
       pipelineConfigId: pipeline.id,
       pipelineName: pipeline.pipelineName,
@@ -244,6 +258,9 @@ export async function createEvalRun(input: {
       configYaml: pipeline.configYaml,
     });
   }
+
+  const evalType =
+    dataset.mediaType === 'document' ? 'doc_parse_pipeline_compare' : 'asr_pipeline_compare';
 
   const runMode = 'pipeline_only' as const;
 
@@ -256,6 +273,7 @@ export async function createEvalRun(input: {
       status: 'draft',
       phase: 'transcribing',
       runMode,
+      evalType,
       judgeEnabled: false,
       judgeMetrics: null,
       createdBy: input.createdBy ?? null,
@@ -773,6 +791,13 @@ export async function listEvalRunProcessingOptions() {
   return {
     transcription_pipelines: pipelines
       .filter((pipeline) => isAudioAsyncPipelineName(pipeline.pipelineName))
+      .map((pipeline) => ({
+        id: pipeline.id,
+        name: pipeline.name,
+        pipeline_name: pipeline.pipelineName,
+      })),
+    document_pipelines: pipelines
+      .filter((pipeline) => isDocumentAsyncPipelineName(pipeline.pipelineName))
       .map((pipeline) => ({
         id: pipeline.id,
         name: pipeline.name,
