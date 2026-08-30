@@ -77,7 +77,6 @@ def test_finalize_job_artifacts(
 ) -> None:
     hash_dir = tmp_path / "hash"
     hash_dir.mkdir()
-    (hash_dir / "markdown.md").write_text("# Doc", encoding="utf-8")
     ctx = {
         "document": {"id": "doc-1", "name": "readme.md"},
         "input_uri": "s3://bucket/documents/abc/original.md",
@@ -85,7 +84,8 @@ def test_finalize_job_artifacts(
         "pipeline_name": "baidu-doc-parse",
         "config_yaml": "metadata_extract:\n  enabled: false\n",
     }
-    result = {"markdown": "# Doc", "file_hash": "abc"}
+    file_hash = "a" * 64
+    result = {"markdown": "# Doc", "file_hash": file_hash, "parsing_res_list": [], "layout_det_res": [], "page_count": 1}
 
     finalize_job_artifacts(
         api="http://api",
@@ -99,9 +99,12 @@ def test_finalize_job_artifacts(
     )
 
     assert (hash_dir / "original.md").read_bytes() == b"# Doc bytes"
+    assert json.loads((hash_dir / "result.json").read_text())["file_hash"] == file_hash
+    assert (hash_dir / "markdown.md").read_text() == "# Doc"
 
     mock_build.assert_called_once()
     mock_upload.assert_called_once()
     mock_sync.assert_called_once()
     mock_complete.assert_called_once()
+    mock_complete.assert_called_with("http://api", "job-1", ctx, parse_result=result)
     mock_patch.assert_called()

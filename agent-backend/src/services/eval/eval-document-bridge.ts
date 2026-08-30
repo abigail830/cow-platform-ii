@@ -8,6 +8,7 @@ import {
   createPipelineJob,
   getPipelineJobById,
   pipelineProviderForName,
+  updatePipelineJob,
 } from '../pipeline/pipeline-jobs.ts';
 import { spawnAsyncPipelineWorker } from '../pipeline/pipeline-runner.ts';
 import { getEvalRunItemById, snapshotConfigYaml, updateEvalRunItem } from './eval-pipeline-jobs.ts';
@@ -16,6 +17,42 @@ import {
   mapDocumentPipelineStageToEvalItemStage,
 } from './eval-document-stage.ts';
 import { ensureEvalShadowDocumentForDatasetItem } from './eval-shadow-document.ts';
+
+export async function reconcileEvalDocumentPipelineJobsForRun(runId: string): Promise<void> {
+  const { listActiveAttemptItems } = await import('./eval-runs.ts');
+  const { shouldFailStaleDocumentPipelineJob } = await import('../pipeline/document-pipeline-stale.ts');
+
+  const items = await listActiveAttemptItems(runId);
+  for (const item of items) {
+    if (!item.documentPipelineJobId) continue;
+
+    const job = await getPipelineJobById(item.documentPipelineJobId);
+    if (!job) continue;
+
+    if (isDocumentPipelineTerminalStage(job.stage)) {
+      await syncEvalRunItemFromDocumentPipelineJob(job.id);
+      continue;
+    }
+
+    // Eval detail polls every ~5s — fail faster than library document jobs when GHA died without PATCH.
+    const decision = shouldFailStaleDocumentPipelineJob({
+      stage: job.stage,
+      provider: job.provider,
+      externalJobId: job.externalJobId,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      submitStaleMs: 3 * 60 * 1000,
+      parsedStaleMs: 90 * 1000,
+    });
+    if (!decision.stale || !decision.message) continue;
+
+    await updatePipelineJob(job.id, {
+      stage: 'failed',
+      errorMessage: decision.message,
+    });
+    await syncEvalRunItemFromDocumentPipelineJob(job.id);
+  }
+}
 
 export async function createEvalParseDocumentPipelineJob(
   evalRunItem: typeof appEvalRunItems.$inferSelect,

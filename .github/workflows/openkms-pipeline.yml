@@ -98,3 +98,17 @@ jobs:
           uv run openkms-cli pipeline run-async \
             --job-id "${{ inputs.job_id }}" \
             --page-index-strategy "${{ inputs.page_index_strategy }}"
+
+      - name: Mark job failed on workflow error
+        if: failure()
+        env:
+          OPENKMS_API_URL: ${{ secrets.OPENKMS_API_URL }}
+          OPENKMS_CLI_BASIC_USER: ${{ secrets.OPENKMS_CLI_BASIC_USER }}
+          OPENKMS_CLI_BASIC_PASSWORD: ${{ secrets.OPENKMS_CLI_BASIC_PASSWORD }}
+        run: |
+          JOB_ID="${{ inputs.job_id }}"
+          curl -fsS -X PATCH "${OPENKMS_API_URL%/}/internal-api/pipeline/jobs/${JOB_ID}" \
+            -u "${OPENKMS_CLI_BASIC_USER}:${OPENKMS_CLI_BASIC_PASSWORD}" \
+            -H "Content-Type: application/json" \
+            -d '{"stage":"failed","error_message":"GitHub Actions worker failed before document parse completed"}' \
+            || echo "::warning::Could not mark document pipeline job as failed"

@@ -307,7 +307,11 @@ def run_async_job(
         from openkms_cli.core.workflow_config import metadata_extract_enabled
 
         if metadata_extract_enabled(workflow_config):
-            run_metadata_extraction_from_ctx(ctx, api, job_id, workflow_config=workflow_config)
+            try:
+                run_metadata_extraction_from_ctx(ctx, api, job_id, workflow_config=workflow_config)
+            except Exception as exc:  # noqa: BLE001 — terminal fail PATCH before exit
+                fail_job(api, job_id, str(exc) or exc.__class__.__name__)
+                raise SystemExit(1) from exc
         else:
             patch_job(api, job_id, stage="done")
             console.print(f"[green]Job {job_id} done[/green]")

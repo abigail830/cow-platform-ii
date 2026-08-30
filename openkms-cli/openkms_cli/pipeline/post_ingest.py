@@ -210,7 +210,13 @@ def write_hash_dir_artifacts(
         (hash_dir / "markdown.md").write_text(markdown, encoding="utf-8")
 
 
-def complete_job_after_parse(api: str, job_id: str, ctx: dict[str, Any]) -> None:
+def complete_job_after_parse(
+    api: str,
+    job_id: str,
+    ctx: dict[str, Any],
+    *,
+    parse_result: dict[str, Any] | None = None,
+) -> None:
     from openkms_cli.core.workflow_config import metadata_extract_enabled, resolve_job_workflow_config
 
     config = resolve_job_workflow_config(
@@ -218,7 +224,13 @@ def complete_job_after_parse(api: str, job_id: str, ctx: dict[str, Any]) -> None
         job_config_yaml=ctx.get("config_yaml"),
     )
     if metadata_extract_enabled(config):
-        run_metadata_extraction_from_ctx(ctx, api, job_id, workflow_config=config)
+        run_metadata_extraction_from_ctx(
+            ctx,
+            api,
+            job_id,
+            workflow_config=config,
+            parse_result=parse_result,
+        )
     else:
         patch_job(api, job_id, stage="done")
         console.print(f"[green]Job {job_id} done[/green]")
@@ -246,10 +258,12 @@ def finalize_job_artifacts(
         work = Path(tempfile.mkdtemp(prefix="openkms-original-"))
         _stored, original_content, _ext = download_input_to_temp(ctx, work)
 
-    ensure_original_upload_artifact(
-        hash_dir,
-        basename=original_basename_from_ctx(ctx),
-        content=original_content,
+    # Paddle VLM returns result in memory only; Baidu/Aliyun may already have result.json on disk.
+    write_hash_dir_artifacts(
+        hash_dir=hash_dir,
+        result=result,
+        original_content=original_content,
+        original_basename=original_basename_from_ctx(ctx),
     )
 
     build_page_index(
@@ -276,7 +290,7 @@ def finalize_job_artifacts(
         sync_markdown_and_version(api, document_id, markdown)
 
     patch_job(api, job_id, stage="parsed")
-    complete_job_after_parse(api, job_id, ctx)
+    complete_job_after_parse(api, job_id, ctx, parse_result=result)
 
 
 def run_metadata_extraction_from_ctx(
@@ -285,6 +299,7 @@ def run_metadata_extraction_from_ctx(
     job_id: str,
     *,
     workflow_config: dict[str, Any] | None = None,
+    parse_result: dict[str, Any] | None = None,
 ) -> None:
     from openkms_cli.core.model_resolve import (
         ModelResolveError,
@@ -309,12 +324,15 @@ def run_metadata_extraction_from_ctx(
     try:
         resolved = resolve_metadata_models_for_job(config)
     except ModelResolveError as e:
-        raise RuntimeError(str(e)) from e
+        fail_job(api, job_id, str(e))
+        raise
 
     model_name = str(meta.get("model_name") or "").strip()
     params = resolved.get(model_name)
     if not params:
-        raise RuntimeError(f"No resolved credentials for model_name={model_name!r}")
+        message = f"No resolved credentials for model_name={model_name!r}"
+        fail_job(api, job_id, message)
+        raise RuntimeError(message)
 
     cfg = get_cli_settings()
     document_id = ctx["document"]["id"]
@@ -323,46 +341,66 @@ def run_metadata_extraction_from_ctx(
     from rich.progress import Progress, SpinnerColumn, TextColumn
 
     hash_dir = Path(tempfile.mkdtemp(prefix="openkms-meta-"))
-    bucket, _ = parse_s3_uri(ctx["input_uri"])
+    bucket = cfg.aws_bucket_name
 
-    client = get_s3_client(
-        cfg.aws_endpoint_url or None,
-        cfg.aws_access_key_id,
-        cfg.aws_secret_access_key,
-        cfg.aws_region,
-    )
-    raw = client.get_object(Bucket=bucket, Key=f"{prefix}/result.json")["Body"].read()
-    result = json.loads(raw)
-    (hash_dir / "result.json").write_bytes(raw)
-    if result.get("markdown"):
-        (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
+    if parse_result is not None:
+        result = parse_result
+        (hash_dir / "result.json").write_text(
+            json.dumps(result, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        if result.get("markdown"):
+            (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
+    else:
+        client = get_s3_client(
+            cfg.aws_endpoint_url or None,
+            cfg.aws_access_key_id,
+            cfg.aws_secret_access_key,
+            cfg.aws_region,
+        )
+        try:
+            raw = client.get_object(Bucket=bucket, Key=f"{prefix}/result.json")["Body"].read()
+        except Exception as e:
+            fail_job(api, job_id, f"Failed to load parse result for metadata extraction: {e}")
+            raise
+
+        result = json.loads(raw)
+        (hash_dir / "result.json").write_bytes(raw)
+        if result.get("markdown"):
+            (hash_dir / "markdown.md").write_text(result["markdown"], encoding="utf-8")
 
     auth_headers, basic_auth, has_auth = resolve_api_request_auth(required=True)
     if not has_auth:
-        raise RuntimeError("API authentication required for metadata extraction")
+        message = "API authentication required for metadata extraction"
+        fail_job(api, job_id, message)
+        raise RuntimeError(message)
 
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        task = progress.add_task("Extracting metadata...", total=None)
-        auth_headers, basic_auth = run_pipeline_metadata_extraction(
-            result=result,
-            hash_dir=hash_dir,
-            prefix=prefix,
-            extract_metadata=True,
-            document_id=document_id,
-            metadata_extract=meta,
-            model_connection=model_connection(params),
-            api_url=api,
-            skip_upload=False,
-            bucket=cfg.aws_bucket_name,
-            endpoint_url=cfg.aws_endpoint_url or None,
-            access_key=cfg.aws_access_key_id,
-            secret_key=cfg.aws_secret_access_key,
-            region=cfg.aws_region,
-            progress=progress,
-            task=task,
-            auth_headers=auth_headers,
-            basic_auth=basic_auth,
-        )
+    try:
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+            task = progress.add_task("Extracting metadata...", total=None)
+            auth_headers, basic_auth = run_pipeline_metadata_extraction(
+                result=result,
+                hash_dir=hash_dir,
+                prefix=prefix,
+                extract_metadata=True,
+                document_id=document_id,
+                metadata_extract=meta,
+                model_connection=model_connection(params),
+                api_url=api,
+                skip_upload=False,
+                bucket=cfg.aws_bucket_name,
+                endpoint_url=cfg.aws_endpoint_url or None,
+                access_key=cfg.aws_access_key_id,
+                secret_key=cfg.aws_secret_access_key,
+                region=cfg.aws_region,
+                progress=progress,
+                task=task,
+                auth_headers=auth_headers,
+                basic_auth=basic_auth,
+            )
+    except Exception as e:
+        fail_job(api, job_id, str(e) or e.__class__.__name__)
+        raise
 
     patch_job(api, job_id, stage="extracted_metadata")
     patch_job(api, job_id, stage="done")

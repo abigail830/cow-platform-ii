@@ -518,6 +518,9 @@ export async function reconcileStaleEvalRunItems(runId: string): Promise<void> {
   const run = await getEvalRunById(runId);
   if (!run || run.status !== 'running') return;
 
+  const { reconcileEvalDocumentPipelineJobsForRun } = await import('./eval-document-bridge.ts');
+  await reconcileEvalDocumentPipelineJobsForRun(runId);
+
   const items = await listActiveAttemptItems(runId);
   for (const item of items) {
     if (isTerminalEvalRunItemStage(item.stage)) continue;
