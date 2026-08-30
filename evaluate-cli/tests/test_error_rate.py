@@ -1,6 +1,19 @@
-from evaluate_cli.judge.error_rate import compute_character_error_rate, compute_word_error_rate
+from evaluate_cli.judge.error_rate import (
+    compute_character_error_rate,
+    compute_word_error_rate,
+    normalize_cer_text,
+    tokenize_wer_tokens,
+)
 from evaluate_cli.judge.metrics import score_error_rate_dimension
 from evaluate_cli.judge.transcript_text import extract_transcript_plain_text
+
+
+def test_tokenize_wer_tokens_mixed_chinese_english() -> None:
+    assert tokenize_wer_tokens("Hello 你好 world") == ["hello", "你", "好", "world"]
+
+
+def test_normalize_cer_text_lowercases_english() -> None:
+    assert normalize_cer_text("Hello 你好!") == "hello你好"
 
 
 def test_compute_character_error_rate_ignores_spaces() -> None:
@@ -22,7 +35,12 @@ def test_compute_character_error_rate_empty_reference() -> None:
     assert result.error_rate == 1.0
 
 
-def test_compute_word_error_rate() -> None:
+def test_compute_character_error_rate_ignores_case() -> None:
+    result = compute_character_error_rate("Hello", "hello")
+    assert result.error_rate == 0.0
+
+
+def test_compute_word_error_rate_english() -> None:
     result = compute_word_error_rate("hello world", "hello brave world")
     assert result.reference_length == 2
     assert result.insertions == 1
@@ -32,16 +50,27 @@ def test_compute_word_error_rate() -> None:
 def test_compute_word_error_rate_ignores_punctuation() -> None:
     result = compute_word_error_rate("hello, world!", "hello world")
     assert result.reference_length == 2
-    assert result.substitutions == 0
-    assert result.insertions == 0
-    assert result.deletions == 0
     assert result.error_rate == 0.0
 
 
-def test_compute_word_error_rate_punctuation_only_diff() -> None:
+def test_compute_word_error_rate_chinese_per_character() -> None:
     result = compute_word_error_rate("我希望個疫症快啲完。", "我希望個疫症快啲完")
-    assert result.reference_length == 1
+    assert result.reference_length == 9
     assert result.error_rate == 0.0
+
+
+def test_compute_word_error_rate_chinese_substitution() -> None:
+    result = compute_word_error_rate("我希望個疫症快啲完", "我希望個疫情快啲完")
+    assert result.reference_length == 9
+    assert result.substitutions == 1
+    assert result.error_rate == 1 / 9
+
+
+def test_compute_word_error_rate_mixed() -> None:
+    result = compute_word_error_rate("hello 你好 world", "hello 你号 world")
+    assert result.reference_length == 4
+    assert result.substitutions == 1
+    assert result.error_rate == 0.25
 
 
 def test_extract_transcript_plain_text_from_markdown() -> None:
@@ -60,8 +89,6 @@ def test_compute_character_error_rate_ignores_punctuation() -> None:
     result = compute_character_error_rate("我希望個疫症快啲完", "我希望個疫情快啲完。")
     assert result.reference_length == 9
     assert result.substitutions == 1
-    assert result.insertions == 0
-    assert result.deletions == 0
     assert result.error_rate == 1 / 9
 
 
@@ -77,7 +104,6 @@ def test_compute_character_error_rate_on_plain_transcript_body() -> None:
         extract_transcript_plain_text(hypothesis),
     )
     assert result.reference_length == 9
-    assert result.insertions == 0
     assert result.substitutions == 1
     assert result.error_rate == 1 / 9
 
@@ -92,3 +118,13 @@ def test_score_error_rate_dimension_returns_lower_is_better() -> None:
     assert scored.score_max == 1.0
     assert scored.score is not None
     assert "Character Error Rate" in scored.reason
+
+
+def test_score_wer_dimension_mixed() -> None:
+    scored = score_error_rate_dimension(
+        "hello 你好 world",
+        "hello 你号 world",
+        {"kind": "wer_score", "label": "WER"},
+    )
+    assert scored.score == 0.25
+    assert "Word Error Rate" in scored.reason

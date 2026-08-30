@@ -5,9 +5,17 @@ const DIMENSION_ID_RE = /^[a-z][a-z0-9_]*$/;
 
 function defaultErrorRateCriteria(kind: 'cer_score' | 'wer_score'): string {
   if (kind === 'wer_score') {
-    return 'Deterministic Word Error Rate (WER) between EXPECTED_OUTPUT and ACTUAL_OUTPUT.';
+    return (
+      'Deterministic Word Error Rate (WER) between EXPECTED_OUTPUT and ACTUAL_OUTPUT. ' +
+      'English words and digits are one token each; each CJK character is one token ' +
+      '(supports mixed Chinese/English). Punctuation and spaces are ignored; lower is better.'
+    );
   }
-  return 'Deterministic Character Error Rate (CER) between EXPECTED_OUTPUT and ACTUAL_OUTPUT.';
+  return (
+    'Deterministic Character Error Rate (CER) between EXPECTED_OUTPUT and ACTUAL_OUTPUT. ' +
+    'Compares lowercase alphanumeric and CJK characters only (supports mixed Chinese/English). ' +
+    'Punctuation and spaces are ignored; lower is better.'
+  );
 }
 
 export function normalizeEvaluationSteps(raw: unknown, dimensionId: string): string[] | undefined {

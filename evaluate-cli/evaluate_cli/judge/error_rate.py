@@ -1,10 +1,18 @@
-"""Character / word error rate metrics for ASR ground-truth evaluation."""
+"""Character / word error rate metrics for ASR ground-truth evaluation.
+
+Tokenization aligns with reference/scripts/generate_combined_report.py (combined dataset):
+- WER: English/digit words + one token per CJK character (mixed Chinese/English).
+- CER: alphanumeric + CJK characters after lowercasing and dropping punctuation.
+"""
 
 from __future__ import annotations
 
 import re
-import unicodedata
 from dataclasses import dataclass
+
+# English/digit word OR single CJK character (mandarin/cantonese/mixed).
+_WER_TOKEN_RE = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]")
+_CER_CHAR_RE = re.compile(r"[^a-z0-9\u4e00-\u9fff]")
 
 
 @dataclass(frozen=True)
@@ -22,19 +30,14 @@ class ErrorRateResult:
         return max(0.0, 1.0 - self.error_rate)
 
 
-def normalize_asr_text(text: str) -> str:
-    """Collapse whitespace and drop punctuation — standard ASR CER/WER prep."""
-    collapsed = re.sub(r"\s+", "", text.strip())
-    return "".join(ch for ch in collapsed if not unicodedata.category(ch).startswith("P"))
+def tokenize_wer_tokens(text: str) -> list[str]:
+    """WER tokens: [a-z0-9]+ words and one token per CJK character."""
+    return _WER_TOKEN_RE.findall(text.lower())
 
 
-def tokenize_words(text: str) -> list[str]:
-    """Split on whitespace after dropping punctuation — aligned with CER prep."""
-    without_punct = "".join(
-        ch if not unicodedata.category(ch).startswith("P") else " "
-        for ch in text.strip()
-    )
-    return [token for token in re.split(r"\s+", without_punct.strip()) if token]
+def normalize_cer_text(text: str) -> str:
+    """CER stream: lowercase alnum + CJK only (no spaces/punctuation)."""
+    return _CER_CHAR_RE.sub("", text.lower())
 
 
 def _levenshtein_counts(ref: list[str], hyp: list[str]) -> tuple[int, int, int, int]:
@@ -81,8 +84,8 @@ def _levenshtein_counts(ref: list[str], hyp: list[str]) -> tuple[int, int, int, 
 
 
 def compute_character_error_rate(reference: str, hypothesis: str) -> ErrorRateResult:
-    ref_tokens = list(normalize_asr_text(reference))
-    hyp_tokens = list(normalize_asr_text(hypothesis))
+    ref_tokens = list(normalize_cer_text(reference))
+    hyp_tokens = list(normalize_cer_text(hypothesis))
     substitutions, deletions, insertions, ref_len = _levenshtein_counts(ref_tokens, hyp_tokens)
     errors = substitutions + deletions + insertions
     error_rate = errors / ref_len if ref_len > 0 else (0.0 if errors == 0 else 1.0)
@@ -96,8 +99,8 @@ def compute_character_error_rate(reference: str, hypothesis: str) -> ErrorRateRe
 
 
 def compute_word_error_rate(reference: str, hypothesis: str) -> ErrorRateResult:
-    ref_tokens = tokenize_words(reference)
-    hyp_tokens = tokenize_words(hypothesis)
+    ref_tokens = tokenize_wer_tokens(reference)
+    hyp_tokens = tokenize_wer_tokens(hypothesis)
     substitutions, deletions, insertions, ref_len = _levenshtein_counts(ref_tokens, hyp_tokens)
     errors = substitutions + deletions + insertions
     error_rate = errors / ref_len if ref_len > 0 else (0.0 if errors == 0 else 1.0)

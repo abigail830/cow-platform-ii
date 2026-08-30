@@ -133,12 +133,18 @@ def score_error_rate_dimension(
     if kind == "wer_score":
         result = compute_word_error_rate(reference, transcript)
         label = "Word Error Rate (WER)"
+        tokenization = (
+            "English/digit words and one CJK character per token "
+            "(mixed Chinese/English supported)"
+        )
     else:
         result = compute_character_error_rate(reference, transcript)
         label = "Character Error Rate (CER)"
+        tokenization = "Lowercase alphanumeric and CJK characters only"
 
     reason = (
         f"{label} {result.error_rate:.2%}. "
+        f"Tokenization: {tokenization}. "
         f"Substitutions: {result.substitutions}, Deletions: {result.deletions}, "
         f"Insertions: {result.insertions}, Reference length: {result.reference_length}."
     )
