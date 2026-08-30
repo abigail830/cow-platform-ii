@@ -121,6 +121,7 @@ def _submit_baidu(ctx: dict[str, Any], api_url: str, job_id: str, work: Path) ->
 
 
 def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
+    from openkms_cli.core.workflow_config import resolve_docmind_submit_options, resolve_job_workflow_config
     from openkms_cli.providers.aliyun.docmind import AliyunDocmindError, presign_s3_get_url, redact_file_url, submit_doc_parser_job
 
     cfg = get_cli_settings()
@@ -128,6 +129,17 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
         raise AliyunDocmindError("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required for OSS presign")
     if not cfg.docmind_endpoint:
         raise AliyunDocmindError("OPENKMS_DOCMIND_ENDPOINT is required")
+
+    workflow = resolve_job_workflow_config(
+        pipeline_name=str(ctx.get("pipeline_name") or ""),
+        job_config_yaml=ctx.get("config_yaml"),
+    )
+    docmind_opts = resolve_docmind_submit_options(workflow)
+    console.print(
+        "[dim]aliyun_docmind "
+        f"llm_enhancement={docmind_opts['llm_enhancement']} "
+        f"enhancement_mode={docmind_opts['enhancement_mode']!r}[/dim]"
+    )
 
     doc = ctx["document"]
     bucket, key = parse_s3_uri(ctx["input_uri"])
@@ -152,6 +164,8 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
         secret_access_key=cfg.aws_secret_access_key,
         endpoint=cfg.docmind_endpoint,
         enable_event_callback=cfg.docmind_enable_event_callback,
+        llm_enhancement=bool(docmind_opts["llm_enhancement"]),
+        enhancement_mode=docmind_opts["enhancement_mode"],
     )
     patch_job(api_url, job_id, external_job_id=task_id)
 

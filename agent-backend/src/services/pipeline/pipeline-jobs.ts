@@ -43,7 +43,7 @@ function s3PrefixFromKey(s3Key: string): string {
   return idx >= 0 ? normalized.slice(0, idx) : normalized;
 }
 
-/** Normalize pipeline override: blank → null (CLI uses packaged default). */
+/** Normalize pipeline override: blank → null (non-system pipelines may omit YAML). */
 export function snapshotConfigYaml(configYaml: string | null | undefined): string | null {
   const raw = configYaml?.trim();
   return raw ? raw : null;

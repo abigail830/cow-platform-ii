@@ -1,9 +1,7 @@
 /**
  * Eval judge (Full-mode compare) workflow YAML — model_name + scenario_id; credentials from platform.
+ * Defaults live in `app_pipeline_configs.config_yaml` (system pipeline rows).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import {
   DEFAULT_EVAL_JUDGE_SCENARIO_ID,
@@ -14,55 +12,6 @@ import {
 } from './eval-judge-constants.ts';
 
 export const EVAL_JUDGE_COMPARE_PIPELINE_NAME = 'eval-judge-compare';
-
-const DEFAULT_CONFIG_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../pipeline-workflows/eval-judge-compare.yml',
-);
-
-const DEFAULT_GT_CONFIG_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../pipeline-workflows/eval-judge-compare-with-gt.yml',
-);
-
-const DEFAULT_DOC_CONFIG_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../pipeline-workflows/eval-judge-doc-compare.yml',
-);
-
-const DEFAULT_DOC_GT_CONFIG_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../pipeline-workflows/eval-judge-doc-compare-with-gt.yml',
-);
-
-let cachedDefaultYaml: string | null = null;
-let cachedDefaultGtYaml: string | null = null;
-let cachedDefaultDocYaml: string | null = null;
-let cachedDefaultDocGtYaml: string | null = null;
-
-export function defaultEvalJudgeConfigYaml(): string {
-  if (cachedDefaultYaml) return cachedDefaultYaml;
-  cachedDefaultYaml = readFileSync(DEFAULT_CONFIG_PATH, 'utf8');
-  return cachedDefaultYaml;
-}
-
-export function defaultEvalJudgeGtConfigYaml(): string {
-  if (cachedDefaultGtYaml) return cachedDefaultGtYaml;
-  cachedDefaultGtYaml = readFileSync(DEFAULT_GT_CONFIG_PATH, 'utf8');
-  return cachedDefaultGtYaml;
-}
-
-export function defaultEvalJudgeDocConfigYaml(): string {
-  if (cachedDefaultDocYaml) return cachedDefaultDocYaml;
-  cachedDefaultDocYaml = readFileSync(DEFAULT_DOC_CONFIG_PATH, 'utf8');
-  return cachedDefaultDocYaml;
-}
-
-export function defaultEvalJudgeDocGtConfigYaml(): string {
-  if (cachedDefaultDocGtYaml) return cachedDefaultDocGtYaml;
-  cachedDefaultDocGtYaml = readFileSync(DEFAULT_DOC_GT_CONFIG_PATH, 'utf8');
-  return cachedDefaultDocGtYaml;
-}
 
 function parseEvalJudgeConfigRoot(configYaml: string, pipelineName = EVAL_JUDGE_COMPARE_PIPELINE_NAME) {
   let data: unknown;
@@ -109,66 +58,50 @@ export function parseEvalJudgeScenarioId(
     if (nested) return nested;
   }
 
+  if (pipelineName === EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME) {
+    return DEFAULT_EVAL_JUDGE_DOC_SCENARIO_ID;
+  }
   return DEFAULT_EVAL_JUDGE_SCENARIO_ID;
 }
 
 export function snapshotEvalJudgeConfigYaml(
-  raw?: string | null,
+  raw: string,
   pipelineName = EVAL_JUDGE_COMPARE_PIPELINE_NAME,
 ): string {
-  const text = raw?.trim();
+  const text = raw.trim();
   if (!text) {
-    if (pipelineName === EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME) {
-      return defaultEvalJudgeGtConfigYaml();
-    }
-    if (pipelineName === EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME) {
-      return defaultEvalJudgeDocGtConfigYaml();
-    }
-    if (pipelineName === EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME) {
-      return defaultEvalJudgeDocConfigYaml();
-    }
-    return defaultEvalJudgeConfigYaml();
+    throw new Error(`Eval judge config YAML is empty for pipeline ${pipelineName}`);
   }
   parseEvalJudgeModelName(text, pipelineName);
   parseEvalJudgeScenarioId(text, pipelineName);
   return text;
 }
 
-/** Prefer Admin → Pipelines system row; fall back to packaged default YAML. */
-export async function resolveEvalJudgeConfigYaml(): Promise<string> {
-  const { getPipelineConfigByPipelineName } = await import('../pipeline/pipeline-config-store.ts');
-  const pipeline = await getPipelineConfigByPipelineName(EVAL_JUDGE_COMPARE_PIPELINE_NAME);
-  if (pipeline?.configYaml?.trim()) {
-    return snapshotEvalJudgeConfigYaml(pipeline.configYaml);
+async function resolveEvalJudgeConfigYamlForPipeline(pipelineName: string): Promise<string> {
+  const { readSystemPipelineConfigYaml } = await import('../pipeline/pipeline-default-config.ts');
+  const yaml = await readSystemPipelineConfigYaml(pipelineName);
+  if (!yaml) {
+    throw new Error(
+      `System pipeline ${pipelineName} has no config_yaml in DB. Run db:migrate.`,
+    );
   }
-  return defaultEvalJudgeConfigYaml();
+  return snapshotEvalJudgeConfigYaml(yaml, pipelineName);
+}
+
+export async function resolveEvalJudgeConfigYaml(): Promise<string> {
+  return resolveEvalJudgeConfigYamlForPipeline(EVAL_JUDGE_COMPARE_PIPELINE_NAME);
 }
 
 export async function resolveEvalJudgeGtConfigYaml(): Promise<string> {
-  const { getPipelineConfigByPipelineName } = await import('../pipeline/pipeline-config-store.ts');
-  const pipeline = await getPipelineConfigByPipelineName(EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME);
-  if (pipeline?.configYaml?.trim()) {
-    return snapshotEvalJudgeConfigYaml(pipeline.configYaml, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME);
-  }
-  return defaultEvalJudgeGtConfigYaml();
+  return resolveEvalJudgeConfigYamlForPipeline(EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME);
 }
 
 export async function resolveEvalJudgeDocConfigYaml(): Promise<string> {
-  const { getPipelineConfigByPipelineName } = await import('../pipeline/pipeline-config-store.ts');
-  const pipeline = await getPipelineConfigByPipelineName(EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME);
-  if (pipeline?.configYaml?.trim()) {
-    return snapshotEvalJudgeConfigYaml(pipeline.configYaml, EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME);
-  }
-  return defaultEvalJudgeDocConfigYaml();
+  return resolveEvalJudgeConfigYamlForPipeline(EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME);
 }
 
 export async function resolveEvalJudgeDocGtConfigYaml(): Promise<string> {
-  const { getPipelineConfigByPipelineName } = await import('../pipeline/pipeline-config-store.ts');
-  const pipeline = await getPipelineConfigByPipelineName(EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME);
-  if (pipeline?.configYaml?.trim()) {
-    return snapshotEvalJudgeConfigYaml(pipeline.configYaml, EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME);
-  }
-  return defaultEvalJudgeDocGtConfigYaml();
+  return resolveEvalJudgeConfigYamlForPipeline(EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME);
 }
 
 /**

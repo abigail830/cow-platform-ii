@@ -144,6 +144,42 @@ def async_section(config: dict[str, Any]) -> dict[str, Any] | None:
     return section
 
 
+def docmind_section(config: dict[str, Any]) -> dict[str, Any] | None:
+    section = config.get("docmind")
+    if not isinstance(section, dict):
+        return None
+    return section
+
+
+def resolve_docmind_submit_options(config: dict[str, Any]) -> dict[str, Any]:
+    """Aliyun SubmitDocParserJob options from workflow YAML ``docmind`` section.
+
+    Defaults follow Aliyun 大模型版 best practice for image/OCR quality:
+    ``llm_enhancement=true`` and ``enhancement_mode=VLM`` (multimodal layout + OCR).
+    Disable VLM only via ``enhancement_mode: null`` or ``""``; disable all via
+    ``llm_enhancement: false``.
+    """
+    section = docmind_section(config) or {}
+    llm_raw = section.get("llm_enhancement")
+    llm_enhancement = True if llm_raw is None else bool(llm_raw)
+
+    if not llm_enhancement:
+        enhancement_mode: str | None = None
+    elif "enhancement_mode" not in section:
+        enhancement_mode = "VLM"
+    else:
+        mode_raw = section.get("enhancement_mode")
+        if mode_raw is None or (isinstance(mode_raw, str) and not mode_raw.strip()):
+            enhancement_mode = None
+        else:
+            enhancement_mode = str(mode_raw).strip().upper()
+
+    return {
+        "llm_enhancement": llm_enhancement,
+        "enhancement_mode": enhancement_mode,
+    }
+
+
 def resolve_page_index_strategy(
     config: dict[str, Any],
     *,

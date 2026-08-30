@@ -21,6 +21,7 @@ import {
   toKbImportJobPublic,
   type KbImportJobRow,
 } from './knowledge-bases.ts';
+import { resolvePipelineConfigYamlSnapshot } from '../../shared/pipeline/pipeline-default-config.ts';
 import {
   resolveFaqIndexEmbedConfig,
   resolveFaqIndexEmbedConfigForKb,
@@ -460,13 +461,19 @@ export async function startKbFaqExtractJob(input: {
   });
   if (documentIds.length === 0) throw new Error('No documents selected for extract');
 
+  const extractConfigYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
   return createKbImportJob({
     knowledgeBaseId: input.knowledgeBaseId,
     documentIds,
     faqIds: [],
     jobKind: 'faq_extract',
     pipelineId: pipeline.id,
-    configYaml: pipeline.configYaml,
+    configYaml: extractConfigYaml,
     createdBy: input.createdBy,
   });
 }
@@ -518,13 +525,19 @@ export async function startKbFaqIndexJob(input: {
 
   await markKbFaqsIndexing(input.knowledgeBaseId, publishedIds);
 
+  const indexConfigYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: embed.configYaml ?? pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
   return createKbImportJob({
     knowledgeBaseId: input.knowledgeBaseId,
     documentIds: [],
     faqIds: publishedIds,
     jobKind: 'faq_index',
     pipelineId: pipeline.id,
-    configYaml: embed.configYaml ?? pipeline.configYaml,
+    configYaml: indexConfigYaml,
     createdBy: input.createdBy,
   });
 }

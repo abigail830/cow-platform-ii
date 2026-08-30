@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { appAudioCaptures, db } from '../../db/index.ts';
 import { redactCliCommandSecrets } from '../../shared/model/model-cli-client.ts';
 import { getPipelineConfigByPipelineName, getPipelineConfigById } from '../../shared/pipeline/pipeline-config-store.ts';
+import { resolvePipelineConfigYamlSnapshot } from '../../shared/pipeline/pipeline-default-config.ts';
 import {
   normalizeAsyncWorkerCliArgs,
   parseAsyncWorkerTemplate,
@@ -216,10 +217,16 @@ export async function startCapturePostProcess(
     throw new Error('Capture post-process pipeline is not available');
   }
 
+  const configYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
   const job = await createCapturePipelineJob({
     captureId,
     pipelineName: pipeline.pipelineName,
-    configYaml: pipeline.configYaml,
+    configYaml,
   });
 
   await db

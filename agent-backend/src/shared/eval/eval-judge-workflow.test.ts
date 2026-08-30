@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  defaultEvalJudgeConfigYaml,
-  defaultEvalJudgeGtConfigYaml,
-  defaultEvalJudgeDocConfigYaml,
-  defaultEvalJudgeDocGtConfigYaml,
   parseEvalJudgeModelName,
   parseEvalJudgeScenarioId,
   snapshotEvalJudgeConfigYaml,
@@ -15,13 +11,26 @@ import {
   EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME,
 } from './eval-judge-constants.ts';
 
+const SAMPLE_NO_GT = `model_name: "deepSeek-V4-Flash"
+scenario_id: asr_pipeline_compare_no_gt
+`;
+
+const SAMPLE_WITH_GT = `model_name: "deepSeek-V4-Flash"
+scenario_id: asr_pipeline_compare_with_gt
+`;
+
+const SAMPLE_DOC_NO_GT = `model_name: "deepSeek-V4-Flash"
+scenario_id: doc_parse_pipeline_compare_no_gt
+`;
+
+const SAMPLE_DOC_WITH_GT = `model_name: "deepSeek-V4-Flash"
+scenario_id: doc_parse_pipeline_compare_with_gt
+`;
+
 describe('eval-judge-workflow', () => {
-  it('loads packaged default with model_name and scenario_id', () => {
-    const yaml = defaultEvalJudgeConfigYaml();
-    assert.match(yaml, /model_name:/);
-    assert.match(yaml, /scenario_id:/);
-    assert.equal(parseEvalJudgeModelName(yaml), 'deepSeek-V4-Flash');
-    assert.equal(parseEvalJudgeScenarioId(yaml), 'asr_pipeline_compare_no_gt');
+  it('parses model_name and scenario_id from yaml', () => {
+    assert.equal(parseEvalJudgeModelName(SAMPLE_NO_GT), 'deepSeek-V4-Flash');
+    assert.equal(parseEvalJudgeScenarioId(SAMPLE_NO_GT), 'asr_pipeline_compare_no_gt');
   });
 
   it('reads nested judge.model_name', () => {
@@ -46,29 +55,17 @@ describe('eval-judge-workflow', () => {
     assert.throws(() => parseEvalJudgeModelName('scenario_id: x\n'), /model_name/);
   });
 
-  it('loads packaged GT default with ground-truth scenario', () => {
-    const yaml = defaultEvalJudgeGtConfigYaml();
-    assert.match(yaml, /model_name:/);
+  it('parses GT and document scenario ids', () => {
     assert.equal(
-      parseEvalJudgeScenarioId(yaml, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME),
+      parseEvalJudgeScenarioId(SAMPLE_WITH_GT, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME),
       'asr_pipeline_compare_with_gt',
     );
-  });
-
-  it('loads packaged document no-GT default with doc scenario', () => {
-    const yaml = defaultEvalJudgeDocConfigYaml();
-    assert.match(yaml, /model_name:/);
     assert.equal(
-      parseEvalJudgeScenarioId(yaml, EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME),
+      parseEvalJudgeScenarioId(SAMPLE_DOC_NO_GT, EVAL_JUDGE_DOC_COMPARE_PIPELINE_NAME),
       'doc_parse_pipeline_compare_no_gt',
     );
-  });
-
-  it('loads packaged document GT default with doc ground-truth scenario', () => {
-    const yaml = defaultEvalJudgeDocGtConfigYaml();
-    assert.match(yaml, /model_name:/);
     assert.equal(
-      parseEvalJudgeScenarioId(yaml, EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME),
+      parseEvalJudgeScenarioId(SAMPLE_DOC_WITH_GT, EVAL_JUDGE_DOC_COMPARE_WITH_GT_PIPELINE_NAME),
       'doc_parse_pipeline_compare_with_gt',
     );
   });
@@ -76,5 +73,9 @@ describe('eval-judge-workflow', () => {
   it('snapshots valid override yaml', () => {
     const raw = 'model_name: "custom-judge"\nscenario_id: "asr_pipeline_compare_no_gt"';
     assert.equal(snapshotEvalJudgeConfigYaml(raw), raw);
+  });
+
+  it('rejects empty snapshot yaml', () => {
+    assert.throws(() => snapshotEvalJudgeConfigYaml('   '), /empty/i);
   });
 });

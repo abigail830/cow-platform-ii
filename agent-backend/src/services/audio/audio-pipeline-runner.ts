@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { appAudios, db } from '../../db/index.ts';
 import { redactCliCommandSecrets } from '../../shared/model/model-cli-client.ts';
 import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../../shared/pipeline/pipeline-config-store.ts';
+import { resolvePipelineConfigYamlSnapshot } from '../../shared/pipeline/pipeline-default-config.ts';
 import {
   normalizeAsyncWorkerCliArgs,
   parseAsyncWorkerTemplate,
@@ -193,11 +194,17 @@ async function startAsyncAudioPipelineJob(audioId: string): Promise<{ jobId: str
 
   const apiUrl = resolveApiUrl();
 
+  const configYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
   const job = await createAudioPipelineJob({
     audioId: audio.id,
     pipelineName: pipeline.pipelineName,
     provider,
-    configYaml: pipeline.configYaml,
+    configYaml,
     asrVocabularyIdSnapshot: await getChannelAsrVocabularyIdForJob(audio.channelId),
   });
 

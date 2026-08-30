@@ -22,6 +22,7 @@ import {
   KB_IMPORT_MAX_PARSING_RESULT_BYTES,
 } from '../../shared/kb/kb-import-limits.ts';
 import { resolveDefaultPipelineIdForKbType } from '../../shared/kb/kb-pipeline-binding.ts';
+import { resolvePipelineConfigYamlSnapshot } from '../../shared/pipeline/pipeline-default-config.ts';
 import { isServerlessRuntime } from '../pipeline/pipeline-worker-mode.ts';
 import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../../shared/pipeline/pipeline-config-store.ts';
 import { getModelConfigById } from '../../shared/model/model-config-store.ts';
@@ -894,13 +895,19 @@ export async function startKbPageIndexImport(input: {
     await upsertKbItemPending(input.knowledgeBaseId, documentId);
   }
 
+  const configYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
   const job = await createKbImportJob({
     knowledgeBaseId: input.knowledgeBaseId,
     documentIds,
     faqIds: [],
     jobKind: 'pageindex_import',
     pipelineId: kb.pipelineId,
-    configYaml: pipeline.configYaml,
+    configYaml,
     createdBy: input.createdBy,
   });
 
@@ -950,13 +957,19 @@ export async function startKbRagIndexImport(input: {
     await upsertKbChunkDocumentIndexing(input.knowledgeBaseId, documentId);
   }
 
+  const configYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: embed.configYaml ?? pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
   const job = await createKbImportJob({
     knowledgeBaseId: input.knowledgeBaseId,
     documentIds,
     faqIds: [],
     jobKind: 'rag_index',
     pipelineId: pipeline.id,
-    configYaml: embed.configYaml ?? pipeline.configYaml,
+    configYaml,
     createdBy: input.createdBy,
   });
 
@@ -1025,7 +1038,7 @@ export type KbImportJobWorkerContext = {
   total_count: number;
   completed_count: number;
   failed_count: number;
-  /** Snapshot of pipeline config_yaml; null = CLI packaged default. */
+  /** Snapshot of pipeline config_yaml; null only for non-system pipelines without YAML. */
   config_yaml: string | null;
   pipeline_name: string | null;
   api_url: string;

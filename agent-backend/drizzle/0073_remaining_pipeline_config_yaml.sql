@@ -1,4 +1,44 @@
-# Default worker config for audio-capture-post-process pipeline.
+-- Seed remaining system pipeline config_yaml (DB canonical; agent-backend/pipeline-workflows removed).
+--> statement-breakpoint
+UPDATE "app_pipeline_configs"
+SET
+  "config_yaml" = $yaml$# Default worker config for aliyun-qwen-audio-transcribe pipeline.
+# model_name = Models list bold name (app_model_configs.name), api_type=audio-asr.
+# Credentials via GET /internal-api/models/cli-params?model_name=…
+
+model_name: "qwen-audio-3.0-asr-flash-filetrans"
+
+asr:
+  enable_diarization: true
+  # context_prompt: |
+  #   Meeting about product planning. Participants: Alice, Bob.
+$yaml$,
+  "updated_at" = NOW()
+WHERE "pipeline_name" = 'aliyun-qwen-audio-transcribe'
+  AND "is_system" = true
+  AND ("config_yaml" IS NULL OR btrim("config_yaml") = '');
+--> statement-breakpoint
+UPDATE "app_pipeline_configs"
+SET
+  "config_yaml" = $yaml$# Default worker config for aliyun-fun-asr-transcribe pipeline.
+# model_name = Models list bold name (app_model_configs.name), api_type=audio-asr.
+# Credentials via GET /internal-api/models/cli-params?model_name=…
+
+model_name: "fun-asr"
+
+asr:
+  enable_diarization: true
+  # language_hints: ["zh"]   # Fun-ASR supports only one hint
+  # speaker_count: 3         # requires enable_diarization: true
+$yaml$,
+  "updated_at" = NOW()
+WHERE "pipeline_name" = 'aliyun-fun-asr-transcribe'
+  AND "is_system" = true
+  AND ("config_yaml" IS NULL OR btrim("config_yaml") = '');
+--> statement-breakpoint
+UPDATE "app_pipeline_configs"
+SET
+  "config_yaml" = $yaml$# Default worker config for audio-capture-post-process pipeline.
 # model_name = Models list bold name (app_model_configs.name), api_type=chat-completions.
 # Credentials via GET /internal-api/models/cli-params?model_name=…
 #
@@ -143,3 +183,93 @@ post_process:
   enable_segment_topics: true
   enable_chapters: true
   enable_llm_structure: true
+$yaml$,
+  "updated_at" = NOW()
+WHERE "pipeline_name" = 'audio-capture-post-process'
+  AND "is_system" = true
+  AND ("config_yaml" IS NULL OR btrim("config_yaml") = '');
+--> statement-breakpoint
+UPDATE "app_pipeline_configs"
+SET
+  "config_yaml" = $yaml$# Default worker config for metadata-extract (standalone metadata-only pipeline).
+# Run on documents that are already parsed (job stage=parsed).
+# model_name = Models list bold name (app_model_configs.name), api_type=chat-completions.
+# Credentials via GET /internal-api/models/cli-params?model_name=…
+
+metadata_extract:
+  enabled: true
+  model_name: "deepSeek-V4-Flash"
+  temperature: 0.2
+  system_prompt: |
+    Extract metadata from the document content. Use null for unknown values.
+  user_prompt_template: |
+    Document:
+    ---
+    {markdown}
+    ---
+
+    Extract metadata from the above document.
+  output_schema:
+    type: object
+    properties:
+      abstract:
+        type: string
+        description: "One-sentence summary of the document's main content"
+      author:
+        type: string
+        description: Primary author name
+      publish_date:
+        type: string
+        format: date
+        description: Publication date in YYYY-MM-DD format
+      source:
+        type: string
+        description: Journal, conference, or publisher name
+      tags:
+        type: array
+        items:
+          type: string
+        description: Keywords or tags
+      categories:
+        type: array
+        items:
+          type: string
+        description: Subject categories
+    required: []
+$yaml$,
+  "updated_at" = NOW()
+WHERE "pipeline_name" = 'metadata-extract'
+  AND "is_system" = true
+  AND ("config_yaml" IS NULL OR btrim("config_yaml") = '');
+--> statement-breakpoint
+UPDATE "app_pipeline_configs"
+SET
+  "config_yaml" = $yaml$# Default worker config for kb-pageindex-import.
+
+version: 1
+$yaml$,
+  "updated_at" = NOW()
+WHERE "pipeline_name" = 'kb-pageindex-import'
+  AND "is_system" = true
+  AND ("config_yaml" IS NULL OR btrim("config_yaml") = '');
+--> statement-breakpoint
+UPDATE "app_pipeline_configs"
+SET
+  "config_yaml" = $yaml$# Default worker config for kb-faq-extract.
+# model_name = Models list bold name (app_model_configs.name).
+
+model_name: "deepSeek-V4-Flash"
+temperature: 0.2
+system_prompt: |
+  You extract FAQ pairs from documents. Respond with valid JSON only.
+user_prompt_template: |
+  Extract FAQ question-and-answer pairs from the document markdown below. The source may be a proposal, report, or manual — infer useful Q&A a reader might ask (scope, pricing, timeline, deliverables, requirements). Return a JSON array of objects with "question" and "answer" fields. Include at least 3 pairs when the document has enough substance.
+
+  Document: {document_name}
+
+  {markdown}
+$yaml$,
+  "updated_at" = NOW()
+WHERE "pipeline_name" = 'kb-faq-extract'
+  AND "is_system" = true
+  AND ("config_yaml" IS NULL OR btrim("config_yaml") = '');

@@ -64,17 +64,22 @@ def submit_doc_parser_job(
     secret_access_key: str,
     endpoint: str,
     enable_event_callback: bool = False,
+    llm_enhancement: bool = True,
+    enhancement_mode: str | None = "VLM",
 ) -> str:
     client, dm_models = _create_client(access_key_id, secret_access_key, endpoint)
     ext = Path(file_name).suffix.lower().lstrip(".")
-    request = dm_models.SubmitDocParserJobRequest(
+    request_kwargs: dict[str, Any] = dict(
         file_url=file_url,
         file_name=file_name,
         file_name_extension=ext or None,
-        llm_enhancement=False,
+        llm_enhancement=llm_enhancement,
         enable_event_callback=enable_event_callback,
         output_format=["markdown"],
     )
+    if enhancement_mode:
+        request_kwargs["enhancement_mode"] = enhancement_mode
+    request = dm_models.SubmitDocParserJobRequest(**request_kwargs)
     try:
         response = client.submit_doc_parser_job(request)
     except Exception as e:

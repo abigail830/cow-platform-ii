@@ -3,7 +3,7 @@ import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rb
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
 import { routeParam } from '../../http/route-param.ts';
-import { readCliPackagedDefaultConfigYaml } from '../../shared/pipeline/cli-workflow-defaults.ts';
+import { readSystemPipelineConfigYaml } from '../../shared/pipeline/pipeline-default-config.ts';
 import { normalizePipelineConfigYaml } from '../../shared/pipeline/pipeline-config-yaml.ts';
 import {
   createPipelineConfig,
@@ -40,11 +40,11 @@ pipelines.get(
       return c.json({ error: 'pipeline_name is required' }, 400);
     }
     try {
-      const configYaml = readCliPackagedDefaultConfigYaml(pipelineName);
-      if (configYaml === null) {
-        return c.json({ error: `No packaged default for pipeline_name=${pipelineName}` }, 404);
+      const configYaml = await readSystemPipelineConfigYaml(pipelineName);
+      if (!configYaml) {
+        return c.json({ error: `No system default config_yaml for pipeline_name=${pipelineName}` }, 404);
       }
-      return c.json({ pipeline_name: pipelineName, config_yaml: configYaml });
+      return c.json({ pipeline_name: pipelineName, config_yaml: configYaml, source: 'db' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load default config YAML';
       return c.json({ error: message }, 500);

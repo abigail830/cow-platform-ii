@@ -505,6 +505,20 @@
       "when": 1785228000000,
       "tag": "0071_eval_judge_doc_gt_thresholds",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1785229000000,
+      "tag": "0072_document_pipeline_config_yaml",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1785230000000,
+      "tag": "0073_remaining_pipeline_config_yaml",
+      "breakpoints": true
     }
   ]
 }

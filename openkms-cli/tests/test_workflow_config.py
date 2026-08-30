@@ -107,6 +107,30 @@ def test_resolve_page_index_strategy_from_yaml():
     assert resolve_page_index_strategy(cfg, provider="aliyun", cli_override=None) == "aliyun-layouts"
 
 
+def test_aliyun_docmind_default_llm_vlm_from_yaml():
+    from openkms_cli.core.workflow_config import resolve_docmind_submit_options
+
+    cfg = load_packaged_default("aliyun-docmind-parse")
+    opts = resolve_docmind_submit_options(cfg)
+    assert opts["llm_enhancement"] is True
+    assert opts["enhancement_mode"] == "VLM"
+
+
+def test_resolve_docmind_submit_options_yaml_override():
+    from openkms_cli.core.workflow_config import resolve_docmind_submit_options, resolve_job_workflow_config
+
+    cfg = resolve_job_workflow_config(
+        pipeline_name="aliyun-docmind-parse",
+        job_config_yaml="""
+docmind:
+  llm_enhancement: false
+""",
+    )
+    opts = resolve_docmind_submit_options(cfg)
+    assert opts["llm_enhancement"] is False
+    assert opts["enhancement_mode"] is None
+
+
 def test_resolve_async_poll_settings_yaml_then_settings():
     from openkms_cli.core.workflow_config import resolve_async_poll_settings
 

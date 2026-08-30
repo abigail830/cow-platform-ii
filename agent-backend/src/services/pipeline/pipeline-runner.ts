@@ -5,6 +5,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { appDocuments, db } from '../../db/index.ts';
 import { redactCliCommandSecrets } from '../../shared/model/model-cli-client.ts';
 import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../../shared/pipeline/pipeline-config-store.ts';
+import { resolvePipelineConfigYamlSnapshot } from '../../shared/pipeline/pipeline-default-config.ts';
 import {
   normalizeAsyncWorkerCliArgs,
   pageIndexStrategyFromCliArgs,
@@ -228,11 +229,17 @@ async function startAsyncPipelineJob(documentId: string): Promise<{ jobId: strin
 
   const apiUrl = resolveApiUrl();
 
+  const configYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
   const job = await createPipelineJob({
     documentId: doc.id,
     pipelineName: pipeline.pipelineName,
     provider,
-    configYaml: pipeline.configYaml,
+    configYaml,
   });
 
   await spawnAsyncPipelineWorker(job.id, pipeline.pipelineName, apiUrl);

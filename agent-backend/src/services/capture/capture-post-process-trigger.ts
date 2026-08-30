@@ -8,6 +8,7 @@ import {
   resolveCapturePostProcessPipelineForChannel,
   spawnCapturePostProcessWorker,
 } from '../audio/audio-capture-pipeline-runner.ts';
+import { resolvePipelineConfigYamlSnapshot } from '../../shared/pipeline/pipeline-default-config.ts';
 import { evaluateCaptureReadiness } from './capture-readiness.ts';
 import { getLatestAudioPipelineJobsForAudios } from '../audio/audio-pipeline-jobs.ts';
 
@@ -57,10 +58,16 @@ export async function maybeStartCapturePostProcess(captureId: string): Promise<v
     return;
   }
 
+  const configYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
   const job = await createCapturePipelineJob({
     captureId,
     pipelineName: pipeline.pipelineName,
-    configYaml: pipeline.configYaml,
+    configYaml,
   });
 
   await db

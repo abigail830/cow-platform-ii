@@ -1,4 +1,9 @@
 # Default worker config for aliyun-docmind-parse.
+# docmind.llm_enhancement + enhancement_mode: VLM — Aliyun 大模型版 OCR/版面增强（更慢、按页计费更高）。
+
+docmind:
+  llm_enhancement: true
+  enhancement_mode: VLM
 
 page_index:
   strategy: aliyun-layouts

@@ -12,7 +12,7 @@ export type PublicPipelineConfig = {
   pipelineName: string;
   commandTemplate: string;
   workflowFile: string | null;
-  /** Worker YAML override; null = CLI packaged default. */
+  /** Worker YAML; system pipelines require DB seed (migrations). */
   configYaml: string | null;
   modelConfigId: string | null;
   modelConfigName: string | null;

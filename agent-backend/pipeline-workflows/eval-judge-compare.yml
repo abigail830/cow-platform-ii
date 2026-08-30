@@ -1,7 +1,0 @@
-# Default worker config for eval Full-mode compare/judge (DeepEval GEval).
-# model_name = Models list bold name (app_model_configs.name), api_type=chat-completions.
-# scenario_id = Judge Dimensions scenario key (Admin → Judge Dimensions).
-# Credentials via GET /internal-api/models/cli-params?model_name=…
-
-model_name: "deepSeek-V4-Flash"
-scenario_id: "asr_pipeline_compare_no_gt"

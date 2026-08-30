@@ -1,5 +1,4 @@
 import { parse as parseYaml } from 'yaml';
-import { readCliPackagedDefaultConfigYaml } from './cli-workflow-defaults.ts';
 import type { PipelineConfigRow } from './pipeline-config-store.ts';
 
 export function workflowAsrModelDisplayName(config: Record<string, unknown>): string | null {
@@ -14,9 +13,8 @@ export function workflowAsrModelDisplayName(config: Record<string, unknown>): st
 }
 
 export function resolveAudioTranscribeWorkflowYaml(pipeline: PipelineConfigRow): string | null {
-  const override = pipeline.configYaml?.trim();
-  if (override) return override;
-  return readCliPackagedDefaultConfigYaml(pipeline.pipelineName);
+  const yaml = pipeline.configYaml?.trim();
+  return yaml || null;
 }
 
 export function parseAudioTranscribeWorkflowYaml(raw: string, source: string): Record<string, unknown> {

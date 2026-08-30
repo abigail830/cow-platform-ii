@@ -123,7 +123,7 @@ async function dispatchKbImportGithub(jobId: string): Promise<void> {
 async function assertKbImportJobReady(jobId: string): Promise<void> {
   const job = await getKbImportJobById(jobId);
   if (!job) throw new Error('KB import job not found');
-  // faq_extract prompts/model come from job.config_yaml or CLI packaged default — no agent snapshot.
+  // faq_extract prompts/model come from job.config_yaml snapshot (DB at dispatch).
 }
 
 /**
