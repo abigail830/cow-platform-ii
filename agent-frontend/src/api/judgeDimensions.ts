@@ -14,6 +14,8 @@ export type EvalJudgeDimension = {
   criteria: string;
   /** Optional GEval steps; omit to let DeepEval generate from criteria. */
   evaluation_steps?: string[];
+  /** Pass expression evaluated against result score, e.g. >=7 or <0.3% */
+  pass_threshold?: string;
 };
 
 export type EvalJudgeScenario = {

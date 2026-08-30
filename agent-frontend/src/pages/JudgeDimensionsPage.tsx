@@ -67,6 +67,7 @@ function emptyDimension(): DimensionForm {
     kind: 'geval_score',
     weight: 1,
     criteria: '',
+    pass_threshold: '',
   };
 }
 
@@ -218,6 +219,9 @@ export function JudgeDimensionsPage() {
           criteria: dimension.criteria.trim(),
           weight: Number(dimension.weight),
           ...(evaluation_steps ? { evaluation_steps } : {}),
+          ...(dimension.pass_threshold?.trim()
+            ? { pass_threshold: dimension.pass_threshold.trim() }
+            : {}),
         };
       }),
     };
@@ -528,6 +532,31 @@ export function JudgeDimensionsPage() {
                         <option value="wer_score">WER (deterministic)</option>
                         <option value="geval_winner">Winner (A/B/Tie)</option>
                       </select>
+                    </label>
+                    <label className="form-field">
+                      <span className="form-field-label-row">
+                        Pass threshold
+                        <DimensionFieldTooltip
+                          label="Pass threshold"
+                          text="Optional pass expression evaluated against each score. GEval (0–10): >=7 or >6. CER/WER: <0.3% or <0.003 (raw fraction). Failed scores appear red in eval results."
+                        />
+                      </span>
+                      <input
+                        value={activeDimension.pass_threshold ?? ''}
+                        onChange={(event) =>
+                          updateDimension(activeDimensionIndex, {
+                            pass_threshold: event.target.value,
+                          })
+                        }
+                        placeholder={
+                          activeDimension.kind === 'cer_score' || activeDimension.kind === 'wer_score'
+                            ? '<0.3%'
+                            : activeDimension.kind === 'geval_score'
+                              ? '>=7'
+                              : 'Not supported for winner kind'
+                        }
+                        disabled={activeDimension.kind === 'geval_winner'}
+                      />
                     </label>
                     <label className="form-field">
                       <span>Weight</span>

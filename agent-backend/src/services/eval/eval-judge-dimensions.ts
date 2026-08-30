@@ -14,6 +14,7 @@ export type EvalJudgeDimensionDefinition = {
   weight: number;
   criteria: string;
   evaluation_steps?: string[];
+  pass_threshold?: string;
 };
 
 export type EvalJudgeScenarioDefinition = {

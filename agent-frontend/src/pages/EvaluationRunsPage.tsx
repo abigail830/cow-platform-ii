@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, Fragment, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ChevronDown, Eye, FolderOpen, Loader2, Pencil, Play, Plus, RotateCw, Scale, Trash2 } from 'lucide-react';
 import {
@@ -34,6 +34,7 @@ import { useTransientNotice } from '../hooks/useTransientNotice.ts';
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { fetchPresignedStorageText } from '../api/storage-fetch.ts';
+import { evaluatePassThreshold } from '../shared/eval/judge-threshold.ts';
 import { extractTranscriptPlainText } from '../shared/transcript-plain-text.ts';
 
 const LIST_PAGE = getNavPage('/evaluation/runs')!;
@@ -68,48 +69,7 @@ function formatJudgeScoreCompact(
   return display.toFixed(1);
 }
 
-function buildJudgeScoreSummary(
-  job: EvalRunJudgeRow | undefined,
-  variants: EvalRunDetail['variants'],
-): string | null {
-  if (!job?.summary_metrics || job.status !== 'done') return null;
-
-  const variantScores = job.summary_metrics.variant_scores as
-    | Record<string, Record<string, JudgeDimensionRow>>
-    | undefined;
-  if (!variantScores || Object.keys(variantScores).length === 0) return null;
-
-  const variantId =
-    variants.find((variant) => variantScores[variant.id])?.id ?? Object.keys(variantScores)[0];
-  const dimensions = variantId ? variantScores[variantId] : undefined;
-  if (!dimensions) return null;
-
-  const parts = Object.values(dimensions).map((row) => {
-    if (typeof row.score !== 'number') return '—';
-    return formatJudgeScoreCompact(row.score, row.score_max, {
-      kind: row.kind,
-      lowerIsBetter: row.lower_is_better,
-    });
-  });
-
-  return parts.length > 0 ? parts.join('｜') : null;
-}
-
 type PipelineDotState = 'complete' | 'active' | 'failed' | 'pending';
-
-function pipelineDotClass(state: PipelineDotState): string {
-  if (state === 'complete') return 'pipeline-step-dot complete';
-  if (state === 'active') return 'pipeline-step-dot active';
-  if (state === 'failed') return 'pipeline-step-dot failed';
-  return 'pipeline-step-dot';
-}
-
-function pipelineSegmentClass(left: PipelineDotState, right: PipelineDotState): string {
-  if (right === 'failed') return 'failed';
-  if (left === 'complete') return 'complete';
-  if (left === 'failed') return 'failed';
-  return 'pending';
-}
 
 function resolveFileTranscribeState(
   cells: Array<EvalRunItem | undefined>,
@@ -141,78 +101,6 @@ function resolveFileCompareState(
   if (job?.status === 'pending' && isJudgingPhase) return 'active';
   if (isJudgingPhase && !job) return 'pending';
   return 'pending';
-}
-
-function fileTranscribeDurationLabel(
-  variants: EvalRunDetail['variants'],
-  itemByVariantAndDataset: Map<string, EvalRunItem>,
-  datasetItemId: string,
-): string | null {
-  let bestMs = -1;
-  let label: string | null = null;
-  for (const variant of variants) {
-    const cell = itemByVariantAndDataset.get(`${variant.id}:${datasetItemId}`);
-    const ms =
-      cell?.duration_ms ??
-      (cell?.metrics && typeof cell.metrics === 'object' && !Array.isArray(cell.metrics)
-        ? ((cell.metrics as Record<string, unknown>).asr_duration_ms as number | undefined) ??
-          ((cell.metrics as Record<string, unknown>).worker_duration_ms as number | undefined)
-        : undefined);
-    if (typeof ms === 'number' && ms > bestMs) {
-      bestMs = ms;
-      label = evalItemTranscribeMetricsLabel(cell);
-    }
-  }
-  return label;
-}
-
-function EvalRunFilePipelineStepper({
-  transcribeState,
-  compareState,
-}: {
-  transcribeState: PipelineDotState;
-  compareState: PipelineDotState | null;
-}) {
-  const steps =
-    compareState == null
-      ? [{ key: 'transcribe', label: 'Transcribe', state: transcribeState }]
-      : [
-          { key: 'transcribe', label: 'Transcribe', state: transcribeState },
-          { key: 'compare', label: 'Compare', state: compareState },
-        ];
-  const lastIndex = steps.length - 1;
-
-  return (
-    <div
-      className={`document-pipeline-stepper eval-run-file-stepper${steps.length === 1 ? ' is-single' : ''}`}
-      aria-label="File pipeline progress"
-    >
-      {steps.map((step, index) => (
-        <div key={step.key} className="pipeline-track-node">
-          <div className="pipeline-dot-row">
-            <span
-              className={`pipeline-step-segment${
-                index > 0
-                  ? ` ${pipelineSegmentClass(steps[index - 1].state, step.state)}`
-                  : ' is-empty'
-              }`}
-              aria-hidden="true"
-            />
-            <span className={pipelineDotClass(step.state)} aria-hidden="true" />
-            <span
-              className={`pipeline-step-segment${
-                index < lastIndex
-                  ? ` ${pipelineSegmentClass(step.state, steps[index + 1].state)}`
-                  : ' is-empty'
-              }`}
-              aria-hidden="true"
-            />
-          </div>
-          <span className="pipeline-step-label">{step.label}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function itemDispatchClaimed(item: EvalRunItem | undefined): boolean {
@@ -360,17 +248,6 @@ function evalItemTranscribeMetricsLabel(item: EvalRunItem | undefined): string |
   return null;
 }
 
-function formatTranscribeSummaryLine(transcribe: unknown): string | null {
-  if (!transcribe || typeof transcribe !== 'object' || Array.isArray(transcribe)) return null;
-  const byVariant = (transcribe as { by_variant?: Record<string, { display_name?: string; rtf?: number }> })
-    .by_variant;
-  if (!byVariant) return null;
-  const parts = Object.values(byVariant)
-    .filter((row) => typeof row.rtf === 'number')
-    .map((row) => `${row.display_name ?? 'Variant'} RTF ${formatRtf(row.rtf!)}`);
-  return parts.length > 0 ? parts.join(' · ') : null;
-}
-
 function activeJudgeFileName(attempt: EvalRunAttempt): string | null {
   const running = attempt.judge_jobs.find((row) => row.status === 'running');
   if (running?.dataset_item_name) return running.dataset_item_name;
@@ -450,6 +327,7 @@ type JudgeDimensionRow = {
   reason?: string;
   winner?: string | null;
   winner_variant_id?: string | null;
+  pass_threshold?: string;
 };
 
 function parsePairwiseWinnerFromReason(reason: string): 'a' | 'b' | 'tie' | null {
@@ -501,6 +379,306 @@ function resolvePairwiseWinnerLabel(
   }
 
   return null;
+}
+
+const RTF_FORMULA_TOOLTIP =
+  'RTF (Real-Time Factor) = ASR processing time ÷ audio duration. Values below 1× are faster than realtime; above 1× are slower.';
+
+type EvalDimensionColumn = {
+  id: string;
+  label: string;
+  kind?: string;
+  pass_threshold?: string;
+};
+
+type DimensionAverage = {
+  id: string;
+  label: string;
+  avg: number;
+  kind?: string;
+  lowerIsBetter?: boolean;
+  scoreMax?: number;
+  pass_threshold?: string;
+};
+
+function collectJudgeDimensionColumns(
+  attempt: EvalRunAttempt,
+  variants: EvalRunDetail['variants'],
+): EvalDimensionColumn[] {
+  const columns: EvalDimensionColumn[] = [];
+  const seen = new Set<string>();
+
+  function addDimension(dimensionId: string, row: JudgeDimensionRow) {
+    if (seen.has(dimensionId)) return;
+    seen.add(dimensionId);
+    columns.push({
+      id: dimensionId,
+      label: row.label ?? dimensionId,
+      kind: row.kind,
+      pass_threshold: row.pass_threshold,
+    });
+  }
+
+  for (const job of attempt.judge_jobs) {
+    if (job.status !== 'done' || !job.summary_metrics) continue;
+    const variantScores = job.summary_metrics.variant_scores as
+      | Record<string, Record<string, JudgeDimensionRow>>
+      | undefined;
+    if (variantScores) {
+      for (const variant of variants) {
+        const dimensions = variantScores[variant.id];
+        if (!dimensions) continue;
+        for (const [dimensionId, row] of Object.entries(dimensions)) {
+          addDimension(dimensionId, row);
+        }
+      }
+    }
+    const pairwise = job.summary_metrics.pairwise as Record<string, JudgeDimensionRow> | undefined;
+    if (pairwise) {
+      for (const [dimensionId, row] of Object.entries(pairwise)) {
+        addDimension(dimensionId, row);
+      }
+    }
+  }
+
+  return columns;
+}
+
+function dimensionColumnShortLabel(column: EvalDimensionColumn): string {
+  if (column.kind === 'cer_score') return 'CER';
+  if (column.kind === 'wer_score') return 'WER';
+
+  const normalized = column.label.trim().toLowerCase();
+  if (normalized.includes('entity accuracy')) return 'Entity acc.';
+  if (normalized.includes('artifact control')) return 'Artifact ctrl.';
+  if (normalized.includes('semantic fidelity')) return 'Semantic fid.';
+
+  return column.label;
+}
+
+function pipelineStatusWord(state: PipelineDotState): string {
+  if (state === 'complete') return 'Done';
+  if (state === 'failed') return 'Failed';
+  if (state === 'active') return 'Running';
+  return 'Pending';
+}
+
+function formatPipelineStatusLabel(
+  transcribeState: PipelineDotState,
+  compareState: PipelineDotState | null,
+): string {
+  if (compareState == null) {
+    return `Transcribe ${pipelineStatusWord(transcribeState)}`;
+  }
+  return `Transcribe ${pipelineStatusWord(transcribeState)} · Eval ${pipelineStatusWord(compareState)}`;
+}
+
+function resolveItemRtf(item: EvalRunItem | undefined): number | null {
+  if (!item) return null;
+  if (item.rtf != null && Number.isFinite(item.rtf)) return item.rtf;
+  if (
+    item.duration_ms != null &&
+    item.audio_duration_sec != null &&
+    item.audio_duration_sec > 0
+  ) {
+    return item.duration_ms / 1000 / item.audio_duration_sec;
+  }
+  return null;
+}
+
+type DimensionCellDisplay = {
+  text: string;
+  passesThreshold: boolean | null;
+  thresholdExpr?: string;
+};
+
+function getDimensionRowDisplay(
+  row: JudgeDimensionRow | undefined,
+  variants: EvalRunDetail['variants'],
+): DimensionCellDisplay {
+  if (!row) return { text: '—', passesThreshold: null };
+
+  if (typeof row.score === 'number') {
+    const text = formatJudgeScore(row.score, row.score_max, {
+      kind: row.kind,
+      lowerIsBetter: row.lower_is_better,
+    });
+    const passesThreshold = evaluatePassThreshold(row.score, row.pass_threshold, {
+      kind: row.kind,
+      scoreMax: row.score_max,
+      lowerIsBetter: row.lower_is_better,
+    });
+    return {
+      text,
+      passesThreshold,
+      thresholdExpr: row.pass_threshold,
+    };
+  }
+
+  const variantById = new Map(variants.map((variant) => [variant.id, variant.display_name]));
+  return {
+    text: resolvePairwiseWinnerLabel(row, variants, variantById) ?? '—',
+    passesThreshold: null,
+  };
+}
+
+function getDimensionCellDisplay(
+  judgeJob: EvalRunJudgeRow | undefined,
+  variantId: string,
+  dimensionId: string,
+  variants: EvalRunDetail['variants'],
+): DimensionCellDisplay {
+  if (!judgeJob?.summary_metrics || judgeJob.status !== 'done') {
+    return { text: '—', passesThreshold: null };
+  }
+
+  const variantScores = judgeJob.summary_metrics.variant_scores as
+    | Record<string, Record<string, JudgeDimensionRow>>
+    | undefined;
+  const variantRow = variantScores?.[variantId]?.[dimensionId];
+  if (variantRow) return getDimensionRowDisplay(variantRow, variants);
+
+  const pairwise = judgeJob.summary_metrics.pairwise as Record<string, JudgeDimensionRow> | undefined;
+  return getDimensionRowDisplay(pairwise?.[dimensionId], variants);
+}
+
+function computeAttemptAverages(
+  attempt: EvalRunAttempt,
+  variants: EvalRunDetail['variants'],
+  dimensionColumns: EvalDimensionColumn[],
+): { avgRtf: number | null; dimensionAverages: DimensionAverage[] } {
+  let totalProcessSec = 0;
+  let totalAudioSec = 0;
+  const rtfValues: number[] = [];
+
+  for (const item of attempt.items) {
+    const rtf = resolveItemRtf(item);
+    if (rtf != null) rtfValues.push(rtf);
+
+    const audioSec = item.audio_duration_sec;
+    const durationMs = item.duration_ms;
+    if (
+      typeof audioSec === 'number' &&
+      audioSec > 0 &&
+      typeof durationMs === 'number' &&
+      durationMs >= 0
+    ) {
+      totalAudioSec += audioSec;
+      totalProcessSec += durationMs / 1000;
+    }
+  }
+
+  const avgRtf =
+    totalAudioSec > 0
+      ? totalProcessSec / totalAudioSec
+      : rtfValues.length > 0
+        ? rtfValues.reduce((sum, value) => sum + value, 0) / rtfValues.length
+        : null;
+
+  const dimensionSums = new Map<
+    string,
+    {
+      sum: number;
+      count: number;
+      label: string;
+      kind?: string;
+      lowerIsBetter?: boolean;
+      scoreMax?: number;
+      pass_threshold?: string;
+    }
+  >();
+
+  for (const job of attempt.judge_jobs) {
+    if (job.status !== 'done' || !job.summary_metrics) continue;
+    const variantScores = job.summary_metrics.variant_scores as
+      | Record<string, Record<string, JudgeDimensionRow>>
+      | undefined;
+    if (!variantScores) continue;
+
+    for (const variant of variants) {
+      const dimensions = variantScores[variant.id];
+      if (!dimensions) continue;
+      for (const col of dimensionColumns) {
+        const row = dimensions[col.id];
+        if (!row || typeof row.score !== 'number') continue;
+        const entry = dimensionSums.get(col.id) ?? {
+          sum: 0,
+          count: 0,
+          label: row.label ?? col.label,
+          kind: row.kind,
+          lowerIsBetter: row.lower_is_better,
+          scoreMax: row.score_max,
+          pass_threshold: row.pass_threshold ?? col.pass_threshold,
+        };
+        entry.sum += row.score;
+        entry.count += 1;
+        dimensionSums.set(col.id, entry);
+      }
+    }
+  }
+
+  const dimensionAverages: DimensionAverage[] = [];
+  for (const col of dimensionColumns) {
+    const entry = dimensionSums.get(col.id);
+    if (!entry || entry.count === 0) continue;
+    dimensionAverages.push({
+      id: col.id,
+      label: entry.label,
+      avg: entry.sum / entry.count,
+      kind: entry.kind,
+      lowerIsBetter: entry.lowerIsBetter,
+      scoreMax: entry.scoreMax,
+      pass_threshold: entry.pass_threshold ?? col.pass_threshold,
+    });
+  }
+
+  return { avgRtf, dimensionAverages };
+}
+
+function formatAttemptMetricsSummary(
+  avgRtf: number | null,
+  dimensionAverages: DimensionAverage[],
+): ReactNode | null {
+  const parts: ReactNode[] = [];
+  if (avgRtf != null) {
+    parts.push(`avg RTF ${formatRtf(avgRtf)}`);
+  }
+  for (const dim of dimensionAverages) {
+    const shortLabel = dimensionColumnShortLabel({
+      id: dim.id,
+      label: dim.label,
+      kind: dim.kind,
+      pass_threshold: dim.pass_threshold,
+    });
+    const valueText = formatJudgeScoreCompact(dim.avg, dim.scoreMax, {
+      kind: dim.kind,
+      lowerIsBetter: dim.lowerIsBetter,
+    });
+    const passesThreshold = evaluatePassThreshold(dim.avg, dim.pass_threshold, {
+      kind: dim.kind,
+      scoreMax: dim.scoreMax,
+      lowerIsBetter: dim.lowerIsBetter,
+    });
+    parts.push(
+      <span
+        key={dim.id}
+        className={passesThreshold === false ? 'eval-run-dimension-fail' : undefined}
+        title={
+          dim.pass_threshold
+            ? `${dim.label} · pass ${dim.pass_threshold}`
+            : dim.label
+        }
+      >
+        {shortLabel} {valueText}
+      </span>,
+    );
+  }
+  if (parts.length === 0) return null;
+  return parts.reduce<ReactNode[]>((acc, part, index) => {
+    if (index > 0) acc.push(' · ');
+    acc.push(part);
+    return acc;
+  }, []);
 }
 
 function EvalRunJudgeDimensionTable({
@@ -943,7 +1121,6 @@ function EvalRunAttemptSection({
   evaluatingAttemptId,
   onRetryCompare,
   onEvaluate,
-  transcribeSummary,
 }: {
   attempt: EvalRunAttempt;
   variants: EvalRunDetail['variants'];
@@ -956,8 +1133,9 @@ function EvalRunAttemptSection({
   evaluatingAttemptId: string | null;
   onRetryCompare: (datasetItemId: string, attemptId: string) => void;
   onEvaluate: (attemptId: string) => void;
-  transcribeSummary?: unknown;
 }) {
+  const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
+
   const itemByVariantAndDataset = useMemo(() => {
     const map = new Map<string, EvalRunItem>();
     for (const item of attempt.items) {
@@ -984,13 +1162,54 @@ function EvalRunAttemptSection({
     return map;
   }, [attempt.judge_jobs]);
 
+  const showPipelineColumn = variants.length > 1;
+  const showDimensionColumns = attempt.run_mode === 'full';
+  const dimensionColumns = useMemo(
+    () => (showDimensionColumns ? collectJudgeDimensionColumns(attempt, variants) : []),
+    [attempt, showDimensionColumns, variants],
+  );
+
+  const tableRows = useMemo(() => {
+    const rows: Array<{
+      key: string;
+      datasetItemId: string;
+      name: string;
+      variantId: string;
+      variantName: string;
+      cell: EvalRunItem | undefined;
+      judgeJob: EvalRunJudgeRow | undefined;
+    }> = [];
+
+    for (const file of datasetItemRows) {
+      for (const variant of variants) {
+        rows.push({
+          key: `${file.id}:${variant.id}`,
+          datasetItemId: file.id,
+          name: file.name,
+          variantId: variant.id,
+          variantName: variant.display_name,
+          cell: itemByVariantAndDataset.get(`${variant.id}:${file.id}`),
+          judgeJob: judgeByDatasetItem.get(file.id),
+        });
+      }
+    }
+
+    return rows;
+  }, [datasetItemRows, itemByVariantAndDataset, judgeByDatasetItem, variants]);
+
+  const { avgRtf, dimensionAverages } = useMemo(
+    () => computeAttemptAverages(attempt, variants, dimensionColumns),
+    [attempt, dimensionColumns, variants],
+  );
+  const metricsSummary = formatAttemptMetricsSummary(avgRtf, dimensionAverages);
+
   const isJudgingPhase = attempt.phase === 'judging' && attempt.status === 'running';
-  const durationLabel = attempt.duration_ms ? formatDurationMs(attempt.duration_ms) : null;
-  const transcribeSummaryLabel = formatTranscribeSummaryLine(transcribeSummary);
+  const isAttemptRunning = attempt.status === 'running';
   const statusBadge = attemptStatusBadge(attempt);
-  const showEvaluate =
-    canWrite && canEvaluateAttempt(attempt, runStatus, starting);
+  const showEvaluate = canWrite && canEvaluateAttempt(attempt, runStatus, starting);
   const isEvaluating = evaluatingAttemptId === attempt.id;
+  const tableColumnCount =
+    5 + (showPipelineColumn ? 1 : 0) + dimensionColumns.length;
 
   return (
     <details className="eval-run-attempt" open={defaultOpen}>
@@ -1007,9 +1226,17 @@ function EvalRunAttemptSection({
           {statusBadge.label}
         </span>
         <span className="admin-muted eval-run-attempt-meta">
-          {attempt.run_mode === 'full' ? 'Full' : 'Pipeline only'} · {attemptProgressLabel(attempt)}
-          {durationLabel ? ` · ${durationLabel}` : ''}
-          {transcribeSummaryLabel ? ` · ${transcribeSummaryLabel}` : ''}
+          {isAttemptRunning ? (
+            <>
+              {attempt.run_mode === 'full' ? 'Full' : 'Pipeline only'} · {attemptProgressLabel(attempt)}
+            </>
+          ) : metricsSummary ? (
+            metricsSummary
+          ) : (
+            <>
+              {attempt.run_mode === 'full' ? 'Full' : 'Pipeline only'} · {attemptProgressLabel(attempt)}
+            </>
+          )}
         </span>
         <span className="eval-run-attempt-summary-end">
           {showEvaluate ? (
@@ -1036,107 +1263,168 @@ function EvalRunAttemptSection({
       </summary>
 
       <div className="eval-run-attempt-body">
-        {datasetItemRows.length === 0 ? (
+        {tableRows.length === 0 ? (
           <p className="admin-muted">No files in this run.</p>
         ) : (
-          datasetItemRows.map((row) => {
-            const itemRunStatus = attempt.status === 'running' ? 'running' : runStatus;
-            const itemStarting = starting && attempt.status === 'running';
-            const judgeJob = judgeByDatasetItem.get(row.id);
-            const datasetItem = datasetItemsById.get(row.id);
-            const doneVariantCount = variants.filter(
-              (variant) => itemByVariantAndDataset.get(`${variant.id}:${row.id}`)?.stage === 'done',
-            ).length;
-            const minVariantsForRetry =
-              judgeJob?.scenario_id === GT_JUDGE_SCENARIO_ID ? 1 : 2;
-            const canRetryCompare =
-              canWrite &&
-              attempt.run_mode === 'full' &&
-              doneVariantCount >= minVariantsForRetry &&
-              judgeJob != null &&
-              judgeJob.status === 'failed';
-            const judgeScoreSummary = buildJudgeScoreSummary(judgeJob, variants);
-            const fileCells = variants.map((variant) =>
-              itemByVariantAndDataset.get(`${variant.id}:${row.id}`),
-            );
-            const transcribeState = resolveFileTranscribeState(
-              fileCells,
-              itemRunStatus,
-              itemStarting,
-            );
-            const compareState =
-              attempt.run_mode === 'full' ? resolveFileCompareState(judgeJob, isJudgingPhase) : null;
-            const transcribeDuration = fileTranscribeDurationLabel(
-              variants,
-              itemByVariantAndDataset,
-              row.id,
-            );
-
-            return (
-            <details key={row.id} className="eval-run-file-block">
-              <summary className="eval-run-file-summary">
-                <span className="eval-run-file-name">{row.name}</span>
-                <div className="eval-run-file-summary-stepper">
-                  <EvalRunFilePipelineStepper
-                    transcribeState={transcribeState}
-                    compareState={compareState}
-                  />
-                </div>
-                <span className="eval-run-file-duration admin-muted">
-                  {transcribeDuration ?? '—'}
-                </span>
-                <span className="eval-run-file-scores">
-                  {judgeScoreSummary ? (
-                    <span className="eval-run-judge-score-summary" title="Dimension scores">
-                      {judgeScoreSummary}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="eval-run-file-summary-actions">
-                  {canRetryCompare ? (
-                    <button
-                      type="button"
-                      className="btn-secondary eval-run-compare-btn eval-run-compare-btn-inline"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        onRetryCompare(row.id, attempt.id);
-                      }}
-                      disabled={retryingDatasetItemId === row.id}
-                      title="Retry compare"
+          <div className="admin-table-wrap eval-run-results-table-wrap">
+            <table className="admin-table eval-run-results-table">
+              <thead>
+                <tr>
+                  <th scope="col">Filename</th>
+                  {showPipelineColumn ? <th scope="col">Pipeline</th> : null}
+                  <th scope="col">Transcript-eval status</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">
+                    <span title={RTF_FORMULA_TOOLTIP}>RTF</span>
+                  </th>
+                  {dimensionColumns.map((column) => (
+                    <th
+                      key={column.id}
+                      scope="col"
+                      title={
+                        column.pass_threshold
+                          ? `${column.label} · pass ${column.pass_threshold}`
+                          : column.label
+                      }
                     >
-                      {retryingDatasetItemId === row.id ? (
-                        <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
-                      ) : (
-                        <RotateCw {...iconProps()} aria-hidden />
-                      )}
-                    </button>
-                  ) : null}
-                </span>
-              </summary>
+                      {dimensionColumnShortLabel(column)}
+                    </th>
+                  ))}
+                  <th scope="col" aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((row) => {
+                  const itemRunStatus = attempt.status === 'running' ? 'running' : runStatus;
+                  const itemStarting = starting && attempt.status === 'running';
+                  const datasetItem = datasetItemsById.get(row.datasetItemId);
+                  const transcribeState = resolveFileTranscribeState(
+                    [row.cell],
+                    itemRunStatus,
+                    itemStarting,
+                  );
+                  const compareState =
+                    attempt.run_mode === 'full'
+                      ? resolveFileCompareState(row.judgeJob, isJudgingPhase)
+                      : null;
+                  const statusLabel = formatPipelineStatusLabel(transcribeState, compareState);
+                  const durationLabel = evalItemDurationLabel(row.cell) ?? '—';
+                  const itemRtf = resolveItemRtf(row.cell);
+                  const rtfLabel = itemRtf != null ? formatRtf(itemRtf) : '—';
+                  const doneVariantCount = variants.filter(
+                    (variant) =>
+                      itemByVariantAndDataset.get(`${variant.id}:${row.datasetItemId}`)?.stage ===
+                      'done',
+                  ).length;
+                  const minVariantsForRetry =
+                    row.judgeJob?.scenario_id === GT_JUDGE_SCENARIO_ID ? 1 : 2;
+                  const canRetryCompare =
+                    canWrite &&
+                    attempt.run_mode === 'full' &&
+                    doneVariantCount >= minVariantsForRetry &&
+                    row.judgeJob != null &&
+                    row.judgeJob.status === 'failed';
+                  const isExpanded = expandedRowKey === row.key;
 
-              <div className="eval-run-file-body">
-                <EvalRunFileTranscriptSection
-                  datasetItemId={row.id}
-                  datasetItem={datasetItem}
-                  judgeScenarioId={judgeJob?.scenario_id}
-                  variants={variants}
-                  itemByVariantAndDataset={itemByVariantAndDataset}
-                  itemRunStatus={itemRunStatus}
-                  itemStarting={itemStarting}
-                />
-
-                {attempt.run_mode === 'full' ? (
-                  <div className="eval-run-compare-row">
-                    {judgeByDatasetItem.get(row.id)?.error_message ? (
-                      <p className="admin-error eval-run-cell-error">{judgeByDatasetItem.get(row.id)?.error_message}</p>
-                    ) : null}
-                    <EvalRunJudgeScores job={judgeByDatasetItem.get(row.id)} variants={variants} />
-                  </div>
-                ) : null}
-              </div>
-            </details>
-            );
-          })
+                  return (
+                    <Fragment key={row.key}>
+                      <tr className={isExpanded ? 'is-expanded' : undefined}>
+                        <td className="eval-run-results-filename">{row.name}</td>
+                        {showPipelineColumn ? (
+                          <td className="eval-run-results-pipeline">{row.variantName}</td>
+                        ) : null}
+                        <td className="eval-run-results-status">{statusLabel}</td>
+                        <td className="eval-run-results-duration">{durationLabel}</td>
+                        <td className="eval-run-results-rtf" title={itemRtf != null ? RTF_FORMULA_TOOLTIP : undefined}>
+                          {rtfLabel}
+                        </td>
+                        {dimensionColumns.map((column) => {
+                          const display = getDimensionCellDisplay(
+                            row.judgeJob,
+                            row.variantId,
+                            column.id,
+                            variants,
+                          );
+                          const thresholdTitle =
+                            display.thresholdExpr != null
+                              ? `Pass threshold: ${display.thresholdExpr}`
+                              : undefined;
+                          return (
+                            <td
+                              key={column.id}
+                              className={`eval-run-results-dimension${
+                                display.passesThreshold === false ? ' eval-run-dimension-fail' : ''
+                              }`}
+                              title={thresholdTitle}
+                            >
+                              {display.text}
+                            </td>
+                          );
+                        })}
+                        <td className="eval-run-results-actions">
+                          <div className="row-actions">
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title={isExpanded ? 'Hide details' : 'View details'}
+                              aria-expanded={isExpanded}
+                              onClick={() =>
+                                setExpandedRowKey((current) => (current === row.key ? null : row.key))
+                              }
+                            >
+                              <Eye {...iconProps()} aria-hidden />
+                            </button>
+                            {canRetryCompare ? (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Retry compare"
+                                onClick={() => onRetryCompare(row.datasetItemId, attempt.id)}
+                                disabled={retryingDatasetItemId === row.datasetItemId}
+                              >
+                                {retryingDatasetItemId === row.datasetItemId ? (
+                                  <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                                ) : (
+                                  <RotateCw {...iconProps()} aria-hidden />
+                                )}
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className="eval-run-results-detail-row">
+                          <td colSpan={tableColumnCount}>
+                            <div className="eval-run-results-detail">
+                              <EvalRunFileTranscriptSection
+                                datasetItemId={row.datasetItemId}
+                                datasetItem={datasetItem}
+                                judgeScenarioId={row.judgeJob?.scenario_id}
+                                variants={variants}
+                                itemByVariantAndDataset={itemByVariantAndDataset}
+                                itemRunStatus={itemRunStatus}
+                                itemStarting={itemStarting}
+                              />
+                              {attempt.run_mode === 'full' ? (
+                                <div className="eval-run-compare-row">
+                                  {row.judgeJob?.error_message ? (
+                                    <p className="admin-error eval-run-cell-error">
+                                      {row.judgeJob.error_message}
+                                    </p>
+                                  ) : null}
+                                  <EvalRunJudgeScores job={row.judgeJob} variants={variants} />
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </details>
@@ -1287,10 +1575,22 @@ export function EvaluationRunsListPage() {
               runs.map((run) => (
                 <tr key={run.id}>
                   <td>
-                    <Link to={`/evaluation/runs/${run.id}`} className="eval-run-list-name">
-                      <NavPageIcon name="evaluation-run" size={16} className="eval-run-list-icon" aria-hidden />
-                      {run.name}
-                    </Link>
+                    <div className="eval-dataset-list-entry">
+                      <NavPageIcon
+                        name="evaluation-run"
+                        size={16}
+                        className="eval-dataset-list-icon"
+                        aria-hidden
+                      />
+                      <div className="eval-dataset-list-text">
+                        <Link to={`/evaluation/runs/${run.id}`} className="eval-run-list-name">
+                          {run.name}
+                        </Link>
+                        {run.description ? (
+                          <div className="admin-muted eval-dataset-list-desc">{run.description}</div>
+                        ) : null}
+                      </div>
+                    </div>
                   </td>
                   <td>
                     <button
@@ -1639,7 +1939,6 @@ export function EvaluationRunDetailPage() {
               evaluatingAttemptId={evaluatingAttemptId}
               onRetryCompare={(datasetItemId, attemptId) => void handleRetryCompare(datasetItemId, attemptId)}
               onEvaluate={(attemptId) => void handleEvaluate(attemptId)}
-              transcribeSummary={index === 0 ? detail.run.summary_metrics?.transcribe : undefined}
             />
           ))
         )}

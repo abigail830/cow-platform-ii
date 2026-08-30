@@ -188,6 +188,7 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
                 "score_max": scored.score_max,
                 "lower_is_better": scored.lower_is_better,
                 "reason": scored.reason,
+                "pass_threshold": dimension.get("pass_threshold"),
             }
         variant_results.append(
             {

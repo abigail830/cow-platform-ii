@@ -1,0 +1,121 @@
+/** Pass/fail threshold expressions for eval judge dimension scores. */
+
+export type PassThresholdOp = '<' | '<=' | '>' | '>=' | '=' | '==';
+
+export type ParsedPassThreshold = {
+  op: PassThresholdOp;
+  value: number;
+  isPercent: boolean;
+};
+
+export type JudgeThresholdScoreContext = {
+  kind?: string;
+  scoreMax?: number;
+  lowerIsBetter?: boolean;
+};
+
+const PASS_THRESHOLD_RE = /^(<=|>=|==|=|<|>)\s*([\d.]+)\s*(%)?\s*$/;
+
+export function parsePassThresholdExpression(expr: string): ParsedPassThreshold | null {
+  const trimmed = expr.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(PASS_THRESHOLD_RE);
+  if (!match) {
+    throw new Error(
+      `Invalid pass threshold "${expr}". Use expressions like >=7, <0.3%, or <=13.3%.`,
+    );
+  }
+  const value = Number(match[2]);
+  if (!Number.isFinite(value)) {
+    throw new Error(`Invalid pass threshold value in "${expr}"`);
+  }
+  const op = match[1] as PassThresholdOp;
+  return { op, value, isPercent: match[3] === '%' };
+}
+
+function isErrorRateKind(context: JudgeThresholdScoreContext): boolean {
+  const kind = context.kind;
+  return kind === 'cer_score' || kind === 'wer_score' || Boolean(context.lowerIsBetter);
+}
+
+/** Numeric value used when evaluating a threshold expression (matches UI display scale). */
+export function judgeScoreCompareValue(
+  score: number,
+  context: JudgeThresholdScoreContext,
+): number {
+  if (isErrorRateKind(context)) {
+    return score * 100;
+  }
+  const max = context.scoreMax ?? 10;
+  return context.scoreMax != null ? score : score * max;
+}
+
+function compareValues(left: number, op: PassThresholdOp, right: number): boolean {
+  switch (op) {
+    case '<':
+      return left < right;
+    case '<=':
+      return left <= right;
+    case '>':
+      return left > right;
+    case '>=':
+      return left >= right;
+    case '=':
+    case '==':
+      return left === right;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Returns true when the score passes the threshold, false when it fails.
+ * Missing/blank threshold → pass (null = no threshold configured).
+ */
+export function evaluatePassThreshold(
+  score: number,
+  thresholdExpr: string | null | undefined,
+  context: JudgeThresholdScoreContext,
+): boolean | null {
+  const parsed = parsePassThresholdExpression(thresholdExpr ?? '');
+  if (!parsed) return null;
+
+  if (context.kind === 'geval_winner') {
+    throw new Error('Pass threshold is not supported for winner (pairwise) dimensions');
+  }
+
+  let compareValue: number;
+  let thresholdValue = parsed.value;
+
+  if (isErrorRateKind(context)) {
+    compareValue = score * 100;
+    if (!parsed.isPercent) {
+      // Raw fraction scale (0–1), e.g. <0.003 for 0.3%.
+      compareValue = score;
+      thresholdValue = parsed.value;
+    }
+  } else {
+    if (parsed.isPercent) {
+      throw new Error('Pass threshold with % is only supported for CER/WER dimensions');
+    }
+    compareValue = judgeScoreCompareValue(score, context);
+  }
+
+  return compareValues(compareValue, parsed.op, thresholdValue);
+}
+
+export function validatePassThresholdForDimension(
+  thresholdExpr: string | null | undefined,
+  dimension: { id: string; kind: string },
+): string | undefined {
+  const raw = thresholdExpr?.trim();
+  if (!raw) return undefined;
+  if (dimension.kind === 'geval_winner') {
+    throw new Error(`Dimension ${dimension.id}: pass threshold is not supported for winner kind`);
+  }
+  parsePassThresholdExpression(raw);
+  if (dimension.kind === 'geval_score' && raw.includes('%')) {
+    throw new Error(`Dimension ${dimension.id}: use 0–10 expressions like >=7 for GEval scores`);
+  }
+  return raw;
+}

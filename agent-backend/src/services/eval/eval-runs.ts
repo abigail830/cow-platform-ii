@@ -588,6 +588,7 @@ export async function getEvalRunDetail(runId: string) {
           enrichEvalRunItemPublic(
             item,
             datasetItemById.get(item.datasetItemId)?.name ?? '',
+            datasetItemById.get(item.datasetItemId)?.metadata,
           ),
         ),
       );

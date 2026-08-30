@@ -3005,6 +3005,61 @@ textarea {
   gap: 0.5rem;
 }
 
+.eval-run-results-table-wrap {
+  margin-top: 0.125rem;
+}
+
+.eval-run-results-table {
+  font-size: 0.8125rem;
+}
+
+.eval-run-results-table th,
+.eval-run-results-table td {
+  vertical-align: middle;
+}
+
+.eval-run-results-filename {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.eval-run-results-pipeline {
+  white-space: nowrap;
+}
+
+.eval-run-results-status,
+.eval-run-results-duration,
+.eval-run-results-rtf,
+.eval-run-results-dimension {
+  white-space: nowrap;
+}
+
+.eval-run-dimension-fail {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.eval-run-results-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.eval-run-results-detail-row td {
+  background: #f8fafc;
+  border-top: none;
+  padding-top: 0;
+}
+
+.eval-run-results-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0 0.75rem;
+}
+
 .eval-run-file-block {
   border: 1px solid #e2e8f0;
   border-radius: 6px;
@@ -3599,12 +3654,10 @@ textarea {
 }
 
 .eval-run-list-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
   color: var(--brand-orange);
   text-decoration: none;
   font-weight: 500;
+  line-height: 1.25;
 }
 
 .eval-dataset-list-entry {

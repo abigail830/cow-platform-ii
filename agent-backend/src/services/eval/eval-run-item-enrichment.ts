@@ -1,5 +1,8 @@
 import type { EvalRunItemStage } from '../../db/index.ts';
-import { computeRtfFromMs } from '../../shared/eval/eval-audio-duration.ts';
+import {
+  computeRtfFromMs,
+  parseDatasetItemDurationSec,
+} from '../../shared/eval/eval-audio-duration.ts';
 import { getStorageReadUrl } from '../../storage/document-files.ts';
 
 type EvalRunItemRow = {
@@ -46,18 +49,21 @@ export function evalItemDurationMs(item: {
   return null;
 }
 
-export function evalItemRtf(item: {
-  stage: string;
-  metrics: Record<string, unknown> | null | undefined;
-  createdAt: Date;
-  updatedAt: Date;
-}): number | null {
+export function evalItemRtf(
+  item: {
+    stage: string;
+    metrics: Record<string, unknown> | null | undefined;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  fallbackAudioDurationSec?: number | null,
+): number | null {
   const metrics = item.metrics;
   if (metrics && typeof metrics === 'object') {
     const stored = metrics.rtf_asr;
     if (typeof stored === 'number' && Number.isFinite(stored)) return stored;
   }
-  const audioSec = evalItemAudioDurationSec(metrics);
+  const audioSec = evalItemAudioDurationSec(metrics) ?? fallbackAudioDurationSec ?? null;
   const durationMs = evalItemDurationMs(item);
   if (audioSec == null || durationMs == null) return null;
   return computeRtfFromMs(durationMs, audioSec);
@@ -66,10 +72,12 @@ export function evalItemRtf(item: {
 export async function enrichEvalRunItemPublic(
   item: EvalRunItemRow,
   datasetItemName: string,
+  datasetItemMetadata?: unknown,
 ) {
+  const fallbackAudioSec = parseDatasetItemDurationSec(datasetItemMetadata);
   const durationMs = evalItemDurationMs(item);
-  const audioDurationSec = evalItemAudioDurationSec(item.metrics);
-  const rtf = evalItemRtf(item);
+  const audioDurationSec = evalItemAudioDurationSec(item.metrics) ?? fallbackAudioSec;
+  const rtf = evalItemRtf(item, fallbackAudioSec);
   let transcriptUrl: string | null = null;
   if (item.stage === 'done' && item.transcriptS3Key) {
     transcriptUrl = await getStorageReadUrl(item.transcriptS3Key, 3600);

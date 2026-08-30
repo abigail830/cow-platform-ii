@@ -1,5 +1,6 @@
 import type { EvalJudgeDimensionRecord } from '../../db/schema.ts';
 import type { EvalJudgeDimensionDefinition } from '../../services/eval/eval-judge-dimensions.ts';
+import { validatePassThresholdForDimension } from './judge-threshold.ts';
 
 const DIMENSION_ID_RE = /^[a-z][a-z0-9_]*$/;
 
@@ -84,6 +85,10 @@ export function validateJudgeDimensions(
     }
 
     const evaluationSteps = normalizeEvaluationSteps(dimension.evaluation_steps, id);
+    const passThreshold = validatePassThresholdForDimension(
+      typeof dimension.pass_threshold === 'string' ? dimension.pass_threshold : undefined,
+      { id, kind },
+    );
 
     return {
       id,
@@ -93,6 +98,7 @@ export function validateJudgeDimensions(
       weight,
       criteria: resolvedCriteria,
       ...(evaluationSteps ? { evaluation_steps: evaluationSteps } : {}),
+      ...(passThreshold ? { pass_threshold: passThreshold } : {}),
     };
   });
 }

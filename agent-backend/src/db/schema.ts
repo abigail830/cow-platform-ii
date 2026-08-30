@@ -1272,6 +1272,8 @@ export type EvalJudgeDimensionRecord = {
   criteria: string;
   /** Optional GEval evaluation_steps; omit to let DeepEval generate from criteria. */
   evaluation_steps?: string[];
+  /** Optional pass expression, e.g. >=7 or <0.3% */
+  pass_threshold?: string;
 };
 
 export const appEvalJudgeScenarios = pgTable(
