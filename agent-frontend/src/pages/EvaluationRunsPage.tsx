@@ -1838,7 +1838,7 @@ export function EvaluationRunDetailPage() {
   }
 
   return (
-    <div className="admin-page">
+    <div className="admin-page eval-run-detail-page">
       <TransientNotice message={notice} variant={noticeVariant} />
       <Link to="/evaluation/runs" className="kb-back-link">
         ← back Evaluation
