@@ -3,15 +3,12 @@ import { appEvalDatasetItems, appEvalDatasets, db } from '../../db/index.ts';
 import type { EvalDatasetKind, EvalMediaType } from '../../db/index.ts';
 import {
   buildEvalDatasetItemS3Key,
-  buildEvalDatasetReferenceS3Key,
   extensionFromFilename,
   fileTypeFromExtension,
   getEvalDatasetItemReadUrl,
   getEvalDatasetItemUploadUrl,
   guessEvalDatasetContentType,
-  guessEvalDatasetReferenceContentType,
   MAX_EVAL_DATASET_ITEM_BYTES,
-  MAX_EVAL_DATASET_REFERENCE_BYTES,
   newEvalDatasetItemId,
   validateEvalDatasetFilename,
   validateFileHash,
@@ -22,21 +19,65 @@ import {
 } from '../../shared/eval/eval-audio-duration.ts';
 import { formatEvalDatasetDbError } from './eval-dataset-db-error.ts';
 
+export const MAX_EVAL_DATASET_REFERENCE_BYTES = 10 * 1024 * 1024;
+
 export type EvalDatasetRow = typeof appEvalDatasets.$inferSelect;
 export type EvalDatasetItemRow = typeof appEvalDatasetItems.$inferSelect;
 
-function toDatasetPublic(row: EvalDatasetRow) {
+function toDatasetPublic(row: EvalDatasetRow, itemCount?: number) {
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     kind: row.kind,
     media_type: row.mediaType,
-    item_count: row.itemCount,
+    item_count: itemCount ?? row.itemCount,
     created_by: row.createdBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
+}
+
+async function countEvalDatasetItemsByDataset(): Promise<Map<string, number>> {
+  const rows = await db
+    .select({
+      datasetId: appEvalDatasetItems.datasetId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(appEvalDatasetItems)
+    .groupBy(appEvalDatasetItems.datasetId);
+  return new Map(rows.map((row) => [row.datasetId, row.count]));
+}
+
+async function reconcileEvalDatasetItemCount(
+  datasetId: string,
+  executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
+): Promise<number> {
+  const [row] = await executor
+    .select({ count: sql<number>`count(*)::int` })
+    .from(appEvalDatasetItems)
+    .where(eq(appEvalDatasetItems.datasetId, datasetId));
+  const count = row?.count ?? 0;
+  await executor
+    .update(appEvalDatasets)
+    .set({ itemCount: count, updatedAt: new Date() })
+    .where(eq(appEvalDatasets.id, datasetId));
+  return count;
+}
+
+export function hasEvalDatasetReferenceText(text: string | null | undefined): boolean {
+  return typeof text === 'string' && text.trim().length > 0;
+}
+
+function validateReferenceText(text: string | null | undefined): string | null {
+  if (text == null) return null;
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const bytes = Buffer.byteLength(trimmed, 'utf8');
+  if (bytes > MAX_EVAL_DATASET_REFERENCE_BYTES) {
+    throw new Error('Reference text exceeds maximum allowed size');
+  }
+  return trimmed;
 }
 
 function toItemPublic(row: EvalDatasetItemRow) {
@@ -50,7 +91,7 @@ function toItemPublic(row: EvalDatasetItemRow) {
     s3_key: row.s3Key,
     sort_order: row.sortOrder,
     metadata: row.metadata ?? {},
-    reference_s3_key: row.referenceS3Key,
+    reference_text: row.referenceText,
     uploaded_by: row.uploadedBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
@@ -62,12 +103,25 @@ export async function listEvalDatasets(): Promise<ReturnType<typeof toDatasetPub
     .select()
     .from(appEvalDatasets)
     .orderBy(desc(appEvalDatasets.updatedAt));
-  return rows.map(toDatasetPublic);
+  if (rows.length === 0) return [];
+
+  const countByDatasetId = await countEvalDatasetItemsByDataset();
+  return rows.map((row) => toDatasetPublic(row, countByDatasetId.get(row.id) ?? 0));
 }
 
 export async function getEvalDatasetById(id: string): Promise<EvalDatasetRow | null> {
   const [row] = await db.select().from(appEvalDatasets).where(eq(appEvalDatasets.id, id)).limit(1);
   return row ?? null;
+}
+
+export async function getEvalDatasetPublicById(id: string) {
+  const row = await getEvalDatasetById(id);
+  if (!row) return null;
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(appEvalDatasetItems)
+    .where(eq(appEvalDatasetItems.datasetId, id));
+  return toDatasetPublic(row, countRow?.count ?? 0);
 }
 
 export async function createEvalDataset(input: {
@@ -114,7 +168,8 @@ export async function updateEvalDataset(
     .where(eq(appEvalDatasets.id, id))
     .returning();
 
-  return toDatasetPublic(row!);
+  const itemCount = await reconcileEvalDatasetItemCount(id);
+  return toDatasetPublic(row!, itemCount);
 }
 
 export async function deleteEvalDataset(id: string): Promise<void> {
@@ -129,13 +184,6 @@ export async function deleteEvalDataset(id: string): Promise<void> {
       await deleteEvalDatasetStorageObject(item.s3_key);
     } catch {
       // best-effort OSS cleanup
-    }
-    if (item.reference_s3_key) {
-      try {
-        await deleteEvalDatasetStorageObject(item.reference_s3_key);
-      } catch {
-        // best-effort OSS cleanup
-      }
     }
   }
 }
@@ -247,7 +295,7 @@ export async function updateEvalDatasetItemDuration(
   datasetId: string,
   itemId: string,
   durationSec: number | null,
-  source: 'manual' | 'import' = 'manual',
+  source: 'manual' | 'import' | 'client' = 'manual',
 ) {
   const item = await getEvalDatasetItemById(datasetId, itemId);
   if (!item) throw new Error('Dataset item not found');
@@ -276,6 +324,32 @@ export async function updateEvalDatasetItemDuration(
     .returning();
 
   if (!row) throw new Error('Dataset item not found');
+  return toItemPublic(row);
+}
+
+export async function updateEvalDatasetItemReference(
+  datasetId: string,
+  itemId: string,
+  referenceText: string | null,
+) {
+  const item = await getEvalDatasetItemById(datasetId, itemId);
+  if (!item) throw new Error('Dataset item not found');
+
+  const normalized = validateReferenceText(referenceText);
+
+  const [row] = await db
+    .update(appEvalDatasetItems)
+    .set({ referenceText: normalized, updatedAt: new Date() })
+    .where(and(eq(appEvalDatasetItems.id, itemId), eq(appEvalDatasetItems.datasetId, datasetId)))
+    .returning();
+
+  if (!row) throw new Error('Dataset item not found');
+
+  await db
+    .update(appEvalDatasets)
+    .set({ updatedAt: new Date() })
+    .where(eq(appEvalDatasets.id, datasetId));
+
   return toItemPublic(row);
 }
 
@@ -345,13 +419,7 @@ export async function finalizeEvalDatasetItemUpload(input: {
         })
         .returning();
 
-      await tx
-        .update(appEvalDatasets)
-        .set({
-          itemCount: sql`${appEvalDatasets.itemCount} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(appEvalDatasets.id, input.datasetId));
+      await reconcileEvalDatasetItemCount(input.datasetId, tx);
 
       return toItemPublic(row!);
     });
@@ -366,25 +434,12 @@ export async function deleteEvalDatasetItem(datasetId: string, itemId: string): 
 
   await db.delete(appEvalDatasetItems).where(eq(appEvalDatasetItems.id, itemId));
 
-  await db
-    .update(appEvalDatasets)
-    .set({
-      itemCount: sql`GREATEST(${appEvalDatasets.itemCount} - 1, 0)`,
-      updatedAt: new Date(),
-    })
-    .where(eq(appEvalDatasets.id, datasetId));
+  await reconcileEvalDatasetItemCount(datasetId);
 
   try {
     await deleteEvalDatasetStorageObject(item.s3Key);
   } catch {
     // best-effort
-  }
-  if (item.referenceS3Key) {
-    try {
-      await deleteEvalDatasetStorageObject(item.referenceS3Key);
-    } catch {
-      // best-effort
-    }
   }
 }
 
@@ -395,88 +450,16 @@ export async function getEvalDatasetItemDownloadUrl(datasetId: string, itemId: s
   return { download_url: downloadUrl, filename: item.name };
 }
 
-export async function initEvalDatasetReferenceUpload(input: {
-  datasetId: string;
-  itemId: string;
-  sizeBytes: number;
-}) {
-  const dataset = await getEvalDatasetById(input.datasetId);
-  if (!dataset) throw new Error('Dataset not found');
-
-  const item = await getEvalDatasetItemById(input.datasetId, input.itemId);
-  if (!item) throw new Error('Dataset item not found');
-
-  const sizeBytes = input.sizeBytes;
-  if (!Number.isFinite(sizeBytes) || sizeBytes < 1) {
-    throw new Error('size_bytes is required');
-  }
-  if (sizeBytes > MAX_EVAL_DATASET_REFERENCE_BYTES) {
-    throw new Error('Reference text exceeds maximum allowed size');
-  }
-
-  const s3Key = buildEvalDatasetReferenceS3Key(input.datasetId, input.itemId);
-  const contentType = guessEvalDatasetReferenceContentType();
-  const uploadUrl = await getEvalDatasetItemUploadUrl(s3Key, contentType);
-
-  return {
-    s3_key: s3Key,
-    upload_url: uploadUrl,
-    method: 'PUT' as const,
-    headers: { 'Content-Type': contentType },
-  };
-}
-
-export async function finalizeEvalDatasetReferenceUpload(input: {
-  datasetId: string;
-  itemId: string;
-  s3Key: string;
-}) {
-  const dataset = await getEvalDatasetById(input.datasetId);
-  if (!dataset) throw new Error('Dataset not found');
-
-  const item = await getEvalDatasetItemById(input.datasetId, input.itemId);
-  if (!item) throw new Error('Dataset item not found');
-
-  const expectedKey = buildEvalDatasetReferenceS3Key(input.datasetId, input.itemId);
-  if (input.s3Key !== expectedKey) {
-    throw new Error('s3_key does not match dataset reference path');
-  }
-
-  const [row] = await db
-    .update(appEvalDatasetItems)
-    .set({
-      referenceS3Key: expectedKey,
-      updatedAt: new Date(),
-    })
-    .where(eq(appEvalDatasetItems.id, input.itemId))
-    .returning();
-
-  await db
-    .update(appEvalDatasets)
-    .set({ updatedAt: new Date() })
-    .where(eq(appEvalDatasets.id, input.datasetId));
-
-  return toItemPublic(row!);
-}
-
-export async function getEvalDatasetReferenceDownloadUrl(datasetId: string, itemId: string) {
-  const item = await getEvalDatasetItemById(datasetId, itemId);
-  if (!item) throw new Error('Dataset item not found');
-  if (!item.referenceS3Key) throw new Error('Reference transcript not uploaded');
-  const downloadUrl = await getEvalDatasetItemReadUrl(item.referenceS3Key);
-  return { download_url: downloadUrl, filename: `${item.name}.reference.txt` };
-}
-
 export async function assertEvalDatasetGroundTruthReady(
   datasetId: string,
   scenarioLabel: string,
 ): Promise<void> {
   const items = await db
-    .select({ name: appEvalDatasetItems.name, referenceS3Key: appEvalDatasetItems.referenceS3Key })
+    .select({ name: appEvalDatasetItems.name, referenceText: appEvalDatasetItems.referenceText })
     .from(appEvalDatasetItems)
     .where(eq(appEvalDatasetItems.datasetId, datasetId));
 
-  const missing = items.filter((item) => !item.referenceS3Key).map((item) => item.name);
+  const missing = items.filter((item) => !hasEvalDatasetReferenceText(item.referenceText)).map((item) => item.name);
   if (missing.length === 0) return;
 
   const preview = missing.slice(0, 5).join(', ');

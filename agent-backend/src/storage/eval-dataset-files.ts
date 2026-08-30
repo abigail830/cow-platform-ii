@@ -14,8 +14,6 @@ import { validateKey } from './prefix-utils.ts';
 
 export const EVAL_DATASETS_PREFIX = 'datasets/';
 export const MAX_EVAL_DATASET_ITEM_BYTES = 500 * 1024 * 1024;
-export const MAX_EVAL_DATASET_REFERENCE_BYTES = 10 * 1024 * 1024;
-export const EVAL_DATASET_REFERENCE_FILENAME = 'transcript.txt';
 
 const ACCEPTED_AUDIO_EXTENSIONS = new Set([
   'm4a',
@@ -55,16 +53,6 @@ export function buildEvalDatasetItemS3Key(
   const key = `${EVAL_DATASETS_PREFIX}${datasetId}/items/${itemId}/input/original.${ext}`;
   validateKey(key);
   return key;
-}
-
-export function buildEvalDatasetReferenceS3Key(datasetId: string, itemId: string): string {
-  const key = `${EVAL_DATASETS_PREFIX}${datasetId}/items/${itemId}/reference/${EVAL_DATASET_REFERENCE_FILENAME}`;
-  validateKey(key);
-  return key;
-}
-
-export function guessEvalDatasetReferenceContentType(): string {
-  return 'text/plain; charset=utf-8';
 }
 
 export function newEvalDatasetItemId(): string {

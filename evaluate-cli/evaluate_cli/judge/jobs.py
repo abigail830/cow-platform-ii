@@ -132,17 +132,17 @@ def run_async_judge_job(job_id: str, api_url: str | None = None) -> None:
 
 
 def _load_reference_text(context: dict[str, Any]) -> str:
+    reference = context.get("reference")
+    if isinstance(reference, str) and reference.strip():
+        return reference
+
     reference_url = context.get("reference_url")
     if isinstance(reference_url, str) and reference_url.strip():
         response = requests.get(reference_url.strip(), timeout=TRANSCRIPT_FETCH_TIMEOUT_SECONDS)
         response.raise_for_status()
         return response.text
 
-    reference = context.get("reference")
-    if isinstance(reference, str) and reference.strip():
-        return reference
-
-    raise RuntimeError("Missing reference_url in judge job context")
+    raise RuntimeError("Missing reference or reference_url in judge job context")
 
 
 def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:

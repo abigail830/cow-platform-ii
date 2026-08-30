@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Download, Clock3, FileText, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { Download, Clock3, FileText, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
 import {
   createEvalDataset,
   deleteEvalDataset,
   deleteEvalDatasetItem,
+  detectEvalDatasetItemDuration,
   evalDatasetItemDurationSec,
+  evalDatasetItemHasReference,
   formatEvalFileBytes,
   getEvalDataset,
   getEvalDatasetItemDownloadUrl,
-  getEvalDatasetReferenceDownloadUrl,
   listEvalDatasetItems,
   listEvalDatasets,
   updateEvalDataset,
   updateEvalDatasetItemDuration,
-  uploadEvalDatasetItem,
-  uploadEvalDatasetReference,
+  updateEvalDatasetItemReference,
   type EvalDataset,
   type EvalDatasetItem,
 } from '../api/evaluation/datasets.ts';
@@ -28,6 +28,8 @@ import {
   EvalDatasetUploadModal,
 } from '../components/EvalDatasetModals.tsx';
 import { formatDatasetItemDuration } from '../shared/reference-import.ts';
+import { startEvalDatasetUpload } from '../shared/eval-dataset-upload-manager.ts';
+import { useEvalDatasetUploadJob } from '../shared/use-eval-dataset-upload-job.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { NavPageIcon } from '../components/icons/NavIcons.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
@@ -36,9 +38,63 @@ import { hasPermission } from '../shared/permissions.ts';
 
 const LIST_PAGE = getNavPage('/evaluation/datasets')!;
 
+function downloadReferenceText(filename: string, text: string) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${filename}.reference.txt`;
+  anchor.rel = 'noopener noreferrer';
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 function mediaTypeLabel(mediaType: EvalDataset['media_type']): string {
   if (mediaType === 'audio') return 'Audio';
   return 'Document';
+}
+
+function EvalDatasetListRowActions({
+  dataset,
+  canWrite,
+  onUpload,
+  onEdit,
+  onDelete,
+}: {
+  dataset: EvalDataset;
+  canWrite: boolean;
+  onUpload: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const uploadJob = useEvalDatasetUploadJob(dataset.id);
+  const uploading = uploadJob?.inProgress ?? false;
+
+  if (!canWrite) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="icon-btn"
+        title={uploading ? `Uploading ${uploadJob?.completed ?? 0}/${uploadJob?.total ?? 0}…` : 'Upload files'}
+        onClick={onUpload}
+        disabled={uploading}
+      >
+        {uploading ? (
+          <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+        ) : (
+          <Upload {...iconProps()} aria-hidden />
+        )}
+      </button>
+      <button type="button" className="icon-btn" title="Edit" onClick={onEdit}>
+        <Pencil {...iconProps()} aria-hidden />
+      </button>
+      <button type="button" className="icon-btn" title="Delete" onClick={onDelete}>
+        <Trash2 {...iconProps()} aria-hidden />
+      </button>
+    </>
+  );
 }
 
 export function EvalDatasetsListPage() {
@@ -98,22 +154,24 @@ export function EvalDatasetsListPage() {
       name: input.name,
       description: input.description || undefined,
     });
-    for (const file of input.files) {
-      await uploadEvalDatasetItem(dataset.id, file);
-    }
     setCreateOpen(false);
-    await load();
     if (input.files.length > 0) {
+      startEvalDatasetUpload(dataset.id, input.files, {
+        onFileUploaded: () => void load(),
+        onComplete: () => void load(),
+      });
       navigate(`/evaluation/datasets/${dataset.id}`);
+    } else {
+      await load();
     }
   }
 
-  async function handleUploadToDataset(datasetId: string, files: File[]) {
-    for (const file of files) {
-      await uploadEvalDatasetItem(datasetId, file);
-    }
+  function handleUploadToDataset(datasetId: string, files: File[]) {
     setUploadTarget(null);
-    await load();
+    startEvalDatasetUpload(datasetId, files, {
+      onFileUploaded: () => void load(),
+      onComplete: () => void load(),
+    });
   }
 
   async function handleEditSave(input: { name: string; description: string | null }) {
@@ -219,34 +277,13 @@ export function EvalDatasetsListPage() {
                   <td>{new Date(row.updated_at).toLocaleString()}</td>
                   <td>
                     <div className="row-actions">
-                      {canWrite ? (
-                        <>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="Upload files"
-                            onClick={() => setUploadTarget(row)}
-                          >
-                            <Upload {...iconProps()} aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="Edit"
-                            onClick={() => setEditTarget(row)}
-                          >
-                            <Pencil {...iconProps()} aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="Delete"
-                            onClick={() => setDeleteTarget(row)}
-                          >
-                            <Trash2 {...iconProps()} aria-hidden />
-                          </button>
-                        </>
-                      ) : null}
+                      <EvalDatasetListRowActions
+                        dataset={row}
+                        canWrite={canWrite}
+                        onUpload={() => setUploadTarget(row)}
+                        onEdit={() => setEditTarget(row)}
+                        onDelete={() => setDeleteTarget(row)}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -275,7 +312,7 @@ export function EvalDatasetsListPage() {
         <EvalDatasetUploadModal
           datasetName={uploadTarget.name}
           onCancel={() => setUploadTarget(null)}
-          onUpload={(files) => handleUploadToDataset(uploadTarget.id, files)}
+          onStartUpload={(files) => handleUploadToDataset(uploadTarget.id, files)}
         />
       ) : null}
 
@@ -328,10 +365,16 @@ export function EvalDatasetDetailPage() {
   const [forbidden, setForbidden] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<EvalDatasetItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [retryingDurationIds, setRetryingDurationIds] = useState<Set<string>>(() => new Set());
 
-  const load = useCallback(async () => {
+  const uploadJob = useEvalDatasetUploadJob(datasetId);
+  const uploading = uploadJob?.inProgress ?? false;
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!datasetId) return;
-    setLoading(true);
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setError('');
     try {
       const [datasetRow, itemRows] = await Promise.all([
@@ -348,7 +391,9 @@ export function EvalDatasetDetailPage() {
         setError(message);
       }
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
   }, [datasetId]);
 
@@ -362,13 +407,16 @@ export function EvalDatasetDetailPage() {
     return items.filter((row) => row.name.toLowerCase().includes(query));
   }, [items, search]);
 
-  async function handleUpload(files: File[]) {
+  function handleStartUpload(files: File[]) {
     if (!datasetId || !canWrite) return;
-    for (const file of files) {
-      await uploadEvalDatasetItem(datasetId, file);
-    }
     setUploadOpen(false);
-    await load();
+    startEvalDatasetUpload(datasetId, files, {
+      onFileUploaded: () => void load({ silent: true }),
+      onComplete: () => void load({ silent: true }),
+      onError: (err) => {
+        setError(err instanceof Error ? err.message : 'Upload failed');
+      },
+    });
   }
 
   async function handleDownload(item: EvalDatasetItem) {
@@ -385,18 +433,9 @@ export function EvalDatasetDetailPage() {
     }
   }
 
-  async function handleDownloadReference(item: EvalDatasetItem) {
-    if (!datasetId) return;
-    try {
-      const { download_url, filename } = await getEvalDatasetReferenceDownloadUrl(datasetId, item.id);
-      const anchor = document.createElement('a');
-      anchor.href = download_url;
-      anchor.download = filename;
-      anchor.rel = 'noopener noreferrer';
-      anchor.click();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Reference download failed');
-    }
+  function handleDownloadReference(item: EvalDatasetItem) {
+    if (!item.reference_text?.trim()) return;
+    downloadReferenceText(item.name, item.reference_text);
   }
 
   async function handleImportReferences(
@@ -405,7 +444,7 @@ export function EvalDatasetDetailPage() {
     if (!datasetId) return;
     for (const row of rows) {
       if (row.reference.trim()) {
-        await uploadEvalDatasetReference(datasetId, row.itemId, row.reference);
+        await updateEvalDatasetItemReference(datasetId, row.itemId, row.reference);
       }
       if (row.durationSec != null) {
         await updateEvalDatasetItemDuration(datasetId, row.itemId, row.durationSec, 'import');
@@ -422,9 +461,30 @@ export function EvalDatasetDetailPage() {
     await load();
   }
 
+  async function handleRetryDuration(item: EvalDatasetItem) {
+    if (!datasetId || !canWrite) return;
+    setRetryingDurationIds((prev) => new Set(prev).add(item.id));
+    setError('');
+    try {
+      const updated = await detectEvalDatasetItemDuration(datasetId, item.id);
+      setItems((prev) => prev.map((row) => (row.id === item.id ? updated : row)));
+      setDataset((prev) =>
+        prev ? { ...prev, updated_at: updated.updated_at } : prev,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Duration detection failed');
+    } finally {
+      setRetryingDurationIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  }
+
   async function handleUploadReference(itemId: string, referenceText: string) {
     if (!datasetId) return;
-    await uploadEvalDatasetReference(datasetId, itemId, referenceText);
+    await updateEvalDatasetItemReference(datasetId, itemId, referenceText);
     setReferenceUploadTarget(null);
     await load();
   }
@@ -459,6 +519,13 @@ export function EvalDatasetDetailPage() {
           <AdminPageDescription>
             {mediaTypeLabel(dataset.media_type)} · {dataset.item_count} file
             {dataset.item_count === 1 ? '' : 's'}
+            {uploading ? (
+              <>
+                {' '}
+                · Uploading {uploadJob?.completed ?? 0}/{uploadJob?.total ?? 0}
+                {uploadJob?.failed ? ` (${uploadJob.failed} failed)` : ''}…
+              </>
+            ) : null}
           </AdminPageDescription>
         ) : null}
       </header>
@@ -486,9 +553,20 @@ export function EvalDatasetDetailPage() {
               <FileText {...iconProps()} aria-hidden />
               Import references
             </button>
-            <button type="button" className="btn-primary" onClick={() => setUploadOpen(true)}>
-              <Upload {...iconProps()} aria-hidden />
-              Upload files
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setUploadOpen(true)}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+              ) : (
+                <Upload {...iconProps()} aria-hidden />
+              )}
+              {uploading
+                ? `Uploading ${uploadJob?.completed ?? 0}/${uploadJob?.total ?? 0}…`
+                : 'Upload files'}
             </button>
           </div>
         ) : null}
@@ -536,13 +614,17 @@ export function EvalDatasetDetailPage() {
                 </td>
               </tr>
             ) : (
-              filteredItems.map((item) => (
+              filteredItems.map((item) => {
+                const durationSec = evalDatasetItemDurationSec(item);
+                const retryingDuration = retryingDurationIds.has(item.id);
+
+                return (
                 <tr key={item.id}>
                   <td>{item.name}</td>
                   <td>{item.file_type}</td>
                   <td>{formatEvalFileBytes(item.size_bytes)}</td>
-                  <td>{formatDatasetItemDuration(evalDatasetItemDurationSec(item))}</td>
-                  <td>{item.reference_s3_key ? 'Uploaded' : 'Missing'}</td>
+                  <td>{formatDatasetItemDuration(durationSec)}</td>
+                  <td>{evalDatasetItemHasReference(item) ? 'Uploaded' : 'Missing'}</td>
                   <td>{new Date(item.created_at).toLocaleString()}</td>
                   <td>
                     <div className="row-actions">
@@ -554,18 +636,33 @@ export function EvalDatasetDetailPage() {
                       >
                         <Download {...iconProps()} aria-hidden />
                       </button>
-                      {item.reference_s3_key ? (
+                      {evalDatasetItemHasReference(item) ? (
                         <button
                           type="button"
                           className="icon-btn"
                           title="Download reference"
-                          onClick={() => void handleDownloadReference(item)}
+                          onClick={() => handleDownloadReference(item)}
                         >
                           <FileText {...iconProps()} aria-hidden />
                         </button>
                       ) : null}
                       {canWrite ? (
                         <>
+                          {durationSec == null ? (
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Detect duration"
+                              disabled={retryingDuration}
+                              onClick={() => void handleRetryDuration(item)}
+                            >
+                              {retryingDuration ? (
+                                <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                              ) : (
+                                <RefreshCw {...iconProps()} aria-hidden />
+                              )}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="icon-btn"
@@ -577,7 +674,7 @@ export function EvalDatasetDetailPage() {
                           <button
                             type="button"
                             className="icon-btn"
-                            title={item.reference_s3_key ? 'Replace reference' : 'Upload reference'}
+                            title={evalDatasetItemHasReference(item) ? 'Replace reference' : 'Add reference'}
                             onClick={() => setReferenceUploadTarget(item)}
                           >
                             <Pencil {...iconProps()} aria-hidden />
@@ -595,7 +692,8 @@ export function EvalDatasetDetailPage() {
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
@@ -630,7 +728,7 @@ export function EvalDatasetDetailPage() {
         <EvalDatasetUploadModal
           datasetName={dataset.name}
           onCancel={() => setUploadOpen(false)}
-          onUpload={handleUpload}
+          onStartUpload={handleStartUpload}
         />
       ) : null}
 

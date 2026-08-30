@@ -139,29 +139,21 @@ export function EvalDatasetFileDropzone({
 type EvalDatasetUploadModalProps = {
   datasetName: string;
   onCancel: () => void;
-  onUpload: (files: File[]) => Promise<void>;
+  onStartUpload: (files: File[]) => void;
 };
 
-export function EvalDatasetUploadModal({ datasetName, onCancel, onUpload }: EvalDatasetUploadModalProps) {
+export function EvalDatasetUploadModal({ datasetName, onCancel, onStartUpload }: EvalDatasetUploadModalProps) {
   const [files, setFiles] = useState<File[]>([]);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleSubmit(event: React.FormEvent) {
+  function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (files.length === 0) {
       setError('Choose at least one file');
       return;
     }
-    setBusy(true);
     setError('');
-    try {
-      await onUpload(files);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setBusy(false);
-    }
+    onStartUpload(files);
   }
 
   return (
@@ -175,15 +167,15 @@ export function EvalDatasetUploadModal({ datasetName, onCancel, onUpload }: Eval
       >
         <h2 id="eval-dataset-upload-title">Upload files</h2>
         <p className="admin-form-hint">Add audio samples to dataset: {datasetName}</p>
-        <form onSubmit={(event) => void handleSubmit(event)}>
-          <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} disabled={busy} />
+        <form onSubmit={handleSubmit}>
+          <EvalDatasetFileDropzone files={files} onFilesChange={setFiles} />
           {error ? <p className="error">{error}</p> : null}
           <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+            <button type="button" className="btn-secondary" onClick={onCancel}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={busy || files.length === 0}>
-              {busy ? 'Uploading…' : 'Upload'}
+            <button type="submit" className="btn-primary" disabled={files.length === 0}>
+              Upload
             </button>
           </div>
         </form>
@@ -518,7 +510,7 @@ export function EvalDatasetReferenceUploadModal({
   onCancel,
   onUpload,
 }: EvalDatasetReferenceUploadModalProps) {
-  const [referenceText, setReferenceText] = useState('');
+  const [referenceText, setReferenceText] = useState(item.reference_text ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -533,7 +525,7 @@ export function EvalDatasetReferenceUploadModal({
     try {
       await onUpload(referenceText);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
+      setError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setBusy(false);
     }
@@ -548,7 +540,7 @@ export function EvalDatasetReferenceUploadModal({
         aria-labelledby="eval-dataset-reference-upload-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="eval-dataset-reference-upload-title">Upload reference</h2>
+        <h2 id="eval-dataset-reference-upload-title">Edit reference</h2>
         <p className="admin-form-hint">
           Ground-truth transcript for <strong>{item.name}</strong>
         </p>
@@ -569,7 +561,7 @@ export function EvalDatasetReferenceUploadModal({
               Cancel
             </button>
             <button type="submit" className="btn-primary" disabled={busy || !referenceText.trim()}>
-              {busy ? 'Uploading…' : 'Upload reference'}
+              {busy ? 'Saving…' : 'Save reference'}
             </button>
           </div>
         </form>

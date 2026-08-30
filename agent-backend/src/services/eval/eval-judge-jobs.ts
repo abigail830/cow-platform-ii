@@ -12,6 +12,7 @@ import {
 import { buildEvalRunJudgeResultKey } from '../../storage/eval-run-files.ts';
 import { getStorageReadUrl } from '../../storage/document-files.ts';
 import { getS3Config } from '../../storage/s3-config.ts';
+import { hasEvalDatasetReferenceText } from './eval-datasets.ts';
 import {
   parseEvalJudgeModelName,
   resolveEvalJudgeConfigYaml,
@@ -105,12 +106,12 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     );
   }
 
-  let referenceUrl: string | null = null;
+  let referenceText: string | null = null;
   if (scenario.requires_ground_truth) {
-    if (!datasetItem.referenceS3Key) {
+    if (!hasEvalDatasetReferenceText(datasetItem.referenceText)) {
       throw new Error(`Dataset item ${datasetItem.name} is missing a ground-truth reference`);
     }
-    referenceUrl = await getStorageReadUrl(datasetItem.referenceS3Key, 3600);
+    referenceText = datasetItem.referenceText!.trim();
   } else if (transcripts.length < 2) {
     throw new Error('At least two successful transcripts are required for judge evaluation');
   }
@@ -151,7 +152,7 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     min_variants: minVariants,
     dimensions: job.dimensionsSnapshot as EvalJudgeDimensionDefinition[],
     transcripts,
-    reference_url: referenceUrl,
+    reference: referenceText,
     config_yaml: configYaml,
     bucket: s3.bucket,
     artifact_keys: {

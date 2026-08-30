@@ -17,6 +17,7 @@ import {
   snapshotEvalJudgeDimensions,
 } from './eval-judge-dimensions.ts';
 import { buildEvalRunJudgeMetrics } from './eval-run-judge-config.ts';
+import { hasEvalDatasetReferenceText } from './eval-datasets.ts';
 import { spawnAsyncEvalJudgeWorker } from './eval-judge-runner.ts';
 
 /** Judge runs on GHA; reset stale `running` rows so reconcile can re-dispatch. */
@@ -129,7 +130,7 @@ async function syncTranscribeCountsOnRun(runId: string, attemptId: string): Prom
 
 function describeJudgeEligibilityFailure(input: {
   scenario: { label: string; requires_ground_truth: boolean; min_variants: number };
-  datasetItems: Array<{ referenceS3Key: string | null }>;
+  datasetItems: Array<{ referenceText: string | null }>;
   attemptItems: Array<{ datasetItemId: string; stage: string; transcriptS3Key: string | null }>;
   datasetItemIds: string[];
   pipelineCount: number;
@@ -137,7 +138,7 @@ function describeJudgeEligibilityFailure(input: {
   const { scenario, datasetItems, attemptItems, datasetItemIds, pipelineCount } = input;
 
   if (scenario.requires_ground_truth) {
-    const missingRefs = datasetItems.filter((row) => !row.referenceS3Key).length;
+    const missingRefs = datasetItems.filter((row) => !row.referenceText?.trim()).length;
     if (missingRefs > 0) {
       return `Judge evaluation did not start: ${missingRefs} dataset file(s) are missing ground-truth reference transcripts. Upload references on the dataset page, then run again.`;
     }
@@ -214,7 +215,7 @@ export async function startEvalRunJudgePhase(
 
   const dimensions = await snapshotEvalJudgeDimensions(scenarioId);
   const datasetItems = await db
-    .select({ id: appEvalDatasetItems.id, referenceS3Key: appEvalDatasetItems.referenceS3Key })
+    .select({ id: appEvalDatasetItems.id, referenceText: appEvalDatasetItems.referenceText })
     .from(appEvalDatasetItems)
     .where(eq(appEvalDatasetItems.datasetId, run.datasetId))
     .orderBy(asc(appEvalDatasetItems.sortOrder), asc(appEvalDatasetItems.name));
@@ -230,7 +231,7 @@ export async function startEvalRunJudgePhase(
     .where(eq(appEvalRunVariants.runId, runId));
 
   const eligibleDatasetItemIds = datasetItems
-    .filter((row) => !scenario.requires_ground_truth || row.referenceS3Key)
+    .filter((row) => !scenario.requires_ground_truth || hasEvalDatasetReferenceText(row.referenceText))
     .map((row) => row.id)
     .filter((datasetItemId) => {
       const doneCount = attemptItems.filter(

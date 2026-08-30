@@ -3,7 +3,7 @@ import { getToken } from '../auth.ts';
 import { formatApiError } from '../http.ts';
 import { sha256HexFromFile } from '../../shared/file-hash.ts';
 import { putFileToPresignedUrl } from '../direct-upload.ts';
-import { readAudioDurationSec } from '../../shared/audio-duration.ts';
+import { readAudioDurationSec, readAudioDurationSecFromUrl } from '../../shared/audio-duration.ts';
 import { datasetItemDurationSec } from '../../shared/reference-import.ts';
 
 export type EvalDataset = {
@@ -28,7 +28,7 @@ export type EvalDatasetItem = {
   s3_key: string;
   sort_order: number;
   metadata: Record<string, unknown>;
-  reference_s3_key: string | null;
+  reference_text: string | null;
   uploaded_by: string | null;
   created_at: string;
   updated_at: string;
@@ -172,7 +172,7 @@ export async function updateEvalDatasetItemDuration(
   datasetId: string,
   itemId: string,
   durationSec: number | null,
-  source: 'manual' | 'import' = 'manual',
+  source: 'manual' | 'import' | 'client' = 'manual',
 ): Promise<EvalDatasetItem> {
   const data = await authFetch(`/api/evaluation/datasets/${datasetId}/items/${itemId}`, {
     method: 'PATCH',
@@ -182,54 +182,31 @@ export async function updateEvalDatasetItemDuration(
   return data as EvalDatasetItem;
 }
 
-type ReferenceUploadInitResponse = {
-  s3_key: string;
-  upload_url: string;
-  method?: string;
-  headers?: Record<string, string>;
-};
+export async function detectEvalDatasetItemDuration(
+  datasetId: string,
+  itemId: string,
+): Promise<EvalDatasetItem> {
+  const { download_url } = await getEvalDatasetItemDownloadUrl(datasetId, itemId);
+  const durationSec = await readAudioDurationSecFromUrl(download_url);
+  if (durationSec == null) {
+    throw new Error('Could not detect audio duration from file');
+  }
+  return updateEvalDatasetItemDuration(datasetId, itemId, durationSec, 'client');
+}
 
-export async function uploadEvalDatasetReference(
+export function evalDatasetItemHasReference(item: EvalDatasetItem): boolean {
+  return typeof item.reference_text === 'string' && item.reference_text.trim().length > 0;
+}
+
+export async function updateEvalDatasetItemReference(
   datasetId: string,
   itemId: string,
   referenceText: string,
 ): Promise<EvalDatasetItem> {
-  const blob = new Blob([referenceText], { type: 'text/plain;charset=utf-8' });
-  const init = (await authFetch(
-    `/api/evaluation/datasets/${datasetId}/items/${itemId}/reference/upload-init`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ size_bytes: blob.size }),
-    },
-  )) as ReferenceUploadInitResponse;
-
-  const uploadUrl = init.upload_url;
-  if (!uploadUrl) throw new Error('Server did not return an upload URL');
-
-  await putFileToPresignedUrl(uploadUrl, blob, init.headers ?? {}, init.method ?? 'PUT');
-
-  const completed = await authFetch(
-    `/api/evaluation/datasets/${datasetId}/items/${itemId}/reference/upload-complete`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ s3_key: init.s3_key }),
-    },
-  );
-
-  return completed as EvalDatasetItem;
-}
-
-export async function getEvalDatasetReferenceDownloadUrl(
-  datasetId: string,
-  itemId: string,
-): Promise<{ download_url: string; filename: string }> {
-  const data = await authFetch(
-    `/api/evaluation/datasets/${datasetId}/items/${itemId}/reference/download-url`,
-  );
-  return {
-    download_url: String(data.download_url),
-    filename: String(data.filename),
-  };
+  const data = await authFetch(`/api/evaluation/datasets/${datasetId}/items/${itemId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reference_text: referenceText }),
+  });
+  return data as EvalDatasetItem;
 }

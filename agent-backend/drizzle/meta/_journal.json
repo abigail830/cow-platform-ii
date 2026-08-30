@@ -463,6 +463,13 @@
       "when": 1785222000000,
       "tag": "0065_eval_judge_gt_wer_cer",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1785223000000,
+      "tag": "0066_eval_dataset_reference_text",
+      "breakpoints": true
     }
   ]
 }

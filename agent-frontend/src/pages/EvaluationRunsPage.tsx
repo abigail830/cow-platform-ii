@@ -24,7 +24,7 @@ import {
   type EvalRunProcessingOption,
   type EvalRunStatus,
 } from '../api/evaluation/runs.ts';
-import { listEvalDatasets, getEvalDatasetReferenceDownloadUrl, type EvalDataset } from '../api/evaluation/datasets.ts';
+import { listEvalDatasets, type EvalDataset } from '../api/evaluation/datasets.ts';
 import { EvalRunCreateModal, EvalRunEditModal, EvalRunFilesModal } from '../components/EvalRunModals.tsx';
 import { TransientNotice } from '../components/TransientNotice.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -755,63 +755,18 @@ function TranscriptPlainPreview({
   return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
 }
 
-function useDatasetReferenceUrl(datasetId: string, item: EvalRunDatasetItemRef | undefined) {
-  const [url, setUrl] = useState<string | null>(item?.reference_url ?? null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const hasReference = Boolean(item?.reference_s3_key ?? item?.reference_url);
-
-  useEffect(() => {
-    if (item?.reference_url) {
-      setUrl(item.reference_url);
-      setError('');
-      setLoading(false);
-      return;
-    }
-    if (!item?.id || !datasetId) {
-      setUrl(null);
-      setLoading(false);
-      return;
-    }
-    if (!hasReference && item.reference_s3_key !== 'pending') {
-      setUrl(null);
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setError('');
-    void getEvalDatasetReferenceDownloadUrl(datasetId, item.id)
-      .then((result) => {
-        if (cancelled) return;
-        setUrl(result.download_url);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setUrl(null);
-        setError(err instanceof Error ? err.message : 'Failed to load ground truth');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetId, hasReference, item?.id, item?.reference_s3_key, item?.reference_url]);
-
-  return { url, loading, error, hasReference };
+function TranscriptTextPreview({ text }: { text: string }) {
+  const body = text.trim() || '(empty reference)';
+  return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
 }
 
 function EvalRunTranscriptCompare({
-  referenceUrl,
+  referenceText,
   actualUrl,
   actualLabel,
   actualError,
 }: {
-  referenceUrl: string;
+  referenceText: string;
   actualUrl: string | null;
   actualLabel: string;
   actualError?: string | null;
@@ -821,7 +776,7 @@ function EvalRunTranscriptCompare({
       <div className="eval-run-transcript-compare-pane">
         <p className="eval-run-transcript-compare-title">Ground truth</p>
         <div className="eval-run-transcript-compare-body">
-          <TranscriptPlainPreview url={referenceUrl} />
+          <TranscriptTextPreview text={referenceText} />
         </div>
       </div>
       <div className="eval-run-transcript-compare-pane">
@@ -841,7 +796,6 @@ function EvalRunTranscriptCompare({
 }
 
 function EvalRunFileTranscriptSection({
-  datasetId,
   datasetItemId,
   datasetItem,
   judgeScenarioId,
@@ -850,7 +804,6 @@ function EvalRunFileTranscriptSection({
   itemRunStatus,
   itemStarting,
 }: {
-  datasetId: string;
   datasetItemId: string;
   datasetItem: EvalRunDatasetItemRef | undefined;
   judgeScenarioId?: string;
@@ -860,27 +813,24 @@ function EvalRunFileTranscriptSection({
   itemStarting: boolean;
 }) {
   const gtScenario = judgeScenarioId === GT_JUDGE_SCENARIO_ID;
-  const referenceItem =
-    datasetItem ??
-    (gtScenario
-      ? ({ id: datasetItemId, name: '', file_type: 'audio', reference_s3_key: 'pending' } as EvalRunDatasetItemRef)
-      : undefined);
-  const { url: referenceUrl, loading, error, hasReference } = useDatasetReferenceUrl(datasetId, referenceItem);
+  const referenceText = datasetItem?.reference_text?.trim() ?? '';
+  const hasReference = referenceText.length > 0;
   const showCompare = hasReference || gtScenario;
 
   if (showCompare) {
     return (
       <div className="eval-run-transcript-compare-section">
-        {loading ? <p className="admin-muted">Loading ground truth…</p> : null}
-        {error ? <p className="admin-error">{error}</p> : null}
-        {referenceUrl ? (
+        {!hasReference && gtScenario ? (
+          <p className="admin-muted">Ground truth reference not set for this file.</p>
+        ) : null}
+        {hasReference ? (
           <div className="eval-run-transcript-compare-stack">
             {variants.map((variant) => {
               const cell = itemByVariantAndDataset.get(`${variant.id}:${datasetItemId}`);
               return (
                 <EvalRunTranscriptCompare
                   key={variant.id}
-                  referenceUrl={referenceUrl}
+                  referenceText={referenceText}
                   actualUrl={cell?.transcript_url ?? null}
                   actualLabel={variant.display_name}
                   actualError={cell?.error_message}
@@ -1168,7 +1118,6 @@ function EvalRunAttemptSection({
 
               <div className="eval-run-file-body">
                 <EvalRunFileTranscriptSection
-                  datasetId={datasetId}
                   datasetItemId={row.id}
                   datasetItem={datasetItem}
                   judgeScenarioId={judgeJob?.scenario_id}

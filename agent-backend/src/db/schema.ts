@@ -1074,7 +1074,7 @@ export const appEvalDatasetItems = pgTable(
     s3Key: text('s3_key').notNull(),
     sortOrder: integer('sort_order').notNull().default(0),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
-    referenceS3Key: text('reference_s3_key'),
+    referenceText: text('reference_text'),
     uploadedBy: uuid('uploaded_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
