@@ -227,16 +227,30 @@ def build_page_index(
         return page_index_strategy or ""
 
 
-def sync_markdown_and_version(api_url: str, document_id: str, markdown: str) -> bool:
+def sync_markdown_and_version(
+    api_url: str,
+    document_id: str,
+    markdown: str,
+    *,
+    markdown_already_on_oss: bool = False,
+) -> bool:
+    """Sync pipeline completion to the API.
+
+    When the worker already uploaded ``markdown.md`` to OSS (normal GHA path), skip
+    PUT /documents/:id/markdown — that route writes through Vercel and often ETIMEDOUT
+    to Aliyun OSS from HK/serverless regions.
+    """
     auth_headers, basic, has_auth = resolve_api_request_auth(required=True)
     if not has_auth:
         return False
-    ok, auth_headers, basic = put_document_markdown(
-        api_url, document_id, markdown, auth_headers, basic
-    )
-    if ok:
-        post_pipeline_version(api_url, document_id, auth_headers, basic)
-    return ok
+    if not markdown_already_on_oss:
+        ok, auth_headers, basic = put_document_markdown(
+            api_url, document_id, markdown, auth_headers, basic
+        )
+        if not ok:
+            return False
+    post_pipeline_version(api_url, document_id, auth_headers, basic)
+    return True
 
 
 def write_hash_dir_artifacts(
@@ -349,7 +363,12 @@ def finalize_job_artifacts(
 
     markdown = (result.get("markdown") or "").strip()
     if markdown:
-        sync_markdown_and_version(api, document_id, markdown)
+        sync_markdown_and_version(
+            api,
+            document_id,
+            markdown,
+            markdown_already_on_oss=True,
+        )
 
     patch_job(api, job_id, stage="parsed")
     complete_job_after_parse(api, job_id, ctx, parse_result=result)

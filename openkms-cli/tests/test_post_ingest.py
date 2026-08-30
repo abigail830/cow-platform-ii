@@ -11,6 +11,7 @@ from openkms_cli.pipeline.post_ingest import (
     finalize_job_artifacts,
     layouts_from_result,
     original_basename_from_ctx,
+    sync_markdown_and_version,
     upload_hash_dir_to_document_bundle,
     write_hash_dir_artifacts,
 )
@@ -105,10 +106,34 @@ def test_finalize_job_artifacts(
 
     mock_build.assert_called_once()
     mock_upload.assert_called_once()
-    mock_sync.assert_called_once()
+    mock_sync.assert_called_once_with(
+        "http://api",
+        "doc-1",
+        "# Doc",
+        markdown_already_on_oss=True,
+    )
     mock_complete.assert_called_once()
     mock_complete.assert_called_with("http://api", "job-1", ctx, parse_result=result)
     mock_patch.assert_called()
+
+
+@patch("openkms_cli.pipeline.post_ingest.post_pipeline_version", return_value=True)
+@patch("openkms_cli.pipeline.post_ingest.put_document_markdown")
+@patch("openkms_cli.pipeline.post_ingest.resolve_api_request_auth", return_value=({}, None, True))
+def test_sync_markdown_skips_api_put_when_already_on_oss(
+    mock_auth: MagicMock,
+    mock_put: MagicMock,
+    mock_version: MagicMock,
+) -> None:
+    ok = sync_markdown_and_version(
+        "http://api",
+        "doc-1",
+        "# Doc",
+        markdown_already_on_oss=True,
+    )
+    assert ok is True
+    mock_put.assert_not_called()
+    mock_version.assert_called_once()
 
 
 @patch("openkms_cli.pipeline.post_ingest.fail_job")
