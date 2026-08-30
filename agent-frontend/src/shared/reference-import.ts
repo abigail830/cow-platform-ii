@@ -152,3 +152,13 @@ export function formatDatasetItemDuration(sec: number | null): string {
   const seconds = Math.round(sec % 60);
   return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
+
+export function formatDatasetItemReferencePreview(
+  text: string | null | undefined,
+  maxLen = 80,
+): string {
+  const trimmed = text?.trim() ?? '';
+  if (!trimmed) return '—';
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen)}…`;
+}

@@ -28,7 +28,7 @@ import {
   EvalDatasetReferenceUploadModal,
   EvalDatasetUploadModal,
 } from '../components/EvalDatasetModals.tsx';
-import { formatDatasetItemDuration } from '../shared/reference-import.ts';
+import { formatDatasetItemDuration, formatDatasetItemReferencePreview } from '../shared/reference-import.ts';
 import { startEvalDatasetUpload } from '../shared/eval-dataset-upload-manager.ts';
 import { useEvalDatasetUploadJob } from '../shared/use-eval-dataset-upload-job.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -618,7 +618,14 @@ export function EvalDatasetDetailPage() {
                   <td>{item.file_type}</td>
                   <td>{formatEvalFileBytes(item.size_bytes)}</td>
                   <td>{formatDatasetItemDuration(durationSec)}</td>
-                  <td>{evalDatasetItemHasReference(item) ? 'Uploaded' : 'Missing'}</td>
+                  <td>
+                    <span
+                      className="eval-dataset-item-reference"
+                      title={item.reference_text?.trim() || undefined}
+                    >
+                      {formatDatasetItemReferencePreview(item.reference_text)}
+                    </span>
+                  </td>
                   <td>{new Date(item.created_at).toLocaleString()}</td>
                   <td>
                     <div className="row-actions">
