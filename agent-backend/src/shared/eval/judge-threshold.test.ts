@@ -50,6 +50,17 @@ describe('judge-threshold', () => {
     );
   });
 
+  it('evaluates hotword thresholds with percent suffix', () => {
+    assert.equal(
+      evaluatePassThreshold(0.95, '>=90%', { kind: 'hotword_recall_score' }),
+      true,
+    );
+    assert.equal(
+      evaluatePassThreshold(0.85, '>=90%', { kind: 'hotword_f1_score' }),
+      false,
+    );
+  });
+
   it('maps error-rate scores to percentage display values', () => {
     assert.equal(judgeScoreCompareValue(0.133, { kind: 'cer_score' }), 13.3);
   });

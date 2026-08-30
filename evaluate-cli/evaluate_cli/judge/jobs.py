@@ -13,6 +13,7 @@ from openkms_cli.pipeline.storage import get_s3_client
 
 from evaluate_cli.judge.metrics import (
     score_error_rate_dimension,
+    score_hotword_dimension,
     score_pairwise_dimension,
     score_variant_dimension,
     score_variant_vs_gt_dimension,
@@ -161,6 +162,13 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
     requires_gt = bool(context.get("requires_ground_truth"))
     reference_text = _load_reference_text(context) if requires_gt else None
 
+    raw_hotword_terms = context.get("hotword_terms")
+    hotword_terms = (
+        [str(term).strip() for term in raw_hotword_terms if str(term).strip()]
+        if isinstance(raw_hotword_terms, list)
+        else []
+    )
+
     dimensions = context.get("dimensions") or []
     variant_results = []
     for entry in transcripts:
@@ -173,6 +181,17 @@ def evaluate_judge_context(context: dict[str, Any]) -> tuple[dict[str, Any], dic
                 kind = dimension.get("kind", "geval_score")
                 if kind in {"cer_score", "wer_score"}:
                     scored = score_error_rate_dimension(reference_text, entry["transcript"], dimension)
+                elif kind in {
+                    "hotword_recall_score",
+                    "hotword_precision_score",
+                    "hotword_f1_score",
+                }:
+                    scored = score_hotword_dimension(
+                        reference_text,
+                        entry["transcript"],
+                        dimension,
+                        hotword_terms,
+                    )
                 else:
                     scored = score_variant_vs_gt_dimension(
                         reference_text, entry["transcript"], dimension, context

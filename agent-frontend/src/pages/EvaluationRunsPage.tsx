@@ -41,13 +41,25 @@ import { extractTranscriptPlainText } from '../shared/transcript-plain-text.ts';
 const LIST_PAGE = getNavPage('/evaluation/runs')!;
 
 /** Format judge score for display. New results store raw rubric scale; legacy rows store DeepEval 0–1. */
+function isPercentDisplayKind(kind?: string, lowerIsBetter?: boolean): boolean {
+  if (kind === 'cer_score' || kind === 'wer_score') return true;
+  if (
+    kind === 'hotword_recall_score' ||
+    kind === 'hotword_precision_score' ||
+    kind === 'hotword_f1_score'
+  ) {
+    return true;
+  }
+  return Boolean(lowerIsBetter);
+}
+
 function formatJudgeScore(
   score: number,
   scoreMax?: number,
   options?: { kind?: string; lowerIsBetter?: boolean },
 ): string {
   const kind = options?.kind;
-  if (kind === 'cer_score' || kind === 'wer_score' || options?.lowerIsBetter) {
+  if (isPercentDisplayKind(kind, options?.lowerIsBetter)) {
     return `${(score * 100).toFixed(1)}%`;
   }
   const max = scoreMax ?? 10;
@@ -62,7 +74,7 @@ function formatJudgeScoreCompact(
   options?: { kind?: string; lowerIsBetter?: boolean },
 ): string {
   const kind = options?.kind;
-  if (kind === 'cer_score' || kind === 'wer_score' || options?.lowerIsBetter) {
+  if (isPercentDisplayKind(kind, options?.lowerIsBetter)) {
     return `${(score * 100).toFixed(1)}%`;
   }
   const max = scoreMax ?? 10;
@@ -448,6 +460,9 @@ function collectJudgeDimensionColumns(
 function dimensionColumnShortLabel(column: EvalDimensionColumn): string {
   if (column.kind === 'cer_score') return 'CER';
   if (column.kind === 'wer_score') return 'WER';
+  if (column.kind === 'hotword_recall_score') return 'HW Recall';
+  if (column.kind === 'hotword_precision_score') return 'HW Prec.';
+  if (column.kind === 'hotword_f1_score') return 'HW F1';
 
   const normalized = column.label.trim().toLowerCase();
   if (normalized.includes('entity accuracy')) return 'Entity acc.';

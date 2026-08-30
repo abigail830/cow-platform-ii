@@ -7,6 +7,7 @@ import {
   type EvalRunPhase,
   type EvalRunStatus,
 } from '../../db/index.ts';
+import { isHotwordEvalEnabled } from './eval-run-hotword-judge.ts';
 
 export function toAttemptPublic(row: typeof appEvalRunAttempts.$inferSelect) {
   const startedMs = row.startedAt.getTime();
@@ -28,6 +29,7 @@ export function toAttemptPublic(row: typeof appEvalRunAttempts.$inferSelect) {
     total_compare_items: row.totalCompareItems,
     completed_compare_items: row.completedCompareItems,
     failed_compare_items: row.failedCompareItems,
+    hotword_eval_enabled: isHotwordEvalEnabled(row.asrHotwordsSnapshot),
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };

@@ -38,11 +38,24 @@ function isErrorRateKind(context: JudgeThresholdScoreContext): boolean {
   return kind === 'cer_score' || kind === 'wer_score' || Boolean(context.lowerIsBetter);
 }
 
+function isHotwordKind(context: JudgeThresholdScoreContext): boolean {
+  const kind = context.kind;
+  return (
+    kind === 'hotword_recall_score' ||
+    kind === 'hotword_precision_score' ||
+    kind === 'hotword_f1_score'
+  );
+}
+
+function isFractionPercentKind(context: JudgeThresholdScoreContext): boolean {
+  return isErrorRateKind(context) || isHotwordKind(context);
+}
+
 export function judgeScoreCompareValue(
   score: number,
   context: JudgeThresholdScoreContext,
 ): number {
-  if (isErrorRateKind(context)) {
+  if (isFractionPercentKind(context)) {
     return score * 100;
   }
   const max = context.scoreMax ?? 10;
@@ -88,6 +101,11 @@ export function evaluatePassThreshold(
       compareValue = score;
       thresholdValue = parsed.value;
     }
+  } else if (isHotwordKind(context)) {
+    if (!parsed.isPercent) {
+      return null;
+    }
+    compareValue = score * 100;
   } else {
     if (parsed.isPercent) {
       return null;

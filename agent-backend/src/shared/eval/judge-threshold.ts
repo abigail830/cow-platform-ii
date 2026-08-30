@@ -38,12 +38,25 @@ function isErrorRateKind(context: JudgeThresholdScoreContext): boolean {
   return kind === 'cer_score' || kind === 'wer_score' || Boolean(context.lowerIsBetter);
 }
 
+function isHotwordKind(context: JudgeThresholdScoreContext): boolean {
+  const kind = context.kind;
+  return (
+    kind === 'hotword_recall_score' ||
+    kind === 'hotword_precision_score' ||
+    kind === 'hotword_f1_score'
+  );
+}
+
+function isFractionPercentKind(context: JudgeThresholdScoreContext): boolean {
+  return isErrorRateKind(context) || isHotwordKind(context);
+}
+
 /** Numeric value used when evaluating a threshold expression (matches UI display scale). */
 export function judgeScoreCompareValue(
   score: number,
   context: JudgeThresholdScoreContext,
 ): number {
-  if (isErrorRateKind(context)) {
+  if (isFractionPercentKind(context)) {
     return score * 100;
   }
   const max = context.scoreMax ?? 10;
@@ -94,9 +107,14 @@ export function evaluatePassThreshold(
       compareValue = score;
       thresholdValue = parsed.value;
     }
+  } else if (isHotwordKind(context)) {
+    if (!parsed.isPercent) {
+      throw new Error('Hotword pass threshold requires % suffix, e.g. >=90%');
+    }
+    compareValue = score * 100;
   } else {
     if (parsed.isPercent) {
-      throw new Error('Pass threshold with % is only supported for CER/WER dimensions');
+      throw new Error('Pass threshold with % is only supported for CER/WER and hotword dimensions');
     }
     compareValue = judgeScoreCompareValue(score, context);
   }

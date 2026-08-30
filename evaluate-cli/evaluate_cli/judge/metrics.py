@@ -10,6 +10,7 @@ from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from evaluate_cli.judge.error_rate import compute_character_error_rate, compute_word_error_rate
+from evaluate_cli.judge.hotword_metrics import compute_hotword_metrics
 
 GEVAL_PASS_THRESHOLD = 0.5
 
@@ -122,6 +123,47 @@ def score_variant_vs_gt_dimension(
     test_case = LLMTestCase(input="", expected_output=reference, actual_output=transcript)
     metric.measure(test_case)
     return _score_from_metric(metric, winner=False)
+
+
+def score_hotword_dimension(
+    reference: str,
+    transcript: str,
+    dimension: dict[str, Any],
+    terms: list[str],
+) -> JudgeScore:
+    kind = dimension.get("kind", "hotword_recall_score")
+    result = compute_hotword_metrics(reference, transcript, terms)
+
+    if kind == "hotword_precision_score":
+        score = result.precision
+        label = "Hotword Precision"
+    elif kind == "hotword_f1_score":
+        score = result.f1
+        label = "Hotword F1"
+    else:
+        score = result.recall
+        label = "Hotword Recall"
+
+    if score is None:
+        reason = (
+            f"{label}: no hotword occurrences in reference. "
+            f"Terms: {', '.join(result.terms) or 'none'}."
+        )
+    else:
+        reason = (
+            f"{label} {score:.2%}. "
+            f"Matched {result.correct} of {result.actual} reference occurrences "
+            f"({result.predicted} in transcript). "
+            f"Terms: {', '.join(result.terms)}."
+        )
+
+    return JudgeScore(
+        score=score,
+        score_max=1.0,
+        winner=None,
+        reason=reason,
+        lower_is_better=False,
+    )
 
 
 def score_error_rate_dimension(

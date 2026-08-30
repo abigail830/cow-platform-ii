@@ -14,8 +14,8 @@ import { buildEvalRunJudgeResultKey } from '../../storage/eval-run-files.ts';
 import {
   DEFAULT_EVAL_JUDGE_SCENARIO_ID,
   getEvalJudgeScenario,
-  snapshotEvalJudgeDimensions,
 } from './eval-judge-dimensions.ts';
+import { buildJudgeDimensionsSnapshot } from './eval-run-hotword-judge.ts';
 import { buildEvalRunJudgeMetrics } from './eval-run-judge-config.ts';
 import { hasEvalDatasetReferenceText } from './eval-datasets.ts';
 import { spawnAsyncEvalJudgeWorker } from './eval-judge-runner.ts';
@@ -213,7 +213,14 @@ export async function startEvalRunJudgePhase(
   const scenario = await getEvalJudgeScenario(scenarioId);
   if (!scenario) throw new Error(`Unknown eval judge scenario: ${scenarioId}`);
 
-  const dimensions = await snapshotEvalJudgeDimensions(scenarioId);
+  const [attempt] = await db
+    .select()
+    .from(appEvalRunAttempts)
+    .where(eq(appEvalRunAttempts.id, resolvedAttemptId))
+    .limit(1);
+  if (!attempt) return;
+
+  const dimensions = await buildJudgeDimensionsSnapshot(scenarioId, attempt);
   const datasetItems = await db
     .select({ id: appEvalDatasetItems.id, referenceText: appEvalDatasetItems.referenceText })
     .from(appEvalDatasetItems)
@@ -455,7 +462,14 @@ export async function retryEvalRunJudgeJob(
     throw new Error('Compare is already running for this file');
   }
 
-  const dimensions = await snapshotEvalJudgeDimensions(job.scenarioId);
+  const [attempt] = await db
+    .select()
+    .from(appEvalRunAttempts)
+    .where(eq(appEvalRunAttempts.id, resolvedAttemptId))
+    .limit(1);
+  if (!attempt) throw new Error('Eval run attempt not found');
+
+  const dimensions = await buildJudgeDimensionsSnapshot(job.scenarioId, attempt);
 
   await db
     .update(appEvalRunJudgeJobs)

@@ -131,6 +131,7 @@ export type EvalRunAttempt = {
   total_compare_items: number;
   completed_compare_items: number;
   failed_compare_items: number;
+  hotword_eval_enabled?: boolean;
   items: EvalRunItem[];
   comparisons: EvalRunCompareRow[];
   judge_jobs: EvalRunJudgeRow[];

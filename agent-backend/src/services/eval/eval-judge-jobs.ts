@@ -20,6 +20,10 @@ import {
   EVAL_JUDGE_COMPARE_PIPELINE_NAME,
 } from '../../shared/eval/eval-judge-workflow.ts';
 import { EVAL_JUDGE_GT_SCENARIO_ID, EVAL_JUDGE_COMPARE_WITH_GT_PIPELINE_NAME } from '../../shared/eval/eval-judge-constants.ts';
+import {
+  isHotwordEvalEnabled,
+  resolveEvalHotwordTerms,
+} from './eval-run-hotword-judge.ts';
 import type { EvalJudgeDimensionDefinition } from './eval-judge-dimensions.ts';
 import { getEvalJudgeScenario } from './eval-judge-dimensions.ts';
 import { resolveModelCliParams } from '../models/model-cli-params.ts';
@@ -141,6 +145,10 @@ export async function buildEvalJudgeJobContext(jobId: string) {
 
   const resultS3Key = buildEvalRunJudgeResultKey(job.runId, job.attemptId, job.datasetItemId);
 
+  const hotwordTerms = isHotwordEvalEnabled(attempt.asrHotwordsSnapshot)
+    ? resolveEvalHotwordTerms(attempt.asrHotwordsSnapshot, datasetItem.metadata)
+    : [];
+
   return {
     job_id: job.id,
     run_id: job.runId,
@@ -151,6 +159,7 @@ export async function buildEvalJudgeJobContext(jobId: string) {
     requires_ground_truth: scenario.requires_ground_truth,
     min_variants: minVariants,
     dimensions: job.dimensionsSnapshot as EvalJudgeDimensionDefinition[],
+    hotword_terms: hotwordTerms,
     transcripts,
     reference: referenceText,
     config_yaml: configYaml,
