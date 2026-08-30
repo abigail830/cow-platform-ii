@@ -124,6 +124,9 @@ async function writeTranscribeSummaryMetrics(runId: string): Promise<void> {
   const run = await getEvalRunById(runId);
   if (!run) return;
 
+  const dataset = await getEvalDatasetById(run.datasetId);
+  if (!dataset || dataset.mediaType === 'document') return;
+
   const attempt = await getLatestEvalRunAttempt(runId);
   if (!attempt) return;
 
@@ -597,6 +600,9 @@ export async function getEvalRunDetail(runId: string) {
     .from(appEvalDatasetItems)
     .where(eq(appEvalDatasetItems.datasetId, refreshed.datasetId));
 
+  const dataset = await getEvalDatasetById(refreshed.datasetId);
+  const mediaType = dataset?.mediaType ?? 'audio';
+
   const datasetItemById = new Map(datasetItems.map((row) => [row.id, row]));
 
   const attemptDetails = await Promise.all(
@@ -610,6 +616,7 @@ export async function getEvalRunDetail(runId: string) {
             item,
             datasetItemById.get(item.datasetItemId)?.name ?? '',
             datasetItemById.get(item.datasetItemId)?.metadata,
+            mediaType,
           ),
         ),
       );
@@ -652,6 +659,7 @@ export async function getEvalRunDetail(runId: string) {
 
   return {
     run: toRunPublic(refreshed),
+    media_type: mediaType,
     variants: variants.map(toVariantPublic),
     attempts: attemptDetails,
     items: latestAttempt

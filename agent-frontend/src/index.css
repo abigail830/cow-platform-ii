@@ -2949,15 +2949,14 @@ textarea {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 0.5rem;
+  overflow-y: auto;
 }
 
 .admin-page.eval-run-detail-page .eval-run-attempt.is-open {
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .admin-page.eval-run-detail-page .eval-run-attempt-summary {
@@ -2965,16 +2964,9 @@ textarea {
 }
 
 .admin-page.eval-run-detail-page .eval-run-attempt.is-open .eval-run-attempt-body {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: hidden;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-}
-
-.admin-page.eval-run-detail-page .eval-run-results-table-wrap {
-  flex: 1 1 0;
-  min-height: 0;
 }
 
 .eval-run-attempt {

@@ -5,6 +5,8 @@ import {
 } from '../../shared/eval/eval-audio-duration.ts';
 import { getStorageReadUrl } from '../../storage/document-files.ts';
 
+export type EvalRunItemMediaType = 'audio' | 'document';
+
 type EvalRunItemRow = {
   id: string;
   runId: string;
@@ -57,7 +59,9 @@ export function evalItemRtf(
     updatedAt: Date;
   },
   fallbackAudioDurationSec?: number | null,
+  mediaType: EvalRunItemMediaType = 'audio',
 ): number | null {
+  if (mediaType === 'document') return null;
   const metrics = item.metrics;
   if (metrics && typeof metrics === 'object') {
     const stored = metrics.rtf_asr;
@@ -73,11 +77,16 @@ export async function enrichEvalRunItemPublic(
   item: EvalRunItemRow,
   datasetItemName: string,
   datasetItemMetadata?: unknown,
+  mediaType: EvalRunItemMediaType = 'audio',
 ) {
-  const fallbackAudioSec = parseDatasetItemDurationSec(datasetItemMetadata);
+  const fallbackAudioSec =
+    mediaType === 'document' ? null : parseDatasetItemDurationSec(datasetItemMetadata);
   const durationMs = evalItemDurationMs(item);
-  const audioDurationSec = evalItemAudioDurationSec(item.metrics) ?? fallbackAudioSec;
-  const rtf = evalItemRtf(item, fallbackAudioSec);
+  const audioDurationSec =
+    mediaType === 'document'
+      ? null
+      : (evalItemAudioDurationSec(item.metrics) ?? fallbackAudioSec);
+  const rtf = evalItemRtf(item, fallbackAudioSec, mediaType);
   let transcriptUrl: string | null = null;
   if (item.stage === 'done' && item.transcriptS3Key) {
     transcriptUrl = await getStorageReadUrl(item.transcriptS3Key, 3600);

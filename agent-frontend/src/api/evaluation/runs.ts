@@ -147,6 +147,7 @@ export type EvalRunDatasetItemRef = {
 
 export type EvalRunDetail = {
   run: EvalRun;
+  media_type: 'audio' | 'document';
   variants: EvalRunVariant[];
   attempts: EvalRunAttempt[];
   items: EvalRunItem[];

@@ -255,8 +255,12 @@ function evalItemDurationLabel(item: EvalRunItem | undefined): string | null {
   return formatted || null;
 }
 
-function evalItemTranscribeMetricsLabel(item: EvalRunItem | undefined): string | null {
+function evalItemTranscribeMetricsLabel(
+  item: EvalRunItem | undefined,
+  includeRtf = true,
+): string | null {
   const duration = evalItemDurationLabel(item);
+  if (!includeRtf) return duration;
   const rtf = item?.rtf;
   if (duration && rtf != null) return `${duration} · RTF ${formatRtf(rtf)}`;
   if (duration) return duration;
@@ -598,14 +602,19 @@ function computeAttemptAverages(
   attempt: EvalRunAttempt,
   variants: EvalRunDetail['variants'],
   dimensionColumns: EvalDimensionColumn[],
+  includeRtf: boolean,
 ): { avgRtf: number | null; dimensionAverages: DimensionAverage[] } {
   let totalProcessSec = 0;
   let totalAudioSec = 0;
   const rtfValues: number[] = [];
 
   for (const item of attempt.items) {
-    const rtf = resolveItemRtf(item);
-    if (rtf != null) rtfValues.push(rtf);
+    if (includeRtf) {
+      const rtf = resolveItemRtf(item);
+      if (rtf != null) rtfValues.push(rtf);
+    }
+
+    if (!includeRtf) continue;
 
     const audioSec = item.audio_duration_sec;
     const durationMs = item.duration_ms;
@@ -690,9 +699,10 @@ function computeAttemptAverages(
 function formatAttemptMetricsSummary(
   avgRtf: number | null,
   dimensionAverages: DimensionAverage[],
+  includeRtf: boolean,
 ): ReactNode | null {
   const parts: ReactNode[] = [];
-  if (avgRtf != null) {
+  if (includeRtf && avgRtf != null) {
     parts.push(`avg RTF ${formatRtf(avgRtf)}`);
   }
   for (const dim of dimensionAverages) {
@@ -1033,6 +1043,7 @@ function EvalRunFileTranscriptSection({
   itemByVariantAndDataset,
   itemRunStatus,
   itemStarting,
+  showRtf,
 }: {
   datasetItemId: string;
   datasetItem: EvalRunDatasetItemRef | undefined;
@@ -1041,6 +1052,7 @@ function EvalRunFileTranscriptSection({
   itemByVariantAndDataset: Map<string, EvalRunItem>;
   itemRunStatus: EvalRunStatus;
   itemStarting: boolean;
+  showRtf: boolean;
 }) {
   const gtScenario = judgeScenarioId === GT_JUDGE_SCENARIO_ID;
   const referenceText = datasetItem?.reference_text?.trim() ?? '';
@@ -1087,6 +1099,7 @@ function EvalRunFileTranscriptSection({
             variantName={variant.display_name}
             runStatus={itemRunStatus}
             starting={itemStarting}
+            showRtf={showRtf}
           />
         );
       })}
@@ -1130,13 +1143,15 @@ function EvalRunPipelineOutput({
   variantName,
   runStatus,
   starting,
+  showRtf,
 }: {
   cell: EvalRunItem | undefined;
   variantName: string;
   runStatus: EvalRunStatus;
   starting: boolean;
+  showRtf: boolean;
 }) {
-  const duration = evalItemTranscribeMetricsLabel(cell);
+  const duration = evalItemTranscribeMetricsLabel(cell, showRtf);
 
   return (
     <div className="eval-run-pipeline-col">
@@ -1171,6 +1186,7 @@ function EvalRunAttemptSection({
   canWrite,
   retryingDatasetItemId,
   evaluatingAttemptId,
+  showRtf,
   onRetryCompare,
   onEvaluate,
 }: {
@@ -1183,6 +1199,7 @@ function EvalRunAttemptSection({
   canWrite: boolean;
   retryingDatasetItemId: string | null;
   evaluatingAttemptId: string | null;
+  showRtf: boolean;
   onRetryCompare: (datasetItemId: string, attemptId: string) => void;
   onEvaluate: (attemptId: string) => void;
 }) {
@@ -1251,10 +1268,10 @@ function EvalRunAttemptSection({
   }, [datasetItemRows, itemByVariantAndDataset, judgeByDatasetItem, variants]);
 
   const { avgRtf, dimensionAverages } = useMemo(
-    () => computeAttemptAverages(attempt, variants, dimensionColumns),
-    [attempt, dimensionColumns, variants],
+    () => computeAttemptAverages(attempt, variants, dimensionColumns, showRtf),
+    [attempt, dimensionColumns, showRtf, variants],
   );
-  const metricsSummary = formatAttemptMetricsSummary(avgRtf, dimensionAverages);
+  const metricsSummary = formatAttemptMetricsSummary(avgRtf, dimensionAverages, showRtf);
 
   const isJudgingPhase = attempt.phase === 'judging' && attempt.status === 'running';
   const isAttemptRunning = attempt.status === 'running';
@@ -1262,7 +1279,10 @@ function EvalRunAttemptSection({
   const showEvaluate = canWrite && canEvaluateAttempt(attempt, runStatus, starting);
   const isEvaluating = evaluatingAttemptId === attempt.id;
   const tableColumnCount =
-    5 + (showPipelineColumn ? 1 : 0) + dimensionColumns.length;
+    4 +
+    (showRtf ? 1 : 0) +
+    (showPipelineColumn ? 1 : 0) +
+    dimensionColumns.length;
 
   return (
     <div className={`eval-run-attempt${open ? ' is-open' : ''}`}>
@@ -1340,9 +1360,11 @@ function EvalRunAttemptSection({
                   {showPipelineColumn ? <th scope="col">Pipeline</th> : null}
                   <th scope="col">Transcript-eval status</th>
                   <th scope="col">Duration</th>
-                  <th scope="col">
-                    <span title={RTF_FORMULA_TOOLTIP}>RTF</span>
-                  </th>
+                  {showRtf ? (
+                    <th scope="col">
+                      <span title={RTF_FORMULA_TOOLTIP}>RTF</span>
+                    </th>
+                  ) : null}
                   {dimensionColumns.map((column) => (
                     <th
                       key={column.id}
@@ -1375,7 +1397,7 @@ function EvalRunAttemptSection({
                       : null;
                   const statusLabel = formatPipelineStatusLabel(transcribeState, compareState);
                   const durationLabel = evalItemDurationLabel(row.cell) ?? '—';
-                  const itemRtf = resolveItemRtf(row.cell);
+                  const itemRtf = showRtf ? resolveItemRtf(row.cell) : null;
                   const rtfLabel = itemRtf != null ? formatRtf(itemRtf) : '—';
                   const doneVariantCount = variants.filter(
                     (variant) =>
@@ -1401,9 +1423,14 @@ function EvalRunAttemptSection({
                         ) : null}
                         <td className="eval-run-results-status">{statusLabel}</td>
                         <td className="eval-run-results-duration">{durationLabel}</td>
-                        <td className="eval-run-results-rtf" title={itemRtf != null ? RTF_FORMULA_TOOLTIP : undefined}>
-                          {rtfLabel}
-                        </td>
+                        {showRtf ? (
+                          <td
+                            className="eval-run-results-rtf"
+                            title={itemRtf != null ? RTF_FORMULA_TOOLTIP : undefined}
+                          >
+                            {rtfLabel}
+                          </td>
+                        ) : null}
                         {dimensionColumns.map((column) => {
                           const display = getDimensionCellDisplay(
                             row.judgeJob,
@@ -1470,6 +1497,7 @@ function EvalRunAttemptSection({
                                 itemByVariantAndDataset={itemByVariantAndDataset}
                                 itemRunStatus={itemRunStatus}
                                 itemStarting={itemStarting}
+                                showRtf={showRtf}
                               />
                               {attempt.run_mode === 'full' ? (
                                 <div className="eval-run-compare-row">
@@ -1843,6 +1871,7 @@ export function EvaluationRunDetailPage() {
 
   const fileCount = detail?.dataset_items?.length ?? 0;
   const runFailureReason = detail ? evalRunFailureMessage(detail.run.summary_metrics) : null;
+  const showRtf = detail?.media_type !== 'document';
 
   if (!canRead) return <Navigate to="/agents/playground" replace />;
   if (!runId) return <Navigate to="/evaluation/runs" replace />;
@@ -2025,6 +2054,7 @@ export function EvaluationRunDetailPage() {
               canWrite={canWrite}
               retryingDatasetItemId={retryingCompareItemId}
               evaluatingAttemptId={evaluatingAttemptId}
+              showRtf={showRtf}
               onRetryCompare={(datasetItemId, attemptId) => void handleRetryCompare(datasetItemId, attemptId)}
               onEvaluate={(attemptId) => void handleEvaluate(attemptId)}
             />
