@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { appEvalDatasetItems, appEvalDatasets, db } from '../../db/index.ts';
 import type { EvalDatasetKind, EvalMediaType } from '../../db/index.ts';
 import {
@@ -20,6 +20,7 @@ import {
 import { formatEvalDatasetDbError } from './eval-dataset-db-error.ts';
 
 export const MAX_EVAL_DATASET_REFERENCE_BYTES = 10 * 1024 * 1024;
+export const MAX_EVAL_DATASET_REFERENCE_IMPORT_ROWS = 5000;
 
 export type EvalDatasetRow = typeof appEvalDatasets.$inferSelect;
 export type EvalDatasetItemRow = typeof appEvalDatasetItems.$inferSelect;
@@ -291,6 +292,22 @@ function buildDatasetItemMetadata(
   };
 }
 
+function mergeDurationIntoMetadata(
+  prior: Record<string, unknown>,
+  durationSec: number | null,
+  source: 'manual' | 'import' | 'client',
+): Record<string, unknown> {
+  if (durationSec == null || !Number.isFinite(durationSec) || durationSec <= 0) {
+    const { duration_sec: _a, duration_seconds: _b, duration_source: _c, ...rest } = prior;
+    return rest;
+  }
+  return {
+    ...prior,
+    duration_sec: roundDurationSec(durationSec),
+    duration_source: source,
+  };
+}
+
 export async function updateEvalDatasetItemDuration(
   datasetId: string,
   itemId: string,
@@ -305,17 +322,7 @@ export async function updateEvalDatasetItemDuration(
       ? { ...(item.metadata as Record<string, unknown>) }
       : {};
 
-  let metadata: Record<string, unknown>;
-  if (durationSec == null || !Number.isFinite(durationSec) || durationSec <= 0) {
-    const { duration_sec: _a, duration_seconds: _b, duration_source: _c, ...rest } = prior;
-    metadata = rest;
-  } else {
-    metadata = {
-      ...prior,
-      duration_sec: roundDurationSec(durationSec),
-      duration_source: source,
-    };
-  }
+  const metadata = mergeDurationIntoMetadata(prior, durationSec, source);
 
   const [row] = await db
     .update(appEvalDatasetItems)
@@ -351,6 +358,105 @@ export async function updateEvalDatasetItemReference(
     .where(eq(appEvalDatasets.id, datasetId));
 
   return toItemPublic(row);
+}
+
+export async function importEvalDatasetItemReferences(
+  datasetId: string,
+  rows: Array<{
+    itemId: string;
+    referenceText?: string | null;
+    durationSec?: number | null;
+  }>,
+): Promise<{ updated_count: number }> {
+  const dataset = await getEvalDatasetById(datasetId);
+  if (!dataset) throw new Error('Dataset not found');
+  if (rows.length === 0) throw new Error('No rows to import');
+  if (rows.length > MAX_EVAL_DATASET_REFERENCE_IMPORT_ROWS) {
+    throw new Error(`Import exceeds maximum of ${MAX_EVAL_DATASET_REFERENCE_IMPORT_ROWS} rows`);
+  }
+
+  const patches = new Map<
+    string,
+    { referenceText?: string | null; durationSec?: number | null }
+  >();
+  for (const row of rows) {
+    const itemId = row.itemId.trim();
+    if (!itemId) continue;
+    const existing = patches.get(itemId) ?? {};
+    if (row.referenceText !== undefined) {
+      existing.referenceText = row.referenceText;
+    }
+    if (row.durationSec !== undefined) {
+      existing.durationSec = row.durationSec;
+    }
+    patches.set(itemId, existing);
+  }
+
+  const itemIds = [...patches.keys()];
+  if (itemIds.length === 0) throw new Error('No rows to import');
+
+  const existingItems = await db
+    .select({
+      id: appEvalDatasetItems.id,
+      metadata: appEvalDatasetItems.metadata,
+    })
+    .from(appEvalDatasetItems)
+    .where(and(eq(appEvalDatasetItems.datasetId, datasetId), inArray(appEvalDatasetItems.id, itemIds)));
+
+  const itemById = new Map(existingItems.map((row) => [row.id, row]));
+  const missingIds = itemIds.filter((itemId) => !itemById.has(itemId));
+  if (missingIds.length > 0) {
+    const preview = missingIds.slice(0, 3).join(', ');
+    const suffix = missingIds.length > 3 ? ` (+${missingIds.length - 3} more)` : '';
+    throw new Error(`Dataset item not found: ${preview}${suffix}`);
+  }
+
+  let updatedCount = 0;
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    for (const [itemId, patch] of patches) {
+      const item = itemById.get(itemId)!;
+      const set: {
+        referenceText?: string | null;
+        metadata?: Record<string, unknown>;
+        updatedAt: Date;
+      } = { updatedAt: now };
+      let changed = false;
+
+      if (patch.referenceText !== undefined) {
+        const normalized = validateReferenceText(patch.referenceText);
+        set.referenceText = normalized;
+        changed = true;
+      }
+
+      if (patch.durationSec !== undefined) {
+        const prior =
+          item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+            ? { ...(item.metadata as Record<string, unknown>) }
+            : {};
+        set.metadata = mergeDurationIntoMetadata(prior, patch.durationSec, 'import');
+        changed = true;
+      }
+
+      if (!changed) continue;
+
+      await tx
+        .update(appEvalDatasetItems)
+        .set(set)
+        .where(and(eq(appEvalDatasetItems.id, itemId), eq(appEvalDatasetItems.datasetId, datasetId)));
+
+      updatedCount += 1;
+    }
+
+    if (updatedCount > 0) {
+      await tx
+        .update(appEvalDatasets)
+        .set({ updatedAt: now })
+        .where(eq(appEvalDatasets.id, datasetId));
+    }
+  });
+
+  return { updated_count: updatedCount };
 }
 
 export async function finalizeEvalDatasetItemUpload(input: {

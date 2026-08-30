@@ -210,3 +210,21 @@ export async function updateEvalDatasetItemReference(
   });
   return data as EvalDatasetItem;
 }
+
+export async function importEvalDatasetItemReferences(
+  datasetId: string,
+  rows: Array<{ itemId: string; reference: string; durationSec?: number | null }>,
+): Promise<{ updated_count: number }> {
+  const data = await authFetch(`/api/evaluation/datasets/${datasetId}/items/import-references`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      rows: rows.map((row) => ({
+        item_id: row.itemId,
+        ...(row.reference.trim() ? { reference_text: row.reference } : {}),
+        ...(row.durationSec != null ? { duration_sec: row.durationSec } : {}),
+      })),
+    }),
+  });
+  return data as { updated_count: number };
+}

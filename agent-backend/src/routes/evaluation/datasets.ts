@@ -11,6 +11,7 @@ import {
   getEvalDatasetById,
   getEvalDatasetPublicById,
   getEvalDatasetItemDownloadUrl,
+  importEvalDatasetItemReferences,
   initEvalDatasetItemUpload,
   listEvalDatasetItems,
   listEvalDatasets,
@@ -245,6 +246,60 @@ datasets.get(
       if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
       const message = error instanceof Error ? error.message : 'Failed to create download URL';
       const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+datasets.post(
+  '/:id/items/import-references',
+  requireResourcePermission(EVALUATION_CATEGORY, EVALUATION_RESOURCES.DATASETS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Dataset id is required' }, 400);
+
+    const body = await c.req.json<{
+      rows?: Array<{
+        item_id?: string;
+        reference_text?: string | null;
+        duration_sec?: number | null;
+      }>;
+    }>();
+
+    const rawRows = body.rows;
+    if (!Array.isArray(rawRows) || rawRows.length === 0) {
+      return c.json({ error: 'rows is required' }, 400);
+    }
+
+    const rows = rawRows.map((row) => {
+      const itemId = row.item_id?.trim() ?? '';
+      if (!itemId) throw new Error('Each row requires item_id');
+
+      let durationSec: number | null | undefined;
+      if (row.duration_sec !== undefined) {
+        if (row.duration_sec == null) {
+          durationSec = null;
+        } else {
+          const parsed = Number(row.duration_sec);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            throw new Error('duration_sec must be a positive number or null');
+          }
+          durationSec = parsed;
+        }
+      }
+
+      return {
+        itemId,
+        referenceText: row.reference_text,
+        durationSec,
+      };
+    });
+
+    try {
+      const result = await importEvalDatasetItemReferences(id, rows);
+      return c.json(result);
+    } catch (error) {
+      const { message, status } = routeError(error, 'Reference import failed');
       return c.json({ error: message }, status);
     }
   },

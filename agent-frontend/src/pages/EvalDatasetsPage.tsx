@@ -11,6 +11,7 @@ import {
   formatEvalFileBytes,
   getEvalDataset,
   getEvalDatasetItemDownloadUrl,
+  importEvalDatasetItemReferences,
   listEvalDatasetItems,
   listEvalDatasets,
   updateEvalDataset,
@@ -442,14 +443,7 @@ export function EvalDatasetDetailPage() {
     rows: Array<{ itemId: string; reference: string; durationSec: number | null }>,
   ) {
     if (!datasetId) return;
-    for (const row of rows) {
-      if (row.reference.trim()) {
-        await updateEvalDatasetItemReference(datasetId, row.itemId, row.reference);
-      }
-      if (row.durationSec != null) {
-        await updateEvalDatasetItemDuration(datasetId, row.itemId, row.durationSec, 'import');
-      }
-    }
+    await importEvalDatasetItemReferences(datasetId, rows);
     setReferenceImportOpen(false);
     await load();
   }
