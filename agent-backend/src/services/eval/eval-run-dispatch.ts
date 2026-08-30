@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import {
   appEvalDatasetItems,
   appEvalRunItems,
@@ -32,16 +32,37 @@ function itemDispatchClaimed(metrics: unknown): boolean {
 
 export { evalRunItemDispatchClaimed } from './eval-run-phase.ts';
 
+function evalRunItemInFlight(item: typeof appEvalRunItems.$inferSelect): boolean {
+  if (item.stage === 'transcribing') return true;
+  return item.stage === 'submitted' && itemDispatchClaimed(item.metrics);
+}
+
 function fileItemsInProgress(
   fileItemIds: string[],
   items: Array<typeof appEvalRunItems.$inferSelect>,
 ): boolean {
-  return items.some((item) => {
-    if (!fileItemIds.includes(item.id)) return false;
-    if (item.stage === 'transcribing') return true;
-    if (item.stage === 'submitted' && itemDispatchClaimed(item.metrics)) return true;
-    return false;
-  });
+  return items.some((item) => fileItemIds.includes(item.id) && evalRunItemInFlight(item));
+}
+
+/** Atomically claim the next dispatch slot so concurrent polls cannot double-spawn GHA workers. */
+export async function tryClaimEvalRunDispatchItem(itemId: string): Promise<boolean> {
+  const claimedAt = new Date().toISOString();
+  const result = await db.execute(sql`
+    UPDATE app_eval_run_items
+    SET
+      metrics = COALESCE(metrics, '{}'::jsonb) || jsonb_build_object('dispatch_claimed_at', ${claimedAt}::text),
+      updated_at = NOW()
+    WHERE id = ${itemId}::uuid
+      AND stage = 'submitted'
+      AND (
+        metrics IS NULL
+        OR NOT (metrics ? 'dispatch_claimed_at')
+        OR COALESCE(TRIM(metrics->>'dispatch_claimed_at'), '') = ''
+      )
+    RETURNING id
+  `);
+  const rows = (result as { rows?: unknown[] }).rows ?? result;
+  return Array.isArray(rows) && rows.length > 0;
 }
 
 export async function abortEvalRunTranscribeWithoutSuccess(runId: string): Promise<void> {
@@ -86,7 +107,7 @@ export async function dispatchNextEvalRunJob(runId: string): Promise<void> {
     return;
   }
 
-  if (items.some((item) => item.stage === 'transcribing')) return;
+  if (items.some((item) => evalRunItemInFlight(item))) return;
 
   const dataset = await getEvalDatasetById(run.datasetId);
   if (!dataset) return;
@@ -122,11 +143,11 @@ export async function dispatchNextEvalRunJob(runId: string): Promise<void> {
     );
     if (!nextItem) return;
 
-    await updateEvalRunItem(nextItem.id, {
-      metrics: {
-        dispatch_claimed_at: new Date().toISOString(),
-      },
-    });
+    const claimed = await tryClaimEvalRunDispatchItem(nextItem.id);
+    if (!claimed) {
+      console.info(`[eval-run] skip dispatch — item ${nextItem.id} already claimed by another request`);
+      return;
+    }
 
     try {
       await dispatchPipelineJob(nextItem.id, nextItem.pipelineName);

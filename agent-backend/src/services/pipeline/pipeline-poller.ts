@@ -2,7 +2,11 @@ import { eq, inArray } from 'drizzle-orm';
 import { appDocuments, appPipelineJobs, db, PIPELINE_JOB_STAGES, type PipelineJobStage } from '../../db/index.ts';
 import { markDocumentForJobStage, updatePipelineJob } from './pipeline-jobs.ts';
 import { spawnAsyncPipelineWorker } from './pipeline-runner.ts';
-import { shouldRunPipelineStartupRecovery, shouldRunPipelineWatchdog } from './pipeline-worker-mode.ts';
+import {
+  resolvePipelineWorkerMode,
+  shouldRunPipelineStartupRecovery,
+  shouldRunPipelineWatchdog,
+} from './pipeline-worker-mode.ts';
 
 const ACTIVE_JOB_STAGES = PIPELINE_JOB_STAGES.filter(
   (stage): stage is PipelineJobStage => stage !== 'done' && stage !== 'failed',
@@ -76,6 +80,7 @@ export function startPipelinePollScheduler(): void {
 
 async function watchdogStuckJobs(): Promise<void> {
   try {
+    const workerMode = resolvePipelineWorkerMode();
     const submittedRows = await db
       .select()
       .from(appPipelineJobs)
@@ -97,16 +102,22 @@ async function watchdogStuckJobs(): Promise<void> {
           continue;
         }
 
+        // GHA workers run in CI — do not re-dispatch every watchdog tick (queues duplicate runs).
+        if (workerMode === 'github_actions') continue;
+
         await spawnAsyncPipelineWorker(job.id, job.pipelineName);
         continue;
       }
 
       // paddle: sync VLM in one run-async — re-spawn if worker died mid-parse
       if (job.provider === 'paddle' && ageMs > SUBMIT_STALE_MS) {
+        if (workerMode === 'github_actions') continue;
         console.info(`[pipeline] re-spawn paddle VLM worker for job ${job.id} (stale ${ageMs}ms)`);
         await spawnAsyncPipelineWorker(job.id, job.pipelineName);
       }
     }
+
+    if (workerMode === 'github_actions') return;
 
     const parsedRows = await db
       .select()

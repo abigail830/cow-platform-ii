@@ -541,8 +541,6 @@ export async function reconcileStaleEvalRunItems(runId: string): Promise<void> {
       })
       .where(eq(appEvalRunItems.id, item.id));
   }
-
-  await maybeAdvanceEvalRunAfterJobTerminal(runId);
 }
 
 export async function maybeAdvanceEvalRunAfterJobTerminal(runId: string): Promise<void> {

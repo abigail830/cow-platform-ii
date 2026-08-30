@@ -1,8 +1,24 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { evalRunItemDispatchClaimed } from './eval-run-phase.ts';
 import { groupEvalRunDispatchItemsByDatasetFile, type EvalRunDispatchItem } from './eval-run-dispatch-group.ts';
 
+function evalRunItemInFlight(stage: string, metrics: unknown): boolean {
+  if (stage === 'transcribing') return true;
+  return stage === 'submitted' && evalRunItemDispatchClaimed(metrics);
+}
+
 describe('eval-run-dispatch', () => {
+  it('treats submitted+claimed items as in-flight (blocks parallel GHA dispatch)', () => {
+    assert.equal(
+      evalRunItemInFlight('submitted', { dispatch_claimed_at: '2026-01-01T00:00:00.000Z' }),
+      true,
+    );
+    assert.equal(evalRunItemInFlight('submitted', {}), false);
+    assert.equal(evalRunItemInFlight('transcribing', {}), true);
+    assert.equal(evalRunItemInFlight('done', { dispatch_claimed_at: 'x' }), false);
+  });
+
   it('groups dispatch items by dataset file order', () => {
     const datasetItemIds = ['file-a', 'file-b', 'file-c'];
     const items: EvalRunDispatchItem[] = [
