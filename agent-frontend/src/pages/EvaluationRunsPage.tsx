@@ -934,7 +934,6 @@ function EvalRunPipelineOutput({
 function EvalRunAttemptSection({
   attempt,
   variants,
-  datasetId,
   datasetItemsById,
   runStatus,
   starting,
@@ -948,7 +947,6 @@ function EvalRunAttemptSection({
 }: {
   attempt: EvalRunAttempt;
   variants: EvalRunDetail['variants'];
-  datasetId: string;
   datasetItemsById: Map<string, EvalRunDatasetItemRef>;
   runStatus: EvalRunStatus;
   starting: boolean;
@@ -1632,7 +1630,6 @@ export function EvaluationRunDetailPage() {
               key={attempt.id}
               attempt={attempt}
               variants={detail.variants}
-              datasetId={detail.run.dataset_id}
               datasetItemsById={new Map(detail.dataset_items.map((item) => [item.id, item]))}
               runStatus={displayRunStatus ?? detail.run.status}
               starting={starting}
