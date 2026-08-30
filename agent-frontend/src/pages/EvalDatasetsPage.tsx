@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Download, Clock3, FileText, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
+import { Download, Clock3, FileText, Loader2, Pause, Pencil, Play, Plus, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
 import {
   createEvalDataset,
   deleteEvalDataset,
@@ -28,7 +28,7 @@ import {
   EvalDatasetReferenceUploadModal,
   EvalDatasetUploadModal,
 } from '../components/EvalDatasetModals.tsx';
-import { formatDatasetItemDuration, formatDatasetItemReferencePreview } from '../shared/reference-import.ts';
+import { formatDatasetItemDuration, formatDatasetItemReferencePreview, buildDatasetMetadataExportCsv, downloadDatasetMetadataCsv } from '../shared/reference-import.ts';
 import { startEvalDatasetUpload } from '../shared/eval-dataset-upload-manager.ts';
 import { useEvalDatasetUploadJob } from '../shared/use-eval-dataset-upload-job.ts';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
@@ -38,17 +38,6 @@ import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 
 const LIST_PAGE = getNavPage('/evaluation/datasets')!;
-
-function downloadReferenceText(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `${filename}.reference.txt`;
-  anchor.rel = 'noopener noreferrer';
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
 
 function mediaTypeLabel(mediaType: EvalDataset['media_type']): string {
   if (mediaType === 'audio') return 'Audio';
@@ -367,6 +356,24 @@ export function EvalDatasetDetailPage() {
   const [deleteTarget, setDeleteTarget] = useState<EvalDatasetItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [retryingDurationIds, setRetryingDurationIds] = useState<Set<string>>(() => new Set());
+  const [loadingAudioItemId, setLoadingAudioItemId] = useState<string | null>(null);
+  const [audioPlayback, setAudioPlayback] = useState<{ itemId: string; playing: boolean } | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio();
+    audioRef.current = audio;
+    const handleEnded = () => {
+      setAudioPlayback((prev) => (prev ? { ...prev, playing: false } : null));
+    };
+    audio.addEventListener('ended', handleEnded);
+    return () => {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.removeEventListener('ended', handleEnded);
+      audioRef.current = null;
+    };
+  }, []);
 
   const uploadJob = useEvalDatasetUploadJob(datasetId);
   const uploading = uploadJob?.inProgress ?? false;
@@ -434,9 +441,47 @@ export function EvalDatasetDetailPage() {
     }
   }
 
-  function handleDownloadReference(item: EvalDatasetItem) {
-    if (!item.reference_text?.trim()) return;
-    downloadReferenceText(item.name, item.reference_text);
+  async function handleToggleAudioPlayback(item: EvalDatasetItem) {
+    if (!datasetId) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audioPlayback?.itemId === item.id) {
+      if (audioPlayback.playing) {
+        audio.pause();
+        setAudioPlayback({ itemId: item.id, playing: false });
+        return;
+      }
+      try {
+        await audio.play();
+        setAudioPlayback({ itemId: item.id, playing: true });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Playback failed');
+      }
+      return;
+    }
+
+    setLoadingAudioItemId(item.id);
+    setError('');
+    try {
+      audio.pause();
+      const { download_url } = await getEvalDatasetItemDownloadUrl(datasetId, item.id);
+      audio.src = download_url;
+      await audio.play();
+      setAudioPlayback({ itemId: item.id, playing: true });
+    } catch (err) {
+      setAudioPlayback(null);
+      setError(err instanceof Error ? err.message : 'Playback failed');
+    } finally {
+      setLoadingAudioItemId(null);
+    }
+  }
+
+  function handleExportMetadata() {
+    if (!dataset || items.length === 0) return;
+    const csv = buildDatasetMetadataExportCsv(items);
+    const safeName = dataset.name.trim().replace(/[^\w.-]+/g, '_') || 'dataset';
+    downloadDatasetMetadataCsv(`${safeName}-metadata.csv`, csv);
   }
 
   async function handleImportReferences(
@@ -536,34 +581,45 @@ export function EvalDatasetDetailPage() {
             />
           </div>
         </div>
-        {canWrite ? (
-          <div className="admin-toolbar-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setReferenceImportOpen(true)}
-              disabled={items.length === 0}
-            >
-              <FileText {...iconProps()} aria-hidden />
-              Import references
-            </button>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => setUploadOpen(true)}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
-              ) : (
-                <Upload {...iconProps()} aria-hidden />
-              )}
-              {uploading
-                ? `Uploading ${uploadJob?.completed ?? 0}/${uploadJob?.total ?? 0}…`
-                : 'Upload files'}
-            </button>
-          </div>
-        ) : null}
+        <div className="admin-toolbar-actions">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={handleExportMetadata}
+            disabled={items.length === 0}
+          >
+            <Download {...iconProps()} aria-hidden />
+            Export metadata
+          </button>
+          {canWrite ? (
+            <>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setReferenceImportOpen(true)}
+                disabled={items.length === 0}
+              >
+                <FileText {...iconProps()} aria-hidden />
+                Import references
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setUploadOpen(true)}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                ) : (
+                  <Upload {...iconProps()} aria-hidden />
+                )}
+                {uploading
+                  ? `Uploading ${uploadJob?.completed ?? 0}/${uploadJob?.total ?? 0}…`
+                  : 'Upload files'}
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {error ? <p className="admin-error">{error}</p> : null}
@@ -611,6 +667,9 @@ export function EvalDatasetDetailPage() {
               filteredItems.map((item) => {
                 const durationSec = evalDatasetItemDurationSec(item);
                 const retryingDuration = retryingDurationIds.has(item.id);
+                const isAudioPlaying =
+                  audioPlayback?.itemId === item.id && audioPlayback.playing;
+                const isAudioLoading = loadingAudioItemId === item.id;
 
                 return (
                 <tr key={item.id}>
@@ -632,21 +691,32 @@ export function EvalDatasetDetailPage() {
                       <button
                         type="button"
                         className="icon-btn"
+                        title={
+                          isAudioLoading
+                            ? 'Loading audio…'
+                            : isAudioPlaying
+                              ? 'Pause audio'
+                              : 'Play audio'
+                        }
+                        disabled={isAudioLoading}
+                        onClick={() => void handleToggleAudioPlayback(item)}
+                      >
+                        {isAudioLoading ? (
+                          <Loader2 {...iconProps({ className: 'icon-btn-spin' })} aria-hidden />
+                        ) : isAudioPlaying ? (
+                          <Pause {...iconProps()} aria-hidden />
+                        ) : (
+                          <Play {...iconProps()} aria-hidden />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
                         title="Download audio"
                         onClick={() => void handleDownload(item)}
                       >
                         <Download {...iconProps()} aria-hidden />
                       </button>
-                      {evalDatasetItemHasReference(item) ? (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title="Download reference"
-                          onClick={() => handleDownloadReference(item)}
-                        >
-                          <FileText {...iconProps()} aria-hidden />
-                        </button>
-                      ) : null}
                       {canWrite ? (
                         <>
                           {durationSec == null ? (

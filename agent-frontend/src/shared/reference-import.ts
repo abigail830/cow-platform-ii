@@ -162,3 +162,42 @@ export function formatDatasetItemReferencePreview(
   if (trimmed.length <= maxLen) return trimmed;
   return `${trimmed.slice(0, maxLen)}…`;
 }
+
+function escapeCsvCell(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+export function buildDatasetMetadataExportCsv(
+  items: Array<{
+    name: string;
+    reference_text: string | null;
+    metadata: Record<string, unknown>;
+  }>,
+): string {
+  const lines = ['filename,reference,duration_sec'];
+  for (const item of items) {
+    const durationSec = datasetItemDurationSec(item.metadata);
+    lines.push(
+      [
+        escapeCsvCell(item.name),
+        escapeCsvCell(item.reference_text?.trim() ?? ''),
+        durationSec != null ? String(durationSec) : '',
+      ].join(','),
+    );
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+export function downloadDatasetMetadataCsv(exportFilename: string, csv: string): void {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = exportFilename;
+  anchor.rel = 'noopener noreferrer';
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
