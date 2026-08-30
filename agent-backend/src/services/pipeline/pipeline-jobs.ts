@@ -27,6 +27,16 @@ export function pipelineProviderForName(pipelineName: string): PipelineProvider 
   return null;
 }
 
+const ACTIVE_PIPELINE_JOB_STAGES = new Set<PipelineJobStage>([
+  'submitted',
+  'parsed',
+  'extracted_metadata',
+]);
+
+export function isActivePipelineJobStage(stage: string): boolean {
+  return ACTIVE_PIPELINE_JOB_STAGES.has(stage as PipelineJobStage);
+}
+
 function s3PrefixFromKey(s3Key: string): string {
   const normalized = s3Key.replace(/\\/g, '/');
   const idx = normalized.lastIndexOf('/');

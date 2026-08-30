@@ -111,6 +111,41 @@ def test_finalize_job_artifacts(
     mock_patch.assert_called()
 
 
+@patch("openkms_cli.pipeline.post_ingest.fail_job")
+@patch("openkms_cli.pipeline.post_ingest.write_hash_dir_artifacts")
+def test_finalize_job_artifacts_fails_empty_cloud_ocr_markdown(
+    mock_write: MagicMock,
+    mock_fail: MagicMock,
+    tmp_path: Path,
+) -> None:
+    hash_dir = tmp_path / "hash"
+    hash_dir.mkdir()
+    ctx = {
+        "document": {"id": "doc-1", "name": "photo.jpg"},
+        "input_uri": "s3://bucket/documents/abc/original.jpg",
+        "s3_prefix": "documents/abc",
+        "pipeline_name": "paddleocr-doc-parse",
+    }
+    result = {"markdown": "", "file_hash": "a" * 64, "page_count": 1}
+
+    try:
+        finalize_job_artifacts(
+            api="http://api",
+            job_id="job-1",
+            ctx=ctx,
+            result=result,
+            hash_dir=hash_dir,
+            ingest_kind=IngestKind.CLOUD_OCR,
+            original_content=b"jpeg-bytes",
+        )
+        assert False, "expected SystemExit"
+    except SystemExit as exc:
+        assert exc.code == 1
+
+    mock_fail.assert_called_once()
+    assert "no markdown" in mock_fail.call_args[0][2].lower()
+
+
 def test_upload_hash_dir_to_document_bundle_mirrors_when_prefixes_differ(tmp_path: Path) -> None:
     hash_dir = tmp_path / "bundle"
     hash_dir.mkdir()

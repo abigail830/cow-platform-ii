@@ -318,6 +318,14 @@ def finalize_job_artifacts(
         original_basename=original_basename_from_ctx(ctx),
     )
 
+    if ingest_kind == IngestKind.CLOUD_OCR and not (result.get("markdown") or "").strip():
+        fail_job(
+            api,
+            job_id,
+            "Document parse produced no markdown text (OCR returned empty or image unreadable)",
+        )
+        raise SystemExit(1)
+
     build_page_index(
         hash_dir,
         ingest_kind=ingest_kind,

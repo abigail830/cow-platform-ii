@@ -9,6 +9,7 @@ import {
   type PipelineJobStage,
 } from '../../services/pipeline/pipeline-jobs.ts';
 import { spawnAsyncPipelineWorker } from '../../services/pipeline/pipeline-runner.ts';
+import { resolvePipelineWorkerMode } from '../../services/pipeline/pipeline-worker-mode.ts';
 import { syncEvalRunItemFromDocumentPipelineJob } from '../../services/eval/eval-document-bridge.ts';
 
 const pipelineJobs = new Hono();
@@ -43,6 +44,11 @@ pipelineJobs.post('/:id/aliyun-callback', async (c) => {
 
   if (externalId) {
     await updatePipelineJob(job.id, { externalJobId: externalId });
+  }
+
+  // run-async on GHA already polls + finalizes in one workflow; webhook must not queue another run.
+  if (resolvePipelineWorkerMode() === 'github_actions') {
+    return c.json({ ok: true, skipped: true, reason: 'github_actions_worker_handles_poll_finalize' });
   }
 
   await spawnAsyncPipelineWorker(job.id, job.pipelineName);
@@ -113,6 +119,10 @@ pipelineJobs.post('/:id/events', async (c) => {
 
   if (body.external_job_id?.trim()) {
     await updatePipelineJob(job.id, { externalJobId: body.external_job_id.trim() });
+  }
+
+  if (resolvePipelineWorkerMode() === 'github_actions') {
+    return c.json({ ok: true, skipped: true, reason: 'github_actions_worker_handles_poll_finalize' });
   }
 
   await spawnAsyncPipelineWorker(job.id, job.pipelineName);

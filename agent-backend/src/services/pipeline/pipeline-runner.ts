@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { appDocuments, db } from '../../db/index.ts';
 import { redactCliCommandSecrets } from '../../shared/model/model-cli-client.ts';
 import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../../shared/pipeline/pipeline-config-store.ts';
@@ -17,11 +17,16 @@ import {
   triggerGithubActionsPipeline,
 } from './pipeline-github-actions.ts';
 import { resolvePipelineWorkerMode } from './pipeline-worker-mode.ts';
+import { shouldSkipDuplicateGhaPipelineDispatch } from './pipeline-gha-dispatch.ts';
 import {
   ASYNC_PIPELINE_NAMES,
   createPipelineJob,
+  getLatestPipelineJobForDocument,
+  getPipelineJobById,
+  isActivePipelineJobStage,
   isDocumentAsyncPipelineName,
   pipelineProviderForName,
+  updatePipelineJob,
 } from './pipeline-jobs.ts';
 
 function repoRootFromBackend(): string {
@@ -86,6 +91,7 @@ async function dispatchGithubActionsWorker(
   const args = await buildAsyncWorkerCliArgs(jobId, pipelineName);
   const pageIndexStrategy = pageIndexStrategyFromCliArgs(args);
   await triggerGithubActionsPipeline({ jobId, pageIndexStrategy }, config);
+  await updatePipelineJob(jobId, {});
   console.info(
     `[pipeline] dispatched GitHub Actions workflow=${config.workflowFile} ` +
       `repo=${config.repository} job=${jobId}`,
@@ -160,6 +166,11 @@ export async function spawnAsyncPipelineWorker(
   }
 
   if (resolvePipelineWorkerMode() === 'github_actions') {
+    const job = await getPipelineJobById(jobId);
+    if (job && shouldSkipDuplicateGhaPipelineDispatch(job)) {
+      console.info(`[pipeline] skip duplicate GHA dispatch for job ${jobId} (already dispatched recently)`);
+      return;
+    }
     activePipelineJobs.add(jobId);
     try {
       await dispatchGithubActionsWorker(jobId, pipelineName);
@@ -190,6 +201,16 @@ export async function updateDocumentStatus(
     .update(appDocuments)
     .set({ status, updatedAt: new Date() })
     .where(eq(appDocuments.id, documentId));
+}
+
+/** Atomically mark document running; returns false if already running (concurrent auto-start). */
+export async function tryClaimDocumentForPipeline(documentId: string): Promise<boolean> {
+  const rows = await db
+    .update(appDocuments)
+    .set({ status: 'running', updatedAt: new Date() })
+    .where(and(eq(appDocuments.id, documentId), ne(appDocuments.status, 'running')))
+    .returning({ id: appDocuments.id });
+  return rows.length > 0;
 }
 
 async function startAsyncPipelineJob(documentId: string): Promise<{ jobId: string }> {
@@ -235,9 +256,29 @@ export async function startDocumentPipeline(documentId: string): Promise<{ statu
     );
   }
 
-  if (doc.status === 'running') throw new Error('Pipeline is already running for this document');
+  const existingJob = await getLatestPipelineJobForDocument(documentId);
+  if (existingJob && isActivePipelineJobStage(existingJob.stage)) {
+    if (doc.status !== 'running') {
+      await updateDocumentStatus(documentId, 'running');
+    }
+    console.info(
+      `[pipeline] reuse in-flight job ${existingJob.id} for document ${documentId} (skip new job row)`,
+    );
+    await spawnAsyncPipelineWorker(existingJob.id, existingJob.pipelineName);
+    return { status: 'running', job_id: existingJob.id };
+  }
 
-  await updateDocumentStatus(documentId, 'running');
+  const claimed = await tryClaimDocumentForPipeline(documentId);
+  if (!claimed) {
+    const retryJob = await getLatestPipelineJobForDocument(documentId);
+    if (retryJob && isActivePipelineJobStage(retryJob.stage)) {
+      console.info(
+        `[pipeline] concurrent start — reuse job ${retryJob.id} for document ${documentId}`,
+      );
+      return { status: 'running', job_id: retryJob.id };
+    }
+    throw new Error('Pipeline is already running for this document');
+  }
 
   const { jobId } = await startAsyncPipelineJob(documentId);
   return { status: 'running', job_id: jobId };
