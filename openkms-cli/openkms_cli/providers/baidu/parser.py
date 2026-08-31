@@ -1,8 +1,9 @@
-"""Document parser using Baidu Cloud PaddleOCR-VL API (async).
+"""Document parser using Baidu Cloud 文档解析 API (async, non-VL).
 
 Requires OPENKMS_BAIDU_CLOUD_API_KEY, OPENKMS_BAIDU_CLOUD_SECRET_KEY, and
 OPENKMS_BAIDU_BOS_BUCKET. Documents are staged on Baidu BOS with a presigned URL
-for ``file_url`` submit.
+for ``file_url`` submit. Default endpoints: ``/brain/online/v2/parser/task`` (not
+paddle-vl-parser). Override via BAIDU_TASK_URL / BAIDU_QUERY_URL.
 """
 
 from __future__ import annotations
@@ -720,7 +721,7 @@ def _build_result_from_baidu_json(
             "page_count": page_count,
             "width": doc_width,
             "height": doc_height,
-            "parser": "baidu-cloud-paddle-vl",
+            "parser": "baidu-cloud-parser",
             "baidu_file_id": baidu_json.get("file_id"),
             "baidu_file_name": baidu_json.get("file_name"),
             "baidu_layouts": _flatten_baidu_layouts(baidu_json),

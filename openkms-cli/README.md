@@ -12,7 +12,7 @@ Set variables in **`.env`** (this package’s `.env`, then the current directory
 
 Copy **`openkms-cli/.env.example`** and adjust. For auth against the API, match **`OPENKMS_AUTH_MODE`** with the backend (`oidc` vs `local`).
 
-**Baidu Cloud (`baidu-doc-parse`):** Set **`OPENKMS_BAIDU_CLOUD_API_KEY`**, **`OPENKMS_BAIDU_CLOUD_SECRET_KEY`**, and **`OPENKMS_BAIDU_BOS_BUCKET`**. The CLI uploads to BOS and submits a presigned `file_url` to Baidu’s **paddle-vl-parser** document-parse SaaS API. Install: `pip install -e ".[baidu,pipeline]"`.
+**Baidu Cloud (`baidu-doc-parse`):** Set **`OPENKMS_BAIDU_CLOUD_API_KEY`**, **`OPENKMS_BAIDU_CLOUD_SECRET_KEY`**, and **`OPENKMS_BAIDU_BOS_BUCKET`**. The CLI uploads to BOS and submits a presigned `file_url` to Baidu’s **文档解析** API (`/brain/online/v2/parser/task`, not PaddleOCR-VL). Install: `pip install -e ".[baidu,pipeline]"`.
 
 **Platform VLM (`paddleocr-doc-parse`):** Set workflow YAML **`model_name`** to a VLM model in Admin → Models (e.g. `paddleocr-vl-1.5`). Credentials resolve via **`cli-params`** — no Baidu keys. Install: `pip install -e ".[parse,pipeline,metadata]"`.
 

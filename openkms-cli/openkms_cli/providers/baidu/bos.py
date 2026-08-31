@@ -1,4 +1,4 @@
-"""Stage documents on Baidu BOS for paddle-vl-parser ``file_url`` submit."""
+"""Stage documents on Baidu BOS for 文档解析 ``file_url`` submit."""
 
 from __future__ import annotations
 
@@ -103,7 +103,7 @@ def max_file_url_bytes_for_suffix(suffix: str) -> int:
 
 
 def validate_baidu_upload_size(file_bytes: bytes, file_name: str) -> None:
-    """Reject files that exceed Baidu file_url limits for paddle-vl-parser."""
+    """Reject files that exceed Baidu file_url limits for 文档解析."""
     from pathlib import Path
 
     suffix = Path(file_name).suffix.lower()

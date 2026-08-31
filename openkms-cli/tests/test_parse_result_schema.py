@@ -80,11 +80,11 @@ def test_baidu_minimal_result_validates():
             ],
             "markdown": "# Title",
             "page_count": 1,
-            "parser": "baidu-cloud-paddle-vl",
+            "parser": "baidu-cloud-parser",
             "baidu_file_id": "file-1",
         }
     )
-    assert out["parser"] == "baidu-cloud-paddle-vl"
+    assert out["parser"] == "baidu-cloud-parser"
 
 
 def test_fixture_validates_against_json_schema_file():

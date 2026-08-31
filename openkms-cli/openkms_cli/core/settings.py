@@ -41,11 +41,11 @@ class CliSettings(BaseSettings):
         validation_alias="BAIDU_TOKEN_URL",
     )
     baidu_task_url: str = Field(
-        default="https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task",
+        default="https://aip.baidubce.com/rest/2.0/brain/online/v2/parser/task",
         validation_alias="BAIDU_TASK_URL",
     )
     baidu_query_url: str = Field(
-        default="https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task/query",
+        default="https://aip.baidubce.com/rest/2.0/brain/online/v2/parser/task/query",
         validation_alias="BAIDU_QUERY_URL",
     )
     baidu_file_url_submit_retries: int = Field(

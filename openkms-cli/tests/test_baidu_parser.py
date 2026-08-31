@@ -50,7 +50,7 @@ def test_create_parse_task_file_url_success():
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.headers = {"Content-Type": "application/json"}
-    mock_resp.url = "https://aip.baidubce.com/rest/2.0/brain/online/v2/paddle-vl-parser/task"
+    mock_resp.url = "https://aip.baidubce.com/rest/2.0/brain/online/v2/parser/task"
     mock_resp.text = '{"error_code": 0, "result": {"task_id": "task-url-1"}}'
     mock_resp.json.return_value = {
         "error_code": 0,
@@ -197,7 +197,7 @@ def test_build_result_from_baidu_json(tmp_path):
     box = result["layout_det_res"][0]["boxes"][0]
     assert box["coordinate"] == [0.0, 0.0, 100.0, 20.0]
     assert box["block_index"] == 0
-    assert result["parser"] == "baidu-cloud-paddle-vl"
+    assert result["parser"] == "baidu-cloud-parser"
     chart_block = next(b for b in result["parsing_res_list"] if b["label"] == "chart")
     assert chart_block["image_path"] == f"{file_hash}/markdown_out/block_0.png"
     assert (tmp_path / "markdown_out" / "block_0.png").read_bytes() == b"\x89PNG\r\n"

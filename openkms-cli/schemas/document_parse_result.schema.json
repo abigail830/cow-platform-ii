@@ -41,7 +41,7 @@
     },
     "parser": {
       "type": "string",
-      "description": "Optional pipeline identifier (e.g. baidu-cloud-paddle-vl)."
+      "description": "Optional pipeline identifier (e.g. baidu-cloud-parser)."
     },
     "baidu_file_id": {
       "type": "string",
