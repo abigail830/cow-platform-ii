@@ -30,6 +30,15 @@ export function buildChannelTree(rows: ChannelTreeRow[]): ChannelNode[] {
   return roots;
 }
 
+/** Root channel id plus every descendant id (for cascade delete). */
+export function collectChannelSubtreeIds(
+  rootId: string,
+  rows: Array<{ id: string; parent_id: string | null }>,
+): string[] {
+  const descendants = collectDescendantIds(rootId, rows);
+  return [rootId, ...descendants];
+}
+
 export function collectDescendantIds(
   rootId: string,
   rows: Array<{ id: string; parent_id: string | null }>,

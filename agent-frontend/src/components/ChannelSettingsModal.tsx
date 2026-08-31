@@ -28,6 +28,8 @@ type ChannelSettingsModalProps = {
   fetchProcessingOptions?: () => Promise<ChannelProcessingOptions | AudioChannelProcessingOptions>;
   audioPipelineMode?: boolean;
   sharingInheritHint?: string;
+  /** When false, hide the Sharing tab (resource ACL editing requires manage). */
+  canManageSharing?: boolean;
 };
 
 type SettingsTab = 'general' | 'pipeline' | 'hotwords' | 'sharing';
@@ -51,6 +53,7 @@ export function ChannelSettingsModal({
   fetchProcessingOptions = fetchChannelProcessingOptions,
   audioPipelineMode = false,
   sharingInheritHint = 'Documents inherit access rules from their channel. Sub-channels inherit parent channel rules.',
+  canManageSharing = false,
 }: ChannelSettingsModalProps) {
   const [tab, setTab] = useState<SettingsTab>('general');
   const [name, setName] = useState(initialName);
@@ -81,12 +84,17 @@ export function ChannelSettingsModal({
     setTab('general');
     setSharingCanManage(false);
   }, [
+    channelId,
     initialAutoStartPipeline,
     initialDescription,
     initialName,
     initialPipelineId,
     initialPostProcessPipelineId,
   ]);
+
+  useEffect(() => {
+    if (tab === 'sharing' && !canManageSharing) setTab('general');
+  }, [canManageSharing, tab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,15 +215,17 @@ export function ChannelSettingsModal({
               Hotwords
             </button>
           ) : null}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'sharing'}
-            className={`modal-tab${tab === 'sharing' ? ' active' : ''}`}
-            onClick={() => setTab('sharing')}
-          >
-            Sharing
-          </button>
+          {canManageSharing ? (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'sharing'}
+              className={`modal-tab${tab === 'sharing' ? ' active' : ''}`}
+              onClick={() => setTab('sharing')}
+            >
+              Sharing
+            </button>
+          ) : null}
         </div>
 
         <form className="channel-settings-modal-form" onSubmit={(event) => void handleFormSubmit(event)}>

@@ -56,7 +56,9 @@ export async function recoverOrphanedPipelineWorkOnStartup(): Promise<void> {
   }
 
   const evalOrphanDocumentIds = new Set(
-    orphanedJobs.filter((job) => job.evalRunItemId).map((job) => job.documentId),
+    orphanedJobs
+      .filter((job) => job.evalRunItemId && job.documentId)
+      .map((job) => job.documentId as string),
   );
   const runningDocs = await db
     .select({ id: appDocuments.id })

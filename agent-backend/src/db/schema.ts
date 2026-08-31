@@ -751,9 +751,8 @@ export const appPipelineJobs = pgTable(
   'app_pipeline_jobs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    documentId: uuid('document_id')
-      .notNull()
-      .references(() => appDocuments.id, { onDelete: 'cascade' }),
+    /** Null for eval-only jobs (eval_run_item_id is set; no library document row). */
+    documentId: uuid('document_id').references(() => appDocuments.id, { onDelete: 'cascade' }),
     pipelineName: text('pipeline_name').notNull(),
     provider: text('provider').notNull(),
     stage: text('stage').notNull().default('submitted'),

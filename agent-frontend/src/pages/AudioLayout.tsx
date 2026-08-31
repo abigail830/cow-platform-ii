@@ -199,6 +199,7 @@ export function AudioLayout() {
           audioPipelineMode
           fetchProcessingOptions={fetchAudioChannelProcessingOptions}
           sharingInheritHint="Audio files inherit access rules from their channel. Sub-channels inherit parent channel rules."
+          canManageSharing={Boolean(channelModal.channel.my_access?.manage)}
           onCancel={() => setChannelModal(null)}
           onSubmit={handleUpdateChannel}
         />

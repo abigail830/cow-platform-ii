@@ -76,21 +76,30 @@ export type PipelineJobContext = {
 };
 
 export async function createPipelineJob(input: {
-  documentId: string;
+  documentId?: string | null;
   pipelineName: string;
   provider: PipelineProvider;
   configYaml?: string | null;
   evalRunItemId?: string | null;
 }): Promise<typeof appPipelineJobs.$inferSelect> {
+  const evalRunItemId = input.evalRunItemId?.trim() || null;
+  const documentId = input.documentId?.trim() || null;
+  if (!evalRunItemId && !documentId) {
+    throw new Error('Pipeline job requires documentId or evalRunItemId');
+  }
+  if (evalRunItemId && documentId) {
+    throw new Error('Eval pipeline jobs must not reference a library document');
+  }
+
   const [row] = await db
     .insert(appPipelineJobs)
     .values({
-      documentId: input.documentId,
+      documentId,
       pipelineName: input.pipelineName,
       provider: input.provider,
       stage: 'submitted',
       configYaml: snapshotConfigYaml(input.configYaml),
-      evalRunItemId: input.evalRunItemId?.trim() || null,
+      evalRunItemId,
     })
     .returning();
   return row!;
@@ -174,35 +183,55 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
   const job = await getPipelineJobById(jobId);
   if (!job) throw new Error('Pipeline job not found');
 
-  const [doc] = await db.select().from(appDocuments).where(eq(appDocuments.id, job.documentId)).limit(1);
-  if (!doc) throw new Error('Document not found');
-
   const s3 = getS3Config();
   if (!s3) throw new Error('Object storage is not configured');
-
-  const channel = await getChannelById(doc.channelId);
-  if (!channel) throw new Error('Channel not found');
 
   const apiUrl =
     process.env.OPENKMS_API_URL?.trim() ||
     `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
-
-  let inputUri = `s3://${s3.bucket}/${doc.s3Key}`;
-  let s3Prefix = s3PrefixFromKey(doc.s3Key);
-  const documentS3Prefix = s3Prefix;
-  let displayName = doc.name;
 
   if (job.evalRunItemId) {
     const { buildEvalLinkedDocumentPipelineContextOverrides } = await import(
       '../eval/eval-document-bridge.ts'
     );
     const overrides = await buildEvalLinkedDocumentPipelineContextOverrides(job.evalRunItemId);
-    if (overrides) {
-      inputUri = overrides.input_uri;
-      s3Prefix = overrides.s3_prefix;
-      displayName = overrides.dataset_item_name;
-    }
+    if (!overrides) throw new Error('Eval run item not found');
+
+    return {
+      id: job.id,
+      document_id: job.evalRunItemId,
+      pipeline_name: job.pipelineName,
+      provider: job.provider as PipelineProvider,
+      stage: job.stage as PipelineJobStage,
+      external_job_id: job.externalJobId,
+      config_yaml: job.configYaml ?? null,
+      error_message: job.errorMessage,
+      document: {
+        id: job.evalRunItemId,
+        name: overrides.dataset_item_name,
+        file_type: overrides.file_type,
+        s3_key: overrides.s3_key,
+        file_hash: overrides.file_hash,
+        channel_id: '',
+      },
+      input_uri: overrides.input_uri,
+      s3_prefix: overrides.s3_prefix,
+      document_s3_prefix: overrides.s3_prefix,
+      eval_run_item_id: job.evalRunItemId,
+      api_url: apiUrl,
+    };
   }
+
+  if (!job.documentId) throw new Error('Pipeline job has no document');
+
+  const [doc] = await db.select().from(appDocuments).where(eq(appDocuments.id, job.documentId)).limit(1);
+  if (!doc) throw new Error('Document not found');
+
+  const channel = await getChannelById(doc.channelId);
+  if (!channel) throw new Error('Channel not found');
+
+  const inputUri = `s3://${s3.bucket}/${doc.s3Key}`;
+  const s3Prefix = s3PrefixFromKey(doc.s3Key);
 
   return {
     id: job.id,
@@ -215,7 +244,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     error_message: job.errorMessage,
     document: {
       id: doc.id,
-      name: displayName,
+      name: doc.name,
       file_type: doc.fileType,
       s3_key: doc.s3Key,
       file_hash: doc.fileHash,
@@ -223,8 +252,8 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     },
     input_uri: inputUri,
     s3_prefix: s3Prefix,
-    document_s3_prefix: documentS3Prefix,
-    eval_run_item_id: job.evalRunItemId,
+    document_s3_prefix: s3Prefix,
+    eval_run_item_id: null,
     api_url: apiUrl,
   };
 }

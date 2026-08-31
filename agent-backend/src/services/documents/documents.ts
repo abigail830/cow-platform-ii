@@ -1,12 +1,21 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { appDocumentChannels, appDocuments, appPipelineJobs, db } from '../../db/index.ts';
+import {
+  appDocumentChannels,
+  appDocuments,
+  appPipelineJobs,
+  appResourceGrants,
+  db,
+} from '../../db/index.ts';
 import { getPipelineConfigById } from '../../shared/pipeline/pipeline-config-store.ts';
-import { buildChannelTree, collectDescendantIds } from '../channels/channel-tree.ts';
+import { buildChannelTree, collectChannelSubtreeIds, collectDescendantIds } from '../channels/channel-tree.ts';
 import {
   getLatestPipelineJobForDocument,
   getLatestPipelineJobsForDocuments,
   pipelineJobToPublic,
 } from '../pipeline/pipeline-jobs.ts';
+import {
+  EVAL_SHADOW_DOCUMENT_CHANNEL_NAME,
+} from '../eval/eval-shadow-document.ts';
 
 export type ChannelRow = typeof appDocumentChannels.$inferSelect;
 export type DocumentRow = typeof appDocuments.$inferSelect;
@@ -72,6 +81,7 @@ export async function listChannelTree(): Promise<ChannelNode[]> {
   const rows = await db
     .select()
     .from(appDocumentChannels)
+    .where(sql`${appDocumentChannels.name} <> ${EVAL_SHADOW_DOCUMENT_CHANNEL_NAME}`)
     .orderBy(asc(appDocumentChannels.sortOrder), asc(appDocumentChannels.name));
 
   return buildChannelTree(rows.map(toChannelPublic));
@@ -189,22 +199,52 @@ export async function updateChannel(
 export async function deleteChannel(id: string): Promise<void> {
   const existing = await getChannelById(id);
   if (!existing) throw new Error('Channel not found');
+  if (existing.name === EVAL_SHADOW_DOCUMENT_CHANNEL_NAME) {
+    throw new Error('System evaluation channel cannot be deleted');
+  }
 
-  const [child] = await db
-    .select({ id: appDocumentChannels.id })
-    .from(appDocumentChannels)
-    .where(eq(appDocumentChannels.parentId, id))
-    .limit(1);
-  if (child) throw new Error('Channel has sub-channels. Delete or move them first.');
+  const channelRows = await db
+    .select({ id: appDocumentChannels.id, parentId: appDocumentChannels.parentId })
+    .from(appDocumentChannels);
+  const channelIds = collectChannelSubtreeIds(
+    id,
+    channelRows.map((row) => ({ id: row.id, parent_id: row.parentId })),
+  );
 
-  const [doc] = await db
-    .select({ id: appDocuments.id })
+  const documents = await db
+    .select({ id: appDocuments.id, fileHash: appDocuments.fileHash })
     .from(appDocuments)
-    .where(eq(appDocuments.channelId, id))
-    .limit(1);
-  if (doc) throw new Error('Channel contains documents. Delete or move them first.');
+    .where(
+      and(
+        inArray(appDocuments.channelId, channelIds),
+        sql`coalesce(${appDocuments.metadata}->>'eval_shadow', 'false') <> 'true'`,
+      ),
+    );
 
-  await db.delete(appDocumentChannels).where(eq(appDocumentChannels.id, id));
+  const { isStorageEnabled } = await import('../../storage/s3-config.ts');
+  const { deleteDocumentStorage } = await import('../../storage/document-files.ts');
+
+  for (const doc of documents) {
+    await db.delete(appDocuments).where(eq(appDocuments.id, doc.id));
+    if (isStorageEnabled()) {
+      try {
+        await deleteDocumentStorage(doc.fileHash);
+      } catch {
+        // DB row is already removed; storage cleanup failure is non-fatal.
+      }
+    }
+  }
+
+  await db
+    .delete(appResourceGrants)
+    .where(
+      and(
+        eq(appResourceGrants.resourceType, 'document_channel'),
+        inArray(appResourceGrants.resourceId, channelIds),
+      ),
+    );
+
+  await db.delete(appDocumentChannels).where(inArray(appDocumentChannels.id, channelIds));
 }
 
 export async function listDocuments(input: {
@@ -220,7 +260,10 @@ export async function listDocuments(input: {
   const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
   const search = input.search?.trim();
 
-  const conditions = [eq(appDocuments.channelId, input.channelId)];
+  const conditions = [
+    eq(appDocuments.channelId, input.channelId),
+    sql`coalesce(${appDocuments.metadata}->>'eval_shadow', 'false') <> 'true'`,
+  ];
   if (search) {
     conditions.push(sql`${appDocuments.name} ILIKE ${`%${search}%`}`);
   }

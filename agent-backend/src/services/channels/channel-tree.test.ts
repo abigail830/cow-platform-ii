@@ -1,14 +1,21 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelPath } from './channel-tree.ts';
+import { describe, it } from 'node:test';
+import { collectChannelSubtreeIds } from './channel-tree.ts';
 
-describe('buildChannelPath', () => {
-  it('joins ancestor channel names', () => {
+describe('collectChannelSubtreeIds', () => {
+  it('includes root and all descendants', () => {
     const rows = [
-      { id: 'a', name: 'Root', parent_id: null },
-      { id: 'b', name: 'Policies', parent_id: 'a' },
-      { id: 'c', name: '2024', parent_id: 'b' },
+      { id: 'root', parent_id: null },
+      { id: 'a', parent_id: 'root' },
+      { id: 'b', parent_id: 'a' },
+      { id: 'other', parent_id: null },
     ];
-    assert.equal(buildChannelPath('c', rows), 'Root/Policies/2024');
+    const ids = collectChannelSubtreeIds('root', rows);
+    assert.deepEqual(new Set(ids), new Set(['root', 'a', 'b']));
+  });
+
+  it('returns only root when there are no children', () => {
+    const rows = [{ id: 'solo', parent_id: null }];
+    assert.deepEqual(collectChannelSubtreeIds('solo', rows), ['solo']);
   });
 });

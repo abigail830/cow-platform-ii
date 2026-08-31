@@ -90,10 +90,17 @@ export function DocumentsLayout() {
   }
 
   async function handleDeleteChannel(channel: DocumentChannel) {
-    if (!window.confirm(`Delete channel "${channel.name}"?`)) return;
-    await deleteDocumentChannel(channel.id);
-    if (selectedChannelId === channel.id) setSelectedChannelId(null);
-    await loadChannels();
+    const confirmed = window.confirm(
+      `Delete channel "${channel.name}" and all sub-channels, documents, and stored pipeline files? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    try {
+      await deleteDocumentChannel(channel.id);
+      if (selectedChannelId === channel.id) setSelectedChannelId(null);
+      await loadChannels();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to delete channel');
+    }
   }
 
   if (forbidden) return <Navigate to="/agents/playground" replace />;
@@ -184,6 +191,7 @@ export function DocumentsLayout() {
           initialDescription={channelModal.channel.description ?? ''}
           initialPipelineId={channelModal.channel.pipeline_id}
           initialAutoStartPipeline={channelModal.channel.auto_start_pipeline}
+          canManageSharing={Boolean(channelModal.channel.my_access?.manage)}
           onCancel={() => setChannelModal(null)}
           onSubmit={handleUpdateChannel}
         />

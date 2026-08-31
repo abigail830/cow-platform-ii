@@ -16,7 +16,6 @@ import {
   isDocumentPipelineTerminalStage,
   mapDocumentPipelineStageToEvalItemStage,
 } from './eval-document-stage.ts';
-import { ensureEvalShadowDocumentForDatasetItem } from './eval-shadow-document.ts';
 
 export async function reconcileEvalDocumentPipelineJobsForRun(runId: string): Promise<void> {
   const { listActiveAttemptItems } = await import('./eval-runs.ts');
@@ -62,10 +61,7 @@ export async function createEvalParseDocumentPipelineJob(
     throw new Error(`Unsupported eval document pipeline: ${evalRunItem.pipelineName}`);
   }
 
-  const documentId = await ensureEvalShadowDocumentForDatasetItem(evalRunItem.datasetItemId);
-
   const job = await createPipelineJob({
-    documentId,
     pipelineName: evalRunItem.pipelineName,
     provider,
     configYaml: snapshotConfigYaml(evalRunItem.configYaml),
@@ -137,6 +133,9 @@ export async function buildEvalLinkedDocumentPipelineContextOverrides(
   input_uri: string;
   s3_prefix: string;
   dataset_item_name: string;
+  file_hash: string;
+  file_type: string;
+  s3_key: string;
 } | null> {
   const [evalItem] = await db
     .select()
@@ -160,5 +159,8 @@ export async function buildEvalLinkedDocumentPipelineContextOverrides(
     input_uri: `s3://${s3.bucket}/${datasetItem.s3Key}`,
     s3_prefix: evalItem.outputS3Prefix,
     dataset_item_name: datasetItem.name,
+    file_hash: datasetItem.fileHash,
+    file_type: datasetItem.fileType,
+    s3_key: datasetItem.s3Key,
   };
 }
