@@ -369,6 +369,11 @@ def run_async_job(
 
     external_id = (ctx.get("external_job_id") or "").strip()
     if not external_id:
+        if provider == "aliyun":
+            from openkms_cli.providers.aliyun.image_routing import maybe_skip_docmind_for_image
+
+            if maybe_skip_docmind_for_image(api, job_id, ctx, workflow_config):
+                return
         submit_job(job_id, api_url)
         ctx = get_job_context(api, job_id)
 

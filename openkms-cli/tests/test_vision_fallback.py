@@ -50,6 +50,17 @@ def test_needs_vision_fallback_gibberish_latin():
     assert needs_vision_fallback(text)
 
 
+def test_needs_vision_fallback_latex_angle_loop():
+    block = r"\angle A \cdot \angle B \cdot \angle C \cdot \angle D \cdot "
+    text = block * 15 + "1987年报告"
+    reasons = _vision_quality_gate_reasons(text)
+    assert (
+        "latex_angle_spam" in reasons
+        or "repeated_text_blocks" in reasons
+        or "high_suspicious_char_ratio" in reasons
+    )
+
+
 def test_vision_fallback_enabled():
     assert vision_fallback_enabled({"vision_fallback": {"enabled": True, "model_name": "qwen3.7-plus"}})
     assert not vision_fallback_enabled({"vision_fallback": {"enabled": False, "model_name": "qwen3.7-plus"}})

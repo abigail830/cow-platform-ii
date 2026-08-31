@@ -106,6 +106,10 @@ def collect_model_names(config: dict[str, Any]) -> list[str]:
     vf = config.get("vision_fallback")
     if isinstance(vf, dict):
         add(vf.get("model_name"))
+    ir = config.get("image_routing")
+    if isinstance(ir, dict):
+        add(ir.get("classify_model_name"))
+        add(ir.get("model_name"))
     asr = config.get("asr")
     if isinstance(asr, dict):
         add(asr.get("model_name"))
@@ -181,6 +185,37 @@ def resolve_vision_fallback_options(config: dict[str, Any]) -> dict[str, Any]:
         "timeout_seconds": int(section.get("timeout_seconds") or 300),
         "system_prompt": str(section.get("system_prompt") or "").strip(),
         "min_gibberish_latin_ratio": float(section.get("min_gibberish_latin_ratio") or 0.45),
+    }
+
+
+def image_routing_section(config: dict[str, Any]) -> dict[str, Any] | None:
+    section = config.get("image_routing")
+    if not isinstance(section, dict):
+        return None
+    return section
+
+
+def image_routing_enabled(config: dict[str, Any]) -> bool:
+    section = image_routing_section(config)
+    if not section:
+        return False
+    if section.get("enabled") is False:
+        return False
+    vf = resolve_vision_fallback_options(config)
+    classify_model = str(section.get("classify_model_name") or vf.get("model_name") or "").strip()
+    return bool(classify_model)
+
+
+def resolve_image_routing_options(config: dict[str, Any]) -> dict[str, Any]:
+    section = image_routing_section(config) or {}
+    vf = resolve_vision_fallback_options(config)
+    return {
+        "classify_model_name": str(
+            section.get("classify_model_name") or vf.get("model_name") or "qwen3.7-plus"
+        ).strip(),
+        "model_name": str(section.get("model_name") or vf.get("model_name") or "qwen3.7-plus").strip(),
+        "min_printed_confidence": float(section.get("min_printed_confidence") or 0.65),
+        "classify_timeout_seconds": int(section.get("classify_timeout_seconds") or 120),
     }
 
 

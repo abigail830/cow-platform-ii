@@ -6,6 +6,7 @@ import base64
 import json
 import mimetypes
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,9 @@ from openkms_cli.core.workflow_config import resolve_vision_fallback_options, vi
 from openkms_cli.page_index.strategy import MARKDOWN_STRATEGY
 
 _IMAGE_FILE_TYPES = frozenset({"JPG", "JPEG", "PNG", "WEBP", "GIF"})
+
+# Characters treated as normal in compact markdown (CJK + common punctuation).
+_ALLOWED_COMPACT_CHARS = r"\w\u4e00-\u9fff\u3000-\u303f\uff00-\uffef.,;:!?()/'%+\-"
 
 _DEFAULT_SYSTEM_PROMPT = (
     "Transcribe all text in the image verbatim. "
@@ -32,48 +36,142 @@ def _compact_text(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
-def _vision_quality_gate_reasons(text: str, *, options: dict[str, Any] | None = None) -> list[str]:
-    """Return human-readable reasons the DocMind markdown failed the image quality gate."""
-    opts = options or {}
-    min_len = int(opts.get("min_text_length") or 40)
-    max_ratio = float(opts.get("suspicious_ratio") or 0.08)
-    min_gibberish_latin_ratio = float(opts.get("min_gibberish_latin_ratio") or 0.45)
+@dataclass(frozen=True)
+class _QualityGateOptions:
+    min_text_length: int = 40
+    suspicious_ratio: float = 0.08
+    min_gibberish_latin_ratio: float = 0.45
 
-    stripped = (text or "").strip()
+    @classmethod
+    def from_dict(cls, options: dict[str, Any] | None) -> _QualityGateOptions:
+        opts = options or {}
+        return cls(
+            min_text_length=int(opts.get("min_text_length") or 40),
+            suspicious_ratio=float(opts.get("suspicious_ratio") or 0.08),
+            min_gibberish_latin_ratio=float(opts.get("min_gibberish_latin_ratio") or 0.45),
+        )
+
+
+def _check_empty_text(stripped: str) -> str | None:
     if not stripped:
-        return ["empty_text"]
+        return "empty_text"
+    return None
+
+
+def _check_text_too_short(stripped: str, *, min_len: int) -> str | None:
     if len(stripped) < min_len:
-        return ["text_too_short"]
+        return "text_too_short"
+    return None
+
+
+def _check_replacement_char(text: str) -> str | None:
     if "�" in text:
-        return ["replacement_char"]
+        return "replacement_char"
+    return None
 
-    compact = _compact_text(text)
-    # Allow ASCII word chars, CJK, common CN/JP punctuation (，。等), and western punctuation.
-    allowed = r"\w\u4e00-\u9fff\u3000-\u303f\uff00-\uffef.,;:!?()/'%+\-"
-    suspicious = len(re.findall(rf"[^{allowed}]", compact))
+
+def _check_high_suspicious_char_ratio(compact: str, *, max_ratio: float) -> str | None:
+    suspicious = len(re.findall(rf"[^{_ALLOWED_COMPACT_CHARS}]", compact))
     if suspicious / max(len(compact), 1) > max_ratio:
-        return ["high_suspicious_char_ratio"]
+        return "high_suspicious_char_ratio"
+    return None
 
+
+def _check_long_repeated_digit_run(compact: str) -> str | None:
     if re.search(r"0{20,}|1{20,}", compact):
-        return ["long_repeated_digit_run"]
-    comma_one_runs = re.findall(r"(?:1,){8,}", text)
-    if comma_one_runs:
-        return ["repeated_comma_one_pattern"]
+        return "long_repeated_digit_run"
+    return None
 
+
+def _check_repeated_comma_one_pattern(text: str) -> str | None:
+    if re.findall(r"(?:1,){8,}", text):
+        return "repeated_comma_one_pattern"
+    return None
+
+
+def _check_latex_or_math_spam(text: str, compact: str) -> str | None:
     latex_markers = len(re.findall(r"\\[\(\[]|\\[\)\]]|[\{\}]|\$", text))
     if latex_markers >= 6 and latex_markers / max(len(compact), 1) > 0.015:
-        return ["latex_or_math_spam"]
+        return "latex_or_math_spam"
+    return None
 
+
+def _check_latex_angle_spam(text: str) -> str | None:
+    if len(re.findall(r"\\angle\s*[A-Za-z]", text)) >= 10:
+        return "latex_angle_spam"
+    return None
+
+
+def _check_latex_cdot_spam(text: str) -> str | None:
+    if text.count("\\cdot") >= 20:
+        return "latex_cdot_spam"
+    return None
+
+
+def _check_high_backslash_density(compact: str) -> str | None:
+    if compact.count("\\") / max(len(compact), 1) > 0.06:
+        return "high_backslash_density"
+    return None
+
+
+def _has_heavy_text_repetition(text: str, *, window: int = 48, min_repeats: int = 3) -> bool:
+    """Detect OCR hallucination loops (e.g. same \\angle A \\cdot ... block repeated)."""
+    normalized = re.sub(r"\s+", " ", (text or "").strip())
+    if len(normalized) < window * min_repeats:
+        return False
+    step = max(8, window // 4)
+    counts: dict[str, int] = {}
+    for start in range(0, len(normalized) - window + 1, step):
+        chunk = normalized[start : start + window]
+        counts[chunk] = counts.get(chunk, 0) + 1
+        if counts[chunk] >= min_repeats:
+            return True
+    return False
+
+
+def _check_repeated_text_blocks(text: str) -> str | None:
+    if _has_heavy_text_repetition(text):
+        return "repeated_text_blocks"
+    return None
+
+
+def _check_gibberish_latin_tokens(text: str, *, min_ratio: float) -> str | None:
     latin_words = re.findall(r"[A-Za-z]{5,}", text)
-    if len(latin_words) >= 5:
-        gibberish = 0
-        for word in latin_words:
-            vowels = len(re.findall(r"[aeiouAEIOU]", word))
-            if vowels / len(word) < 0.2:
-                gibberish += 1
-        if gibberish / len(latin_words) >= min_gibberish_latin_ratio:
-            return ["gibberish_latin_tokens"]
+    if len(latin_words) < 5:
+        return None
+    gibberish = sum(
+        1
+        for word in latin_words
+        if len(re.findall(r"[aeiouAEIOU]", word)) / len(word) < 0.2
+    )
+    if gibberish / len(latin_words) >= min_ratio:
+        return "gibberish_latin_tokens"
+    return None
 
+
+def _vision_quality_gate_reasons(text: str, *, options: dict[str, Any] | None = None) -> list[str]:
+    """Return human-readable reasons the DocMind markdown failed the image quality gate."""
+    opts = _QualityGateOptions.from_dict(options)
+    stripped = (text or "").strip()
+    compact = _compact_text(text)
+
+    checks: tuple[str | None, ...] = (
+        _check_empty_text(stripped),
+        _check_text_too_short(stripped, min_len=opts.min_text_length),
+        _check_replacement_char(text),
+        _check_high_suspicious_char_ratio(compact, max_ratio=opts.suspicious_ratio),
+        _check_long_repeated_digit_run(compact),
+        _check_repeated_comma_one_pattern(text),
+        _check_latex_or_math_spam(text, compact),
+        _check_latex_angle_spam(text),
+        _check_latex_cdot_spam(text),
+        _check_high_backslash_density(compact),
+        _check_repeated_text_blocks(text),
+        _check_gibberish_latin_tokens(text, min_ratio=opts.min_gibberish_latin_ratio),
+    )
+    for reason in checks:
+        if reason:
+            return [reason]
     return []
 
 
