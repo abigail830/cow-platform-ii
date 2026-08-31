@@ -16,6 +16,8 @@ import {
   isDocumentPipelineTerminalStage,
   mapDocumentPipelineStageToEvalItemStage,
 } from './eval-document-stage.ts';
+import { terminalTranscribeMetrics } from './eval-run-item-duration.ts';
+import { isTerminalEvalRunItemStage } from './eval-run-phase.ts';
 
 export async function reconcileEvalDocumentPipelineJobsForRun(runId: string): Promise<void> {
   const { listActiveAttemptItems } = await import('./eval-runs.ts');
@@ -29,6 +31,10 @@ export async function reconcileEvalDocumentPipelineJobsForRun(runId: string): Pr
     if (!job) continue;
 
     if (isDocumentPipelineTerminalStage(job.stage)) {
+      const evalStage = mapDocumentPipelineStageToEvalItemStage(job.stage);
+      if (isTerminalEvalRunItemStage(item.stage) && item.stage === evalStage) {
+        continue;
+      }
       await syncEvalRunItemFromDocumentPipelineJob(job.id);
       continue;
     }
@@ -107,12 +113,14 @@ export async function syncEvalRunItemFromDocumentPipelineJob(
       transcriptS3Key: evalRunDocumentMarkdownKey(evalItem.outputS3Prefix),
       asrResultS3Key: evalRunDocumentParseResultKey(evalItem.outputS3Prefix),
       errorMessage: null,
+      metrics: terminalTranscribeMetrics(evalItem, job),
     });
   } else if (stage === 'failed') {
     await updateEvalRunItem(evalItem.id, {
       stage: 'failed',
       externalJobId: job.externalJobId,
       errorMessage: job.errorMessage,
+      metrics: terminalTranscribeMetrics(evalItem, job),
     });
   } else {
     await updateEvalRunItem(evalItem.id, {

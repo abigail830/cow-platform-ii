@@ -959,10 +959,14 @@ function EvalRunJudgeScores({
 
 function TranscriptPlainPreview({
   url,
+  parseResultUrl,
   extractPlain = false,
+  emptyLabel = '(empty transcript)',
 }: {
-  url: string;
+  url: string | null | undefined;
+  parseResultUrl?: string | null;
   extractPlain?: boolean;
+  emptyLabel?: string;
 }) {
   const [body, setBody] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -972,10 +976,10 @@ function TranscriptPlainPreview({
     let cancelled = false;
     setLoadingText(true);
     setError('');
-    void fetchPresignedStorageText(url)
+    void loadEvalArtifactPreviewText(url, parseResultUrl)
       .then((text) => {
         if (cancelled) return;
-        const raw = text ?? '(empty transcript)';
+        const raw = text?.trim() ? text : emptyLabel;
         setBody(extractPlain ? extractTranscriptPlainText(raw) || raw : raw);
       })
       .catch((err) => {
@@ -988,11 +992,35 @@ function TranscriptPlainPreview({
     return () => {
       cancelled = true;
     };
-  }, [url, extractPlain]);
+  }, [url, parseResultUrl, extractPlain, emptyLabel]);
 
   if (loadingText) return <p className="admin-muted">Loading transcript…</p>;
   if (error) return <p className="admin-error">{error}</p>;
   return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
+}
+
+async function loadEvalArtifactPreviewText(
+  markdownUrl: string | null | undefined,
+  parseResultUrl?: string | null,
+): Promise<string | null> {
+  if (markdownUrl) {
+    const markdown = await fetchPresignedStorageText(markdownUrl);
+    if (markdown != null && markdown.trim()) return markdown;
+  }
+  if (parseResultUrl) {
+    const jsonText = await fetchPresignedStorageText(parseResultUrl);
+    if (jsonText) {
+      try {
+        const parsed = JSON.parse(jsonText) as { markdown?: unknown };
+        if (typeof parsed.markdown === 'string' && parsed.markdown.trim()) {
+          return parsed.markdown;
+        }
+      } catch {
+        // Fall through to empty.
+      }
+    }
+  }
+  return null;
 }
 
 function TranscriptTextPreview({ text }: { text: string }) {
@@ -1003,13 +1031,17 @@ function TranscriptTextPreview({ text }: { text: string }) {
 function EvalRunTranscriptCompare({
   referenceText,
   actualUrl,
+  parseResultUrl,
   actualLabel,
   actualError,
+  isDocument,
 }: {
   referenceText: string;
   actualUrl: string | null;
+  parseResultUrl?: string | null;
   actualLabel: string;
   actualError?: string | null;
+  isDocument: boolean;
 }) {
   return (
     <div className="eval-run-transcript-compare">
@@ -1024,8 +1056,13 @@ function EvalRunTranscriptCompare({
         <div className="eval-run-transcript-compare-body">
           {actualError ? (
             <p className="admin-error eval-run-cell-error">{actualError}</p>
-          ) : actualUrl ? (
-            <TranscriptPlainPreview url={actualUrl} extractPlain />
+          ) : actualUrl || parseResultUrl ? (
+            <TranscriptPlainPreview
+              url={actualUrl}
+              parseResultUrl={parseResultUrl}
+              extractPlain={!isDocument}
+              emptyLabel={isDocument ? '(empty parse result)' : '(empty transcript)'}
+            />
           ) : (
             <p className="admin-muted eval-run-transcript-compare-empty">Transcript not ready.</p>
           )}
@@ -1044,6 +1081,7 @@ function EvalRunFileTranscriptSection({
   itemRunStatus,
   itemStarting,
   showRtf,
+  isDocument,
 }: {
   datasetItemId: string;
   datasetItem: EvalRunDatasetItemRef | undefined;
@@ -1053,6 +1091,7 @@ function EvalRunFileTranscriptSection({
   itemRunStatus: EvalRunStatus;
   itemStarting: boolean;
   showRtf: boolean;
+  isDocument: boolean;
 }) {
   const gtScenario = judgeScenarioId === GT_JUDGE_SCENARIO_ID;
   const referenceText = datasetItem?.reference_text?.trim() ?? '';
@@ -1074,8 +1113,10 @@ function EvalRunFileTranscriptSection({
                   key={variant.id}
                   referenceText={referenceText}
                   actualUrl={cell?.transcript_url ?? null}
+                  parseResultUrl={cell?.parse_result_url ?? null}
                   actualLabel={variant.display_name}
                   actualError={cell?.error_message}
+                  isDocument={isDocument}
                 />
               );
             })}
@@ -1100,6 +1141,7 @@ function EvalRunFileTranscriptSection({
             runStatus={itemRunStatus}
             starting={itemStarting}
             showRtf={showRtf}
+            isDocument={isDocument}
           />
         );
       })}
@@ -1107,7 +1149,15 @@ function EvalRunFileTranscriptSection({
   );
 }
 
-function TranscriptPreview({ url }: { url: string }) {
+function TranscriptPreview({
+  url,
+  parseResultUrl,
+  isDocument,
+}: {
+  url: string;
+  parseResultUrl?: string | null;
+  isDocument?: boolean;
+}) {
   const [body, setBody] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loadingText, setLoadingText] = useState(true);
@@ -1116,10 +1166,10 @@ function TranscriptPreview({ url }: { url: string }) {
     let cancelled = false;
     setLoadingText(true);
     setError('');
-    void fetchPresignedStorageText(url)
+    void loadEvalArtifactPreviewText(url, parseResultUrl)
       .then((text) => {
         if (cancelled) return;
-        setBody(text ?? '(empty transcript)');
+        setBody(text?.trim() ? text : isDocument ? '(empty parse result)' : '(empty transcript)');
       })
       .catch((err) => {
         if (cancelled) return;
@@ -1131,7 +1181,7 @@ function TranscriptPreview({ url }: { url: string }) {
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [url, parseResultUrl, isDocument]);
 
   if (loadingText) return <p className="admin-muted">Loading transcript…</p>;
   if (error) return <p className="admin-error">{error}</p>;
@@ -1144,12 +1194,14 @@ function EvalRunPipelineOutput({
   runStatus,
   starting,
   showRtf,
+  isDocument,
 }: {
   cell: EvalRunItem | undefined;
   variantName: string;
   runStatus: EvalRunStatus;
   starting: boolean;
   showRtf: boolean;
+  isDocument: boolean;
 }) {
   const duration = evalItemTranscribeMetricsLabel(cell, showRtf);
 
@@ -1164,8 +1216,12 @@ function EvalRunPipelineOutput({
         {cell?.error_message ? (
           <p className="admin-error eval-run-cell-error">{cell.error_message}</p>
         ) : null}
-        {cell?.stage === 'done' && cell.transcript_url ? (
-          <TranscriptPreview url={cell.transcript_url} />
+        {cell?.stage === 'done' && (cell.transcript_url || cell.parse_result_url) ? (
+          <TranscriptPreview
+            url={cell.transcript_url ?? cell.parse_result_url ?? ''}
+            parseResultUrl={cell.parse_result_url}
+            isDocument={isDocument}
+          />
         ) : cell?.stage !== 'done' ? (
           <p className="admin-muted">Transcript not ready.</p>
         ) : (
@@ -1498,6 +1554,7 @@ function EvalRunAttemptSection({
                                 itemRunStatus={itemRunStatus}
                                 itemStarting={itemStarting}
                                 showRtf={showRtf}
+                                isDocument={!showRtf}
                               />
                               {attempt.run_mode === 'full' ? (
                                 <div className="eval-run-compare-row">

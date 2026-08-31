@@ -19,6 +19,7 @@ import { spawnAsyncAudioPipelineWorker } from '../audio/audio-pipeline-runner.ts
 import { getEvalRunItemById, snapshotConfigYaml, updateEvalRunItem } from './eval-pipeline-jobs.ts';
 import { resolveEvalRunItemAsrVocabularyId } from './eval-run-hotwords.ts';
 import { ensureEvalShadowAudioForDatasetItem } from './eval-shadow-audio.ts';
+import { terminalTranscribeMetrics } from './eval-run-item-duration.ts';
 
 export async function createEvalTranscribeAudioPipelineJob(
   evalRunItem: typeof appEvalRunItems.$inferSelect,
@@ -84,18 +85,22 @@ export async function syncEvalRunItemFromAudioPipelineJob(
 
   const stage = job.stage as AudioPipelineJobStage;
   if (stage === 'done') {
+    if (evalItem.stage === 'done') return;
     await updateEvalRunItem(evalItem.id, {
       stage: 'done',
       externalJobId: job.externalJobId,
       transcriptS3Key: evalRunTranscriptKey(evalItem.outputS3Prefix),
       asrResultS3Key: evalRunAsrResultKey(evalItem.outputS3Prefix),
       errorMessage: null,
+      metrics: terminalTranscribeMetrics(evalItem, job),
     });
   } else if (stage === 'failed') {
+    if (evalItem.stage === 'failed') return;
     await updateEvalRunItem(evalItem.id, {
       stage: 'failed',
       externalJobId: job.externalJobId,
       errorMessage: job.errorMessage,
+      metrics: terminalTranscribeMetrics(evalItem, job),
     });
   } else if (stage === 'transcribing') {
     await updateEvalRunItem(evalItem.id, {

@@ -81,6 +81,8 @@ export type EvalRunItem = {
   transcript_s3_key: string | null;
   asr_result_s3_key: string | null;
   transcript_url: string | null;
+  /** Document parse: presigned GET for result.json when markdown.md is missing. */
+  parse_result_url?: string | null;
   error_message: string | null;
   metrics: Record<string, unknown> | null;
   duration_ms: number | null;

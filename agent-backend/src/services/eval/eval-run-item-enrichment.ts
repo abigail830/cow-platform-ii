@@ -88,8 +88,12 @@ export async function enrichEvalRunItemPublic(
       : (evalItemAudioDurationSec(item.metrics) ?? fallbackAudioSec);
   const rtf = evalItemRtf(item, fallbackAudioSec, mediaType);
   let transcriptUrl: string | null = null;
+  let parseResultUrl: string | null = null;
   if (item.stage === 'done' && item.transcriptS3Key) {
     transcriptUrl = await getStorageReadUrl(item.transcriptS3Key, 3600);
+  }
+  if (mediaType === 'document' && item.stage === 'done' && item.asrResultS3Key) {
+    parseResultUrl = await getStorageReadUrl(item.asrResultS3Key, 3600);
   }
 
   return {
@@ -105,6 +109,7 @@ export async function enrichEvalRunItemPublic(
     transcript_s3_key: item.transcriptS3Key,
     asr_result_s3_key: item.asrResultS3Key,
     transcript_url: transcriptUrl,
+    parse_result_url: parseResultUrl,
     error_message: item.errorMessage,
     metrics: item.metrics,
     duration_ms: durationMs,
