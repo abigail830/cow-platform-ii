@@ -14,6 +14,20 @@ from openkms_cli.core.workflow_config import (
 )
 
 
+def test_collect_model_names_includes_vision_fallback():
+    cfg = parse_workflow_yaml(
+        """
+vision_fallback:
+  model_name: qwen3.7-plus
+metadata_extract:
+  model_name: deepSeek-V4-Flash
+"""
+    )
+    names = collect_model_names(cfg)
+    assert "qwen3.7-plus" in names
+    assert "deepSeek-V4-Flash" in names
+
+
 def test_load_packaged_baidu_default():
     cfg = load_packaged_default("baidu-doc-parse")
     assert metadata_extract_enabled(cfg)

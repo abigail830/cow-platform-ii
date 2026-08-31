@@ -1,4 +1,7 @@
-# Default worker config for aliyun-docmind-parse.
+-- Add vision_fallback defaults to system aliyun-docmind-parse worker config.
+UPDATE "app_pipeline_configs"
+SET
+  "config_yaml" = $yaml$# Default worker config for aliyun-docmind-parse.
 # docmind.llm_enhancement + enhancement_mode: VLM — Aliyun 大模型版 OCR/版面增强（更慢、按页计费更高）。
 
 docmind:
@@ -62,3 +65,7 @@ metadata_extract:
           type: string
         description: Subject categories
     required: []
+$yaml$,
+  "updated_at" = NOW()
+WHERE "pipeline_name" = 'aliyun-docmind-parse'
+  AND "is_system" = true;

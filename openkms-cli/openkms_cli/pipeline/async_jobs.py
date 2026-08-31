@@ -498,7 +498,7 @@ def finalize_job(
     work = Path(tempfile.mkdtemp(prefix="openkms-finalize-"))
     out_base = work / "parsed"
     out_base.mkdir(parents=True, exist_ok=True)
-    _stored, original_content, _ext = download_input_to_temp(ctx, work)
+    stored, original_content, _ext = download_input_to_temp(ctx, work)
 
     try:
         resolved_strategy = _resolve_page_index_strategy(
@@ -510,11 +510,43 @@ def finalize_job(
         if provider == "baidu":
             result, hash_dir = _finalize_baidu(ctx, external_id, out_base, work)
         elif provider == "aliyun":
-            result, hash_dir = _finalize_aliyun(
+            from openkms_cli.core.workflow_config import vision_fallback_enabled
+            from openkms_cli.providers.aliyun.vision_fallback import (
+                apply_vision_fallback_if_needed,
+                is_image_file_type,
+            )
+
+            doc = ctx.get("document") or {}
+            allow_empty = vision_fallback_enabled(workflow_config) and is_image_file_type(
+                str(doc.get("file_type") or "")
+            )
+            try:
+                result, hash_dir = _finalize_aliyun(
+                    ctx,
+                    external_id,
+                    out_base,
+                    page_index_strategy=resolved_strategy,
+                    allow_empty_markdown=allow_empty,
+                )
+            except Exception as e:
+                from openkms_cli.providers.aliyun.docmind import AliyunDocmindError
+                from openkms_cli.parse.result import empty_parse_result
+
+                if allow_empty and isinstance(e, AliyunDocmindError):
+                    file_hash = str(doc.get("file_hash") or "")
+                    hash_dir = out_base / file_hash
+                    hash_dir.mkdir(parents=True, exist_ok=True)
+                    result = empty_parse_result(file_hash)
+                else:
+                    raise
+
+            result, resolved_strategy = apply_vision_fallback_if_needed(
+                result,
                 ctx,
-                external_id,
-                out_base,
-                page_index_strategy=resolved_strategy,
+                stored,
+                workflow_config,
+                resolved_strategy,
+                hash_dir=hash_dir,
             )
         else:
             fail_job(api, job_id, f"Unsupported provider: {provider}")
@@ -560,6 +592,7 @@ def _finalize_aliyun(
     out_base: Path,
     *,
     page_index_strategy: str,
+    allow_empty_markdown: bool = False,
 ) -> tuple[dict[str, Any], Path]:
     from openkms_cli.providers.aliyun.docmind import (
         AliyunDocmindError,
@@ -615,6 +648,12 @@ def _finalize_aliyun(
     )
     result["aliyun_layouts"] = layouts
     if not (result.get("markdown") or "").strip():
+        if allow_empty_markdown:
+            (hash_dir / "result.json").write_text(
+                json.dumps(result, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            return result, hash_dir
         raise AliyunDocmindError(
             f"Aliyun parse produced no markdown (layouts={len(layouts)}, task_id={task_id})"
         )

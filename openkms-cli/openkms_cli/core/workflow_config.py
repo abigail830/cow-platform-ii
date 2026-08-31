@@ -103,6 +103,9 @@ def collect_model_names(config: dict[str, Any]) -> list[str]:
     meta = config.get("metadata_extract")
     if isinstance(meta, dict):
         add(meta.get("model_name"))
+    vf = config.get("vision_fallback")
+    if isinstance(vf, dict):
+        add(vf.get("model_name"))
     asr = config.get("asr")
     if isinstance(asr, dict):
         add(asr.get("model_name"))
@@ -149,6 +152,35 @@ def docmind_section(config: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(section, dict):
         return None
     return section
+
+
+def vision_fallback_section(config: dict[str, Any]) -> dict[str, Any] | None:
+    section = config.get("vision_fallback")
+    if not isinstance(section, dict):
+        return None
+    return section
+
+
+def vision_fallback_enabled(config: dict[str, Any]) -> bool:
+    section = vision_fallback_section(config)
+    if not section:
+        return False
+    enabled = section.get("enabled")
+    if enabled is False:
+        return False
+    return bool(str(section.get("model_name") or "").strip())
+
+
+def resolve_vision_fallback_options(config: dict[str, Any]) -> dict[str, Any]:
+    """Image-only DocMind quality gate → chat-completions vision model."""
+    section = vision_fallback_section(config) or {}
+    return {
+        "model_name": str(section.get("model_name") or "qwen3.7-plus").strip(),
+        "min_text_length": int(section.get("min_text_length") or 40),
+        "suspicious_ratio": float(section.get("suspicious_ratio") or 0.08),
+        "timeout_seconds": int(section.get("timeout_seconds") or 300),
+        "system_prompt": str(section.get("system_prompt") or "").strip(),
+    }
 
 
 def resolve_docmind_submit_options(config: dict[str, Any]) -> dict[str, Any]:

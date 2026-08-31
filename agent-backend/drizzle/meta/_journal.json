@@ -526,6 +526,13 @@
       "when": 1785231000000,
       "tag": "0074_eval_pipeline_jobs_no_shadow_document",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1785232000000,
+      "tag": "0075_aliyun_docmind_vision_fallback_yaml",
+      "breakpoints": true
     }
   ]
 }
