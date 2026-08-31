@@ -28,21 +28,58 @@ def is_image_file_type(file_type: str | None) -> bool:
     return (file_type or "").strip().upper() in _IMAGE_FILE_TYPES
 
 
-def needs_vision_fallback(text: str, *, options: dict[str, Any] | None = None) -> bool:
-    """Heuristic quality gate — same rules as Nova document_mind_quality_gate."""
+def _compact_text(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
+def _vision_quality_gate_reasons(text: str, *, options: dict[str, Any] | None = None) -> list[str]:
+    """Return human-readable reasons the DocMind markdown failed the image quality gate."""
     opts = options or {}
     min_len = int(opts.get("min_text_length") or 40)
     max_ratio = float(opts.get("suspicious_ratio") or 0.08)
+    min_gibberish_latin_ratio = float(opts.get("min_gibberish_latin_ratio") or 0.45)
 
     stripped = (text or "").strip()
-    if not stripped or len(stripped) < min_len:
-        return True
+    if not stripped:
+        return ["empty_text"]
+    if len(stripped) < min_len:
+        return ["text_too_short"]
     if "�" in text:
-        return True
+        return ["replacement_char"]
 
-    compact = re.sub(r"\s+", "", text)
-    suspicious = len(re.findall(r"[^\w\u4e00-\u9fff.,;:!?()/'%+\-]", compact))
-    return suspicious / max(len(compact), 1) > max_ratio
+    compact = _compact_text(text)
+    # Allow ASCII word chars, CJK, common CN/JP punctuation (，。等), and western punctuation.
+    allowed = r"\w\u4e00-\u9fff\u3000-\u303f\uff00-\uffef.,;:!?()/'%+\-"
+    suspicious = len(re.findall(rf"[^{allowed}]", compact))
+    if suspicious / max(len(compact), 1) > max_ratio:
+        return ["high_suspicious_char_ratio"]
+
+    if re.search(r"0{20,}|1{20,}", compact):
+        return ["long_repeated_digit_run"]
+    comma_one_runs = re.findall(r"(?:1,){8,}", text)
+    if comma_one_runs:
+        return ["repeated_comma_one_pattern"]
+
+    latex_markers = len(re.findall(r"\\[\(\[]|\\[\)\]]|[\{\}]|\$", text))
+    if latex_markers >= 6 and latex_markers / max(len(compact), 1) > 0.015:
+        return ["latex_or_math_spam"]
+
+    latin_words = re.findall(r"[A-Za-z]{5,}", text)
+    if len(latin_words) >= 5:
+        gibberish = 0
+        for word in latin_words:
+            vowels = len(re.findall(r"[aeiouAEIOU]", word))
+            if vowels / len(word) < 0.2:
+                gibberish += 1
+        if gibberish / len(latin_words) >= min_gibberish_latin_ratio:
+            return ["gibberish_latin_tokens"]
+
+    return []
+
+
+def needs_vision_fallback(text: str, *, options: dict[str, Any] | None = None) -> bool:
+    """Heuristic quality gate for DocMind image markdown (Nova rules + OCR noise patterns)."""
+    return len(_vision_quality_gate_reasons(text, options=options)) > 0
 
 
 def _chat_completions_url(base_url: str) -> str:
@@ -189,14 +226,16 @@ def apply_vision_fallback_if_needed(
 
     opts = resolve_vision_fallback_options(workflow_config)
     markdown = str(result.get("markdown") or "")
-    if not needs_vision_fallback(markdown, options=opts):
+    gate_reasons = _vision_quality_gate_reasons(markdown, options=opts)
+    if not gate_reasons:
         return result, page_index_strategy
 
     from rich.console import Console
 
     console = Console(stderr=True)
     console.print(
-        "[yellow]DocMind image quality gate failed; running vision fallback "
+        "[yellow]DocMind image quality gate failed "
+        f"({', '.join(gate_reasons)}); running vision fallback "
         f"({opts.get('model_name')})[/yellow]"
     )
 
@@ -222,6 +261,7 @@ def apply_vision_fallback_if_needed(
     updated["parse_route"] = "vision_fallback"
     updated["vision_fallback"] = {
         "reason": "document_mind_quality_gate",
+        "gate_reasons": gate_reasons,
         "model": str(opts.get("model_name") or ""),
         "docmind_markdown_length": len(markdown.strip()),
     }

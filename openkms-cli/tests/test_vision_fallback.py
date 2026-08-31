@@ -3,6 +3,7 @@ from openkms_cli.core.workflow_config import (
     vision_fallback_enabled,
 )
 from openkms_cli.providers.aliyun.vision_fallback import (
+    _vision_quality_gate_reasons,
     is_image_file_type,
     needs_vision_fallback,
 )
@@ -25,10 +26,28 @@ def test_needs_vision_fallback_replacement_char():
 
 
 def test_needs_vision_fallback_suspicious_ratio():
-    good = "审核报告2024年共120项通过检查" + ("正常" * 10)
+    good = "审核报告2024年共120项通过检查，文档内容完整可读。" + ("正常内容段落。" * 8)
     assert not needs_vision_fallback(good)
-    bad = "abc@@@defghij" + ("x" * 30)
+    bad = "abc@@@@@@defghij" + ("x" * 30)
     assert needs_vision_fallback(bad)
+
+
+def test_needs_vision_fallback_docmind_hallucination_patterns():
+    """Long OCR garbage with valid-looking length/ratio (DocMind image failure mode)."""
+    garbage = (
+        "picoe unfebrele ASRILATIANS CLIENT CONTACT STRAEN "
+        + "1, " * 40
+        + "0" * 50
+        + " \\(x_{1}=20.0724\\) \\frac{1}{2} "
+        + "1987年，中国开始实施了新的教育政策。"
+    )
+    reasons = _vision_quality_gate_reasons(garbage)
+    assert "repeated_comma_one_pattern" in reasons or "long_repeated_digit_run" in reasons
+
+
+def test_needs_vision_fallback_gibberish_latin():
+    text = " ".join(["QWRTPSDFG", "KLMNPQRST", "BCDFGHJKLM", "STRNGTHS", "XYZWQRTZ"] * 4)
+    assert needs_vision_fallback(text)
 
 
 def test_vision_fallback_enabled():

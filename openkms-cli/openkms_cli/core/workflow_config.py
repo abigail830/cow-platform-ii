@@ -180,6 +180,7 @@ def resolve_vision_fallback_options(config: dict[str, Any]) -> dict[str, Any]:
         "suspicious_ratio": float(section.get("suspicious_ratio") or 0.08),
         "timeout_seconds": int(section.get("timeout_seconds") or 300),
         "system_prompt": str(section.get("system_prompt") or "").strip(),
+        "min_gibberish_latin_ratio": float(section.get("min_gibberish_latin_ratio") or 0.45),
     }
 
 
