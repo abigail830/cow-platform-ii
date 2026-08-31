@@ -1,6 +1,8 @@
 import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
+import { putFileToPresignedUrl } from './direct-upload.ts';
+import { fetchPresignedListXml, parseListObjectsV2Xml } from './storage-list-xml.ts';
 
 export type StorageInfo = {
   bucket: string;
@@ -36,6 +38,14 @@ export type MoveResult = {
   errors: string[];
 };
 
+type PresignedMoveOperation = {
+  kind: 'copy' | 'delete';
+  url: string;
+  method: 'PUT' | 'DELETE';
+  headers?: Record<string, string>;
+  source_key: string;
+};
+
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
@@ -54,27 +64,95 @@ export async function getStorageInfo(): Promise<StorageInfo> {
   return data as StorageInfo;
 }
 
+async function fetchStorageListing(params: {
+  prefix?: string;
+  continuationToken?: string;
+  maxKeys?: number;
+  recursive?: boolean;
+  signal?: AbortSignal;
+}): Promise<StorageListResponse> {
+  const query = new URLSearchParams();
+  if (params.prefix !== undefined) query.set('prefix', params.prefix);
+  if (params.continuationToken) query.set('continuation_token', params.continuationToken);
+  if (params.maxKeys) query.set('max_keys', String(params.maxKeys));
+  if (params.recursive) query.set('recursive', 'true');
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+
+  const manifest = (await authFetch(`/api/console/storage/objects${suffix}`)) as {
+    list_url: string;
+    prefix: string;
+  };
+  const xml = await fetchPresignedListXml(manifest.list_url, params.signal);
+  return parseListObjectsV2Xml(xml, manifest.prefix ?? params.prefix ?? '');
+}
+
 export async function listStorageObjects(params?: {
   prefix?: string;
   continuationToken?: string;
   maxKeys?: number;
+  signal?: AbortSignal;
 }): Promise<StorageListResponse> {
-  const query = new URLSearchParams();
-  if (params?.prefix !== undefined) query.set('prefix', params.prefix);
-  if (params?.continuationToken) query.set('continuation_token', params.continuationToken);
-  if (params?.maxKeys) query.set('max_keys', String(params.maxKeys));
-  const suffix = query.toString() ? `?${query.toString()}` : '';
-  const data = await authFetch(`/api/console/storage/objects${suffix}`);
-  return data as StorageListResponse;
+  return fetchStorageListing({
+    prefix: params?.prefix,
+    continuationToken: params?.continuationToken,
+    maxKeys: params?.maxKeys,
+    signal: params?.signal,
+  });
+}
+
+async function listAllKeysUnderPrefix(prefix: string): Promise<string[]> {
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const page = await fetchStorageListing({
+      prefix,
+      continuationToken,
+      maxKeys: 200,
+      recursive: true,
+    });
+    keys.push(...page.objects.map((object) => object.key));
+    continuationToken = page.next_continuation_token ?? undefined;
+  } while (continuationToken);
+  return keys;
 }
 
 export async function createStorageFolder(parentPrefix: string, name: string): Promise<{ prefix: string }> {
-  const data = await authFetch('/api/console/storage/folders', {
+  const data = (await authFetch('/api/console/storage/folders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ parent_prefix: parentPrefix, name }),
-  });
-  return data as { prefix: string };
+  })) as { upload_url: string; prefix: string };
+
+  await putFileToPresignedUrl(
+    data.upload_url,
+    new Blob([], { type: 'application/octet-stream' }),
+    { 'Content-Type': 'application/octet-stream' },
+  );
+  return { prefix: data.prefix };
+}
+
+async function executePresignedMoveOperation(operation: PresignedMoveOperation): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(operation.url, {
+      method: operation.method,
+      headers: operation.headers,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Move failed';
+    throw new Error(
+      message === 'Failed to fetch'
+        ? `${operation.source_key}: move failed (network/CORS). Allow PUT and DELETE from your frontend origin in OSS CORS.`
+        : `${operation.source_key}: ${message}`,
+    );
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    const snippet = body.replace(/\s+/g, ' ').slice(0, 120);
+    throw new Error(
+      `${operation.source_key}: move failed (HTTP ${res.status})${snippet ? `: ${snippet}` : ''}`,
+    );
+  }
 }
 
 export async function moveStorageItems(input: {
@@ -82,16 +160,44 @@ export async function moveStorageItems(input: {
   destinationPrefix: string;
   deleteSource?: boolean;
 }): Promise<MoveResult> {
-  const data = await authFetch('/api/console/storage/move', {
+  const folderObjectKeys: Record<string, string[]> = {};
+  for (const item of input.items) {
+    if (item.type !== 'prefix') continue;
+    const normalized = item.key.endsWith('/') ? item.key : `${item.key}/`;
+    folderObjectKeys[normalized] = await listAllKeysUnderPrefix(normalized);
+  }
+
+  const data = (await authFetch('/api/console/storage/move', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       items: input.items,
       destination_prefix: input.destinationPrefix,
       delete_source: input.deleteSource,
+      folder_object_keys: folderObjectKeys,
     }),
-  });
-  return data as MoveResult;
+  })) as {
+    operations: PresignedMoveOperation[];
+    skipped_count: number;
+    errors: string[];
+  };
+
+  const errors = [...(data.errors ?? [])];
+  let movedCount = 0;
+  for (const operation of data.operations ?? []) {
+    try {
+      await executePresignedMoveOperation(operation);
+      if (operation.kind === 'copy') movedCount += 1;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : 'Move failed');
+    }
+  }
+
+  return {
+    moved_count: movedCount,
+    skipped_count: data.skipped_count ?? 0,
+    errors,
+  };
 }
 
 export function formatBytes(size: number): string {

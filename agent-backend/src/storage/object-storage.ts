@@ -51,6 +51,81 @@ export type MoveResult = {
   errors: string[];
 };
 
+export type PlannedMoveOperation = {
+  kind: 'copy' | 'delete';
+  source_key: string;
+  dest_key?: string;
+};
+
+export type PlanMoveResult = {
+  operations: PlannedMoveOperation[];
+  skipped_count: number;
+  errors: string[];
+};
+
+/** Pure move plan — no OSS I/O. Folder items require client-supplied descendant keys. */
+export function planMoveStorageOperations(params: {
+  items: MoveItem[];
+  destinationPrefix: string;
+  folderObjectKeys?: Record<string, string[]>;
+  deleteSource?: boolean;
+}): PlanMoveResult {
+  if (params.items.length === 0 || params.items.length > 200) {
+    throw new StorageValidationError('items must contain 1–200 entries');
+  }
+
+  const destination = normalizePrefix(params.destinationPrefix);
+  const deleteSource = params.deleteSource !== false;
+  const folderKeys = params.folderObjectKeys ?? {};
+  const operations: PlannedMoveOperation[] = [];
+  let skippedCount = 0;
+  const errors: string[] = [];
+
+  for (const item of params.items) {
+    try {
+      validateKey(item.key);
+
+      if (item.type === 'object') {
+        const targetKey = destinationKeyForObject(destination, item.key);
+        if (targetKey === item.key) {
+          skippedCount += 1;
+          continue;
+        }
+        operations.push({ kind: 'copy', source_key: item.key, dest_key: targetKey });
+        if (deleteSource) operations.push({ kind: 'delete', source_key: item.key });
+        continue;
+      }
+
+      const sourceFolder = normalizePrefix(item.key);
+      const targetFolder = destinationPrefixForFolder(destination, sourceFolder);
+      if (targetFolder === sourceFolder) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const keys = folderKeys[sourceFolder] ?? folderKeys[item.key] ?? [];
+      if (keys.length === 0) {
+        skippedCount += 1;
+        errors.push(`${item.key}: no objects listed under folder (expand via browser list first)`);
+        continue;
+      }
+
+      for (const sourceKey of keys) {
+        const relative = sourceKey.slice(sourceFolder.length);
+        const targetKey = `${targetFolder}${relative}`;
+        operations.push({ kind: 'copy', source_key: sourceKey, dest_key: targetKey });
+        if (deleteSource) operations.push({ kind: 'delete', source_key: sourceKey });
+      }
+    } catch (error) {
+      const label = item.key;
+      const message = error instanceof Error ? error.message : 'Move failed';
+      errors.push(`${label}: ${message}`);
+    }
+  }
+
+  return { operations, skipped_count: skippedCount, errors };
+}
+
 export function getStorageInfo(): StorageInfo {
   const client = assertStorageClient();
   return {
@@ -118,11 +193,8 @@ export async function createStorageFolder(params: {
   parentPrefix?: string;
   name: string;
 }): Promise<{ prefix: string }> {
+  const folderPrefix = resolveStorageFolderPrefix(params);
   const { client, config } = assertStorageClient();
-  validateFolderName(params.name);
-
-  const parent = normalizePrefix(params.parentPrefix ?? '');
-  const folderPrefix = joinPrefix(parent, params.name);
 
   try {
     await client.send(
@@ -139,6 +211,16 @@ export async function createStorageFolder(params: {
   }
 
   return { prefix: folderPrefix };
+}
+
+/** Validate folder name and return placeholder key — no OSS I/O (browser-direct create). */
+export function resolveStorageFolderPrefix(params: {
+  parentPrefix?: string;
+  name: string;
+}): string {
+  validateFolderName(params.name);
+  const parent = normalizePrefix(params.parentPrefix ?? '');
+  return joinPrefix(parent, params.name);
 }
 
 async function listAllKeysUnderPrefix(prefix: string): Promise<string[]> {

@@ -193,7 +193,7 @@ export function ObjectStoragePage() {
           <AdminPageDescription>
             {storageEnabled === false
               ? 'Object storage is not configured. Set S3-compatible credentials in the server environment.'
-              : `Bucket: ${bucket || '—'}. Browse folders and move objects; file contents are not shown or downloaded.`}
+              : `Bucket: ${bucket || '—'}. Lists and moves run in your browser via presigned OSS URLs (works on Vercel). Ensure bucket CORS allows GET, PUT, and DELETE from this origin.`}
           </AdminPageDescription>
         </header>
 

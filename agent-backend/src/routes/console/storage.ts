@@ -1,14 +1,19 @@
 import { Hono } from 'hono';
 import { isStorageEnabled } from '../../storage/s3-config.ts';
 import {
-  createStorageFolder,
   getStorageInfo,
-  listStorageObjects,
-  moveStorageItems,
+  planMoveStorageOperations,
+  resolveStorageFolderPrefix,
   StorageNotConfiguredError,
   StorageValidationError,
   type MoveItem,
 } from '../../storage/object-storage.ts';
+import {
+  presignCreateStorageFolder,
+  presignListStorageObjects,
+  presignMoveStorageOperations,
+} from '../../storage/object-storage-presign.ts';
+import { formatStorageError } from '../../storage/document-files.ts';
 import { PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
@@ -31,7 +36,7 @@ function handleStorageError(
   if (error instanceof StorageValidationError) {
     return c.json({ error: error.message }, 400);
   }
-  const message = error instanceof Error ? error.message : 'Storage operation failed';
+  const message = formatStorageError(error);
   if (message.toLowerCase().includes('not configured')) {
     return storageUnavailable(c);
   }
@@ -53,6 +58,7 @@ storage.get('/', requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BAS
   }
 });
 
+/** Presigned ListObjectsV2 URL — browser lists OSS directly (no Vercel→OSS TCP). */
 storage.get(
   '/objects',
   requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.STORAGE, 'read'),
@@ -62,20 +68,28 @@ storage.get(
     const prefix = c.req.query('prefix') ?? '';
     const continuationToken = c.req.query('continuation_token') ?? undefined;
     const maxKeys = Number(c.req.query('max_keys') ?? 100);
+    const recursive = c.req.query('recursive') === 'true' || c.req.query('recursive') === '1';
 
     try {
-      const result = await listStorageObjects({
+      const manifest = await presignListStorageObjects({
         prefix,
         continuationToken,
         maxKeys: Number.isFinite(maxKeys) ? maxKeys : 100,
+        recursive,
       });
-      return c.json(result);
+      return c.json({
+        mode: 'browser_direct',
+        bucket: manifest.bucket,
+        prefix: manifest.prefix,
+        list_url: manifest.list_url,
+      });
     } catch (error) {
       return handleStorageError(c, error);
     }
   },
 );
 
+/** Presigned PUT for folder placeholder — browser uploads empty body to OSS. */
 storage.post(
   '/folders',
   requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.STORAGE, 'write'),
@@ -88,17 +102,23 @@ storage.post(
     }
 
     try {
-      const result = await createStorageFolder({
+      const folderPrefix = resolveStorageFolderPrefix({
         parentPrefix: body.parent_prefix,
         name: body.name,
       });
-      return c.json(result);
+      const presigned = await presignCreateStorageFolder(folderPrefix);
+      return c.json({
+        mode: 'browser_direct',
+        prefix: presigned.prefix,
+        upload_url: presigned.upload_url,
+      });
     } catch (error) {
       return handleStorageError(c, error);
     }
   },
 );
 
+/** Presigned copy/delete steps — browser executes move against OSS directly. */
 storage.post(
   '/move',
   requireResourcePermission(PLATFORM_BASIC_CATEGORY, PLATFORM_BASIC_RESOURCES.STORAGE, 'write'),
@@ -109,6 +129,7 @@ storage.post(
       items?: Array<{ type?: string; key?: string }>;
       destination_prefix?: string;
       delete_source?: boolean;
+      folder_object_keys?: Record<string, string[]>;
     }>();
 
     const items = body.items ?? [];
@@ -131,12 +152,19 @@ storage.post(
     }
 
     try {
-      const result = await moveStorageItems({
+      const plan = planMoveStorageOperations({
         items: normalizedItems,
         destinationPrefix: body.destination_prefix,
+        folderObjectKeys: body.folder_object_keys,
         deleteSource: body.delete_source,
       });
-      return c.json(result);
+      const operations = await presignMoveStorageOperations(plan.operations);
+      return c.json({
+        mode: 'browser_direct',
+        operations,
+        skipped_count: plan.skipped_count,
+        errors: plan.errors,
+      });
     } catch (error) {
       return handleStorageError(c, error);
     }
