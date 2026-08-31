@@ -25,12 +25,15 @@ Worker mode: `PIPELINE_WORKER=spawn` (local dev) | `github_actions` (Vercel defa
 | **Document parse** | `app_pipeline_jobs` | `/internal-api/pipeline/jobs` | `openkms-cli pipeline run-async` | `pipeline.workflow_file` → `openkms-pipeline.yml` | `pipeline-runner.ts` |
 | **Audio library** | `app_audio_pipeline_jobs` | `/internal-api/audio-pipeline/jobs` | `openkms-cli audio-pipeline run-async` | `pipeline.workflow_file` → `openkms-audio-transcribe.yml` | `audio-pipeline-runner.ts` |
 | **Eval transcribe** | `app_audio_pipeline_jobs` (+ `eval_run_item_id`) | `/internal-api/audio-pipeline/jobs` | **`openkms-cli audio-pipeline run-async`** | **`openkms-audio-transcribe.yml`** (same as audio library) | `eval-audio-bridge.ts` → `audio-pipeline-runner.ts` |
+| **Eval document parse** | `app_pipeline_jobs` (+ `eval_run_item_id`) | `/internal-api/pipeline/jobs` | **`openkms-cli pipeline run-async`** | **`openkms-pipeline.yml`** (same as document library) | `eval-document-bridge.ts` → `pipeline-runner.ts` |
 | **Eval judge** | `app_eval_run_judge_jobs` | `/internal-api/eval-judge/jobs` | `evaluate-cli judge run-async` | `evaluate-pipeline.yml` | `eval-judge-runner.ts` |
 | **Eval compare** | `app_eval_run_comparisons` | *(backend inline)* | — | — | `eval-run-compare.ts` |
 | **Capture post-process** | capture pipeline jobs | `/internal-api/audio-capture-pipeline/jobs` | openkms-cli | capture workflow env | `audio-capture-pipeline-runner.ts` |
 | **KB import** | kb import jobs | `/internal-api/kb-import-jobs` | openkms-cli | kb import workflow | `kb-import-runner.ts` |
 
 **Eval transcribe rule:** reuse **audio pipeline worker** with fun-asr/qwen configs from `app_pipeline_configs`. Job context overrides `input_uri` (dataset audio) and `s3_prefix` (eval-runs output) via `eval_run_item_id` on the audio job row. PATCH on audio job syncs `app_eval_run_items` stage. **Do not** run transcription through `evaluate-cli pipeline` or `evaluate-pipeline.yml`.
+
+**Eval document parse rule:** reuse **document pipeline worker** via shadow `app_documents` row (read-only bridge). Context sets `input_uri` from `datasets/` and `s3_prefix` under **`eval-runs/` only**. When `eval_run_item_id` is set, worker **must not** mirror artifacts to `document_s3_prefix`, PUT document markdown/metadata/versions, or update library document status — PATCH syncs `app_eval_run_items` only.
 
 **Legacy bug:** dispatching eval items to `openkms-audio-transcribe.yml` with `pipeline run-async` args (document namespace) → GET `/internal-api/pipeline/jobs` → 404.
 

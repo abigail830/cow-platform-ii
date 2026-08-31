@@ -7,6 +7,17 @@ import {
   shouldRunPipelineStartupRecovery,
   shouldRunPipelineWatchdog,
 } from './pipeline-worker-mode.ts';
+import { syncEvalRunItemFromDocumentPipelineJob } from '../eval/eval-document-bridge.ts';
+
+async function applyOrphanedPipelineJobFailure(
+  job: typeof appPipelineJobs.$inferSelect,
+): Promise<void> {
+  if (job.evalRunItemId) {
+    await syncEvalRunItemFromDocumentPipelineJob(job.id);
+    return;
+  }
+  await markDocumentForJobStage(job.documentId, 'failed');
+}
 
 const ACTIVE_JOB_STAGES = PIPELINE_JOB_STAGES.filter(
   (stage): stage is PipelineJobStage => stage !== 'done' && stage !== 'failed',
@@ -41,25 +52,30 @@ export async function recoverOrphanedPipelineWorkOnStartup(): Promise<void> {
       stage: 'failed',
       errorMessage: STARTUP_RECOVERY_MESSAGE,
     });
-    await markDocumentForJobStage(job.documentId, 'failed');
+    await applyOrphanedPipelineJobFailure(job);
   }
 
+  const evalOrphanDocumentIds = new Set(
+    orphanedJobs.filter((job) => job.evalRunItemId).map((job) => job.documentId),
+  );
   const runningDocs = await db
     .select({ id: appDocuments.id })
     .from(appDocuments)
     .where(eq(appDocuments.status, 'running'));
 
-  if (runningDocs.length > 0) {
+  const libraryRunningDocs = runningDocs.filter((doc) => !evalOrphanDocumentIds.has(doc.id));
+
+  if (libraryRunningDocs.length > 0) {
     await db
       .update(appDocuments)
       .set({ status: 'failed', updatedAt: new Date() })
-      .where(eq(appDocuments.status, 'running'));
+      .where(inArray(appDocuments.id, libraryRunningDocs.map((doc) => doc.id)));
   }
 
-  if (orphanedJobs.length > 0 || runningDocs.length > 0) {
+  if (orphanedJobs.length > 0 || libraryRunningDocs.length > 0) {
     console.info(
       `[pipeline] startup recovery: marked ${orphanedJobs.length} orphaned job(s) and ` +
-        `${runningDocs.length} running document(s) as failed`,
+        `${libraryRunningDocs.length} running document(s) as failed`,
     );
   }
 }
@@ -97,7 +113,7 @@ async function watchdogStuckJobs(): Promise<void> {
             'Submit never received external_job_id from the cloud provider (timed out). ' +
             'Check CLI logs and cloud credentials in openkms-cli/.env.';
           await updatePipelineJob(job.id, { stage: 'failed', errorMessage: message });
-          await markDocumentForJobStage(job.documentId, 'failed');
+          await applyOrphanedPipelineJobFailure(job);
           console.error(`[pipeline] job ${job.id} timed out without external_job_id`);
           continue;
         }

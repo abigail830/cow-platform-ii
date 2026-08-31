@@ -26,6 +26,11 @@ from openkms_cli.pipeline.storage import content_type_for_path, get_s3_client
 console = Console(stderr=True)
 
 
+def is_eval_run_job(ctx: dict[str, Any]) -> bool:
+    """Eval-linked document parse jobs write only to eval-runs (s3_prefix); document storage is read-only."""
+    return bool(str(ctx.get("eval_run_item_id") or "").strip())
+
+
 def parse_s3_uri(uri: str) -> tuple[str, str]:
     m = re.match(r"^s3://([^/]+)/(.+)$", uri.strip())
     if not m:
@@ -143,9 +148,8 @@ def upload_hash_dir_to_document_bundle(
     region: str,
     bucket: str,
 ) -> int:
-    """Upload parse artifacts to eval output prefix and the document bundle prefix when they differ."""
+    """Upload parse artifacts to the job output prefix (eval-runs for eval jobs)."""
     output_prefix = str(ctx.get("s3_prefix") or "").rstrip("/")
-    document_prefix = document_storage_prefix_from_ctx(ctx)
     total = upload_hash_dir(
         hash_dir,
         bucket=bucket,
@@ -155,6 +159,10 @@ def upload_hash_dir_to_document_bundle(
         secret_key=secret_key,
         region=region,
     )
+    if is_eval_run_job(ctx):
+        return total
+
+    document_prefix = document_storage_prefix_from_ctx(ctx)
     if document_prefix and document_prefix != output_prefix:
         total += upload_hash_dir(
             hash_dir,
@@ -233,6 +241,7 @@ def sync_markdown_and_version(
     markdown: str,
     *,
     markdown_already_on_oss: bool = False,
+    ctx: dict[str, Any] | None = None,
 ) -> bool:
     """Sync pipeline completion to the API.
 
@@ -240,6 +249,9 @@ def sync_markdown_and_version(
     PUT /documents/:id/markdown — that route writes through Vercel and often ETIMEDOUT
     to Aliyun OSS from HK/serverless regions.
     """
+    if ctx is not None and is_eval_run_job(ctx):
+        return True
+
     auth_headers, basic, has_auth = resolve_api_request_auth(required=True)
     if not has_auth:
         return False
@@ -368,6 +380,7 @@ def finalize_job_artifacts(
             document_id,
             markdown,
             markdown_already_on_oss=True,
+            ctx=ctx,
         )
 
     patch_job(api, job_id, stage="parsed")
@@ -397,6 +410,10 @@ def run_metadata_extraction_from_ctx(
         pipeline_name=str(ctx.get("pipeline_name") or ""),
         job_config_yaml=ctx.get("config_yaml"),
     )
+    if is_eval_run_job(ctx):
+        patch_job(api, job_id, stage="done")
+        return
+
     if not metadata_extract_enabled(config):
         patch_job(api, job_id, stage="done")
         return

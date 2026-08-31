@@ -70,6 +70,8 @@ export type PipelineJobContext = {
   s3_prefix: string;
   /** Canonical document bundle prefix (doc.s3_key dir); UI reads artifacts here. */
   document_s3_prefix: string;
+  /** When set, worker must write only to s3_prefix (eval-runs) — no document OSS/API writes. */
+  eval_run_item_id: string | null;
   api_url: string;
 };
 
@@ -222,6 +224,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     input_uri: inputUri,
     s3_prefix: s3Prefix,
     document_s3_prefix: documentS3Prefix,
+    eval_run_item_id: job.evalRunItemId,
     api_url: apiUrl,
   };
 }

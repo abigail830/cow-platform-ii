@@ -12,6 +12,17 @@ import { spawnAsyncPipelineWorker } from '../../services/pipeline/pipeline-runne
 import { resolvePipelineWorkerMode } from '../../services/pipeline/pipeline-worker-mode.ts';
 import { syncEvalRunItemFromDocumentPipelineJob } from '../../services/eval/eval-document-bridge.ts';
 
+async function applyPipelineJobStageSideEffects(
+  job: NonNullable<Awaited<ReturnType<typeof getPipelineJobById>>>,
+  stage: PipelineJobStage,
+): Promise<void> {
+  if (job.evalRunItemId) {
+    await syncEvalRunItemFromDocumentPipelineJob(job.id);
+    return;
+  }
+  await markDocumentForJobStage(job.documentId, stage);
+}
+
 const pipelineJobs = new Hono();
 
 /** Aliyun Document Mind event callback — provider cannot send CLI Basic auth. */
@@ -91,12 +102,7 @@ pipelineJobs.patch('/:id', async (c) => {
   });
 
   if (body.stage) {
-    if (!job.evalRunItemId) {
-      await markDocumentForJobStage(job.documentId, body.stage);
-    }
-    if (job.evalRunItemId) {
-      await syncEvalRunItemFromDocumentPipelineJob(job.id);
-    }
+    await applyPipelineJobStageSideEffects(job, body.stage);
   }
 
   return c.json({ ok: true, job: updated });

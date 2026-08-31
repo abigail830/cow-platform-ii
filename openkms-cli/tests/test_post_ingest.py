@@ -9,6 +9,7 @@ from openkms_cli.pipeline.post_ingest import (
     build_page_index,
     ensure_original_upload_artifact,
     finalize_job_artifacts,
+    is_eval_run_job,
     layouts_from_result,
     original_basename_from_ctx,
     sync_markdown_and_version,
@@ -111,6 +112,7 @@ def test_finalize_job_artifacts(
         "doc-1",
         "# Doc",
         markdown_already_on_oss=True,
+        ctx=ctx,
     )
     mock_complete.assert_called_once()
     mock_complete.assert_called_with("http://api", "job-1", ctx, parse_result=result)
@@ -197,3 +199,58 @@ def test_upload_hash_dir_to_document_bundle_mirrors_when_prefixes_differ(tmp_pat
     assert mock_upload.call_count == 2
     assert mock_upload.call_args_list[0].kwargs["prefix"] == "eval-runs/run-1/items/item-1"
     assert mock_upload.call_args_list[1].kwargs["prefix"] == "datasets/ds-1/item-1"
+
+
+def test_upload_hash_dir_to_document_bundle_skips_mirror_for_eval_job(tmp_path: Path) -> None:
+    hash_dir = tmp_path / "bundle"
+    hash_dir.mkdir()
+    (hash_dir / "markdown.md").write_text("# Doc", encoding="utf-8")
+
+    ctx = {
+        "s3_prefix": "eval-runs/run-1/items/item-1",
+        "document_s3_prefix": "datasets/ds-1/item-1",
+        "eval_run_item_id": "eval-item-1",
+        "document": {"s3_key": "datasets/ds-1/item-1/original.jpg"},
+    }
+
+    with patch("openkms_cli.pipeline.post_ingest.upload_hash_dir", return_value=1) as mock_upload:
+        count = upload_hash_dir_to_document_bundle(
+            hash_dir,
+            ctx,
+            bucket="bucket",
+            endpoint_url=None,
+            access_key="ak",
+            secret_key="sk",
+            region="cn",
+        )
+
+    assert count == 1
+    mock_upload.assert_called_once()
+    assert mock_upload.call_args.kwargs["prefix"] == "eval-runs/run-1/items/item-1"
+
+
+@patch("openkms_cli.pipeline.post_ingest.post_pipeline_version", return_value=True)
+@patch("openkms_cli.pipeline.post_ingest.put_document_markdown")
+@patch("openkms_cli.pipeline.post_ingest.resolve_api_request_auth", return_value=({}, None, True))
+def test_sync_markdown_skips_document_api_for_eval_job(
+    mock_auth: MagicMock,
+    mock_put: MagicMock,
+    mock_version: MagicMock,
+) -> None:
+    ok = sync_markdown_and_version(
+        "http://api",
+        "doc-1",
+        "# Doc",
+        markdown_already_on_oss=True,
+        ctx={"eval_run_item_id": "eval-item-1"},
+    )
+    assert ok is True
+    mock_auth.assert_not_called()
+    mock_put.assert_not_called()
+    mock_version.assert_not_called()
+
+
+def test_is_eval_run_job() -> None:
+    assert is_eval_run_job({"eval_run_item_id": "abc"}) is True
+    assert is_eval_run_job({"eval_run_item_id": ""}) is False
+    assert is_eval_run_job({}) is False
