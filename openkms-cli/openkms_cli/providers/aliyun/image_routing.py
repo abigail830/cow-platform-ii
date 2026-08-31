@@ -7,9 +7,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
-import requests
 from rich.console import Console
 
+from openkms_cli.core.chat_completions import post_chat_completions
+from openkms_cli.core.model_resolve import ModelResolveError, resolve_model_params_by_name
 from openkms_cli.core.workflow_config import (
     image_routing_enabled,
     resolve_image_routing_options,
@@ -24,7 +25,6 @@ from openkms_cli.pipeline.post_ingest import (
     finalize_job_artifacts,
 )
 from openkms_cli.providers.aliyun.vision_fallback import (
-    _chat_completions_url,
     _guess_image_mime,
     _message_text,
     _resolve_vision_model_params,
@@ -85,41 +85,26 @@ def classify_image_sync(
     b64 = base64.standard_b64encode(raw).decode("ascii")
     data_url = f"data:{mime};base64,{b64}"
 
-    url = _chat_completions_url(str(params.get("base_url") or ""))
-    api_key = str(params.get("api_key") or "").strip()
-    model = str(params.get("model_name") or "").strip()
-    if not api_key or not model:
-        raise RuntimeError("Classification model credentials incomplete")
-
-    body: dict[str, Any] = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": _CLASSIFY_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": data_url}},
-                    {"type": "text", "text": "Classify this image."},
-                ],
-            },
-        ],
-        "temperature": 0.0,
-        "response_format": {"type": "json_object"},
-    }
-
-    resp = requests.post(
-        url,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
+    data = post_chat_completions(
+        params,
+        {
+            "model": str(params.get("model_name") or "").strip(),
+            "messages": [
+                {"role": "system", "content": _CLASSIFY_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {"type": "text", "text": "Classify this image."},
+                    ],
+                },
+            ],
+            "temperature": 0.0,
+            "response_format": {"type": "json_object"},
         },
-        json=body,
-        timeout=timeout_seconds,
+        timeout_seconds=timeout_seconds,
+        error_prefix="Image classify chat",
     )
-    if not resp.ok:
-        raise RuntimeError(f"Image classify chat {resp.status_code}: {resp.text[:300]}")
-
-    data = resp.json()
     message = (data.get("choices") or [{}])[0].get("message") or {}
     return _parse_classification_payload(_message_text(message))
 
@@ -137,7 +122,6 @@ def should_route_image_to_docmind(
 
 
 def _resolve_classify_model_params(workflow_config: dict[str, Any], *, cfg: Any = None) -> dict[str, Any]:
-    from openkms_cli.core.model_resolve import ModelResolveError, resolve_models_for_job
     from openkms_cli.core.settings import get_cli_settings
 
     settings = cfg or get_cli_settings()
@@ -145,16 +129,7 @@ def _resolve_classify_model_params(workflow_config: dict[str, Any], *, cfg: Any 
     model_name = str(opts.get("classify_model_name") or opts.get("model_name") or "").strip()
     if not model_name:
         raise ModelResolveError("image_routing requires classify_model_name or vision_fallback.model_name")
-
-    resolved = resolve_models_for_job(
-        {"image_routing": {"classify_model_name": model_name}},
-        cfg=settings,
-        api_type="chat-completions",
-    )
-    params = resolved.get(model_name)
-    if not params:
-        raise ModelResolveError(f"No resolved credentials for classify model {model_name!r}")
-    return params
+    return resolve_model_params_by_name(model_name, cfg=settings)
 
 
 def _build_vlm_image_result(file_hash: str, markdown: str, *, route_meta: dict[str, Any]) -> dict[str, Any]:

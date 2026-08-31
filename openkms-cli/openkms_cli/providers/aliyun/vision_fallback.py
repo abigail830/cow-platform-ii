@@ -10,9 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import requests
-
-from openkms_cli.core.model_resolve import ModelResolveError, resolve_models_for_job
+from openkms_cli.core.chat_completions import post_chat_completions
+from openkms_cli.core.model_resolve import ModelResolveError, resolve_model_params_by_name
 from openkms_cli.core.settings import CliSettings, get_cli_settings
 from openkms_cli.core.workflow_config import resolve_vision_fallback_options, vision_fallback_enabled
 from openkms_cli.page_index.strategy import MARKDOWN_STRATEGY
@@ -180,17 +179,6 @@ def needs_vision_fallback(text: str, *, options: dict[str, Any] | None = None) -
     return len(_vision_quality_gate_reasons(text, options=options)) > 0
 
 
-def _chat_completions_url(base_url: str) -> str:
-    base = base_url.rstrip("/")
-    if base.endswith("/chat/completions"):
-        return base
-    if base.endswith("/v1"):
-        return f"{base}/chat/completions"
-    if re.search(r"/v\d+$", base, re.I):
-        return f"{base}/chat/completions"
-    return f"{base}/v1/chat/completions"
-
-
 def _guess_image_mime(path: Path) -> str:
     mime, _ = mimetypes.guess_type(path.name)
     if mime and mime.startswith("image/"):
@@ -235,15 +223,7 @@ def transcribe_image_sync(
     b64 = base64.standard_b64encode(raw).decode("ascii")
     data_url = f"data:{mime};base64,{b64}"
 
-    url = _chat_completions_url(str(params.get("base_url") or ""))
-    api_key = str(params.get("api_key") or "").strip()
-    if not api_key:
-        raise RuntimeError("Vision fallback model has no api_key in platform config")
-
     model = str(params.get("model_name") or "").strip()
-    if not model:
-        raise RuntimeError("Vision fallback model has no provider model id")
-
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": (system_prompt or _DEFAULT_SYSTEM_PROMPT).strip()},
         {
@@ -255,25 +235,16 @@ def transcribe_image_sync(
         },
     ]
 
-    body: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "temperature": 0.1,
-    }
-
-    resp = requests.post(
-        url,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
+    data = post_chat_completions(
+        params,
+        {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.1,
         },
-        json=body,
-        timeout=timeout_seconds,
+        timeout_seconds=timeout_seconds,
+        error_prefix="Vision fallback chat",
     )
-    if not resp.ok:
-        raise RuntimeError(f"Vision fallback chat {resp.status_code}: {resp.text[:300]}")
-
-    data = resp.json()
     message = (data.get("choices") or [{}])[0].get("message") or {}
     text = _message_text(message)
     return text.strip()
@@ -289,16 +260,7 @@ def _resolve_vision_model_params(
     model_name = str(opts.get("model_name") or "").strip()
     if not model_name:
         raise ModelResolveError("vision_fallback.model_name is required when vision fallback is enabled")
-
-    resolved = resolve_models_for_job(
-        {"vision_fallback": {"model_name": model_name}},
-        cfg=settings,
-        api_type="chat-completions",
-    )
-    params = resolved.get(model_name)
-    if not params:
-        raise ModelResolveError(f"No resolved credentials for vision_fallback.model_name={model_name!r}")
-    return params
+    return resolve_model_params_by_name(model_name, cfg=settings)
 
 
 def apply_vision_fallback_if_needed(

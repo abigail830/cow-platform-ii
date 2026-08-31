@@ -23,8 +23,21 @@ type StreamParseResult = {
   reasoning: string;
 };
 
-export function chatCompletionsUrl(baseUrl: string): string {
+export function normalizeChatBaseUrl(baseUrl: string): string {
   const base = baseUrl.trim().replace(/\/$/, '');
+  if (!base) return base;
+  // DashScope native /api/v1 (ASR SDK) ≠ OpenAI-compatible chat; rewrite for chat/completions.
+  if (/dashscope(?:-intl|-us)?\.aliyuncs\.com\/api\/v1$/i.test(base)) {
+    return base.replace(/\/api\/v1$/i, '/compatible-mode/v1');
+  }
+  if (/\.maas\.aliyuncs\.com\/api\/v1$/i.test(base)) {
+    return base.replace(/\/api\/v1$/i, '/compatible-mode/v1');
+  }
+  return base;
+}
+
+export function chatCompletionsUrl(baseUrl: string): string {
+  const base = normalizeChatBaseUrl(baseUrl);
   if (base.endsWith('/chat/completions')) return base;
   if (base.endsWith('/v1')) return `${base}/chat/completions`;
   // Zhipu GLM and similar providers use /v2, /v3, /v4 as the API root — not OpenAI /v1.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from openkms_cli.core.chat_completions import VISION_CHAT_API_TYPES
 from openkms_cli.core.cli_params import fetch_cli_model_params
 from openkms_cli.core.settings import CliSettings, get_cli_settings
 from openkms_cli.core.workflow_config import collect_model_names
@@ -36,6 +37,34 @@ def resolve_models_for_job(
             )
         out[name] = data
     return out
+
+
+def resolve_model_params_by_name(
+    model_name: str,
+    *,
+    cfg: CliSettings | None = None,
+    api_types: tuple[str, ...] = VISION_CHAT_API_TYPES,
+) -> dict[str, Any]:
+    """Resolve one Models-list name; try vision-capable api types, then any api type."""
+    settings = cfg or get_cli_settings()
+    name = (model_name or "").strip()
+    if not name:
+        raise ModelResolveError("model_name is required")
+
+    for api_type in api_types:
+        data = fetch_cli_model_params(settings, model_name=name, api_type=api_type)
+        if data:
+            return data
+
+    data = fetch_cli_model_params(settings, model_name=name, api_type=None)
+    if data:
+        return data
+
+    tried = ", ".join(api_types) if api_types else "(none)"
+    raise ModelResolveError(
+        f"Failed to resolve model {name!r} via cli-params (tried api types: {tried}). "
+        "Check Admin → Models: bold name, api_type, base_url, and provider model id."
+    )
 
 
 def resolve_metadata_models_for_job(

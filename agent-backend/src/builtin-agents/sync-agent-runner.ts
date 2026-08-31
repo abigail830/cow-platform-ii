@@ -16,7 +16,7 @@ import {
   type ResolvedBuiltinAgent,
 } from './resolve-workflow-agent.ts';
 import { outboundFetch } from '../shared/lib/outbound-fetch.ts';
-import { callModelChatCompletion } from '../services/models/model-chat-completions.ts';
+import { callModelChatCompletion, chatCompletionsUrl } from '../services/models/model-chat-completions.ts';
 import { resolveModelCliParams } from '../services/models/model-cli-params.ts';
 
 const AUDIT_CONTENT_MAX = 8000;
@@ -149,7 +149,7 @@ async function callVlm(
   if (!params.base_url?.trim()) throw new Error('VLM model is missing baseUrl');
 
   const dataUrl = `data:${image.mimeType};base64,${image.base64}`;
-  const url = `${params.base_url.replace(/\/$/, '')}/chat/completions`;
+  const url = chatCompletionsUrl(params.base_url);
 
   const response = await outboundFetch(url, {
     method: 'POST',

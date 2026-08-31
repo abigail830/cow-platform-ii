@@ -8,6 +8,13 @@ import {
 } from './model-chat-completions.ts';
 
 describe('chatCompletionsUrl', () => {
+  it('rewrites DashScope /api/v1 to compatible-mode for chat/completions', () => {
+    assert.equal(
+      chatCompletionsUrl('https://dashscope.aliyuncs.com/api/v1'),
+      'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    );
+  });
+
   it('appends /v1/chat/completions when base has no version', () => {
     assert.equal(
       chatCompletionsUrl('https://api.siliconflow.cn'),
