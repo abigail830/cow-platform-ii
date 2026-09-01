@@ -120,35 +120,101 @@ function formatArtifactLoadError(err: unknown): string {
   return message;
 }
 
+function formatExtractionMarkdown(input: {
+  captureTitle: string;
+  extraction: ExtractionArtifact;
+  context?: RecordingContextArtifact | null;
+  structuredArtifact?: unknown;
+  includeTagging?: boolean;
+}): string {
+  const {
+    captureTitle,
+    extraction,
+    context,
+    structuredArtifact,
+    includeTagging = true,
+  } = input;
+  const lines: string[] = [`# ${captureTitle}`, '', '## Extraction', ''];
+
+  if (includeTagging && context) {
+    const classification = context.classification;
+    const recordingMode = classification?.recording_mode ?? context.recording_mode;
+    const audience = classification?.audience ?? context.audience;
+    const meta: string[] = [];
+    if (recordingMode) meta.push(`Recording mode: ${formatFacetLabel(recordingMode)}`);
+    if (audience) meta.push(`Audience: ${formatFacetLabel(audience)}`);
+    if (classification?.confidence != null) {
+      meta.push(`Confidence: ${Math.round(classification.confidence * 100)}%`);
+    }
+    if (classification?.needs_review) meta.push('Needs review');
+    if (meta.length > 0) {
+      lines.push(meta.join(' · '));
+      lines.push('');
+    }
+  }
+
+  const timestamps = structuredTopicTimestamps(structuredArtifact);
+  const facets = includeTagging ? facetsByTopicId(context ?? null) : new Map<string, string[]>();
+
+  for (const [index, topic] of (extraction.topics ?? []).entries()) {
+    const topicId = asDisplayString(topic.topic_id) || `topic_${String(index + 1).padStart(2, '0')}`;
+    const timestamp = timestamps.get(topicId) || timestamps.get(`#${index}`);
+    const title = topic.title || `Topic ${index + 1}`;
+    lines.push(timestamp ? `## ${timestamp} — ${title}` : `## ${title}`);
+
+    const topicFacets = facets.get(topicId) ?? [];
+    if (includeTagging && topicFacets.length > 0) {
+      lines.push('');
+      lines.push(`**Tags:** ${topicFacets.map(formatFacetLabel).join(', ')}`);
+    }
+
+    const keyPoints = topicFieldList(topic, ['key_points']);
+    const actionItems = topicFieldList(topic, ['action_items']);
+    const openQuestions = topicFieldList(topic, ['open_questions']);
+
+    if (keyPoints.length > 0) {
+      lines.push('');
+      lines.push('### Key points');
+      for (const point of keyPoints) lines.push(`- ${point}`);
+    }
+    if (actionItems.length > 0) {
+      lines.push('');
+      lines.push('### Action items');
+      for (const item of actionItems) lines.push(`- ${item}`);
+    }
+    if (openQuestions.length > 0) {
+      lines.push('');
+      lines.push('### Open questions');
+      for (const question of openQuestions) lines.push(`- ${question}`);
+    }
+    lines.push('');
+  }
+
+  return `${lines.join('\n').trim()}\n`;
+}
+
 function formatExtractionPreview(
   extraction: ExtractionArtifact,
   context?: RecordingContextArtifact | null,
 ): string {
-  const lines: string[] = [];
-  const classification = context?.classification;
-  if (classification?.recording_mode) {
-    lines.push(
-      `Recording mode: ${classification.recording_mode} · Audience: ${classification.audience ?? 'unknown'}` +
-        (classification.confidence != null ? ` · Confidence: ${Math.round(classification.confidence * 100)}%` : ''),
-    );
-    lines.push('');
-  }
+  return formatExtractionMarkdown({
+    captureTitle: 'Summary',
+    extraction,
+    context,
+    includeTagging: true,
+  });
+}
 
-  for (const topic of extraction.topics ?? []) {
-    lines.push(`## ${topic.title ?? 'Topic'}`);
-    for (const point of topicFieldList(topic, ['key_points', 'key_points'])) {
-      lines.push(`- ${point}`);
-    }
-    for (const item of topicFieldList(topic, ['action_items', 'action_items'])) {
-      lines.push(`- [Action] ${item}`);
-    }
-    for (const question of topicFieldList(topic, ['open_questions', 'open_questions'])) {
-      lines.push(`- [Question] ${question}`);
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n').trim();
+function buildExtractionDownloadJson(
+  extraction: ExtractionArtifact,
+  context: RecordingContextArtifact | null,
+  includeTagging: boolean,
+): string {
+  const payload =
+    includeTagging && context
+      ? { extraction, recording_context: context }
+      : extraction;
+  return `${JSON.stringify(payload, null, 2)}\n`;
 }
 
 const POST_PROCESS_ARTIFACT_STAGES = new Set([
@@ -1465,6 +1531,45 @@ export function AudioCaptureDetailPage() {
                         />
                         Show tagging
                       </label>
+                      <div className="document-detail-toolbar-actions">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          title={
+                            extractionView === 'timeline'
+                              ? 'Download extraction as Markdown'
+                              : 'Download extraction as JSON'
+                          }
+                          onClick={() => {
+                            if (extractionView === 'timeline') {
+                              downloadTextFile(
+                                formatExtractionMarkdown({
+                                  captureTitle: capture.title,
+                                  extraction: extractionArtifact,
+                                  context: contextArtifact,
+                                  structuredArtifact,
+                                  includeTagging: showExtractionTagging,
+                                }),
+                                withDownloadExtension(`${capture.title}-extraction`, 'md'),
+                                'text/markdown;charset=utf-8',
+                              );
+                              return;
+                            }
+                            downloadTextFile(
+                              buildExtractionDownloadJson(
+                                extractionArtifact,
+                                contextArtifact,
+                                showExtractionTagging,
+                              ),
+                              withDownloadExtension(`${capture.title}-extraction`, 'json'),
+                              'application/json;charset=utf-8',
+                            );
+                          }}
+                        >
+                          <Download {...iconProps()} aria-hidden />
+                          {extractionView === 'timeline' ? '.md' : '.json'}
+                        </button>
+                      </div>
                     </div>
                   ) : null}
                   {artifactTab === 'summary' && summaryMarkdown?.trim() ? (

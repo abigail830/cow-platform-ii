@@ -4397,6 +4397,10 @@ textarea {
   gap: 0.75rem;
 }
 
+.capture-extraction-toolbar .document-detail-toolbar-actions {
+  margin-left: auto;
+}
+
 .capture-extraction-toolbar .form-checkbox {
   grid-column: auto;
   font-size: 0.75rem;
