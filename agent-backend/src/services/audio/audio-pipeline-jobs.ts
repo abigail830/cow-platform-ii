@@ -49,26 +49,36 @@ export type AudioPipelineJobContext = {
   s3_prefix: string;
   api_url: string;
   audio_duration_sec: number | null;
+  eval_run_item_id: string | null;
 };
 
 export async function createAudioPipelineJob(input: {
-  audioId: string;
+  audioId?: string | null;
   pipelineName: string;
   provider: string;
   configYaml?: string | null;
   asrVocabularyIdSnapshot?: string | null;
   evalRunItemId?: string | null;
 }): Promise<typeof appAudioPipelineJobs.$inferSelect> {
+  const evalRunItemId = input.evalRunItemId?.trim() || null;
+  const audioId = input.audioId?.trim() || null;
+  if (!evalRunItemId && !audioId) {
+    throw new Error('Audio pipeline job requires audioId or evalRunItemId');
+  }
+  if (evalRunItemId && audioId) {
+    throw new Error('Eval audio pipeline jobs must not reference library audio');
+  }
+
   const [row] = await db
     .insert(appAudioPipelineJobs)
     .values({
-      audioId: input.audioId,
+      audioId,
       pipelineName: input.pipelineName,
       provider: input.provider,
       stage: 'submitted',
       configYaml: snapshotConfigYaml(input.configYaml),
       asrVocabularyIdSnapshot: input.asrVocabularyIdSnapshot?.trim() || null,
-      evalRunItemId: input.evalRunItemId?.trim() || null,
+      evalRunItemId,
     })
     .returning();
   return row!;
@@ -167,34 +177,56 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
   const job = await getAudioPipelineJobById(jobId);
   if (!job) throw new Error('Audio pipeline job not found');
 
-  const [audio] = await db.select().from(appAudios).where(eq(appAudios.id, job.audioId)).limit(1);
-  if (!audio) throw new Error('Audio not found');
-
   const s3 = getS3Config();
   if (!s3) throw new Error('Object storage is not configured');
-
-  const channel = await getAudioChannelById(audio.channelId);
-  if (!channel) throw new Error('Channel not found');
 
   const apiUrl =
     process.env.OPENKMS_API_URL?.trim() ||
     `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
 
+  if (job.evalRunItemId) {
+    const { buildEvalLinkedAudioPipelineContextOverrides } = await import('../eval/eval-audio-bridge.ts');
+    const overrides = await buildEvalLinkedAudioPipelineContextOverrides(job.evalRunItemId);
+    if (!overrides) throw new Error('Eval run item not found');
+
+    return {
+      id: job.id,
+      audio_id: job.evalRunItemId,
+      pipeline_name: job.pipelineName,
+      provider: job.provider,
+      stage: job.stage as AudioPipelineJobStage,
+      external_job_id: job.externalJobId,
+      config_yaml: job.configYaml ?? null,
+      asr_vocabulary_id_snapshot: job.asrVocabularyIdSnapshot ?? null,
+      error_message: job.errorMessage,
+      audio: {
+        id: job.evalRunItemId,
+        name: overrides.dataset_item_name,
+        file_type: overrides.file_type,
+        s3_key: overrides.s3_key,
+        file_hash: overrides.file_hash,
+        channel_id: '',
+      },
+      input_uri: overrides.input_uri,
+      s3_prefix: overrides.s3_prefix,
+      api_url: apiUrl,
+      audio_duration_sec: overrides.audio_duration_sec,
+      eval_run_item_id: job.evalRunItemId,
+    };
+  }
+
+  if (!job.audioId) throw new Error('Audio pipeline job has no library audio');
+
+  const [audio] = await db.select().from(appAudios).where(eq(appAudios.id, job.audioId)).limit(1);
+  if (!audio) throw new Error('Audio not found');
+
+  const channel = await getAudioChannelById(audio.channelId);
+  if (!channel) throw new Error('Channel not found');
+
   let inputUri = `s3://${s3.bucket}/${audio.s3Key}`;
   let s3Prefix = s3PrefixFromKey(audio.s3Key) || audioStoragePrefix(audio.fileHash);
   let displayName = audio.name;
   let audioDurationSec: number | null = null;
-
-  if (job.evalRunItemId) {
-    const { buildEvalLinkedAudioPipelineContextOverrides } = await import('../eval/eval-audio-bridge.ts');
-    const overrides = await buildEvalLinkedAudioPipelineContextOverrides(job.evalRunItemId);
-    if (overrides) {
-      inputUri = overrides.input_uri;
-      s3Prefix = overrides.s3_prefix;
-      displayName = overrides.dataset_item_name;
-      audioDurationSec = overrides.audio_duration_sec;
-    }
-  }
 
   return {
     id: job.id,
@@ -218,6 +250,7 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
     s3_prefix: s3Prefix,
     api_url: apiUrl,
     audio_duration_sec: audioDurationSec,
+    eval_run_item_id: null,
   };
 }
 

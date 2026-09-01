@@ -462,9 +462,8 @@ export const appAudioPipelineJobs = pgTable(
   'app_audio_pipeline_jobs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    audioId: uuid('audio_id')
-      .notNull()
-      .references(() => appAudios.id, { onDelete: 'cascade' }),
+    /** Null for eval-only jobs (eval_run_item_id is set; no library audio row). */
+    audioId: uuid('audio_id').references(() => appAudios.id, { onDelete: 'cascade' }),
     pipelineName: text('pipeline_name').notNull(),
     provider: text('provider').notNull(),
     stage: text('stage').notNull().default('submitted'),

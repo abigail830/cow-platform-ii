@@ -65,7 +65,9 @@ audioPipelineJobs.patch('/:id', async (c) => {
   });
 
   if (body.stage) {
-    await markAudioForJobStage(job.audioId, body.stage);
+    if (job.audioId) {
+      await markAudioForJobStage(job.audioId, body.stage);
+    }
     await syncEvalRunItemFromAudioPipelineJob(job.id);
   }
 

@@ -14,6 +14,7 @@ import {
   isCapturePostProcessPipelineName,
   CAPTURE_POST_PROCESS_PIPELINE_NAMES,
 } from '../capture/capture-post-process-pipeline-names.ts';
+import { EVAL_SHADOW_CHANNEL_NAME } from '../eval/eval-shadow-audio.ts';
 
 export type AudioChannelRow = typeof appAudioChannels.$inferSelect;
 export type AudioRow = typeof appAudios.$inferSelect;
@@ -76,6 +77,7 @@ export async function listAudioChannelTree(): Promise<AudioChannelNode[]> {
   const rows = await db
     .select()
     .from(appAudioChannels)
+    .where(sql`${appAudioChannels.name} <> ${EVAL_SHADOW_CHANNEL_NAME}`)
     .orderBy(asc(appAudioChannels.sortOrder), asc(appAudioChannels.name));
 
   return buildChannelTree(rows.map(toChannelPublic));
@@ -223,6 +225,9 @@ export async function updateAudioChannel(
 export async function deleteAudioChannel(id: string): Promise<void> {
   const existing = await getAudioChannelById(id);
   if (!existing) throw new Error('Channel not found');
+  if (existing.name === EVAL_SHADOW_CHANNEL_NAME) {
+    throw new Error('System evaluation channel cannot be deleted');
+  }
 
   const [child] = await db
     .select({ id: appAudioChannels.id })
@@ -254,7 +259,10 @@ export async function listAudios(input: {
   const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
   const search = input.search?.trim();
 
-  const conditions = [eq(appAudios.channelId, input.channelId)];
+  const conditions = [
+    eq(appAudios.channelId, input.channelId),
+    sql`coalesce(${appAudios.metadata}->>'eval_shadow', 'false') <> 'true'`,
+  ];
   if (search) {
     conditions.push(sql`${appAudios.name} ILIKE ${`%${search}%`}`);
   }

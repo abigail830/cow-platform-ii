@@ -18,7 +18,6 @@ import { audioPipelineProviderForName } from '../audio/audio-pipeline-names.ts';
 import { spawnAsyncAudioPipelineWorker } from '../audio/audio-pipeline-runner.ts';
 import { getEvalRunItemById, snapshotConfigYaml, updateEvalRunItem } from './eval-pipeline-jobs.ts';
 import { resolveEvalRunItemAsrVocabularyId } from './eval-run-hotwords.ts';
-import { ensureEvalShadowAudioForDatasetItem } from './eval-shadow-audio.ts';
 import { terminalTranscribeMetrics } from './eval-run-item-duration.ts';
 
 export async function createEvalTranscribeAudioPipelineJob(
@@ -29,7 +28,6 @@ export async function createEvalTranscribeAudioPipelineJob(
     throw new Error(`Unsupported eval pipeline: ${evalRunItem.pipelineName}`);
   }
 
-  const audioId = await ensureEvalShadowAudioForDatasetItem(evalRunItem.datasetItemId);
   const [datasetItem] = await db
     .select()
     .from(appEvalDatasetItems)
@@ -46,7 +44,6 @@ export async function createEvalTranscribeAudioPipelineJob(
   }
 
   const job = await createAudioPipelineJob({
-    audioId,
     pipelineName: evalRunItem.pipelineName,
     provider,
     configYaml: snapshotConfigYaml(evalRunItem.configYaml),
@@ -123,6 +120,9 @@ export async function buildEvalLinkedAudioPipelineContextOverrides(
   input_uri: string;
   s3_prefix: string;
   dataset_item_name: string;
+  file_hash: string;
+  file_type: string;
+  s3_key: string;
   audio_duration_sec: number | null;
 } | null> {
   const [evalItem] = await db
@@ -147,6 +147,9 @@ export async function buildEvalLinkedAudioPipelineContextOverrides(
     input_uri: `s3://${s3.bucket}/${datasetItem.s3Key}`,
     s3_prefix: evalItem.outputS3Prefix,
     dataset_item_name: datasetItem.name,
+    file_hash: datasetItem.fileHash,
+    file_type: datasetItem.fileType,
+    s3_key: datasetItem.s3Key,
     audio_duration_sec: parseDatasetItemDurationSec(datasetItem.metadata),
   };
 }
