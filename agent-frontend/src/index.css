@@ -2715,6 +2715,55 @@ textarea {
   max-height: calc(100vh - 2rem);
 }
 
+.eval-dataset-reference-edit-modal.modal-card {
+  width: min(960px, calc(100vw - 2rem));
+  min-height: min(720px, calc(100vh - 2rem));
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 1.5rem;
+}
+
+.eval-dataset-reference-edit-modal h2 {
+  flex-shrink: 0;
+  font-size: 1.125rem;
+}
+
+.eval-dataset-reference-edit-hint {
+  flex-shrink: 0;
+  margin-bottom: 0.75rem;
+}
+
+.eval-dataset-reference-edit-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 0.75rem;
+}
+
+.eval-dataset-reference-edit-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.eval-dataset-reference-edit-field textarea {
+  flex: 1;
+  min-height: 28rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.eval-dataset-reference-edit-form .modal-actions {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
+}
+
 .eval-dataset-reference-import-dataset-hint {
   white-space: normal;
   overflow: visible;

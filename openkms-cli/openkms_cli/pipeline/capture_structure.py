@@ -175,22 +175,51 @@ def extract_knowledge(
     }
 
 
-def _parse_json_object(raw: str) -> dict[str, Any]:
+def _strip_llm_json_fence(raw: str) -> str:
     cleaned = raw.strip()
-    cleaned = re.sub(r"^```json\s*", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.I)
     cleaned = re.sub(r"^```\s*", "", cleaned)
     cleaned = re.sub(r"\s*```$", "", cleaned)
-    try:
-        parsed = json.loads(cleaned)
-    except json.JSONDecodeError:
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start < 0 or end <= start:
-            raise
-        parsed = json.loads(cleaned[start : end + 1])
-    if not isinstance(parsed, dict):
-        raise ValueError("Expected JSON object")
-    return parsed
+    return cleaned.strip()
+
+
+def _repair_json_text(text: str) -> str:
+    """Best-effort fixes for common LLM JSON mistakes."""
+    text = text.replace("\ufeff", "").replace("\u201c", '"').replace("\u201d", '"')
+    return re.sub(r",(\s*[}\]])", r"\1", text)
+
+
+def _json_object_candidates(raw: str) -> list[str]:
+    cleaned = _strip_llm_json_fence(raw)
+    candidates = [cleaned, _repair_json_text(cleaned)]
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start >= 0 and end > start:
+        sliced = cleaned[start : end + 1]
+        candidates.extend([sliced, _repair_json_text(sliced)])
+    seen: set[str] = set()
+    unique: list[str] = []
+    for item in candidates:
+        if item and item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique
+
+
+def _parse_json_object(raw: str) -> dict[str, Any]:
+    last_error: json.JSONDecodeError | None = None
+    for candidate in _json_object_candidates(raw):
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        if not isinstance(parsed, dict):
+            raise ValueError("Expected JSON object")
+        return parsed
+    if last_error is not None:
+        raise last_error
+    raise ValueError("Expected JSON object")
 
 
 def _chat_completions_url(base_url: str) -> str:
@@ -224,39 +253,61 @@ def chat_json(
     user_prompt: str,
     temperature: float,
 ) -> dict[str, Any]:
-    import requests
+    from openkms_cli.core.chat_completions import post_chat_completions
 
-    url = _chat_completions_url(str(model_params.get("base_url") or ""))
-    body: dict[str, Any] = {
-        "model": model_params["model_name"],
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": temperature,
-    }
-    if model_params.get("max_completion_tokens"):
-        body["max_completion_tokens"] = int(model_params["max_completion_tokens"])
-    elif model_params.get("max_tokens"):
-        body["max_tokens"] = int(model_params["max_tokens"])
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    last_error: Exception | None = None
 
-    resp = requests.post(
-        url,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {model_params['api_key']}",
-        },
-        json=body,
-        timeout=180,
-    )
-    if not resp.ok:
-        raise RuntimeError(f"chat {resp.status_code} {resp.text[:300]}")
-    data = resp.json()
-    message = (data.get("choices") or [{}])[0].get("message") or {}
-    raw = _message_text(message)
-    if not raw:
-        raise RuntimeError("LLM returned empty content")
-    return _parse_json_object(raw)
+    for attempt in range(2):
+        body: dict[str, Any] = {
+            "model": model_params["model_name"],
+            "messages": messages,
+            "temperature": temperature if attempt == 0 else min(temperature + 0.15, 1.0),
+        }
+        if model_params.get("max_completion_tokens"):
+            body["max_completion_tokens"] = int(model_params["max_completion_tokens"])
+        elif model_params.get("max_tokens"):
+            body["max_tokens"] = int(model_params["max_tokens"])
+        if attempt == 0:
+            body["response_format"] = {"type": "json_object"}
+
+        try:
+            data = post_chat_completions(
+                model_params,
+                body,
+                timeout_seconds=180,
+                error_prefix="chat",
+            )
+        except RuntimeError as exc:
+            message = str(exc)
+            if attempt == 0 and "response_format" in message.lower():
+                retry_body = dict(body)
+                retry_body.pop("response_format", None)
+                data = post_chat_completions(
+                    model_params,
+                    retry_body,
+                    timeout_seconds=180,
+                    error_prefix="chat",
+                )
+            else:
+                last_error = exc
+                continue
+
+        message = (data.get("choices") or [{}])[0].get("message") or {}
+        raw = _message_text(message)
+        if not raw:
+            last_error = RuntimeError("LLM returned empty content")
+            continue
+        try:
+            return _parse_json_object(raw)
+        except (json.JSONDecodeError, ValueError) as exc:
+            last_error = exc
+            continue
+
+    raise RuntimeError(f"LLM returned invalid JSON: {last_error}") from last_error
 
 
 def chat_text(
@@ -309,65 +360,76 @@ def llm_build_topics(
     model_params: dict[str, Any],
     temperature: float,
 ) -> list[dict[str, Any]]:
+    from rich.console import Console
+
     llm_cfg = segment_cfg.get("llm") if isinstance(segment_cfg.get("llm"), dict) else {}
     system_prompt = str(llm_cfg.get("system_prompt") or "")
     user_template = str(llm_cfg.get("user_prompt_template") or "")
     window_minutes = int(segment_cfg.get("window_minutes") or 12)
+    preview_max_chars = int(segment_cfg.get("preview_max_chars") or 160)
+    console = Console(stderr=True)
 
     topics: list[dict[str, Any]] = []
     windows = _window_turns(turns, window_minutes=window_minutes)
-    for idx, window in enumerate(windows, start=1):
-        payload = chat_json(
-            model_params,
-            system_prompt=system_prompt,
-            user_prompt=apply_prompt_template(
-                user_template,
-                {
-                    "title": str(capture.get("title") or ""),
-                    "brief": str(capture.get("brief") or ""),
-                    "window_index": str(idx),
-                    "window_count": str(len(windows)),
-                    "turns_json": json.dumps(
-                        [
-                            {
-                                "turn_id": t.get("turn_id"),
-                                "speaker": t.get("speaker"),
-                                "text": t.get("text"),
-                            }
-                            for t in window
-                        ],
-                        ensure_ascii=False,
-                    ),
-                },
-            ),
-            temperature=temperature,
-        )
-        window_topics = payload.get("topics")
-        if not isinstance(window_topics, list):
-            continue
-        for item in window_topics:
-            if not isinstance(item, dict):
-                continue
-            topic_id = f"topic_{len(topics) + 1:02d}"
-            topics.append(
-                {
-                    "topic_id": topic_id,
-                    "title": str(item.get("title") or topic_id),
-                    "summary": str(item.get("summary") or item.get("title") or ""),
-                    "speakers": sorted({str(t.get("speaker") or "Speaker") for t in window}),
-                    "turn_ids": [
-                        str(tid)
-                        for tid in (item.get("turn_ids") or [])
-                        if isinstance(tid, str)
-                    ]
-                    or [t["turn_id"] for t in window if t.get("turn_id")],
-                }
+    try:
+        for idx, window in enumerate(windows, start=1):
+            payload = chat_json(
+                model_params,
+                system_prompt=system_prompt,
+                user_prompt=apply_prompt_template(
+                    user_template,
+                    {
+                        "title": str(capture.get("title") or ""),
+                        "brief": str(capture.get("brief") or ""),
+                        "window_index": str(idx),
+                        "window_count": str(len(windows)),
+                        "turns_json": json.dumps(
+                            [
+                                {
+                                    "turn_id": t.get("turn_id"),
+                                    "speaker": t.get("speaker"),
+                                    "text": t.get("text"),
+                                }
+                                for t in window
+                            ],
+                            ensure_ascii=False,
+                        ),
+                    },
+                ),
+                temperature=temperature,
             )
+            window_topics = payload.get("topics")
+            if not isinstance(window_topics, list):
+                continue
+            for item in window_topics:
+                if not isinstance(item, dict):
+                    continue
+                topic_id = f"topic_{len(topics) + 1:02d}"
+                topics.append(
+                    {
+                        "topic_id": topic_id,
+                        "title": str(item.get("title") or topic_id),
+                        "summary": str(item.get("summary") or item.get("title") or ""),
+                        "speakers": sorted({str(t.get("speaker") or "Speaker") for t in window}),
+                        "turn_ids": [
+                            str(tid)
+                            for tid in (item.get("turn_ids") or [])
+                            if isinstance(tid, str)
+                        ]
+                        or [t["turn_id"] for t in window if t.get("turn_id")],
+                    }
+                )
+    except (RuntimeError, json.JSONDecodeError, ValueError) as exc:
+        console.print(
+            f"[yellow]LLM topic segmentation failed ({exc}); using rule-based fallback[/yellow]"
+        )
+        topics = []
+
     if not topics and turns:
         topics = build_topics(
             turns,
             window_minutes=window_minutes,
-            preview_max_chars=int(segment_cfg.get("preview_max_chars") or 160),
+            preview_max_chars=preview_max_chars,
         )
     return topics
 

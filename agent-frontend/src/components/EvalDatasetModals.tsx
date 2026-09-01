@@ -595,21 +595,24 @@ export function EvalDatasetReferenceUploadModal({
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div
-        className="modal-card model-config-form"
+        className="modal-card model-config-form eval-dataset-reference-edit-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="eval-dataset-reference-upload-title"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="eval-dataset-reference-upload-title">Edit reference</h2>
-        <p className="admin-form-hint">
+        <p className="admin-form-hint eval-dataset-reference-edit-hint">
           Ground-truth transcript for <strong>{item.name}</strong>
         </p>
-        <form onSubmit={(event) => void handleSubmit(event)}>
-          <label className="form-field form-field-wide">
+        <form
+          className="eval-dataset-reference-edit-form"
+          onSubmit={(event) => void handleSubmit(event)}
+        >
+          <label className="form-field form-field-wide eval-dataset-reference-edit-field">
             <span>Reference text</span>
             <textarea
-              rows={8}
+              rows={20}
               value={referenceText}
               onChange={(event) => setReferenceText(event.target.value)}
               disabled={busy}
