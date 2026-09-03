@@ -36,10 +36,6 @@ function defaultTemplateForPipelineName(pipelineName: string): string {
   return DEFAULT_PIPELINE_COMMAND_TEMPLATE;
 }
 
-function normalizeYamlText(raw: string): string {
-  return raw.replace(/\r\n/g, '\n').trim();
-}
-
 type FormTab = 'basic' | 'config';
 
 type PipelineConfigFormProps = {
@@ -94,8 +90,7 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
     initial?.commandTemplate ?? defaultTemplateForPipelineName(initial?.pipelineName ?? 'paddleocr-doc-parse'),
   );
   const [configYaml, setConfigYaml] = useState(initial?.configYaml ?? '');
-  const [packagedDefaultYaml, setPackagedDefaultYaml] = useState('');
-  const [defaultLoading, setDefaultLoading] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState(false);
   const [isEnabled, setIsEnabled] = useState(initial?.isEnabled ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -117,53 +112,41 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
     setYamlMessage('');
   }, [initial]);
 
+  // Pre-fill YAML only when creating a pipeline with no stored config yet.
   useEffect(() => {
-    const nameForDefault = pipelineName.trim();
-    if (!nameForDefault) {
-      setPackagedDefaultYaml('');
+    const nameForTemplate = pipelineName.trim();
+    const storedYaml = (initial?.configYaml ?? '').trim();
+    if (!nameForTemplate || storedYaml || isEdit) {
       return;
     }
     let cancelled = false;
-    setDefaultLoading(true);
-    void fetchDefaultPipelineConfigYaml(nameForDefault)
+    setTemplateLoading(true);
+    void fetchDefaultPipelineConfigYaml(nameForTemplate)
       .then((yaml) => {
         if (cancelled) return;
-        setPackagedDefaultYaml(yaml);
-        if (!(initial?.configYaml ?? '').trim()) {
-          setConfigYaml(yaml);
-        }
+        setConfigYaml(yaml);
       })
       .catch((err) => {
         if (cancelled) return;
-        setPackagedDefaultYaml('');
-        if (!(initial?.configYaml ?? '').trim()) {
-          setYamlStatus('error');
-          setYamlMessage(err instanceof Error ? err.message : 'Failed to load packaged default YAML');
-        }
+        setYamlStatus('error');
+        setYamlMessage(err instanceof Error ? err.message : 'Failed to load system pipeline template YAML');
       })
       .finally(() => {
-        if (!cancelled) setDefaultLoading(false);
+        if (!cancelled) setTemplateLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [pipelineName, initial?.id, initial?.configYaml]);
-
-  const usingPackagedDefault =
-    Boolean(packagedDefaultYaml) &&
-    normalizeYamlText(configYaml) === normalizeYamlText(packagedDefaultYaml);
+  }, [pipelineName, initial?.id, initial?.configYaml, isEdit]);
 
   async function handleValidateYaml(): Promise<{ ok: boolean; message: string }> {
     setYamlStatus('idle');
     setYamlMessage('');
     const result = await validatePipelineConfigYaml(configYaml);
     if (result.ok) {
-      const message = usingPackagedDefault
-        ? 'Valid YAML (matches CLI packaged default).'
-        : 'Valid YAML.';
       setYamlStatus('ok');
-      setYamlMessage(message);
-      return { ok: true, message };
+      setYamlMessage('Valid YAML.');
+      return { ok: true, message: 'Valid YAML.' };
     }
     setYamlStatus('error');
     setYamlMessage(result.error);
@@ -180,7 +163,7 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
         setTab('config');
         throw new Error(validation.message);
       }
-      const configToSave = usingPackagedDefault ? null : configYaml.trim() || null;
+      const configToSave = configYaml.trim() || null;
       if (isSystem) {
         await onSubmit({
           name: name.trim(),
@@ -371,8 +354,8 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
               <YamlCodeEditor
                 className="pipeline-config-yaml"
                 value={configYaml}
-                disabled={defaultLoading && !configYaml}
-                placeholder={defaultLoading ? 'Loading packaged default…' : ''}
+                disabled={templateLoading && !configYaml}
+                placeholder={templateLoading ? 'Loading template…' : ''}
                 onChange={(next) => {
                   setConfigYaml(next);
                   setYamlStatus('idle');
@@ -380,11 +363,9 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
                 }}
               />
               <span className="admin-form-hint">
-                {defaultLoading
-                  ? 'Loading CLI packaged default…'
-                  : usingPackagedDefault
-                    ? 'Showing CLI packaged default. Save without edits keeps Default (null override).'
-                    : 'Custom YAML — will be stored on this pipeline and snapshotted onto new jobs.'}
+                {templateLoading
+                  ? 'Loading system pipeline template…'
+                  : 'Stored on this pipeline and snapshotted onto new jobs. Leave empty to omit (worker uses CLI packaged default).'}
               </span>
               {yamlStatus === 'ok' && <p className="pipeline-yaml-ok">{yamlMessage}</p>}
               {yamlStatus === 'error' && <p className="error">{yamlMessage}</p>}
@@ -398,19 +379,7 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={busy || defaultLoading || !packagedDefaultYaml}
-                onClick={() => {
-                  setConfigYaml(packagedDefaultYaml);
-                  setYamlStatus('idle');
-                  setYamlMessage('');
-                }}
-              >
-                Reset to CLI default
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={busy || defaultLoading}
+                disabled={busy || templateLoading}
                 onClick={() => void handleValidateYaml()}
               >
                 Check format
@@ -423,7 +392,7 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={busy || defaultLoading}>
+            <button type="submit" className="btn-primary" disabled={busy || templateLoading}>
               {busy ? 'Saving…' : 'Save'}
             </button>
           </div>
