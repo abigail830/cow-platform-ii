@@ -90,7 +90,7 @@ export function AppLayout() {
 
   return (
     <AppOutletContextInternal.Provider value={outletContext}>
-      <div className="app-shell">
+      <div className={`app-shell layout-${layoutMode}`}>
         <AppTopBar
           user={user}
           userLabel={user.displayName ?? user.email}

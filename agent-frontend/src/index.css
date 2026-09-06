@@ -14,6 +14,10 @@
   --brand-green-soft: rgb(23 162 107 / 0.12);
   --brand-green-muted: rgb(23 162 107 / 0.28);
   --app-page-bg: #f8fafb;
+  --home-page-gradient:
+    radial-gradient(ellipse 80% 70% at 15% 45%, rgba(255, 196, 160, 0.45) 0%, transparent 55%),
+    radial-gradient(ellipse 75% 65% at 85% 50%, rgba(186, 210, 230, 0.4) 0%, transparent 55%),
+    linear-gradient(180deg, #fafbfc 0%, #f4f6f8 100%);
   accent-color: var(--brand-orange);
 }
 
@@ -185,10 +189,7 @@ textarea {
   justify-content: center;
   padding: clamp(2.5rem, 7vh, 4.5rem) clamp(2.5rem, 6vw, 5rem);
   box-sizing: border-box;
-  background:
-    radial-gradient(ellipse 80% 70% at 15% 45%, rgba(255, 196, 160, 0.45) 0%, transparent 55%),
-    radial-gradient(ellipse 75% 65% at 85% 50%, rgba(186, 210, 230, 0.4) 0%, transparent 55%),
-    linear-gradient(180deg, #fafbfc 0%, #f4f6f8 100%);
+  background: transparent;
 }
 
 .home-glass {
@@ -309,6 +310,37 @@ textarea {
   height: 100%;
   overflow: hidden;
   background: var(--app-page-bg);
+}
+
+.app-shell:is(.layout-home, .layout-flat, .layout-admin) {
+  background: var(--home-page-gradient);
+}
+
+.app-shell:is(.layout-home, .layout-flat, .layout-admin) .app-topbar {
+  background: transparent;
+  border-bottom: none;
+}
+
+.app-shell:is(.layout-home, .layout-flat, .layout-admin) .topbar-nav-pill {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+}
+
+.app-shell:is(.layout-home, .layout-flat, .layout-admin) .topbar-brand:hover,
+.app-shell:is(.layout-home, .layout-flat, .layout-admin) .topbar-user:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Page wrappers: transparent so shell gradient shows; white panels unchanged */
+.app-shell:is(.layout-flat, .layout-admin) .admin-page,
+.app-shell.layout-flat .chat-layout,
+.app-shell.layout-flat .chat-main,
+.app-shell.layout-flat .chat-header,
+.app-shell.layout-flat .chat-body {
+  background: transparent;
 }
 
 .app-topbar {
