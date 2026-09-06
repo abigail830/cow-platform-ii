@@ -154,11 +154,12 @@ export function KnowledgeUploadModal({
             )}
           </div>
 
-          <div className="knowledge-upload-modal-body">
-          <div
-            className={`knowledge-upload-form-panel${isDocumentTab ? ' is-hidden' : ''}`}
-            aria-hidden={isDocumentTab}
-          >
+          <div className={`knowledge-upload-modal-body knowledge-upload-modal-body--${tab}`}>
+            <div className="knowledge-upload-modal-stack">
+              <div
+                className={`knowledge-upload-form-panel${isDocumentTab ? ' is-hidden' : ''}`}
+                aria-hidden={isDocumentTab}
+              >
             <div className="form-grid">
               <label className="form-field form-field-wide">
                 <span>Title</span>
@@ -298,6 +299,8 @@ export function KnowledgeUploadModal({
               </ul>
             ) : null}
           </div>
+            </div>
+            <div className="knowledge-upload-modal-spacer" aria-hidden="true" />
           </div>
 
           {error && <p className="error">{error}</p>}

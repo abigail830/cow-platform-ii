@@ -4354,33 +4354,66 @@ textarea {
   margin-top: 1rem;
 }
 
-/* Upload modal — fixed body height so tab switches do not resize the dialog */
+/* Upload modal — fixed body height; spare space stays at the bottom, not in the dropzone */
+.knowledge-upload-modal .capture-artifact-tabs {
+  width: 100%;
+}
+
+.knowledge-upload-modal .capture-artifact-tab {
+  flex: 1;
+  text-align: center;
+}
+
 .knowledge-upload-modal .knowledge-upload-modal-body {
   display: flex;
   flex-direction: column;
-  min-height: 28.5rem;
+  height: 31rem;
+}
+
+.knowledge-upload-modal .knowledge-upload-modal-stack {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.knowledge-upload-modal .knowledge-upload-modal-spacer {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.knowledge-upload-modal .knowledge-upload-form-panel {
+  flex: 0 0 auto;
 }
 
 .knowledge-upload-modal .knowledge-upload-form-panel.is-hidden {
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
 }
 
 .knowledge-upload-modal .knowledge-upload-form-panel .form-grid {
   margin-bottom: 0;
 }
 
+.knowledge-upload-modal .document-upload-dropzone {
+  flex: 0 0 auto;
+  margin-top: 0.75rem;
+}
+
 .knowledge-upload-modal .knowledge-upload-dropzone-copy {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  min-height: 4.75rem;
 }
 
 .knowledge-upload-modal .knowledge-upload-file-list-slot {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+  max-height: 5.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin-top: 0.75rem;
+}
+
+.knowledge-upload-modal .knowledge-upload-modal-body--document .document-upload-dropzone {
+  margin-top: 0;
 }
 
 .capture-detail-meta {
