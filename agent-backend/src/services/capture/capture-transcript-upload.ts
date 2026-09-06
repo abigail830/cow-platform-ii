@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
-import { appAudios, db } from '../../db/index.ts';
 import { extractSessionFileText } from '../../shared/session/session-file-extract.ts';
 import {
   MAX_TRANSCRIPT_UPLOAD_BYTES,
@@ -13,10 +11,7 @@ import {
   getStorageUploadUrl,
   sha256Hex,
   transcriptS3Key,
-  uploadAudioObject,
-  validateFileHash,
 } from '../../storage/audio-files.ts';
-import { attachAudioToCapture } from './audio-captures.ts';
 
 export { MAX_TRANSCRIPT_UPLOAD_BYTES, normalizeTranscriptMarkdown, validateTranscriptFilename } from './capture-transcript-normalize.ts';
 
@@ -47,131 +42,6 @@ export async function extractTranscriptUploadText(filename: string, buffer: Buff
       : 'text/markdown';
   const result = await extractSessionFileText({ filename, mimeType, bytes: buffer });
   return result.text.trim();
-}
-
-async function writeTranscriptSegmentObjects(input: {
-  normalizedMarkdown: string;
-  originalBuffer: Buffer;
-  filename: string;
-}): Promise<{ fileHash: string; transcriptKey: string; originalKey: string }> {
-  const normalizedMarkdown = input.normalizedMarkdown;
-  const fileHash = sha256Hex(Buffer.from(normalizedMarkdown, 'utf8'));
-  const transcriptKey = transcriptS3Key(fileHash);
-  const originalKey = transcriptOriginalS3Key(fileHash, input.filename);
-
-  await uploadAudioObject(
-    transcriptKey,
-    Buffer.from(normalizedMarkdown, 'utf8'),
-    'text/markdown; charset=utf-8',
-  );
-
-  const ext = extensionFromFilename(input.filename).toLowerCase();
-  const originalContentType =
-    ext === 'docx'
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      : 'text/markdown; charset=utf-8';
-  await uploadAudioObject(originalKey, input.originalBuffer, originalContentType);
-
-  return { fileHash, transcriptKey, originalKey };
-}
-
-export async function createAndAttachTranscriptSegment(input: {
-  channelId: string;
-  captureId: string;
-  filename: string;
-  buffer: Buffer;
-  uploadedBy: string;
-  segmentLabel?: string | null;
-}) {
-  const filename = validateTranscriptFilename(input.filename);
-  const extracted = await extractTranscriptUploadText(filename, input.buffer);
-  const normalizedMarkdown = normalizeTranscriptMarkdown(extracted, filename);
-  const { fileHash, transcriptKey } = await writeTranscriptSegmentObjects({
-    normalizedMarkdown,
-    originalBuffer: input.buffer,
-    filename,
-  });
-
-  const [row] = await db
-    .insert(appAudios)
-    .values({
-      channelId: input.channelId,
-      name: filename,
-      fileType: 'md',
-      sizeBytes: input.buffer.length,
-      fileHash,
-      s3Key: transcriptKey,
-      status: 'completed',
-      metadata: {
-        source_kind: 'transcript',
-        original_filename: filename,
-      },
-      uploadedBy: input.uploadedBy,
-    })
-    .returning();
-
-  await attachAudioToCapture({
-    captureId: input.captureId,
-    audioId: row!.id,
-    segmentLabel: input.segmentLabel,
-  });
-
-  await afterTranscriptSegmentAttached(input.captureId);
-
-  return row!;
-}
-
-async function afterTranscriptSegmentAttached(captureId: string): Promise<void> {
-  const { maybeStartCapturePostProcess } = await import('./capture-post-process-trigger.ts');
-  const { syncCaptureStatus } = await import('./capture-status.ts');
-  void maybeStartCapturePostProcess(captureId);
-  void syncCaptureStatus(captureId);
-}
-
-async function attachTranscriptSegmentRecord(input: {
-  channelId: string;
-  captureId: string;
-  filename: string;
-  fileHash: string;
-  transcriptS3Key: string;
-  sizeBytes: number;
-  uploadedBy: string;
-  segmentLabel?: string | null;
-}) {
-  const filename = validateTranscriptFilename(input.filename);
-  const fileHash = validateFileHash(input.fileHash);
-  const expectedKey = transcriptS3Key(fileHash);
-  if (input.transcriptS3Key !== expectedKey) {
-    throw new Error('transcript_s3_key does not match file_hash');
-  }
-
-  const [row] = await db
-    .insert(appAudios)
-    .values({
-      channelId: input.channelId,
-      name: filename,
-      fileType: 'md',
-      sizeBytes: input.sizeBytes,
-      fileHash,
-      s3Key: expectedKey,
-      status: 'completed',
-      metadata: {
-        source_kind: 'transcript',
-        original_filename: filename,
-      },
-      uploadedBy: input.uploadedBy,
-    })
-    .returning();
-
-  await attachAudioToCapture({
-    captureId: input.captureId,
-    audioId: row!.id,
-    segmentLabel: input.segmentLabel,
-  });
-
-  await afterTranscriptSegmentAttached(input.captureId);
-
-  return row!;
 }
 
 export async function initTranscriptSegmentUpload(input: {
@@ -236,68 +106,4 @@ export async function initTranscriptSegmentUpload(input: {
     method: 'PUT' as const,
     headers: { 'Content-Type': contentType },
   };
-}
-
-export async function completeTranscriptSegmentDirectUpload(input: {
-  channelId: string;
-  captureId: string;
-  filename: string;
-  fileHash: string;
-  transcriptS3Key: string;
-  sizeBytes: number;
-  uploadedBy: string;
-  segmentLabel?: string | null;
-}) {
-  return attachTranscriptSegmentRecord({
-    channelId: input.channelId,
-    captureId: input.captureId,
-    filename: input.filename,
-    fileHash: input.fileHash,
-    transcriptS3Key: input.transcriptS3Key,
-    sizeBytes: input.sizeBytes,
-    uploadedBy: input.uploadedBy,
-    segmentLabel: input.segmentLabel,
-  });
-}
-
-export async function completeTranscriptSegmentUpload(input: {
-  channelId: string;
-  captureId: string;
-  uploadId: string;
-  filename: string;
-  stagingS3Key: string;
-  sizeBytes: number;
-  uploadedBy: string;
-  segmentLabel?: string | null;
-  /** Markdown body from browser — avoids Vercel→OSS download on complete for .md uploads. */
-  transcriptMarkdown?: string | null;
-}) {
-  const filename = validateTranscriptFilename(input.filename);
-  const expectedKey = transcriptStagingS3Key(input.uploadId, filename);
-  if (input.stagingS3Key !== expectedKey) {
-    throw new Error('staging_s3_key does not match upload_id and filename');
-  }
-
-  const inline = input.transcriptMarkdown?.trim();
-  if (!inline) {
-    throw new Error(
-      'transcript_markdown is required; use direct upload so the browser PUTs to OSS',
-    );
-  }
-  if (Buffer.byteLength(inline, 'utf8') > MAX_TRANSCRIPT_UPLOAD_BYTES) {
-    throw new Error('Transcript file exceeds maximum allowed size');
-  }
-
-  const normalized = normalizeTranscriptMarkdown(inline, filename);
-  const fileHash = sha256Hex(Buffer.from(normalized, 'utf8'));
-  return attachTranscriptSegmentRecord({
-    channelId: input.channelId,
-    captureId: input.captureId,
-    filename,
-    fileHash,
-    transcriptS3Key: transcriptS3Key(fileHash),
-    sizeBytes: input.sizeBytes,
-    uploadedBy: input.uploadedBy,
-    segmentLabel: input.segmentLabel,
-  });
 }

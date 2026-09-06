@@ -60,6 +60,7 @@ export function DocumentsLayout() {
   const [expandedChannelIds, setExpandedChannelIds] = useState<Set<string>>(() => new Set());
   const [channelItems, setChannelItems] = useState<Record<string, ChannelKnowledgeItem[]>>({});
   const [loadingChannelIds, setLoadingChannelIds] = useState<Set<string>>(() => new Set());
+  const [deletingItemIds, setDeletingItemIds] = useState<Set<string>>(() => new Set());
   const [loadingChannels, setLoadingChannels] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [channelModal, setChannelModal] = useState<ChannelModalState | null>(null);
@@ -238,6 +239,7 @@ export function DocumentsLayout() {
   }
 
   async function handleDeleteItem(item: ChannelKnowledgeItem) {
+    setDeletingItemIds((current) => new Set(current).add(item.id));
     try {
       await deleteDocumentCapture(item.id);
       await loadItemsForChannel(item.channel_id);
@@ -246,6 +248,12 @@ export function DocumentsLayout() {
       }
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Failed to delete item');
+    } finally {
+      setDeletingItemIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
     }
   }
 
@@ -336,6 +344,7 @@ export function DocumentsLayout() {
             expandedChannelIds={expandedChannelIds}
             channelItems={channelItems}
             loadingChannelIds={loadingChannelIds}
+            deletingItemIds={deletingItemIds}
             canCreateRoot={canWrite}
             onToggleExpand={handleToggleExpand}
             onSelectChannel={handleSelectChannel}

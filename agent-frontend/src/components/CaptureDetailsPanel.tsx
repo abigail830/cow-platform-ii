@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react';
 import {
   AUDIENCE_LABELS,
   RECORDING_MODE_LABELS,
-  type AudioCaptureDetail,
-} from '../api/audioCaptures.ts';
+  type DocumentCaptureDetail,
+} from '../api/documentCaptures.ts';
 import { iconProps } from './icons/icon-props.ts';
 
 type CaptureDetailsPanelProps = {
-  capture: AudioCaptureDetail;
+  capture: DocumentCaptureDetail;
   canEdit: boolean;
   onSave: (input: {
     brief: string | null;
@@ -25,7 +25,7 @@ type FormState = {
   audience: string;
 };
 
-function toFormState(capture: AudioCaptureDetail): FormState {
+function toFormState(capture: DocumentCaptureDetail): FormState {
   return {
     brief: capture.brief ?? '',
     participantsHint: capture.participants_hint ?? '',

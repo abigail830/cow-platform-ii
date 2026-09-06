@@ -1,9 +1,8 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import {
-  appAsrHotwordChannels,
   appAsrHotwordDocumentChannels,
   appAsrHotwords,
-  appAudioChannels,
+  appDocumentChannels,
   db,
 } from '../../db/index.ts';
 import { getPipelineConfigById } from '../../shared/pipeline/pipeline-config-store.ts';
@@ -22,7 +21,6 @@ import {
   dashScopeDeleteVocabulary,
   dashScopeUpdateVocabulary,
 } from './asr-vocabulary-sync.ts';
-import { getAudioChannelById } from './audios.ts';
 import { getChannelById } from '../documents/documents.ts';
 
 export type AsrHotwordPublic = {
@@ -56,11 +54,11 @@ async function channelIdsForHotwords(hotwordIds: string[]): Promise<Map<string, 
   if (hotwordIds.length === 0) return new Map();
   const links = await db
     .select({
-      hotwordId: appAsrHotwordChannels.hotwordId,
-      channelId: appAsrHotwordChannels.channelId,
+      hotwordId: appAsrHotwordDocumentChannels.hotwordId,
+      channelId: appAsrHotwordDocumentChannels.channelId,
     })
-    .from(appAsrHotwordChannels)
-    .where(inArray(appAsrHotwordChannels.hotwordId, hotwordIds));
+    .from(appAsrHotwordDocumentChannels)
+    .where(inArray(appAsrHotwordDocumentChannels.hotwordId, hotwordIds));
   const map = new Map<string, string[]>();
   for (const link of links) {
     const list = map.get(link.hotwordId) ?? [];
@@ -117,18 +115,6 @@ export async function getAsrHotwordById(id: string): Promise<AsrHotwordPublic | 
   return toPublic(row, channelMap.get(row.id) ?? []);
 }
 
-export async function listHotwordsForChannel(channelId: string): Promise<AsrHotwordPublic[]> {
-  const links = await db
-    .select({ hotwordId: appAsrHotwordChannels.hotwordId })
-    .from(appAsrHotwordChannels)
-    .where(eq(appAsrHotwordChannels.channelId, channelId));
-  const ids = links.map((link) => link.hotwordId);
-  if (ids.length === 0) return [];
-  const rows = await db.select().from(appAsrHotwords).where(inArray(appAsrHotwords.id, ids));
-  const channelMap = await channelIdsForHotwords(ids);
-  return rows.map((row) => toPublic(row, channelMap.get(row.id) ?? []));
-}
-
 export async function listHotwordsForDocumentChannel(channelId: string): Promise<AsrHotwordPublic[]> {
   const links = await db
     .select({ hotwordId: appAsrHotwordDocumentChannels.hotwordId })
@@ -137,13 +123,14 @@ export async function listHotwordsForDocumentChannel(channelId: string): Promise
   const ids = links.map((link) => link.hotwordId);
   if (ids.length === 0) return [];
   const rows = await db.select().from(appAsrHotwords).where(inArray(appAsrHotwords.id, ids));
-  return rows.map((row) => toPublic(row, [channelId]));
+  const channelMap = await channelIdsForHotwords(ids);
+  return rows.map((row) => toPublic(row, channelMap.get(row.id) ?? []));
 }
 
-async function resolveChannelAsrCredentials(channelId: string) {
-  const channel = await getAudioChannelById(channelId);
-  if (!channel?.pipelineId) return null;
-  const pipeline = await getPipelineConfigById(channel.pipelineId);
+async function resolveDocumentChannelAsrCredentials(channelId: string) {
+  const channel = await getChannelById(channelId);
+  if (!channel?.transcriptionPipelineId) return null;
+  const pipeline = await getPipelineConfigById(channel.transcriptionPipelineId);
   if (!pipeline || !isAudioAsyncPipelineName(pipeline.pipelineName)) return null;
 
   const displayName = audioTranscribeModelDisplayNameFromPipeline(pipeline);
@@ -166,24 +153,24 @@ async function resolveChannelAsrCredentials(channelId: string) {
   };
 }
 
-async function mergedHotwordRowsForChannel(channelId: string) {
+async function mergedHotwordRowsForDocumentChannel(channelId: string) {
   return db
     .select({
       text: appAsrHotwords.text,
       weight: appAsrHotwords.weight,
       lang: appAsrHotwords.lang,
     })
-    .from(appAsrHotwordChannels)
-    .innerJoin(appAsrHotwords, eq(appAsrHotwordChannels.hotwordId, appAsrHotwords.id))
-    .where(eq(appAsrHotwordChannels.channelId, channelId));
+    .from(appAsrHotwordDocumentChannels)
+    .innerJoin(appAsrHotwords, eq(appAsrHotwordDocumentChannels.hotwordId, appAsrHotwords.id))
+    .where(eq(appAsrHotwordDocumentChannels.channelId, channelId));
 }
 
-export async function syncChannelAsrVocabulary(channelId: string): Promise<void> {
-  const channel = await getAudioChannelById(channelId);
+export async function syncDocumentChannelAsrVocabulary(channelId: string): Promise<void> {
+  const channel = await getChannelById(channelId);
   if (!channel) throw new Error('Channel not found');
 
-  const creds = await resolveChannelAsrCredentials(channelId);
-  const rows = await mergedHotwordRowsForChannel(channelId);
+  const creds = await resolveDocumentChannelAsrCredentials(channelId);
+  const rows = await mergedHotwordRowsForDocumentChannel(channelId);
 
   if (rows.length > 0 && !creds) {
     throw new Error('Channel has linked hotwords but no ASR transcription pipeline is configured');
@@ -204,14 +191,14 @@ export async function syncChannelAsrVocabulary(channelId: string): Promise<void>
       }
     }
     await db
-      .update(appAudioChannels)
+      .update(appDocumentChannels)
       .set({
         asrVocabularyId: null,
         asrVocabularyTargetModel: null,
         asrVocabularySyncedAt: null,
         updatedAt: new Date(),
       })
-      .where(eq(appAudioChannels.id, channelId));
+      .where(eq(appDocumentChannels.id, channelId));
     return;
   }
 
@@ -248,31 +235,33 @@ export async function syncChannelAsrVocabulary(channelId: string): Promise<void>
   }
 
   await db
-    .update(appAudioChannels)
+    .update(appDocumentChannels)
     .set({
       asrVocabularyId: vocabularyId,
       asrVocabularyTargetModel: creds.targetModel,
       asrVocabularySyncedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(appAudioChannels.id, channelId));
+    .where(eq(appDocumentChannels.id, channelId));
 }
 
-export async function resyncChannelsForHotword(hotwordId: string): Promise<void> {
+export async function resyncDocumentChannelsForHotword(hotwordId: string): Promise<void> {
   const links = await db
-    .select({ channelId: appAsrHotwordChannels.channelId })
-    .from(appAsrHotwordChannels)
-    .where(eq(appAsrHotwordChannels.hotwordId, hotwordId));
+    .select({ channelId: appAsrHotwordDocumentChannels.channelId })
+    .from(appAsrHotwordDocumentChannels)
+    .where(eq(appAsrHotwordDocumentChannels.hotwordId, hotwordId));
   for (const link of links) {
-    await syncChannelAsrVocabulary(link.channelId);
+    await syncDocumentChannelAsrVocabulary(link.channelId);
   }
 }
 
-async function replaceHotwordChannels(hotwordId: string, channelIds: string[]): Promise<void> {
-  await db.delete(appAsrHotwordChannels).where(eq(appAsrHotwordChannels.hotwordId, hotwordId));
+async function replaceHotwordDocumentChannels(hotwordId: string, channelIds: string[]): Promise<void> {
+  await db
+    .delete(appAsrHotwordDocumentChannels)
+    .where(eq(appAsrHotwordDocumentChannels.hotwordId, hotwordId));
   const unique = [...new Set(channelIds)];
   if (unique.length === 0) return;
-  await db.insert(appAsrHotwordChannels).values(
+  await db.insert(appAsrHotwordDocumentChannels).values(
     unique.map((channelId) => ({
       hotwordId,
       channelId,
@@ -284,7 +273,7 @@ export async function createAsrHotword(
   input: AsrHotwordInput & { channelIds?: string[]; createdBy?: string | null },
 ): Promise<AsrHotwordPublic> {
   const channelIds = input.channelIds ?? [];
-  const creds = channelIds.length > 0 ? await resolveChannelAsrCredentials(channelIds[0]) : null;
+  const creds = channelIds.length > 0 ? await resolveDocumentChannelAsrCredentials(channelIds[0]) : null;
   const providerModelId = creds?.targetModel ?? 'qwen-audio-3.0-asr-flash-filetrans';
 
   const text = validateHotwordText(input.text);
@@ -304,9 +293,9 @@ export async function createAsrHotword(
     .returning();
 
   if (channelIds.length > 0) {
-    await replaceHotwordChannels(row!.id, channelIds);
+    await replaceHotwordDocumentChannels(row!.id, channelIds);
     for (const channelId of [...new Set(channelIds)]) {
-      await syncChannelAsrVocabulary(channelId);
+      await syncDocumentChannelAsrVocabulary(channelId);
     }
   }
 
@@ -321,7 +310,7 @@ export async function updateAsrHotword(
   const existing = await getAsrHotwordById(id);
   if (!existing) throw new Error('Hotword not found');
 
-  const creds = await resolveChannelAsrCredentials(
+  const creds = await resolveDocumentChannelAsrCredentials(
     existing.channel_ids[0] ?? (input.channelIds?.[0] ?? ''),
   );
   const providerModelId = creds?.targetModel ?? 'qwen-audio-3.0-asr-flash-filetrans';
@@ -346,15 +335,15 @@ export async function updateAsrHotword(
 
   const affectedChannels = new Set(existing.channel_ids);
   if (input.channelIds !== undefined) {
-    await replaceHotwordChannels(id, input.channelIds);
+    await replaceHotwordDocumentChannels(id, input.channelIds);
     for (const channelId of input.channelIds) affectedChannels.add(channelId);
   } else {
-    await resyncChannelsForHotword(id);
+    await resyncDocumentChannelsForHotword(id);
   }
 
   if (input.channelIds !== undefined) {
     for (const channelId of affectedChannels) {
-      await syncChannelAsrVocabulary(channelId);
+      await syncDocumentChannelAsrVocabulary(channelId);
     }
   }
 
@@ -370,40 +359,33 @@ export async function deleteAsrHotword(id: string): Promise<void> {
   await db.delete(appAsrHotwords).where(eq(appAsrHotwords.id, id));
 
   for (const channelId of channelIds) {
-    await syncChannelAsrVocabulary(channelId);
+    await syncDocumentChannelAsrVocabulary(channelId);
   }
 }
 
-export async function getChannelAsrVocabularyIdForJob(channelId: string): Promise<string | null> {
-  const channel = await getAudioChannelById(channelId);
+export async function getDocumentChannelAsrVocabularyIdForJob(channelId: string): Promise<string | null> {
+  const channel = await getChannelById(channelId);
   if (!channel?.asrVocabularyId?.trim()) return null;
-  const creds = await resolveChannelAsrCredentials(channelId);
+  const creds = await resolveDocumentChannelAsrCredentials(channelId);
   if (!creds) return null;
   if (channel.asrVocabularyTargetModel !== creds.targetModel) {
-    await syncChannelAsrVocabulary(channelId);
-    const refreshed = await getAudioChannelById(channelId);
+    await syncDocumentChannelAsrVocabulary(channelId);
+    const refreshed = await getChannelById(channelId);
     return refreshed?.asrVocabularyId?.trim() || null;
   }
   return channel.asrVocabularyId.trim();
 }
 
-/** Document channel transcription captures — vocabulary synced on document channels. */
-export async function getDocumentChannelAsrVocabularyIdForJob(channelId: string): Promise<string | null> {
-  const channel = await getChannelById(channelId);
-  if (!channel?.asrVocabularyId?.trim()) return null;
-  return channel.asrVocabularyId.trim();
-}
-
-export async function syncChannelAsrVocabularyIfPipelineChanged(
+export async function syncDocumentChannelAsrVocabularyIfPipelineChanged(
   channelId: string,
-  previousPipelineId: string | null,
-  nextPipelineId: string | null,
+  previousTranscriptionPipelineId: string | null,
+  nextTranscriptionPipelineId: string | null,
 ): Promise<void> {
-  if (previousPipelineId === nextPipelineId) return;
+  if (previousTranscriptionPipelineId === nextTranscriptionPipelineId) return;
   const links = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(appAsrHotwordChannels)
-    .where(eq(appAsrHotwordChannels.channelId, channelId));
+    .from(appAsrHotwordDocumentChannels)
+    .where(eq(appAsrHotwordDocumentChannels.channelId, channelId));
   if ((links[0]?.count ?? 0) === 0) return;
-  await syncChannelAsrVocabulary(channelId);
+  await syncDocumentChannelAsrVocabulary(channelId);
 }

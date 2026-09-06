@@ -38,8 +38,7 @@ import {
   type CapturePostProcessArtifactKind,
 } from '../api/documentCaptures.ts';
 import { formatDocumentBytes } from '../api/documents.ts';
-import { isAudioPipelineActive } from '../api/audios.ts';
-import type { AudioCaptureDetail } from '../api/audioCaptures.ts';
+import { isAudioPipelineActive } from '../api/capture-pipeline-utils.ts';
 import { downloadTextFile, withDownloadExtension } from '../shared/download-text.ts';
 import { AudioPipelineStatus } from '../components/AudioPipelineStatus.tsx';
 import { DocumentPipelineStatus } from '../components/DocumentPipelineStatus.tsx';
@@ -1235,7 +1234,7 @@ export function DocumentCaptureDetailPage() {
       <div className="audio-detail-layout">
         {!documentFileCapture ? (
           <CaptureDetailsPanel
-            capture={capture as unknown as AudioCaptureDetail}
+            capture={capture}
             canEdit={canWriteCapture}
             onSave={handleSaveDetails}
           />
@@ -1352,18 +1351,7 @@ export function DocumentCaptureDetailPage() {
                           <AudioPipelineStatus
                             audio={{
                               id: segment.id,
-                              channel_id: segment.channel_id,
-                              name: segment.name,
-                              file_type: segment.file_type,
-                              size_bytes: segment.size_bytes,
-                              file_hash: segment.file_hash ?? '',
-                              s3_key: '',
                               status: segment.status,
-                              duration_sec: null,
-                              metadata: segment.metadata ?? {},
-                              uploaded_by: null,
-                              created_at: segment.created_at,
-                              updated_at: segment.updated_at,
                               pipeline_job: segment.pipeline_job,
                             }}
                           />
@@ -1460,7 +1448,7 @@ export function DocumentCaptureDetailPage() {
             {showPipelineStepper ? (
               <div className="capture-extraction-pipeline-bar" aria-label="Post-process progress">
                 <CapturePipelineStatus
-                  capture={capture as unknown as AudioCaptureDetail}
+                  capture={capture}
                   errorLayout="inline"
                 />
               </div>

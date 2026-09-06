@@ -1,8 +1,8 @@
 import {
   formatCaptureStatusLabel,
   isCapturePostProcessFailed,
-  type AudioCaptureRecord,
-} from '../api/audioCaptures.ts';
+  type DocumentCaptureRecord,
+} from '../api/documentCaptures.ts';
 
 const POST_PROCESS_STEPS = [
   { key: 'structuring', label: 'Structure' },
@@ -14,7 +14,7 @@ const POST_PROCESS_STEPS = [
 
 const ACTIVE_STAGES = new Set(['submitted', 'structuring', 'classifying', 'extracting', 'synthesizing']);
 
-type CaptureJob = NonNullable<AudioCaptureRecord['pipeline_job']>;
+type CaptureJob = NonNullable<DocumentCaptureRecord['pipeline_job']>;
 
 function pipelineStageProgressIndex(stage: string): number {
   switch (stage) {
@@ -50,7 +50,7 @@ function shortenErrorMessage(message: string, maxLen = 120): string {
   return `${oneLine.slice(0, maxLen - 1)}…`;
 }
 
-function buildTooltip(capture: AudioCaptureRecord, job: CaptureJob | null): string {
+function buildTooltip(capture: DocumentCaptureRecord, job: CaptureJob | null): string {
   const parts: string[] = [formatCaptureStatusLabel(capture.status)];
   if (job) {
     parts.push(job.stage);
@@ -59,7 +59,7 @@ function buildTooltip(capture: AudioCaptureRecord, job: CaptureJob | null): stri
   return parts.join(' — ');
 }
 
-function shouldShowPostProcessStepper(capture: AudioCaptureRecord): boolean {
+function shouldShowPostProcessStepper(capture: DocumentCaptureRecord): boolean {
   const job = capture.pipeline_job;
   if (capture.status === 'post_processing') return true;
   if (!job) return false;
@@ -103,7 +103,7 @@ function segmentClassForConnector(
 }
 
 type CapturePipelineStatusProps = {
-  capture: AudioCaptureRecord;
+  capture: DocumentCaptureRecord;
   /** stack: error below stepper (table/list). inline: error to the right of stepper (detail header). */
   errorLayout?: 'stack' | 'inline';
 };

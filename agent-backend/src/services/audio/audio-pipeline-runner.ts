@@ -1,30 +1,21 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { eq } from 'drizzle-orm';
-import { appAudios, db } from '../../db/index.ts';
+import { spawn } from 'node:child_process';
 import { redactCliCommandSecrets } from '../../shared/model/model-cli-client.ts';
-import { getPipelineConfigById, getPipelineConfigByPipelineName } from '../../shared/pipeline/pipeline-config-store.ts';
-import { resolvePipelineConfigYamlSnapshot } from '../../shared/pipeline/pipeline-default-config.ts';
+import { getPipelineConfigByPipelineName } from '../../shared/pipeline/pipeline-config-store.ts';
 import {
   normalizeAsyncWorkerCliArgs,
   parseAsyncWorkerTemplate,
   pipelineTemplateToCliArgs,
 } from '../../shared/pipeline/pipeline-command-template.ts';
-import { getAudioChannelById } from './audios.ts';
-import { getChannelAsrVocabularyIdForJob } from './asr-hotwords.ts';
 import {
   resolveAudioPipelineGithubConfig,
   triggerAudioPipelineGithubActions,
 } from './audio-pipeline-github-actions.ts';
 import { resolvePipelineWorkerMode } from '../pipeline/pipeline-worker-mode.ts';
 import {
-  ASYNC_AUDIO_PIPELINE_NAMES,
-  audioPipelineProviderForName,
-  createAudioPipelineJob,
   defaultAudioPipelineWorkflowFile,
-  isAudioAsyncPipelineName,
 } from './audio-pipeline-jobs.ts';
-import { spawn } from 'node:child_process';
 
 function repoRootFromBackend(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -167,70 +158,4 @@ export async function spawnAsyncAudioPipelineWorker(
 
   const args = await buildAudioWorkerCliArgs(jobId, pipelineName);
   spawnAudioPipelineCliLocal(args, apiUrl);
-}
-
-export async function updateAudioStatus(
-  audioId: string,
-  status: 'uploaded' | 'running' | 'completed' | 'failed',
-): Promise<void> {
-  await db
-    .update(appAudios)
-    .set({ status, updatedAt: new Date() })
-    .where(eq(appAudios.id, audioId));
-}
-
-async function startAsyncAudioPipelineJob(audioId: string): Promise<{ jobId: string }> {
-  const [audio] = await db.select().from(appAudios).where(eq(appAudios.id, audioId)).limit(1);
-  if (!audio) throw new Error('Audio not found');
-
-  const channel = await getAudioChannelById(audio.channelId);
-  if (!channel?.pipelineId) throw new Error('Channel has no pipeline configured');
-
-  const pipeline = await getPipelineConfigById(channel.pipelineId);
-  if (!pipeline || !pipeline.isEnabled) throw new Error('Pipeline is not available');
-
-  const provider = audioPipelineProviderForName(pipeline.pipelineName);
-  if (!provider) throw new Error(`Unsupported async audio pipeline: ${pipeline.pipelineName}`);
-
-  const apiUrl = resolveApiUrl();
-
-  const configYaml = await resolvePipelineConfigYamlSnapshot({
-    pipelineName: pipeline.pipelineName,
-    configYaml: pipeline.configYaml,
-    isSystem: pipeline.isSystem,
-  });
-
-  const job = await createAudioPipelineJob({
-    audioId: audio.id,
-    pipelineName: pipeline.pipelineName,
-    provider,
-    configYaml,
-    asrVocabularyIdSnapshot: await getChannelAsrVocabularyIdForJob(audio.channelId),
-  });
-
-  await spawnAsyncAudioPipelineWorker(job.id, pipeline.pipelineName, apiUrl);
-  return { jobId: job.id };
-}
-
-export async function startAudioPipeline(audioId: string): Promise<{ status: string; job_id?: string }> {
-  const [audio] = await db.select().from(appAudios).where(eq(appAudios.id, audioId)).limit(1);
-  if (!audio) throw new Error('Audio not found');
-
-  const channel = await getAudioChannelById(audio.channelId);
-  if (!channel?.pipelineId) throw new Error('Channel has no pipeline configured');
-
-  const pipeline = await getPipelineConfigById(channel.pipelineId);
-  if (!pipeline) throw new Error('Pipeline is not available');
-
-  if (!isAudioAsyncPipelineName(pipeline.pipelineName)) {
-    throw new Error(
-      `Channel pipeline must be an async audio transcribe pipeline ` +
-        `(${[...ASYNC_AUDIO_PIPELINE_NAMES].join(', ')}). Got: ${pipeline.pipelineName}`,
-    );
-  }
-
-  await updateAudioStatus(audioId, 'running');
-
-  const { jobId } = await startAsyncAudioPipelineJob(audioId);
-  return { status: 'running', job_id: jobId };
 }

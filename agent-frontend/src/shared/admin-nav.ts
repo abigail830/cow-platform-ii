@@ -101,22 +101,6 @@ export const AGENT_PAGES: readonly NavPage[] = [
 
 export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
   {
-    path: '/knowledge/audio',
-    navLabel: 'Audio',
-    titleMain: 'Audio',
-    titleAccent: '',
-    permissionKey: 'knowledge-management:audio',
-    icon: 'audio',
-  },
-  {
-    path: '/knowledge/asr-hotwords',
-    navLabel: 'ASR Hotwords',
-    titleMain: 'ASR',
-    titleAccent: 'Hotwords',
-    permissionKey: 'knowledge-management:asr-hotwords',
-    icon: 'asr-hotwords',
-  },
-  {
     path: '/knowledge/documents',
     navLabel: 'Document',
     titleMain: 'Document',
@@ -139,6 +123,14 @@ export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
     titleAccent: 'Search',
     permissionKey: 'knowledge-management:hybrid-search',
     icon: 'hybrid-search',
+  },
+  {
+    path: '/knowledge/asr-hotwords',
+    navLabel: 'ASR Hotwords',
+    titleMain: 'ASR',
+    titleAccent: 'Hotwords',
+    permissionKey: 'knowledge-management:asr-hotwords',
+    icon: 'asr-hotwords',
   },
 ];
 

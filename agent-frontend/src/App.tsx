@@ -18,10 +18,6 @@ import { AsrHotwordsPage } from './pages/AsrHotwordsPage.tsx';
 import { BuiltinAgentEditPage } from './pages/BuiltinAgentEditPage.tsx';
 import { PipelinesConfigPage } from './pages/PipelinesConfigPage.tsx';
 import { JudgeDimensionsPage } from './pages/JudgeDimensionsPage.tsx';
-import { AudioLayout } from './pages/AudioLayout.tsx';
-import { AudioDetailPage } from './pages/AudioDetailPage.tsx';
-import { AudioCaptureListPage } from './pages/AudioCaptureListPage.tsx';
-import { AudioCaptureDetailPage } from './pages/AudioCaptureDetailPage.tsx';
 import { EvalDatasetDetailPage, EvalDatasetsListPage } from './pages/EvalDatasetsPage.tsx';
 import { EvaluationRunDetailPage, EvaluationRunsListPage } from './pages/EvaluationRunsPage.tsx';
 import { DocumentsLayout } from './pages/DocumentsLayout.tsx';
@@ -66,11 +62,6 @@ export default function App() {
           <Route path="/knowledge/hybrid-search" element={<HybridSearchPage />} />
           <Route path="/knowledge/knowledge-bases" element={<KnowledgeBasesListPage />} />
           <Route path="/knowledge/knowledge-bases/:knowledgeBaseId" element={<KnowledgeBaseDetailRouter />} />
-          <Route path="/knowledge/audio" element={<AudioLayout />}>
-            <Route index element={<AudioCaptureListPage />} />
-            <Route path="captures/:captureId" element={<AudioCaptureDetailPage />} />
-            <Route path="segments/:audioId" element={<AudioDetailPage />} />
-          </Route>
           <Route path="/evaluation/datasets" element={<EvalDatasetsListPage />} />
           <Route path="/evaluation/datasets/:datasetId" element={<EvalDatasetDetailPage />} />
           <Route path="/evaluation/runs" element={<EvaluationRunsListPage />} />

@@ -224,7 +224,6 @@ export const appUserRoles = pgTable(
 
 export const RESOURCE_TYPES = [
   'document_channel',
-  'audio_channel',
   'knowledge_base',
   'studio_agent',
   'skill',
@@ -307,29 +306,6 @@ export const appDocuments = pgTable(
   ],
 );
 
-export const appAudioChannels = pgTable(
-  'app_audio_channels',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    name: text('name').notNull(),
-    description: text('description'),
-    parentId: uuid('parent_id'),
-    sortOrder: integer('sort_order').notNull().default(0),
-    pipelineId: uuid('pipeline_id').references(() => appPipelineConfigs.id, { onDelete: 'set null' }),
-    postProcessPipelineId: uuid('post_process_pipeline_id').references(() => appPipelineConfigs.id, {
-      onDelete: 'set null',
-    }),
-    autoStartPipeline: boolean('auto_start_pipeline').notNull().default(false),
-    asrVocabularyId: text('asr_vocabulary_id'),
-    asrVocabularyTargetModel: text('asr_vocabulary_target_model'),
-    asrVocabularySyncedAt: timestamp('asr_vocabulary_synced_at', { withTimezone: true }),
-    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [index('idx_audio_channels_parent').on(t.parentId, t.sortOrder)],
-);
-
 export const appAsrHotwords = pgTable(
   'app_asr_hotwords',
   {
@@ -362,33 +338,6 @@ export const appAsrHotwordDocumentChannels = pgTable(
   ],
 );
 
-export const appAsrHotwordChannels = pgTable(
-  'app_asr_hotword_channels',
-  {
-    hotwordId: uuid('hotword_id')
-      .notNull()
-      .references(() => appAsrHotwords.id, { onDelete: 'cascade' }),
-    channelId: uuid('channel_id')
-      .notNull()
-      .references(() => appAudioChannels.id, { onDelete: 'cascade' }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.hotwordId, t.channelId] }),
-    index('idx_asr_hotword_channels_channel').on(t.channelId),
-  ],
-);
-
-export const AUDIO_CAPTURE_STATUSES = [
-  'draft',
-  'transcribing',
-  'ready',
-  'post_processing',
-  'done',
-  'failed',
-] as const;
-export type AudioCaptureStatus = (typeof AUDIO_CAPTURE_STATUSES)[number];
-
 export const AUDIO_CAPTURE_RECORDING_MODES = [
   'multi_party_discussion',
   'structured_interview',
@@ -401,9 +350,6 @@ export type AudioCaptureRecordingMode = (typeof AUDIO_CAPTURE_RECORDING_MODES)[n
 
 export const AUDIO_CAPTURE_AUDIENCES = ['external_client', 'internal_team', 'mixed', 'unknown'] as const;
 export type AudioCaptureAudience = (typeof AUDIO_CAPTURE_AUDIENCES)[number];
-
-export const AUDIO_CAPTURE_INPUT_MODES = ['audio', 'transcript'] as const;
-export type AudioCaptureInputMode = (typeof AUDIO_CAPTURE_INPUT_MODES)[number];
 
 export const CAPTURE_PIPELINE_JOB_STAGES = [
   'submitted',
@@ -500,83 +446,13 @@ export const appDocumentCapturePipelineJobs = pgTable(
   (t) => [index('idx_document_capture_pipeline_jobs_capture').on(t.captureId, t.createdAt)],
 );
 
-export const appAudioCaptures = pgTable(
-  'app_audio_captures',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    channelId: uuid('channel_id')
-      .notNull()
-      .references(() => appAudioChannels.id, { onDelete: 'cascade' }),
-    title: text('title').notNull(),
-    brief: text('brief'),
-    participantsHint: text('participants_hint'),
-    recordingMode: text('recording_mode').$type<AudioCaptureRecordingMode | null>(),
-    audience: text('audience').$type<AudioCaptureAudience>().notNull().default('unknown'),
-    inputMode: text('input_mode').$type<AudioCaptureInputMode>().notNull().default('audio'),
-    status: text('status').$type<AudioCaptureStatus>().notNull().default('draft'),
-    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
-    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [index('idx_audio_captures_channel').on(t.channelId, t.updatedAt)],
-);
-
-export const appAudios = pgTable(
-  'app_audios',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    channelId: uuid('channel_id')
-      .notNull()
-      .references(() => appAudioChannels.id, { onDelete: 'cascade' }),
-    captureId: uuid('capture_id').references(() => appAudioCaptures.id, { onDelete: 'cascade' }),
-    segmentIndex: integer('segment_index'),
-    segmentLabel: text('segment_label'),
-    name: text('name').notNull(),
-    fileType: text('file_type').notNull(),
-    sizeBytes: integer('size_bytes').notNull().default(0),
-    fileHash: text('file_hash').notNull(),
-    s3Key: text('s3_key').notNull(),
-    status: text('status').notNull().default('uploaded'),
-    durationSec: integer('duration_sec'),
-    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
-    uploadedBy: uuid('uploaded_by').references(() => appUsers.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    index('idx_audios_channel').on(t.channelId, t.updatedAt),
-    index('idx_audios_hash').on(t.fileHash),
-    index('idx_audios_capture').on(t.captureId, t.segmentIndex),
-  ],
-);
-
 export const AUDIO_PIPELINE_JOB_STAGES = ['submitted', 'transcribing', 'done', 'failed'] as const;
 export type AudioPipelineJobStage = (typeof AUDIO_PIPELINE_JOB_STAGES)[number];
-
-export const appAudioCapturePipelineJobs = pgTable(
-  'app_audio_capture_pipeline_jobs',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    captureId: uuid('capture_id')
-      .notNull()
-      .references(() => appAudioCaptures.id, { onDelete: 'cascade' }),
-    pipelineName: text('pipeline_name').notNull(),
-    stage: text('stage').$type<CapturePipelineJobStage>().notNull().default('submitted'),
-    configYaml: text('config_yaml'),
-    errorMessage: text('error_message'),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [index('idx_audio_capture_pipeline_jobs_capture').on(t.captureId, t.createdAt)],
-);
 
 export const appAudioPipelineJobs = pgTable(
   'app_audio_pipeline_jobs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** Null for eval-only jobs (eval_run_item_id is set; no library audio row). */
-    audioId: uuid('audio_id').references(() => appAudios.id, { onDelete: 'cascade' }),
     /** Document-module capture segment ASR jobs (unified knowledge uploads). */
     documentCaptureSegmentId: uuid('document_capture_segment_id').references(
       () => appDocumentCaptureSegments.id,
@@ -594,7 +470,7 @@ export const appAudioPipelineJobs = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
-    index('idx_audio_pipeline_jobs_audio').on(t.audioId, t.createdAt),
+    index('idx_audio_pipeline_jobs_segment').on(t.documentCaptureSegmentId, t.createdAt),
     index('idx_audio_pipeline_jobs_stage').on(t.stage, t.provider),
     index('idx_audio_pipeline_jobs_eval_item').on(t.evalRunItemId),
   ],

@@ -20,7 +20,6 @@ export const ADMIN_RESOURCES = {
 export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'knowledge-management' as const;
 
 export const KNOWLEDGE_MANAGEMENT_RESOURCES = {
-  AUDIO: 'audio',
   ASR_HOTWORDS: 'asr-hotwords',
   DOCUMENTS: 'documents',
   KNOWLEDGE_BASES: 'knowledge-bases',
@@ -99,18 +98,6 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
 
 const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
   {
-    resource: KNOWLEDGE_MANAGEMENT_RESOURCES.AUDIO,
-    label: 'Audio',
-    description: 'Audio channel folders and meeting recording uploads.',
-    routePatterns: ['/knowledge/audio'],
-    apiPatterns: [
-      '/api/audio-channels',
-      '/api/audio-channels/*',
-      '/api/audios',
-      '/api/audios/*',
-    ],
-  },
-  {
     resource: KNOWLEDGE_MANAGEMENT_RESOURCES.ASR_HOTWORDS,
     label: 'ASR hotwords',
     description: 'Manage ASR hotwords and channel associations for transcription pipelines.',
@@ -127,6 +114,8 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
       '/api/document-channels/*',
       '/api/documents',
       '/api/documents/*',
+      '/api/document-captures',
+      '/api/document-captures/*',
     ],
   },
   {
@@ -311,6 +300,8 @@ export const OBSOLETE_PERMISSION_KEYS = [
   'platform-basic:asr-hotwords:write',
   'platform-basic:judge-dimensions:read',
   'platform-basic:judge-dimensions:write',
+  'knowledge-management:audio:read',
+  'knowledge-management:audio:write',
 ] as const;
 
 export function permissionKey(category: string, resource: string, access: AccessLevel): string {

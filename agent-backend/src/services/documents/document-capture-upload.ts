@@ -18,8 +18,6 @@ import {
 } from '../../storage/audio-files.ts';
 import {
   initTranscriptSegmentUpload,
-  completeTranscriptSegmentDirectUpload,
-  completeTranscriptSegmentUpload,
   validateTranscriptFilename,
   MAX_TRANSCRIPT_UPLOAD_BYTES,
   normalizeTranscriptMarkdown,
@@ -94,8 +92,6 @@ export async function initDocumentCaptureAudioSegmentUpload(input: {
 
 export {
   initTranscriptSegmentUpload,
-  completeTranscriptSegmentDirectUpload,
-  completeTranscriptSegmentUpload,
   validateTranscriptFilename,
   MAX_TRANSCRIPT_UPLOAD_BYTES,
   normalizeTranscriptMarkdown,

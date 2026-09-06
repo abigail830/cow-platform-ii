@@ -50,8 +50,6 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
     'agent:session-explorer',
   ],
   'knowledge-manager': [
-    'knowledge-management:audio:read',
-    'knowledge-management:audio:write',
     'knowledge-management:asr-hotwords:read',
     'knowledge-management:asr-hotwords:write',
     'knowledge-management:documents:read',
@@ -68,7 +66,6 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
   ],
   'read-only': [
     'agent:playground',
-    'knowledge-management:audio:read',
     'knowledge-management:documents:read',
     'knowledge-management:knowledge-bases:read',
     'knowledge-management:hybrid-search',

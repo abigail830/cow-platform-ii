@@ -2,7 +2,21 @@ import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
 import type { ResourcePermissionFlags } from './resourceAccess.ts';
-import type { ChannelAsrHotwordsResponse } from './audioChannels.ts';
+export type ChannelAsrHotwordsResponse = {
+  hotwords: Array<{
+    id: string;
+    text: string;
+    weight: number;
+    lang: string | null;
+    note: string | null;
+    channel_ids: string[];
+    created_at: string;
+    updated_at: string;
+  }>;
+  asr_vocabulary_id: string | null;
+  asr_vocabulary_target_model: string | null;
+  asr_vocabulary_synced_at: string | null;
+};
 
 export type DocumentChannel = {
   id: string;

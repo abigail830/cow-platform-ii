@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder, Plus, Settings, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, Loader2, Plus, Settings, Trash2 } from 'lucide-react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
 import type { ChannelKnowledgeItem } from '../api/documents.ts';
 import { KnowledgeFileTypeIcon } from './icons/file-type-icon.tsx';
@@ -36,6 +36,7 @@ type KnowledgeChannelTreePanelProps = {
   expandedChannelIds: ReadonlySet<string>;
   channelItems: Readonly<Record<string, ChannelKnowledgeItem[]>>;
   loadingChannelIds: ReadonlySet<string>;
+  deletingItemIds: ReadonlySet<string>;
   canCreateRoot: boolean;
   emptyMessage?: string;
   onToggleExpand: (channelId: string) => void;
@@ -55,6 +56,7 @@ function ChannelTreeBranch({
   expandedChannelIds,
   channelItems,
   loadingChannelIds,
+  deletingItemIds,
   onToggleExpand,
   onSelectChannel,
   onSelectItem,
@@ -69,6 +71,7 @@ function ChannelTreeBranch({
   expandedChannelIds: ReadonlySet<string>;
   channelItems: Readonly<Record<string, ChannelKnowledgeItem[]>>;
   loadingChannelIds: ReadonlySet<string>;
+  deletingItemIds: ReadonlySet<string>;
   onToggleExpand: (channelId: string) => void;
   onSelectChannel: (channelId: string) => void;
   onSelectItem: (item: ChannelKnowledgeItem) => void;
@@ -159,6 +162,7 @@ function ChannelTreeBranch({
               expandedChannelIds={expandedChannelIds}
               channelItems={channelItems}
               loadingChannelIds={loadingChannelIds}
+              deletingItemIds={deletingItemIds}
               onToggleExpand={onToggleExpand}
               onSelectChannel={onSelectChannel}
               onSelectItem={onSelectItem}
@@ -179,6 +183,7 @@ function ChannelTreeBranch({
               selection.item.kind === item.kind &&
               selection.item.id === item.id;
             const name = itemDisplayName(item);
+            const isDeleting = deletingItemIds.has(item.id);
             return (
               <li key={`${item.kind}-${item.id}`} className="knowledge-tree-node">
                 <div
@@ -198,16 +203,23 @@ function ChannelTreeBranch({
                     <div className="knowledge-tree-actions">
                       <button
                         type="button"
-                        className="icon-btn danger"
-                        title="Delete"
+                        className={`icon-btn danger icon-btn--delete${isDeleting ? ' is-busy' : ''}`}
+                        title={isDeleting ? 'Deleting…' : 'Delete'}
+                        disabled={isDeleting}
+                        aria-busy={isDeleting}
                         onClick={(event) => {
                           event.stopPropagation();
+                          if (isDeleting) return;
                           if (window.confirm(`Delete "${name}"?`)) {
                             onDeleteItem(item);
                           }
                         }}
                       >
-                        <Trash2 {...iconProps()} />
+                        {isDeleting ? (
+                          <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                        ) : (
+                          <Trash2 {...iconProps()} />
+                        )}
                       </button>
                     </div>
                   ) : null}
@@ -227,6 +239,7 @@ export function KnowledgeChannelTreePanel({
   expandedChannelIds,
   channelItems,
   loadingChannelIds,
+  deletingItemIds,
   canCreateRoot,
   emptyMessage = 'No channels yet. Create one to organize documents.',
   onToggleExpand,
@@ -261,6 +274,7 @@ export function KnowledgeChannelTreePanel({
               expandedChannelIds={expandedChannelIds}
               channelItems={channelItems}
               loadingChannelIds={loadingChannelIds}
+              deletingItemIds={deletingItemIds}
               onToggleExpand={onToggleExpand}
               onSelectChannel={onSelectChannel}
               onSelectItem={onSelectItem}

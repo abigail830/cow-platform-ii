@@ -554,6 +554,13 @@
       "when": 1785235000000,
       "tag": "0078_document_knowledge_captures",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1785236000000,
+      "tag": "0079_drop_legacy_audio_knowledge",
+      "breakpoints": true
     }
   ]
 }

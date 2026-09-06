@@ -1,12 +1,12 @@
 import type { ChannelKnowledgeItem } from '../api/documents.ts';
-import type { AudioCaptureRecord } from '../api/audioCaptures.ts';
+import type { DocumentCaptureRecord } from '../api/documentCaptures.ts';
 import { CapturePipelineStatus } from './CapturePipelineStatus.tsx';
 
 type KnowledgePipelineStatusProps = {
   item: ChannelKnowledgeItem;
 };
 
-function captureItemToPipelineCapture(item: ChannelKnowledgeItem): AudioCaptureRecord {
+function captureItemToPipelineCapture(item: ChannelKnowledgeItem): DocumentCaptureRecord {
   return {
     id: item.id,
     channel_id: item.channel_id,

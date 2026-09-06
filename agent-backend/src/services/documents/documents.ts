@@ -240,6 +240,15 @@ export async function updateChannel(
     .where(eq(appDocumentChannels.id, id))
     .returning();
 
+  if (input.transcriptionPipelineId !== undefined) {
+    const { syncDocumentChannelAsrVocabularyIfPipelineChanged } = await import('../audio/asr-hotwords.ts');
+    await syncDocumentChannelAsrVocabularyIfPipelineChanged(
+      id,
+      existing.transcriptionPipelineId,
+      input.transcriptionPipelineId,
+    );
+  }
+
   return toChannelPublic(row!);
 }
 

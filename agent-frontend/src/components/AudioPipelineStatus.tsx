@@ -1,5 +1,7 @@
-import type { AudioRecord } from '../api/audios.ts';
-import { resolveEffectiveAudioStatus } from '../api/audios.ts';
+import {
+  resolveEffectiveAudioStatus,
+  type SegmentPipelineRecord,
+} from '../api/capture-pipeline-utils.ts';
 import { formatDocumentStatusLabel } from './DocumentPipelineStatus.tsx';
 
 const UPLOAD_STEP = { key: 'upload', label: 'Upload' } as const;
@@ -25,7 +27,7 @@ function pipelineStageProgressIndex(stage: string): number {
   }
 }
 
-function inferFailedStepIndex(job: NonNullable<AudioRecord['pipeline_job']>): number {
+function inferFailedStepIndex(job: NonNullable<SegmentPipelineRecord['pipeline_job']>): number {
   const message = (job.error_message ?? '').toLowerCase();
   if (message.includes('transcri') || message.includes('asr') || message.includes('poll')) return 1;
   if (message.includes('submit') || message.includes('external_job_id')) return 0;
@@ -33,7 +35,7 @@ function inferFailedStepIndex(job: NonNullable<AudioRecord['pipeline_job']>): nu
   return 0;
 }
 
-function buildSteps(audio: AudioRecord): StepDef[] {
+function buildSteps(audio: SegmentPipelineRecord): StepDef[] {
   const steps: StepDef[] = [UPLOAD_STEP];
   if (audio.pipeline_job) {
     for (const step of PIPELINE_STEPS) {
@@ -45,8 +47,8 @@ function buildSteps(audio: AudioRecord): StepDef[] {
 
 function dotClassForStep(
   index: number,
-  audio: AudioRecord,
-  job: AudioRecord['pipeline_job'],
+  audio: SegmentPipelineRecord,
+  job: SegmentPipelineRecord['pipeline_job'],
 ): string {
   let dotClass = 'pipeline-step-dot';
   if (!job) return `${dotClass} complete`;
@@ -75,8 +77,8 @@ function dotClassForStep(
 
 function segmentClassForConnector(
   leftIndex: number,
-  audio: AudioRecord,
-  job: AudioRecord['pipeline_job'],
+  audio: SegmentPipelineRecord,
+  job: SegmentPipelineRecord['pipeline_job'],
 ): string {
   const rightDot = dotClassForStep(leftIndex + 1, audio, job);
   if (rightDot.includes('failed')) return 'failed';
@@ -91,7 +93,7 @@ function shortenErrorMessage(message: string, maxLen = 120): string {
   return `${oneLine.slice(0, maxLen - 1)}…`;
 }
 
-function buildTooltip(audio: AudioRecord, job: AudioRecord['pipeline_job']): string {
+function buildTooltip(audio: SegmentPipelineRecord, job: SegmentPipelineRecord['pipeline_job']): string {
   const status = resolveEffectiveAudioStatus(audio);
   const parts: string[] = [formatDocumentStatusLabel(status)];
   if (job) {
@@ -104,7 +106,7 @@ function buildTooltip(audio: AudioRecord, job: AudioRecord['pipeline_job']): str
 }
 
 type AudioPipelineStatusProps = {
-  audio: AudioRecord;
+  audio: SegmentPipelineRecord;
 };
 
 export function AudioPipelineStatus({ audio }: AudioPipelineStatusProps) {

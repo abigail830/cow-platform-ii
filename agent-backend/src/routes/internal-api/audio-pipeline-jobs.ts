@@ -5,12 +5,11 @@ import { enrichTranscribeMetrics } from '../../shared/eval/eval-audio-duration.t
 import {
   buildAudioPipelineJobContext,
   getAudioPipelineJobById,
-  markAudioForJobStage,
   markDocumentCaptureSegmentForAudioPipelineJobStage,
   resolveAudioPipelineJobErrorMessage,
   updateAudioPipelineJob,
-  type AudioPipelineJobStage,
 } from '../../services/audio/audio-pipeline-jobs.ts';
+import type { AudioPipelineJobStage } from '../../db/index.ts';
 import { spawnAsyncAudioPipelineWorker } from '../../services/audio/audio-pipeline-runner.ts';
 import { updateEvalRunItem } from '../../services/eval/eval-pipeline-jobs.ts';
 import { syncEvalRunItemFromAudioPipelineJob } from '../../services/eval/eval-audio-bridge.ts';
@@ -66,9 +65,7 @@ audioPipelineJobs.patch('/:id', async (c) => {
   });
 
   if (body.stage) {
-    if (job.audioId) {
-      await markAudioForJobStage(job.audioId, body.stage);
-    } else if (job.documentCaptureSegmentId) {
+    if (job.documentCaptureSegmentId) {
       await markDocumentCaptureSegmentForAudioPipelineJobStage(
         job.documentCaptureSegmentId,
         body.stage,

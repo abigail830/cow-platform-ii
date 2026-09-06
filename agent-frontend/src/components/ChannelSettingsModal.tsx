@@ -5,11 +5,10 @@ import {
   DEFAULT_KNOWLEDGE_TRANSCRIPTION_PIPELINE_NAME,
   fetchChannelProcessingOptions,
   fetchDocumentChannelAsrHotwords,
+  type ChannelAsrHotwordsResponse,
   type ChannelProcessingOptions,
   type KnowledgeChannelProcessingOptions,
 } from '../api/documentChannels.ts';
-import type { AudioChannelProcessingOptions } from '../api/audioChannels.ts';
-import { fetchChannelAsrHotwords, type ChannelAsrHotwordsResponse } from '../api/audioChannels.ts';
 import { ResourceAccessPanel, type ResourceAccessPanelHandle } from './ResourceAccessPanel.tsx';
 import type { ResourceType } from '../api/resourceAccess.ts';
 
@@ -31,10 +30,7 @@ type ChannelSettingsModalProps = {
     autoStartPipeline: boolean;
   }) => Promise<void>;
   resourceType?: ResourceType;
-  fetchProcessingOptions?: () => Promise<
-    ChannelProcessingOptions | AudioChannelProcessingOptions | KnowledgeChannelProcessingOptions
-  >;
-  audioPipelineMode?: boolean;
+  fetchProcessingOptions?: () => Promise<ChannelProcessingOptions | KnowledgeChannelProcessingOptions>;
   knowledgePipelineMode?: boolean;
   sharingInheritHint?: string;
   /** When false, hide the Sharing tab (resource ACL editing requires manage). */
@@ -44,15 +40,9 @@ type ChannelSettingsModalProps = {
 type SettingsTab = 'general' | 'pipeline' | 'hotwords' | 'sharing';
 
 function isKnowledgeProcessingOptions(
-  options: ChannelProcessingOptions | AudioChannelProcessingOptions | KnowledgeChannelProcessingOptions,
+  options: ChannelProcessingOptions | KnowledgeChannelProcessingOptions,
 ): options is KnowledgeChannelProcessingOptions {
   return 'documentPipelines' in options;
-}
-
-function isAudioProcessingOptions(
-  options: ChannelProcessingOptions | AudioChannelProcessingOptions | KnowledgeChannelProcessingOptions,
-): options is AudioChannelProcessingOptions {
-  return 'transcriptionPipelines' in options && !('documentPipelines' in options);
 }
 
 export function ChannelSettingsModal({
@@ -67,7 +57,6 @@ export function ChannelSettingsModal({
   onSubmit,
   resourceType = 'document_channel',
   fetchProcessingOptions = fetchChannelProcessingOptions,
-  audioPipelineMode = false,
   knowledgePipelineMode = false,
   sharingInheritHint = 'Documents inherit access rules from their channel. Sub-channels inherit parent channel rules.',
   canManageSharing = false,
@@ -79,9 +68,9 @@ export function ChannelSettingsModal({
   const [transcriptionPipelineId, setTranscriptionPipelineId] = useState(initialTranscriptionPipelineId ?? '');
   const [postProcessPipelineId, setPostProcessPipelineId] = useState(initialPostProcessPipelineId ?? '');
   const [autoStartPipeline, setAutoStartPipeline] = useState(initialAutoStartPipeline);
-  const [options, setOptions] = useState<
-    ChannelProcessingOptions | AudioChannelProcessingOptions | KnowledgeChannelProcessingOptions | null
-  >(null);
+  const [options, setOptions] = useState<ChannelProcessingOptions | KnowledgeChannelProcessingOptions | null>(
+    null,
+  );
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [optionsError, setOptionsError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -141,8 +130,8 @@ export function ChannelSettingsModal({
     };
   }, [fetchProcessingOptions]);
 
-  const showHotwordsTab = audioPipelineMode || knowledgePipelineMode;
-  const fetchHotwords = knowledgePipelineMode ? fetchDocumentChannelAsrHotwords : fetchChannelAsrHotwords;
+  const showHotwordsTab = knowledgePipelineMode;
+  const fetchHotwords = fetchDocumentChannelAsrHotwords;
 
   useEffect(() => {
     if (!showHotwordsTab || tab !== 'hotwords') return;
@@ -169,21 +158,13 @@ export function ChannelSettingsModal({
   const documentPipelines =
     options && isKnowledgeProcessingOptions(options)
       ? options.documentPipelines
-      : options && !isAudioProcessingOptions(options)
+      : options && 'pipelines' in options
         ? options.pipelines
         : [];
   const transcriptionPipelines =
-    options && isKnowledgeProcessingOptions(options)
-      ? options.transcriptionPipelines
-      : options && isAudioProcessingOptions(options)
-        ? options.transcriptionPipelines
-        : [];
+    options && isKnowledgeProcessingOptions(options) ? options.transcriptionPipelines : [];
   const postProcessPipelines =
-    options && isKnowledgeProcessingOptions(options)
-      ? options.postProcessPipelines
-      : options && isAudioProcessingOptions(options)
-        ? options.postProcessPipelines
-        : [];
+    options && isKnowledgeProcessingOptions(options) ? options.postProcessPipelines : [];
 
   const resolvedPostProcessPipelineId =
     postProcessPipelineId ||
@@ -235,21 +216,15 @@ export function ChannelSettingsModal({
         name: name.trim(),
         description: description.trim(),
         pipelineId: pipelineId || null,
-        ...(audioPipelineMode || knowledgePipelineMode
-          ? {
-              postProcessPipelineId: knowledgePipelineMode
-                ? resolvedPostProcessPipelineId || null
-                : postProcessPipelineId || null,
-            }
-          : {}),
         ...(knowledgePipelineMode
-          ? { transcriptionPipelineId: transcriptionPipelineId || null }
+          ? {
+              postProcessPipelineId: resolvedPostProcessPipelineId || null,
+              transcriptionPipelineId: transcriptionPipelineId || null,
+            }
           : {}),
         autoStartPipeline: knowledgePipelineMode
           ? Boolean(pipelineId) && autoStartPipeline
-          : pipelineId || transcriptionPipelineId
-            ? autoStartPipeline
-            : false,
+          : Boolean(pipelineId) && autoStartPipeline,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save channel settings');
@@ -336,51 +311,6 @@ export function ChannelSettingsModal({
                   <p className="admin-form-hint">Loading options…</p>
                 ) : optionsError ? (
                   <p className="error">{optionsError}</p>
-                ) : audioPipelineMode ? (
-                  <>
-                    <label className="channel-pipeline-row">
-                      <span>Transcription pipeline</span>
-                      <select
-                        value={pipelineId}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setPipelineId(value);
-                          if (!value) setAutoStartPipeline(false);
-                        }}
-                      >
-                        <option value="">— None —</option>
-                        {transcriptionPipelines.map((pipeline) => (
-                          <option key={pipeline.id} value={pipeline.id}>
-                            {pipeline.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="channel-pipeline-row">
-                      <span>Post-process pipeline</span>
-                      <select
-                        value={postProcessPipelineId}
-                        onChange={(event) => setPostProcessPipelineId(event.target.value)}
-                      >
-                        <option value="">— System default —</option>
-                        {postProcessPipelines.map((pipeline) => (
-                          <option key={pipeline.id} value={pipeline.id}>
-                            {pipeline.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="channel-pipeline-check">
-                      <span>Auto-start transcription after segment upload</span>
-                      <input
-                        type="checkbox"
-                        className="brand-checkbox"
-                        checked={Boolean(pipelineId) && autoStartPipeline}
-                        disabled={!pipelineId}
-                        onChange={(event) => setAutoStartPipeline(event.target.checked)}
-                      />
-                    </label>
-                  </>
                 ) : knowledgePipelineMode ? (
                   <>
                     <section className="channel-pipeline-section" aria-labelledby="channel-pipeline-document-heading">

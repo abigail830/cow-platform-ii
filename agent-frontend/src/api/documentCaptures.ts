@@ -8,7 +8,7 @@ import {
   shouldUseDirectUpload,
 } from './direct-upload.ts';
 import { readTranscriptFileText } from './transcript-file-text.ts';
-import { resolveEffectiveAudioStatus } from './audios.ts';
+import { resolveEffectiveAudioStatus } from './capture-pipeline-utils.ts';
 
 export type CapturePipelineJob = {
   id: string;

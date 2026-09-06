@@ -9,13 +9,13 @@ import {
   type AsrHotword,
 } from '../api/asrHotwords.ts';
 import {
-  listAudioChannels,
-  type AudioChannel,
-} from '../api/audioChannels.ts';
+  listDocumentChannels,
+  type DocumentChannel,
+} from '../api/documentChannels.ts';
 import {
-  AudioChannelMultiSelect,
-  audioChannelLabel,
-} from '../components/AudioChannelMultiSelect.tsx';
+  DocumentChannelMultiSelect,
+  documentChannelLabel,
+} from '../components/DocumentChannelMultiSelect.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { IconDelete, IconEdit } from '../components/AdminActionIcons.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
@@ -54,7 +54,7 @@ export function AsrHotwordsPage() {
   );
 
   const [hotwords, setHotwords] = useState<AsrHotword[]>([]);
-  const [channels, setChannels] = useState<AudioChannel[]>([]);
+  const [channels, setChannels] = useState<DocumentChannel[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -71,7 +71,7 @@ export function AsrHotwordsPage() {
     try {
       const [hotwordResult, channelRows] = await Promise.all([
         listAsrHotwords({ search }),
-        listAudioChannels(),
+        listDocumentChannels(),
       ]);
       setHotwords(hotwordResult.hotwords);
       setChannels(channelRows);
@@ -197,7 +197,7 @@ export function AsrHotwordsPage() {
                         {hotword.channel_ids.length > 0 ? (
                           hotword.channel_ids.map((channelId) => (
                             <span key={channelId} className="capability-pill">
-                              {audioChannelLabel(channels, channelId)}
+                              {documentChannelLabel(channels, channelId)}
                             </span>
                           ))
                         ) : (
@@ -286,7 +286,7 @@ export function AsrHotwordsPage() {
                 </label>
                 <div className="form-field form-field-wide">
                   <span>Audio channels</span>
-                  <AudioChannelMultiSelect
+                  <DocumentChannelMultiSelect
                     channels={channels}
                     selectedIds={form.channelIds}
                     onChange={(channelIds) => setForm((prev) => ({ ...prev, channelIds }))}
