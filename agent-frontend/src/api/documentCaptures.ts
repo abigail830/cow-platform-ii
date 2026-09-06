@@ -471,6 +471,37 @@ export async function bulkDocumentUpload(
   return captures;
 }
 
+/** Upload N audio/transcript files as N separate captures (one file each). */
+export async function bulkSegmentCaptureUpload(
+  channelId: string,
+  files: File[],
+  input: {
+    inputMode: 'audio' | 'transcript';
+    brief?: string;
+    participantsHint?: string;
+    recordingMode?: string;
+    audience?: string;
+  },
+): Promise<DocumentCaptureRecord[]> {
+  const uploadSegment =
+    input.inputMode === 'transcript' ? uploadCaptureTranscriptSegment : uploadCaptureAudioSegment;
+  const captures: DocumentCaptureRecord[] = [];
+  for (const file of files) {
+    const capture = await createDocumentCapture({
+      channelId,
+      title: captureTitleFromFilename(file.name),
+      brief: input.brief,
+      participantsHint: input.participantsHint,
+      recordingMode: input.recordingMode,
+      audience: input.audience,
+      inputMode: input.inputMode,
+    });
+    const detail = await uploadSegment(capture.id, file);
+    captures.push(detail);
+  }
+  return captures;
+}
+
 export async function reorderCaptureSegments(
   captureId: string,
   orderedSegmentIds: string[],

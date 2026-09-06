@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { CircleHelp, Plus, X } from 'lucide-react';
 import {
   AUDIENCE_LABELS,
   DOCUMENT_CAPTURE_INPUT_MODE_LABELS,
@@ -18,6 +18,20 @@ function fileKey(file: File): string {
   return `${file.name}-${file.size}-${file.lastModified}`;
 }
 
+function SeparateCapturesTooltip() {
+  return (
+    <span className="field-tooltip">
+      <button type="button" className="field-tooltip-trigger" aria-label="Separate captures help">
+        <CircleHelp {...iconProps({ size: 14 })} aria-hidden />
+      </button>
+      <span className="field-tooltip-panel" role="tooltip">
+        When checked, each file is uploaded as its own capture (title from the file name). Uncheck to
+        add multiple files as ordered segments in a single capture.
+      </span>
+    </span>
+  );
+}
+
 type KnowledgeUploadModalProps = {
   channelName: string;
   onCancel: () => void;
@@ -29,6 +43,7 @@ type KnowledgeUploadModalProps = {
     recordingMode?: string;
     audience?: string;
     inputMode: Exclude<KnowledgeUploadTab, 'document'>;
+    separateCaptures: boolean;
     files: File[];
   }) => Promise<void>;
 };
@@ -46,6 +61,7 @@ export function KnowledgeUploadModal({
   const [participantsHint, setParticipantsHint] = useState('');
   const [recordingMode, setRecordingMode] = useState('general');
   const [audience, setAudience] = useState('unknown');
+  const [separateCaptures, setSeparateCaptures] = useState(true);
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -103,8 +119,8 @@ export function KnowledgeUploadModal({
         return;
       }
 
-      if (!title.trim()) {
-        setError('Title is required');
+      if (!separateCaptures && !title.trim()) {
+        setError('Title is required when uploading into one capture');
         return;
       }
 
@@ -115,6 +131,7 @@ export function KnowledgeUploadModal({
         recordingMode: recordingMode || undefined,
         audience,
         inputMode: tab,
+        separateCaptures,
         files,
       });
     } catch (err) {
@@ -160,17 +177,31 @@ export function KnowledgeUploadModal({
                 className={`knowledge-upload-form-panel${isDocumentTab ? ' is-hidden' : ''}`}
                 aria-hidden={isDocumentTab}
               >
+            <label className="form-checkbox knowledge-upload-separate-captures">
+              <input
+                type="checkbox"
+                className="brand-checkbox"
+                checked={separateCaptures}
+                disabled={busy}
+                onChange={(event) => setSeparateCaptures(event.target.checked)}
+              />
+              <span>Separate captures</span>
+              <SeparateCapturesTooltip />
+            </label>
+
             <div className="form-grid">
-              <label className="form-field form-field-wide">
-                <span>Title</span>
-                <input
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  required
-                  autoFocus={!isDocumentTab}
-                  disabled={busy}
-                />
-              </label>
+              {!separateCaptures ? (
+                <label className="form-field form-field-wide">
+                  <span>Title</span>
+                  <input
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    required
+                    autoFocus={!isDocumentTab}
+                    disabled={busy}
+                  />
+                </label>
+              ) : null}
 
               <label className="form-field form-field-wide">
                 <span>Brief (optional)</span>
@@ -242,16 +273,24 @@ export function KnowledgeUploadModal({
               <p className="document-upload-dropzone-title">
                 {isDocumentTab
                   ? 'Drag and drop document files here, or click to browse. Each file becomes its own capture.'
-                  : tab === 'transcript'
-                    ? 'Drag and drop transcript files here, or click to browse (multiple files supported).'
-                    : 'Drag and drop audio segments here, or click to browse (multiple files supported).'}
+                  : separateCaptures
+                    ? tab === 'transcript'
+                      ? 'Drag and drop transcript files here, or click to browse. Each file becomes its own capture.'
+                      : 'Drag and drop audio files here, or click to browse. Each file becomes its own capture.'
+                    : tab === 'transcript'
+                      ? 'Drag and drop transcript files here, or click to browse (multiple files supported).'
+                      : 'Drag and drop audio segments here, or click to browse (multiple files supported).'}
               </p>
               <p className="document-upload-dropzone-hint">
                 {isDocumentTab
                   ? 'PDF, images, DOCX, PPTX, XLSX, EPUB, XMind, Markdown. Large files upload via presigned PUT.'
-                  : tab === 'transcript'
-                    ? 'Markdown (.md) or Word (.docx). Each file becomes one segment in order.'
-                    : 'M4A, MP3, WAV, FLAC, AAC, and more. Each file becomes one segment in order.'}
+                  : separateCaptures
+                    ? tab === 'transcript'
+                      ? 'Markdown (.md) or Word (.docx). Titles come from file names; metadata below applies to all.'
+                      : 'M4A, MP3, WAV, FLAC, AAC, and more. Titles come from file names; metadata below applies to all.'
+                    : tab === 'transcript'
+                      ? 'Markdown (.md) or Word (.docx). Each file becomes one segment in order.'
+                      : 'M4A, MP3, WAV, FLAC, AAC, and more. Each file becomes one segment in order.'}
               </p>
             </div>
             <div className="document-upload-plus-box" aria-hidden>

@@ -4393,6 +4393,13 @@ textarea {
   margin-bottom: 0;
 }
 
+.knowledge-upload-modal .knowledge-upload-separate-captures {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
 .knowledge-upload-modal .document-upload-dropzone {
   flex: 0 0 auto;
   margin-top: 0.75rem;

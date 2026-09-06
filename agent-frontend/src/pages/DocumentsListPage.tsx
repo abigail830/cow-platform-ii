@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { flattenChannels } from '../api/documentChannels.ts';
 import {
   bulkDocumentUpload,
+  bulkSegmentCaptureUpload,
   createDocumentCapture,
   deleteDocumentCapture,
   isCapturePipelineActive,
@@ -113,23 +114,36 @@ export function DocumentsListPage() {
     recordingMode?: string;
     audience?: string;
     inputMode: 'audio' | 'transcript';
+    separateCaptures: boolean;
     files: File[];
   }) {
     if (!selectedChannelId) throw new Error('Select a channel first');
-    const capture = await createDocumentCapture({
-      channelId: selectedChannelId,
-      title: input.title,
-      brief: input.brief,
-      participantsHint: input.participantsHint,
-      recordingMode: input.recordingMode,
-      audience: input.audience,
-      inputMode: input.inputMode,
-    });
-    const uploadSegment =
-      input.inputMode === 'transcript' ? uploadCaptureTranscriptSegment : uploadCaptureAudioSegment;
-    for (const file of input.files) {
-      await uploadSegment(capture.id, file);
+
+    if (input.separateCaptures) {
+      await bulkSegmentCaptureUpload(selectedChannelId, input.files, {
+        inputMode: input.inputMode,
+        brief: input.brief,
+        participantsHint: input.participantsHint,
+        recordingMode: input.recordingMode,
+        audience: input.audience,
+      });
+    } else {
+      const capture = await createDocumentCapture({
+        channelId: selectedChannelId,
+        title: input.title,
+        brief: input.brief,
+        participantsHint: input.participantsHint,
+        recordingMode: input.recordingMode,
+        audience: input.audience,
+        inputMode: input.inputMode,
+      });
+      const uploadSegment =
+        input.inputMode === 'transcript' ? uploadCaptureTranscriptSegment : uploadCaptureAudioSegment;
+      for (const file of input.files) {
+        await uploadSegment(capture.id, file);
+      }
     }
+
     setUploadOpen(false);
     await loadItems();
     await refreshChannelItems(selectedChannelId);
