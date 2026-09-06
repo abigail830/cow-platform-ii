@@ -10,7 +10,6 @@ import {
 } from '../api/documentChannels.ts';
 import { deleteDocumentCapture } from '../api/documentCaptures.ts';
 import {
-  deleteDocument,
   listChannelKnowledgeItems,
   type ChannelKnowledgeItem,
 } from '../api/documents.ts';
@@ -53,7 +52,6 @@ export function DocumentsLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const captureMatch = useMatch('/knowledge/documents/captures/:captureId');
-  const documentMatch = useMatch('/knowledge/documents/:documentId');
 
   const canWrite = useMemo(() => hasPermission(user, 'knowledge-management:documents', 'write'), [user]);
 
@@ -74,55 +72,29 @@ export function DocumentsLayout() {
   const isListRoute = location.pathname === '/knowledge/documents';
 
   const selectedItem = useMemo((): ChannelKnowledgeItem | null => {
-    if (captureMatch?.params.captureId) {
-      for (const items of Object.values(channelItems)) {
-        const found = items.find(
-          (item) => item.kind === 'capture' && item.id === captureMatch.params.captureId,
-        );
-        if (found) return found;
-      }
-      return {
-        kind: 'capture',
-        id: captureMatch.params.captureId,
-        channel_id: selectedChannelId ?? '',
-        name: '',
-        title: '',
-        brief: null,
-        input_mode: 'document',
-        file_count: 0,
-        size_bytes: 0,
-        status: '',
-        updated_at: '',
-        created_at: '',
-        pipeline_job: null,
-      };
+    if (!captureMatch?.params.captureId) return null;
+
+    for (const items of Object.values(channelItems)) {
+      const found = items.find((item) => item.id === captureMatch.params.captureId);
+      if (found) return found;
     }
-    const documentId = documentMatch?.params.documentId;
-    if (documentId && documentId !== 'captures') {
-      for (const items of Object.values(channelItems)) {
-        const found = items.find((item) => item.kind === 'document' && item.id === documentId);
-        if (found) return found;
-      }
-      return {
-        kind: 'document',
-        id: documentId,
-        channel_id: selectedChannelId ?? '',
-        name: '',
-        file_type: '',
-        size_bytes: 0,
-        file_hash: '',
-        s3_key: '',
-        status: '',
-        metadata: {},
-        uploaded_by: null,
-        created_at: '',
-        updated_at: '',
-        pipeline_job: null,
-        file_count: 1,
-      };
-    }
-    return null;
-  }, [captureMatch?.params.captureId, channelItems, documentMatch?.params.documentId, selectedChannelId]);
+
+    return {
+      kind: 'capture',
+      id: captureMatch.params.captureId,
+      channel_id: selectedChannelId ?? '',
+      name: '',
+      title: '',
+      brief: null,
+      input_mode: 'document',
+      file_count: 0,
+      size_bytes: 0,
+      status: '',
+      updated_at: '',
+      created_at: '',
+      pipeline_job: null,
+    };
+  }, [captureMatch?.params.captureId, channelItems, selectedChannelId]);
 
   const treeSelection = useMemo((): KnowledgeTreeSelection | null => {
     if (selectedItem) return { type: 'item', item: selectedItem };
@@ -267,17 +239,9 @@ export function DocumentsLayout() {
 
   async function handleDeleteItem(item: ChannelKnowledgeItem) {
     try {
-      if (item.kind === 'document') {
-        await deleteDocument(item.id);
-      } else {
-        await deleteDocumentCapture(item.id);
-      }
+      await deleteDocumentCapture(item.id);
       await loadItemsForChannel(item.channel_id);
-      if (
-        selectedItem &&
-        selectedItem.kind === item.kind &&
-        selectedItem.id === item.id
-      ) {
+      if (selectedItem?.id === item.id) {
         navigate('/knowledge/documents');
       }
     } catch (err) {
@@ -317,10 +281,6 @@ export function DocumentsLayout() {
 
   function handleSelectItem(item: ChannelKnowledgeItem) {
     setSelectedChannelId(item.channel_id);
-    if (item.kind === 'document') {
-      navigate(`/knowledge/documents/${item.id}`);
-      return;
-    }
     navigate(`/knowledge/documents/captures/${item.id}`);
   }
 

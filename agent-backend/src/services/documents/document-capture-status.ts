@@ -1,6 +1,6 @@
 import type { DocumentCaptureInputMode } from '../../db/index.ts';
 import type { CaptureStatusSegment } from '../capture/capture-status-resolve.ts';
-import { getLatestPipelineJobsForDocuments } from '../pipeline/pipeline-jobs.ts';
+import { getLatestPipelineJobsForSegments } from '../pipeline/pipeline-jobs.ts';
 
 type SegmentRow = {
   id: string;
@@ -30,23 +30,10 @@ export async function buildDocumentCaptureStatusSegments(
   audioJobs: Map<string, { stage: string } | undefined>,
 ): Promise<CaptureStatusSegment[]> {
   if (inputMode === 'document') {
-    const libraryDocIds = segments
-      .map((segment) => {
-        const meta = segment.metadata ?? {};
-        return typeof meta.library_document_id === 'string' ? meta.library_document_id : null;
-      })
-      .filter((id): id is string => Boolean(id));
-
-    const documentJobs = libraryDocIds.length
-      ? await getLatestPipelineJobsForDocuments(libraryDocIds)
-      : new Map();
+    const segmentJobs = await getLatestPipelineJobsForSegments(segments.map((segment) => segment.id));
 
     return segments.map((segment) => {
-      const libraryDocumentId =
-        typeof segment.metadata?.library_document_id === 'string'
-          ? segment.metadata.library_document_id
-          : null;
-      const docJob = libraryDocumentId ? documentJobs.get(libraryDocumentId) : null;
+      const docJob = segmentJobs.get(segment.id);
       if (!docJob) {
         return { status: segment.status, pipeline_job: null };
       }

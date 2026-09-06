@@ -16,7 +16,6 @@ import {
 } from '../audio/audio-pipeline-jobs.ts';
 import { spawnAsyncAudioPipelineWorker } from '../audio/audio-pipeline-runner.ts';
 import { getDocumentChannelAsrVocabularyIdForJob } from '../audio/asr-hotwords.ts';
-import { autoStartPipelineAfterUpload } from '../pipeline/auto-pipeline.ts';
 import { createDocumentCapturePipelineJob } from './document-capture-pipeline-jobs.ts';
 import { getChannelById, createDocumentRecord } from './documents.ts';
 import {
@@ -63,7 +62,7 @@ async function startDocumentCaptureSegmentDocumentPipeline(
       metadata: {
         knowledge_capture_id: captureId,
         knowledge_capture_segment_id: segment.id,
-        knowledge_shadow: true,
+        knowledge_archived: true,
       },
       updatedAt: new Date(),
     })
@@ -73,6 +72,7 @@ async function startDocumentCaptureSegmentDocumentPipeline(
     .update(appDocumentCaptureSegments)
     .set({
       metadata: {
+        ...(segment.metadata ?? {}),
         library_document_id: document.id,
         knowledge_capture_id: captureId,
       },
@@ -81,7 +81,47 @@ async function startDocumentCaptureSegmentDocumentPipeline(
     })
     .where(eq(appDocumentCaptureSegments.id, segment.id));
 
-  await autoStartPipelineAfterUpload(document.id, segment.channelId);
+  const channel = await getChannelById(segment.channelId);
+  if (!channel?.pipelineId) {
+    console.info(
+      `[document-capture] skip parse — channel ${segment.channelId} has no pipeline_id`,
+    );
+    return;
+  }
+
+  const pipeline = await getPipelineConfigById(channel.pipelineId);
+  if (!pipeline?.isEnabled) {
+    throw new Error('Document parse pipeline is not available');
+  }
+
+  const { pipelineProviderForName, createPipelineJob, isDocumentAsyncPipelineName } = await import(
+    '../pipeline/pipeline-jobs.ts'
+  );
+  const { spawnAsyncPipelineWorker } = await import('../pipeline/pipeline-runner.ts');
+  const { resolvePipelineConfigYamlSnapshot } = await import(
+    '../../shared/pipeline/pipeline-default-config.ts'
+  );
+
+  const provider = pipelineProviderForName(pipeline.pipelineName);
+  if (!provider || !isDocumentAsyncPipelineName(pipeline.pipelineName)) {
+    throw new Error(`Unsupported document parse pipeline: ${pipeline.pipelineName}`);
+  }
+
+  const configYaml = await resolvePipelineConfigYamlSnapshot({
+    pipelineName: pipeline.pipelineName,
+    configYaml: pipeline.configYaml,
+    isSystem: pipeline.isSystem,
+  });
+
+  const job = await createPipelineJob({
+    documentCaptureSegmentId: segment.id,
+    documentId: document.id,
+    pipelineName: pipeline.pipelineName,
+    provider,
+    configYaml,
+  });
+
+  await spawnAsyncPipelineWorker(job.id, pipeline.pipelineName);
 }
 
 async function startDocumentCaptureSegmentAudioPipeline(

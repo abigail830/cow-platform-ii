@@ -16,13 +16,10 @@ function channelCanWrite(channel: DocumentChannel): boolean {
 }
 
 function itemDisplayName(item: ChannelKnowledgeItem): string {
-  return item.kind === 'capture' ? item.title || item.name : item.name;
+  return item.title || item.name;
 }
 
 function ItemIcon({ item }: { item: ChannelKnowledgeItem }) {
-  if (item.kind === 'document') {
-    return <FileText {...iconProps({ className: 'knowledge-tree-icon' })} />;
-  }
   if (item.input_mode === 'audio') {
     return <Mic {...iconProps({ className: 'knowledge-tree-icon' })} />;
   }

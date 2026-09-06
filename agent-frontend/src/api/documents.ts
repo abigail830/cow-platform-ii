@@ -48,12 +48,6 @@ export type DocumentListResponse = {
   total: number;
 };
 
-export type ChannelKnowledgeDocumentItem = DocumentRecord & {
-  kind: 'document';
-  file_count: number;
-  name: string;
-};
-
 export type ChannelKnowledgeCaptureItem = {
   kind: 'capture';
   id: string;
@@ -70,7 +64,7 @@ export type ChannelKnowledgeCaptureItem = {
   pipeline_job: DocumentPipelineJob | null;
 };
 
-export type ChannelKnowledgeItem = ChannelKnowledgeDocumentItem | ChannelKnowledgeCaptureItem;
+export type ChannelKnowledgeItem = ChannelKnowledgeCaptureItem;
 
 export type ChannelKnowledgeListResponse = {
   items: ChannelKnowledgeItem[];

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   appDocumentCaptureSegments,
   appDocumentChannels,
@@ -338,14 +338,12 @@ export async function listDocuments(input: {
   };
 }
 
-export type ChannelKnowledgeItem =
-  | ({ kind: 'document'; file_count: number } & ReturnType<typeof toDocumentPublic>)
-  | ({
-      kind: 'capture';
-      name: string;
-      file_count: number;
-      size_bytes: number;
-    } & NonNullable<Awaited<ReturnType<typeof import('./document-captures.ts').getCapturePublicById>>>);
+export type ChannelKnowledgeItem = {
+  kind: 'capture';
+  name: string;
+  file_count: number;
+  size_bytes: number;
+} & NonNullable<Awaited<ReturnType<typeof import('./document-captures.ts').getCapturePublicById>>>;
 
 export async function listChannelKnowledgeItems(input: {
   channelId: string;
@@ -360,71 +358,28 @@ export async function listChannelKnowledgeItems(input: {
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
   const offset = Math.max(input.offset ?? 0, 0);
 
-  const docConditions = [
-    eq(appDocuments.channelId, input.channelId),
-    sql`coalesce(${appDocuments.metadata}->>'knowledge_shadow', 'false') <> 'true'`,
-    sql`coalesce(${appDocuments.metadata}->>'eval_shadow', 'false') <> 'true'`,
-  ];
-  if (search) {
-    docConditions.push(sql`${appDocuments.name} ILIKE ${`%${search}%`}`);
-  }
-
   const captureConditions = [eq(appDocumentCaptures.channelId, input.channelId)];
   if (search) {
     captureConditions.push(sql`${appDocumentCaptures.title} ILIKE ${`%${search}%`}`);
   }
-
-  const [docCountRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(appDocuments)
-    .where(and(...docConditions));
 
   const [captureCountRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(appDocumentCaptures)
     .where(and(...captureConditions));
 
-  const total = (docCountRow?.count ?? 0) + (captureCountRow?.count ?? 0);
-
-  const docRows = await db
-    .select({
-      kind: sql<'document'>`'document'`,
-      id: appDocuments.id,
-      name: appDocuments.name,
-      updatedAt: appDocuments.updatedAt,
-    })
-    .from(appDocuments)
-    .where(and(...docConditions));
+  const total = captureCountRow?.count ?? 0;
 
   const captureRows = await db
-    .select({
-      kind: sql<'capture'>`'capture'`,
-      id: appDocumentCaptures.id,
-      name: appDocumentCaptures.title,
-      updatedAt: appDocumentCaptures.updatedAt,
-    })
+    .select({ id: appDocumentCaptures.id })
     .from(appDocumentCaptures)
-    .where(and(...captureConditions));
+    .where(and(...captureConditions))
+    .orderBy(desc(appDocumentCaptures.updatedAt))
+    .limit(limit)
+    .offset(offset);
 
-  const merged = [
-    ...docRows.map((row) => ({
-      kind: row.kind,
-      id: row.id,
-      updatedAt: row.updatedAt,
-    })),
-    ...captureRows.map((row) => ({
-      kind: row.kind,
-      id: row.id,
-      updatedAt: row.updatedAt,
-    })),
-  ]
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-    .slice(offset, offset + limit);
-
+  const captureIds = captureRows.map((row) => row.id);
   const { getCapturePublicById } = await import('./document-captures.ts');
-  const docIds = merged.filter((row) => row.kind === 'document').map((row) => row.id);
-  const captureIds = merged.filter((row) => row.kind === 'capture').map((row) => row.id);
-  const jobMap = docIds.length ? await getLatestPipelineJobsForDocuments(docIds) : new Map();
 
   const captureStats = captureIds.length
     ? await db
@@ -442,27 +397,17 @@ export async function listChannelKnowledgeItems(input: {
   );
 
   const items: NonNullable<ChannelKnowledgeItem>[] = [];
-  for (const row of merged) {
-    if (row.kind === 'document') {
-      const doc = await getDocumentById(row.id);
-      if (!doc) continue;
-      items.push({
-        kind: 'document',
-        file_count: 1,
-        ...toDocumentPublic(doc, jobMap.get(row.id)),
-      });
-    } else {
-      const capture = await getCapturePublicById(row.id);
-      if (!capture) continue;
-      const stats = captureStatsMap.get(row.id);
-      items.push({
-        kind: 'capture',
-        name: capture.title,
-        file_count: stats?.fileCount ?? capture.segment_count,
-        size_bytes: stats?.sizeBytes ?? 0,
-        ...capture,
-      });
-    }
+  for (const row of captureRows) {
+    const capture = await getCapturePublicById(row.id);
+    if (!capture) continue;
+    const stats = captureStatsMap.get(row.id);
+    items.push({
+      kind: 'capture',
+      name: capture.title,
+      file_count: stats?.fileCount ?? capture.segment_count,
+      size_bytes: stats?.sizeBytes ?? 0,
+      ...capture,
+    });
   }
 
   return { items, total };

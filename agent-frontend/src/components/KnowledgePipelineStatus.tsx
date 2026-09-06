@@ -1,15 +1,12 @@
 import type { ChannelKnowledgeItem } from '../api/documents.ts';
 import type { AudioCaptureRecord } from '../api/audioCaptures.ts';
 import { CapturePipelineStatus } from './CapturePipelineStatus.tsx';
-import { DocumentPipelineStatus } from './DocumentPipelineStatus.tsx';
 
 type KnowledgePipelineStatusProps = {
   item: ChannelKnowledgeItem;
 };
 
-function captureItemToPipelineCapture(
-  item: Extract<ChannelKnowledgeItem, { kind: 'capture' }>,
-): AudioCaptureRecord {
+function captureItemToPipelineCapture(item: ChannelKnowledgeItem): AudioCaptureRecord {
   return {
     id: item.id,
     channel_id: item.channel_id,
@@ -30,10 +27,6 @@ function captureItemToPipelineCapture(
 }
 
 export function KnowledgePipelineStatus({ item }: KnowledgePipelineStatusProps) {
-  if (item.kind === 'document') {
-    return <DocumentPipelineStatus document={item} />;
-  }
-
   if (item.input_mode === 'document') {
     return (
       <span className={`document-status-badge status-${item.status}`}>
@@ -48,7 +41,6 @@ export function KnowledgePipelineStatus({ item }: KnowledgePipelineStatusProps) 
 }
 
 export function knowledgeKindLabel(item: ChannelKnowledgeItem): string {
-  if (item.kind === 'document') return 'Document file';
   switch (item.input_mode) {
     case 'document':
       return 'Document capture';

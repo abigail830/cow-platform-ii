@@ -2,26 +2,14 @@ import { Hono } from 'hono';
 import { requireCliInternalAuth } from '../../auth/cli-internal-auth.ts';
 import { routeParam } from '../../http/route-param.ts';
 import {
+  applyPipelineJobStageSideEffects,
   buildPipelineJobContext,
   getPipelineJobById,
-  markDocumentForJobStage,
   updatePipelineJob,
   type PipelineJobStage,
 } from '../../services/pipeline/pipeline-jobs.ts';
 import { spawnAsyncPipelineWorker } from '../../services/pipeline/pipeline-runner.ts';
 import { resolvePipelineWorkerMode } from '../../services/pipeline/pipeline-worker-mode.ts';
-import { syncEvalRunItemFromDocumentPipelineJob } from '../../services/eval/eval-document-bridge.ts';
-
-async function applyPipelineJobStageSideEffects(
-  job: NonNullable<Awaited<ReturnType<typeof getPipelineJobById>>>,
-  stage: PipelineJobStage,
-): Promise<void> {
-  if (job.evalRunItemId) {
-    await syncEvalRunItemFromDocumentPipelineJob(job.id);
-    return;
-  }
-  await markDocumentForJobStage(job.documentId, stage);
-}
 
 const pipelineJobs = new Hono();
 

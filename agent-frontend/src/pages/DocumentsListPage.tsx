@@ -10,35 +10,28 @@ import {
   uploadCaptureTranscriptSegment,
 } from '../api/documentCaptures.ts';
 import {
-  deleteDocument,
   formatDocumentBytes,
   listChannelKnowledgeItems,
-  moveDocument,
-  runDocumentPipeline,
   type ChannelKnowledgeItem,
 } from '../api/documents.ts';
-import { DocumentDownloadActions } from '../components/DocumentDownloadMenu.tsx';
-import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
 import {
   KnowledgePipelineStatus,
   knowledgeKindLabel,
 } from '../components/KnowledgePipelineStatus.tsx';
 import { KnowledgeUploadModal } from '../components/KnowledgeUploadModal.tsx';
-import { IconDelete, IconMove, IconRun, IconView } from '../components/AdminActionIcons.tsx';
+import { IconDelete, IconView } from '../components/AdminActionIcons.tsx';
 import { Loader2, Search } from 'lucide-react';
-import { iconProps } from '../components/icons/icon-props.ts';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
 import { buildChannelPath } from '../shared/channel-path.ts';
 
+import { iconProps } from '../components/icons/icon-props.ts';
+
 function itemDetailPath(item: ChannelKnowledgeItem): string {
-  if (item.kind === 'capture') {
-    return `/knowledge/documents/captures/${item.id}`;
-  }
-  return `/knowledge/documents/${item.id}`;
+  return `/knowledge/documents/captures/${item.id}`;
 }
 
 function itemDisplayName(item: ChannelKnowledgeItem): string {
-  return item.kind === 'capture' ? item.title || item.name : item.name;
+  return item.title || item.name;
 }
 
 function itemFileCount(item: ChannelKnowledgeItem): number {
@@ -46,13 +39,10 @@ function itemFileCount(item: ChannelKnowledgeItem): number {
 }
 
 function isItemPipelineActive(item: ChannelKnowledgeItem): boolean {
-  if (item.kind === 'capture') {
-    return isCapturePipelineActive({
-      status: item.status,
-      pipeline_job: item.pipeline_job,
-    });
-  }
-  return item.status === 'running';
+  return isCapturePipelineActive({
+    status: item.status,
+    pipeline_job: item.pipeline_job,
+  });
 }
 
 export function DocumentsListPage() {
@@ -64,10 +54,6 @@ export function DocumentsListPage() {
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [moveDocumentTarget, setMoveDocumentTarget] = useState<
-    Extract<ChannelKnowledgeItem, { kind: 'document' }> | null
-  >(null);
-  const [runningDocumentIds, setRunningDocumentIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   const flatChannels = useMemo(() => flattenChannels(channels), [channels]);
@@ -76,7 +62,6 @@ export function DocumentsListPage() {
     ? buildChannelPath(flatChannels, selectedChannel.id)
     : '';
   const canWriteChannel = Boolean(selectedChannel?.my_access?.write);
-  const channelHasPipeline = Boolean(selectedChannel?.pipeline_id);
 
   const loadItems = useCallback(async (options?: { silent?: boolean }) => {
     if (!selectedChannelId) {
@@ -153,49 +138,13 @@ export function DocumentsListPage() {
     setDeletingIds((current) => new Set(current).add(item.id));
     setError('');
     try {
-      if (item.kind === 'document') {
-        await deleteDocument(item.id);
-      } else {
-        await deleteDocumentCapture(item.id);
-      }
+      await deleteDocumentCapture(item.id);
       await loadItems();
       await refreshChannelItems(selectedChannelId ?? undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete item');
     } finally {
       setDeletingIds((current) => {
-        const next = new Set(current);
-        next.delete(item.id);
-        return next;
-      });
-    }
-  }
-
-  async function handleMoveDocument(channelId: string) {
-    if (!moveDocumentTarget) return;
-    await moveDocument(moveDocumentTarget.id, channelId);
-    setMoveDocumentTarget(null);
-    await loadItems();
-    await refreshChannelItems(selectedChannelId ?? undefined);
-    await refreshChannelItems(channelId);
-  }
-
-  async function handleRunPipeline(item: Extract<ChannelKnowledgeItem, { kind: 'document' }>) {
-    if (!channelHasPipeline) return;
-    setRunningDocumentIds((current) => new Set(current).add(item.id));
-    setError('');
-    try {
-      await runDocumentPipeline(item.id);
-      setItems((current) =>
-        current.map((row) =>
-          row.kind === 'document' && row.id === item.id ? { ...row, status: 'running' } : row,
-        ),
-      );
-      await loadItems({ silent: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start pipeline');
-    } finally {
-      setRunningDocumentIds((current) => {
         const next = new Set(current);
         next.delete(item.id);
         return next;
@@ -280,18 +229,14 @@ export function DocumentsListPage() {
             ) : (
               items.map((item) => {
                 const isDeleting = deletingIds.has(item.id);
-                const isDocument = item.kind === 'document';
-                const isPipelineBusy =
-                  isDocument &&
-                  (runningDocumentIds.has(item.id) || item.status === 'running');
 
                 return (
-                  <tr key={`${item.kind}-${item.id}`}>
+                  <tr key={item.id}>
                     <td>
                       <Link to={itemDetailPath(item)} className="document-name-link">
                         {itemDisplayName(item)}
                       </Link>
-                      {item.kind === 'capture' && item.brief ? (
+                      {item.brief ? (
                         <div className="documents-table-meta">{item.brief}</div>
                       ) : null}
                     </td>
@@ -316,45 +261,6 @@ export function DocumentsListPage() {
                         >
                           <IconView />
                         </Link>
-                        {isDocument ? (
-                          <DocumentDownloadActions
-                            documentId={item.id}
-                            documentName={item.name}
-                            onError={setError}
-                          />
-                        ) : null}
-                        {canWriteChannel && isDocument ? (
-                          <>
-                            <button
-                              type="button"
-                              className={`icon-btn icon-btn--run${isPipelineBusy ? ' is-busy' : ''}`}
-                              title={
-                                channelHasPipeline
-                                  ? isPipelineBusy
-                                    ? 'Pipeline running…'
-                                    : 'Run pipeline'
-                                  : 'Configure a pipeline on this channel first'
-                              }
-                              disabled={!channelHasPipeline || isPipelineBusy}
-                              aria-busy={isPipelineBusy}
-                              onClick={() => void handleRunPipeline(item)}
-                            >
-                              {isPipelineBusy ? (
-                                <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
-                              ) : (
-                                <IconRun />
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              title="Move to channel"
-                              onClick={() => setMoveDocumentTarget(item)}
-                            >
-                              <IconMove />
-                            </button>
-                          </>
-                        ) : null}
                         {canWriteChannel ? (
                           <button
                             type="button"
@@ -398,15 +304,6 @@ export function DocumentsListPage() {
           onCancel={() => setUploadOpen(false)}
           onUploadDocuments={handleUploadDocuments}
           onCreateCapture={handleCreateCapture}
-        />
-      )}
-      {moveDocumentTarget && (
-        <DocumentMoveModal
-          documentName={moveDocumentTarget.name}
-          currentChannelId={moveDocumentTarget.channel_id}
-          channels={channels}
-          onCancel={() => setMoveDocumentTarget(null)}
-          onSubmit={handleMoveDocument}
         />
       )}
     </>

@@ -17,7 +17,7 @@ import {
   getLatestAudioPipelineJobsForDocumentCaptureSegments,
   audioPipelineJobToPublic,
 } from '../audio/audio-pipeline-jobs.ts';
-import { getLatestPipelineJobsForDocuments, pipelineJobToPublic } from '../pipeline/pipeline-jobs.ts';
+import { getLatestPipelineJobsForSegments, pipelineJobToPublic } from '../pipeline/pipeline-jobs.ts';
 import { resolveCaptureStatusFromSegments } from '../capture/capture-status-resolve.ts';
 import {
   buildDocumentCaptureStatusSegments,
@@ -25,6 +25,13 @@ import {
 } from './document-capture-status.ts';
 
 export type DocumentCaptureRow = typeof appDocumentCaptures.$inferSelect;
+
+function resolveArtifactDocumentId(metadata: Record<string, unknown> | null | undefined): string | null {
+  if (!metadata) return null;
+  if (typeof metadata.library_document_id === 'string') return metadata.library_document_id;
+  if (typeof metadata.legacy_document_id === 'string') return metadata.legacy_document_id;
+  return null;
+}
 
 function toCapturePublic(
   row: DocumentCaptureRow,
@@ -58,15 +65,14 @@ function toSegmentPublic(
   > extends Map<string, infer J>
     ? J
     : never,
-  documentJob?: Awaited<ReturnType<typeof getLatestPipelineJobsForDocuments>> extends Map<
+  documentJob?: Awaited<ReturnType<typeof getLatestPipelineJobsForSegments>> extends Map<
     string,
     infer J
   >
     ? J
     : never,
 ) {
-  const libraryDocumentId =
-    typeof row.metadata?.library_document_id === 'string' ? row.metadata.library_document_id : null;
+  const artifactDocumentId = resolveArtifactDocumentId(row.metadata as Record<string, unknown> | null);
 
   let pipelineJob = null;
   if (inputMode === 'document' && documentJob) {
@@ -89,7 +95,7 @@ function toSegmentPublic(
     duration_sec: row.durationSec,
     metadata: {
       ...(row.metadata as Record<string, unknown>),
-      ...(libraryDocumentId ? { library_document_id: libraryDocumentId } : {}),
+      ...(artifactDocumentId ? { library_document_id: artifactDocumentId } : {}),
     },
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
@@ -263,15 +269,10 @@ export async function getCaptureWithSegments(id: string, options?: { sync?: bool
   const audioJobs = await getLatestAudioPipelineJobsForDocumentCaptureSegments(
     segments.map((s) => s.id),
   );
-  const libraryDocIds = segments
-    .map((segment) => {
-      const meta = segment.metadata as Record<string, unknown> | null;
-      return typeof meta?.library_document_id === 'string' ? meta.library_document_id : null;
-    })
-    .filter((docId): docId is string => Boolean(docId));
-  const documentJobs = libraryDocIds.length
-    ? await getLatestPipelineJobsForDocuments(libraryDocIds)
-    : new Map();
+  const documentSegmentJobs =
+    row.inputMode === 'document'
+      ? await getLatestPipelineJobsForSegments(segments.map((segment) => segment.id))
+      : new Map();
 
   const captureJob = await getLatestDocumentCapturePipelineJob(id);
   const statusSegments = await buildDocumentCaptureStatusSegments(row.inputMode, segments, audioJobs);
@@ -288,18 +289,14 @@ export async function getCaptureWithSegments(id: string, options?: { sync?: bool
 
   return {
     ...capture,
-    segments: segments.map((seg) => {
-      const libraryDocumentId =
-        typeof (seg.metadata as Record<string, unknown> | null)?.library_document_id === 'string'
-          ? (seg.metadata as Record<string, unknown>).library_document_id as string
-          : null;
-      return toSegmentPublic(
+    segments: segments.map((seg) =>
+      toSegmentPublic(
         seg,
         row.inputMode,
         audioJobs.get(seg.id),
-        libraryDocumentId ? documentJobs.get(libraryDocumentId) : undefined,
-      );
-    }),
+        row.inputMode === 'document' ? documentSegmentJobs.get(seg.id) : undefined,
+      ),
+    ),
   };
 }
 
@@ -340,15 +337,20 @@ export async function deleteDocumentCapture(id: string): Promise<boolean> {
     .from(appDocumentCaptureSegments)
     .where(eq(appDocumentCaptureSegments.captureId, id));
 
-  const shadowDocIds = segments
+  const artifactDocIds = segments
     .map((segment) => {
       const meta = segment.metadata as Record<string, unknown> | null;
-      return typeof meta?.library_document_id === 'string' ? meta.library_document_id : null;
+      const libraryDocumentId =
+        typeof meta?.library_document_id === 'string' ? meta.library_document_id : null;
+      const legacyDocumentId =
+        typeof meta?.legacy_document_id === 'string' ? meta.legacy_document_id : null;
+      if (libraryDocumentId && !legacyDocumentId) return libraryDocumentId;
+      return null;
     })
     .filter((docId): docId is string => Boolean(docId));
 
-  if (shadowDocIds.length > 0) {
-    await db.delete(appDocuments).where(inArray(appDocuments.id, shadowDocIds));
+  if (artifactDocIds.length > 0) {
+    await db.delete(appDocuments).where(inArray(appDocuments.id, artifactDocIds));
   }
 
   const result = await db.delete(appDocumentCaptures).where(eq(appDocumentCaptures.id, id));
