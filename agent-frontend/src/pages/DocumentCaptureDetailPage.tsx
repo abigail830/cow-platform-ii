@@ -25,6 +25,7 @@ import {
   isTranscriptCapture,
   isTranscriptSegment,
   reorderCaptureSegments,
+  resolveCaptureArtifactDocumentId,
   runCapturePipeline,
   runCaptureSegmentPipeline,
   segmentNeedsProcessing,
@@ -47,6 +48,7 @@ import { CapturePipelineStatus } from '../components/CapturePipelineStatus.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { Markdown } from '../chat/Markdown.tsx';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
+import { DocumentDetailPage } from './DocumentDetailPage.tsx';
 
 function PanelLoading({ label }: { label: string }) {
   return (
@@ -231,8 +233,9 @@ const POST_PROCESS_ARTIFACT_STAGES = new Set([
 ]);
 
 function captureExpectsPostProcessArtifacts(
-  capture: Pick<DocumentCaptureDetail, 'status' | 'pipeline_job'>,
+  capture: Pick<DocumentCaptureDetail, 'status' | 'pipeline_job' | 'input_mode'>,
 ): boolean {
+  if (capture.input_mode === 'document') return false;
   const jobStage = capture.pipeline_job?.stage;
   if (capture.status === 'post_processing' || capture.status === 'done') return true;
   return jobStage != null && POST_PROCESS_ARTIFACT_STAGES.has(jobStage);
@@ -938,6 +941,14 @@ export function DocumentCaptureDetailPage() {
   const badgeClass = captureStatusBadgeClass(capture.status);
   const transcriptCapture = isTranscriptCapture(capture);
   const documentFileCapture = isDocumentFileCapture(capture);
+
+  if (documentFileCapture) {
+    const artifactDocumentId = resolveCaptureArtifactDocumentId(capture);
+    if (artifactDocumentId) {
+      return <DocumentDetailPage documentIdOverride={artifactDocumentId} />;
+    }
+  }
+
   const segmentAcceptTypes = transcriptCapture
     ? '.md,.markdown,.docx'
     : documentFileCapture
@@ -1222,11 +1233,13 @@ export function DocumentCaptureDetailPage() {
       {error && <p className="error inline">{error}</p>}
 
       <div className="audio-detail-layout">
-        <CaptureDetailsPanel
-          capture={capture as unknown as AudioCaptureDetail}
-          canEdit={canWriteCapture}
-          onSave={handleSaveDetails}
-        />
+        {!documentFileCapture ? (
+          <CaptureDetailsPanel
+            capture={capture as unknown as AudioCaptureDetail}
+            canEdit={canWriteCapture}
+            onSave={handleSaveDetails}
+          />
+        ) : null}
 
         {awaitingSegmentProcessing ? (
           <p className="capture-detail-hint" role="status">

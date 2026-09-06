@@ -25,7 +25,7 @@ import { AudioCaptureDetailPage } from './pages/AudioCaptureDetailPage.tsx';
 import { EvalDatasetDetailPage, EvalDatasetsListPage } from './pages/EvalDatasetsPage.tsx';
 import { EvaluationRunDetailPage, EvaluationRunsListPage } from './pages/EvaluationRunsPage.tsx';
 import { DocumentsLayout } from './pages/DocumentsLayout.tsx';
-import { DocumentCaptureDetailPage } from './pages/DocumentCaptureDetailPage.tsx';
+import { DocumentItemDetailRouter } from './pages/DocumentItemDetailRouter.tsx';
 import { DocumentsListPage } from './pages/DocumentsListPage.tsx';
 import { ObjectStoragePage } from './pages/ObjectStoragePage.tsx';
 import { PermissionsPage } from './pages/PermissionsPage.tsx';
@@ -78,7 +78,7 @@ export default function App() {
           <Route path="/evaluation/judge-dimensions" element={<JudgeDimensionsPage />} />
           <Route path="/knowledge/documents" element={<DocumentsLayout />}>
             <Route index element={<DocumentsListPage />} />
-            <Route path="captures/:captureId" element={<DocumentCaptureDetailPage />} />
+            <Route path="captures/:captureId" element={<DocumentItemDetailRouter />} />
           </Route>
           <Route path="/admin/users" element={<UsersPage />} />
           <Route path="/admin/roles" element={<RolesPage />} />

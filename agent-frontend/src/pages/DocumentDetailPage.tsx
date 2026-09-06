@@ -35,8 +35,14 @@ const DocumentUdocViewer = lazyWithRetry(
 
 type RightPanelTab = 'pageindex' | 'parsed';
 
-export function DocumentDetailPage() {
-  const { documentId } = useParams<{ documentId: string }>();
+type DocumentDetailPageProps = {
+  /** When opened via /captures/:captureId router for document-file captures. */
+  documentIdOverride?: string;
+};
+
+export function DocumentDetailPage({ documentIdOverride }: DocumentDetailPageProps = {}) {
+  const { documentId: routeDocumentId } = useParams<{ documentId: string }>();
+  const documentId = documentIdOverride ?? routeDocumentId;
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLink = useMemo(() => parseDocumentDeepLink(searchParams.toString()), [searchParams]);
   const { setSelectedChannelId } = useDocumentsOutletContext();

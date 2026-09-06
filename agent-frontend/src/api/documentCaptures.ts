@@ -100,6 +100,18 @@ export function isDocumentFileCapture(
   return capture.input_mode === 'document';
 }
 
+/** Artifact carrier document row used for parse results (library or migrated legacy doc). */
+export function resolveCaptureArtifactDocumentId(
+  capture: Pick<DocumentCaptureDetail, 'segments'>,
+): string | null {
+  for (const segment of capture.segments) {
+    const meta = segment.metadata ?? {};
+    if (typeof meta.library_document_id === 'string') return meta.library_document_id;
+    if (typeof meta.legacy_document_id === 'string') return meta.legacy_document_id;
+  }
+  return null;
+}
+
 export function isTranscriptSegment(
   segment: Pick<DocumentCaptureSegment, 'metadata'>,
 ): boolean {
