@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronRight, File, FileText, Folder, Mic, Plus, Settings, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, Plus, Settings, Trash2 } from 'lucide-react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
 import type { ChannelKnowledgeItem } from '../api/documents.ts';
+import { KnowledgeFileTypeIcon } from './icons/file-type-icon.tsx';
 import { iconProps } from './icons/icon-props.ts';
 
 export type KnowledgeTreeSelection =
@@ -20,13 +21,13 @@ function itemDisplayName(item: ChannelKnowledgeItem): string {
 }
 
 function ItemIcon({ item }: { item: ChannelKnowledgeItem }) {
-  if (item.input_mode === 'audio') {
-    return <Mic {...iconProps({ className: 'knowledge-tree-icon' })} />;
-  }
-  if (item.input_mode === 'document') {
-    return <File {...iconProps({ className: 'knowledge-tree-icon' })} />;
-  }
-  return <FileText {...iconProps({ className: 'knowledge-tree-icon' })} />;
+  return (
+    <KnowledgeFileTypeIcon
+      className="knowledge-tree-icon"
+      filename={item.title || item.name}
+      inputMode={item.input_mode}
+    />
+  );
 }
 
 type KnowledgeChannelTreePanelProps = {

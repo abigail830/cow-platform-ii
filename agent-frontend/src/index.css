@@ -6693,6 +6693,12 @@ select:focus-visible {
   text-decoration: none;
 }
 
+.knowledge-item-name-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .document-name-link--table {
   text-decoration: underline;
   text-underline-offset: 2px;

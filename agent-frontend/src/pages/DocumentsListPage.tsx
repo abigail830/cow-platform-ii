@@ -20,6 +20,7 @@ import {
 } from '../components/KnowledgePipelineStatus.tsx';
 import { KnowledgeUploadModal } from '../components/KnowledgeUploadModal.tsx';
 import { IconDelete, IconView } from '../components/AdminActionIcons.tsx';
+import { KnowledgeFileTypeIcon } from '../components/icons/file-type-icon.tsx';
 import { Loader2, Search } from 'lucide-react';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
 import { buildChannelPath } from '../shared/channel-path.ts';
@@ -233,7 +234,11 @@ export function DocumentsListPage() {
                 return (
                   <tr key={item.id}>
                     <td>
-                      <Link to={itemDetailPath(item)} className="document-name-link">
+                      <Link to={itemDetailPath(item)} className="document-name-link knowledge-item-name-link">
+                        <KnowledgeFileTypeIcon
+                          filename={item.title || item.name}
+                          inputMode={item.input_mode}
+                        />
                         {itemDisplayName(item)}
                       </Link>
                       {item.brief ? (
