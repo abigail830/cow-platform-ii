@@ -1,6 +1,7 @@
 import { desc, eq, inArray } from 'drizzle-orm';
-import { appAudios, appAudioPipelineJobs, db, type AudioPipelineJobStage } from '../../db/index.ts';
+import { appAudios, appAudioPipelineJobs, appDocumentCaptureSegments, db, type AudioPipelineJobStage } from '../../db/index.ts';
 import { getAudioChannelById } from './audios.ts';
+import { getChannelById } from '../documents/documents.ts';
 import { getS3Config } from '../../storage/s3-config.ts';
 import { audioStoragePrefix } from '../../storage/audio-files.ts';
 import {
@@ -54,6 +55,7 @@ export type AudioPipelineJobContext = {
 
 export async function createAudioPipelineJob(input: {
   audioId?: string | null;
+  documentCaptureSegmentId?: string | null;
   pipelineName: string;
   provider: string;
   configYaml?: string | null;
@@ -62,17 +64,17 @@ export async function createAudioPipelineJob(input: {
 }): Promise<typeof appAudioPipelineJobs.$inferSelect> {
   const evalRunItemId = input.evalRunItemId?.trim() || null;
   const audioId = input.audioId?.trim() || null;
-  if (!evalRunItemId && !audioId) {
-    throw new Error('Audio pipeline job requires audioId or evalRunItemId');
-  }
-  if (evalRunItemId && audioId) {
-    throw new Error('Eval audio pipeline jobs must not reference library audio');
+  const documentCaptureSegmentId = input.documentCaptureSegmentId?.trim() || null;
+  const refCount = [evalRunItemId, audioId, documentCaptureSegmentId].filter(Boolean).length;
+  if (refCount !== 1) {
+    throw new Error('Audio pipeline job requires exactly one of audioId, documentCaptureSegmentId, or evalRunItemId');
   }
 
   const [row] = await db
     .insert(appAudioPipelineJobs)
     .values({
       audioId,
+      documentCaptureSegmentId,
       pipelineName: input.pipelineName,
       provider: input.provider,
       stage: 'submitted',
@@ -103,6 +105,27 @@ export async function getLatestAudioPipelineJobForAudio(
   return row ?? null;
 }
 
+export async function getLatestAudioPipelineJobsForDocumentCaptureSegments(
+  segmentIds: string[],
+): Promise<Map<string, typeof appAudioPipelineJobs.$inferSelect>> {
+  if (segmentIds.length === 0) return new Map();
+
+  const rows = await db
+    .select()
+    .from(appAudioPipelineJobs)
+    .where(inArray(appAudioPipelineJobs.documentCaptureSegmentId, segmentIds))
+    .orderBy(desc(appAudioPipelineJobs.createdAt));
+
+  const map = new Map<string, typeof appAudioPipelineJobs.$inferSelect>();
+  for (const row of rows) {
+    if (!row.documentCaptureSegmentId) continue;
+    if (!map.has(row.documentCaptureSegmentId)) {
+      map.set(row.documentCaptureSegmentId, row);
+    }
+  }
+  return map;
+}
+
 export async function getLatestAudioPipelineJobsForAudios(
   audioIds: string[],
 ): Promise<Map<string, typeof appAudioPipelineJobs.$inferSelect>> {
@@ -116,7 +139,7 @@ export async function getLatestAudioPipelineJobsForAudios(
 
   const map = new Map<string, typeof appAudioPipelineJobs.$inferSelect>();
   for (const row of rows) {
-    if (!map.has(row.audioId)) map.set(row.audioId, row);
+    if (row.audioId && !map.has(row.audioId)) map.set(row.audioId, row);
   }
   return map;
 }
@@ -215,6 +238,46 @@ export async function buildAudioPipelineJobContext(jobId: string): Promise<Audio
     };
   }
 
+  if (job.documentCaptureSegmentId) {
+    const [segment] = await db
+      .select()
+      .from(appDocumentCaptureSegments)
+      .where(eq(appDocumentCaptureSegments.id, job.documentCaptureSegmentId))
+      .limit(1);
+    if (!segment) throw new Error('Document capture segment not found');
+
+    const channel = await getChannelById(segment.channelId);
+    if (!channel) throw new Error('Channel not found');
+
+    const inputUri = `s3://${s3.bucket}/${segment.s3Key}`;
+    const s3Prefix = s3PrefixFromKey(segment.s3Key) || audioStoragePrefix(segment.fileHash);
+
+    return {
+      id: job.id,
+      audio_id: segment.id,
+      pipeline_name: job.pipelineName,
+      provider: job.provider,
+      stage: job.stage as AudioPipelineJobStage,
+      external_job_id: job.externalJobId,
+      config_yaml: job.configYaml ?? null,
+      asr_vocabulary_id_snapshot: job.asrVocabularyIdSnapshot ?? null,
+      error_message: job.errorMessage,
+      audio: {
+        id: segment.id,
+        name: segment.name,
+        file_type: segment.fileType,
+        s3_key: segment.s3Key,
+        file_hash: segment.fileHash,
+        channel_id: segment.channelId,
+      },
+      input_uri: inputUri,
+      s3_prefix: s3Prefix,
+      api_url: apiUrl,
+      audio_duration_sec: segment.durationSec,
+      eval_run_item_id: null,
+    };
+  }
+
   if (!job.audioId) throw new Error('Audio pipeline job has no library audio');
 
   const [audio] = await db.select().from(appAudios).where(eq(appAudios.id, job.audioId)).limit(1);
@@ -303,3 +366,14 @@ export async function markAudioForJobStage(
     .set({ status: 'running', updatedAt: new Date() })
     .where(eq(appAudios.id, audioId));
 }
+
+export async function markDocumentCaptureSegmentForAudioPipelineJobStage(
+  segmentId: string,
+  stage: AudioPipelineJobStage,
+): Promise<void> {
+  const { markDocumentCaptureSegmentForAudioJobStage } = await import(
+    '../documents/document-capture-segment-pipeline.ts'
+  );
+  await markDocumentCaptureSegmentForAudioJobStage(segmentId, stage);
+}
+

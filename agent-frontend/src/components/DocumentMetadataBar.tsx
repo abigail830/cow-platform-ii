@@ -7,7 +7,7 @@ import {
   forwardRef,
   type KeyboardEvent,
 } from 'react';
-import { Pencil, Save, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Save, X } from 'lucide-react';
 import { updateDocumentMetadata } from '../api/documents.ts';
 import { iconProps } from './icons/icon-props.ts';
 
@@ -162,6 +162,7 @@ export function DocumentMetadataBar({ documentId, metadata, onMetadataChange }: 
   const tagEditorRef = useRef<MetadataTagEditorHandle>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [abstractValue, setAbstractValue] = useState(() => metadataStringValue(metadata, 'abstract'));
   const [authorValue, setAuthorValue] = useState(() => metadataStringValue(metadata, 'author'));
   const [publishDateValue, setPublishDateValue] = useState(() => metadataStringValue(metadata, 'publish_date'));
@@ -210,6 +211,7 @@ export function DocumentMetadataBar({ documentId, metadata, onMetadataChange }: 
   function handleStartEdit() {
     setSaveState('idle');
     setSaveError('');
+    setDetailsExpanded(true);
     setIsEditing(true);
   }
 
@@ -308,6 +310,29 @@ export function DocumentMetadataBar({ documentId, metadata, onMetadataChange }: 
         )}
       </div>
 
+      {!isEditing && (
+        <button
+          type="button"
+          className="document-metadata-details-toggle"
+          aria-expanded={detailsExpanded}
+          onClick={() => setDetailsExpanded((value) => !value)}
+        >
+          {detailsExpanded ? (
+            <>
+              <ChevronUp {...iconProps({ size: 14 })} aria-hidden />
+              Hide details
+            </>
+          ) : (
+            <>
+              <ChevronDown {...iconProps({ size: 14 })} aria-hidden />
+              Show details
+            </>
+          )}
+        </button>
+      )}
+
+      {(detailsExpanded || isEditing) && (
+        <>
       <div className="document-metadata-row document-metadata-row-inline">
         <div className="document-metadata-inline-item">
           <span className="document-metadata-key">{METADATA_LABELS.author}</span>
@@ -386,6 +411,8 @@ export function DocumentMetadataBar({ documentId, metadata, onMetadataChange }: 
           <MetadataBagelsReadonly items={tagItems} />
         )}
       </div>
+        </>
+      )}
     </section>
   );
 }

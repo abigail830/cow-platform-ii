@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   appAsrHotwordChannels,
+  appAsrHotwordDocumentChannels,
   appAsrHotwords,
   appAudioChannels,
   db,
@@ -22,6 +23,7 @@ import {
   dashScopeUpdateVocabulary,
 } from './asr-vocabulary-sync.ts';
 import { getAudioChannelById } from './audios.ts';
+import { getChannelById } from '../documents/documents.ts';
 
 export type AsrHotwordPublic = {
   id: string;
@@ -125,6 +127,17 @@ export async function listHotwordsForChannel(channelId: string): Promise<AsrHotw
   const rows = await db.select().from(appAsrHotwords).where(inArray(appAsrHotwords.id, ids));
   const channelMap = await channelIdsForHotwords(ids);
   return rows.map((row) => toPublic(row, channelMap.get(row.id) ?? []));
+}
+
+export async function listHotwordsForDocumentChannel(channelId: string): Promise<AsrHotwordPublic[]> {
+  const links = await db
+    .select({ hotwordId: appAsrHotwordDocumentChannels.hotwordId })
+    .from(appAsrHotwordDocumentChannels)
+    .where(eq(appAsrHotwordDocumentChannels.channelId, channelId));
+  const ids = links.map((link) => link.hotwordId);
+  if (ids.length === 0) return [];
+  const rows = await db.select().from(appAsrHotwords).where(inArray(appAsrHotwords.id, ids));
+  return rows.map((row) => toPublic(row, [channelId]));
 }
 
 async function resolveChannelAsrCredentials(channelId: string) {
@@ -371,6 +384,13 @@ export async function getChannelAsrVocabularyIdForJob(channelId: string): Promis
     const refreshed = await getAudioChannelById(channelId);
     return refreshed?.asrVocabularyId?.trim() || null;
   }
+  return channel.asrVocabularyId.trim();
+}
+
+/** Document channel transcription captures — vocabulary synced on document channels. */
+export async function getDocumentChannelAsrVocabularyIdForJob(channelId: string): Promise<string | null> {
+  const channel = await getChannelById(channelId);
+  if (!channel?.asrVocabularyId?.trim()) return null;
   return channel.asrVocabularyId.trim();
 }
 

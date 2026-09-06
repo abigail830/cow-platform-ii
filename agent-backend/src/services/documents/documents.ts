@@ -1,6 +1,8 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
+  appDocumentCaptureSegments,
   appDocumentChannels,
+  appDocumentCaptures,
   appDocuments,
   appPipelineJobs,
   appResourceGrants,
@@ -27,6 +29,8 @@ export type ChannelNode = {
   parent_id: string | null;
   sort_order: number;
   pipeline_id: string | null;
+  transcription_pipeline_id: string | null;
+  post_process_pipeline_id: string | null;
   auto_start_pipeline: boolean;
   created_at: string;
   updated_at: string;
@@ -50,7 +54,12 @@ function toChannelPublic(row: ChannelRow) {
     parent_id: row.parentId,
     sort_order: row.sortOrder,
     pipeline_id: row.pipelineId,
+    transcription_pipeline_id: row.transcriptionPipelineId,
+    post_process_pipeline_id: row.postProcessPipelineId,
     auto_start_pipeline: row.autoStartPipeline,
+    asr_vocabulary_id: row.asrVocabularyId,
+    asr_vocabulary_target_model: row.asrVocabularyTargetModel,
+    asr_vocabulary_synced_at: row.asrVocabularySyncedAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -126,7 +135,9 @@ export async function createChannel(input: {
       parentId: input.parentId ?? null,
       sortOrder: maxSort + 1,
       pipelineId: parent?.pipelineId ?? null,
-      autoStartPipeline: parent?.pipelineId ? parent.autoStartPipeline : false,
+      transcriptionPipelineId: parent?.transcriptionPipelineId ?? null,
+      postProcessPipelineId: parent?.postProcessPipelineId ?? null,
+      autoStartPipeline: parent?.pipelineId || parent?.transcriptionPipelineId ? parent.autoStartPipeline : false,
       createdBy: input.createdBy ?? null,
     })
     .returning();
@@ -141,6 +152,8 @@ export async function updateChannel(
     description?: string | null;
     parentId?: string | null;
     pipelineId?: string | null;
+    transcriptionPipelineId?: string | null;
+    postProcessPipelineId?: string | null;
     autoStartPipeline?: boolean;
   },
 ): Promise<ReturnType<typeof toChannelPublic>> {
@@ -154,8 +167,36 @@ export async function updateChannel(
     const { isDocumentAsyncPipelineName, ASYNC_PIPELINE_NAMES } = await import('../pipeline/pipeline-jobs.ts');
     if (!isDocumentAsyncPipelineName(pipeline.pipelineName)) {
       throw new Error(
-        `Channel pipeline must be an async document parse pipeline ` +
+        `Channel document pipeline must be an async document parse pipeline ` +
           `(${[...ASYNC_PIPELINE_NAMES].join(', ')}). Got: ${pipeline.pipelineName}`,
+      );
+    }
+  }
+
+  if (input.transcriptionPipelineId !== undefined && input.transcriptionPipelineId !== null) {
+    const pipeline = await getPipelineConfigById(input.transcriptionPipelineId);
+    if (!pipeline) throw new Error('Transcription pipeline not found');
+    if (!pipeline.isEnabled) throw new Error('Transcription pipeline is disabled');
+    const { isAudioAsyncPipelineName, ASYNC_AUDIO_PIPELINE_NAMES } = await import('../audio/audio-pipeline-names.ts');
+    if (!isAudioAsyncPipelineName(pipeline.pipelineName)) {
+      throw new Error(
+        `Channel transcription pipeline must be an async audio transcribe pipeline ` +
+          `(${[...ASYNC_AUDIO_PIPELINE_NAMES].join(', ')}). Got: ${pipeline.pipelineName}`,
+      );
+    }
+  }
+
+  if (input.postProcessPipelineId !== undefined && input.postProcessPipelineId !== null) {
+    const pipeline = await getPipelineConfigById(input.postProcessPipelineId);
+    if (!pipeline) throw new Error('Post-process pipeline not found');
+    if (!pipeline.isEnabled) throw new Error('Post-process pipeline is disabled');
+    const { isCapturePostProcessPipelineName, CAPTURE_POST_PROCESS_PIPELINE_NAMES } = await import(
+      '../capture/capture-post-process-pipeline-names.ts'
+    );
+    if (!isCapturePostProcessPipelineName(pipeline.pipelineName)) {
+      throw new Error(
+        `Channel post-process pipeline must be a capture post-process pipeline ` +
+          `(${[...CAPTURE_POST_PROCESS_PIPELINE_NAMES].join(', ')}). Got: ${pipeline.pipelineName}`,
       );
     }
   }
@@ -187,6 +228,12 @@ export async function updateChannel(
       ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
       ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
       ...(input.pipelineId !== undefined ? { pipelineId: input.pipelineId } : {}),
+      ...(input.transcriptionPipelineId !== undefined
+        ? { transcriptionPipelineId: input.transcriptionPipelineId }
+        : {}),
+      ...(input.postProcessPipelineId !== undefined
+        ? { postProcessPipelineId: input.postProcessPipelineId }
+        : {}),
       ...(input.autoStartPipeline !== undefined ? { autoStartPipeline: input.autoStartPipeline } : {}),
       updatedAt: new Date(),
     })
@@ -289,6 +336,136 @@ export async function listDocuments(input: {
     items: rows.map((row) => toDocumentPublic(row, jobMap.get(row.id))),
     total: countRow?.count ?? 0,
   };
+}
+
+export type ChannelKnowledgeItem =
+  | ({ kind: 'document'; file_count: number } & ReturnType<typeof toDocumentPublic>)
+  | ({
+      kind: 'capture';
+      name: string;
+      file_count: number;
+      size_bytes: number;
+    } & NonNullable<Awaited<ReturnType<typeof import('./document-captures.ts').getCapturePublicById>>>);
+
+export async function listChannelKnowledgeItems(input: {
+  channelId: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ items: NonNullable<ChannelKnowledgeItem>[]; total: number }> {
+  const channel = await getChannelById(input.channelId);
+  if (!channel) throw new Error('Channel not found');
+
+  const search = input.search?.trim();
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+  const offset = Math.max(input.offset ?? 0, 0);
+
+  const docConditions = [
+    eq(appDocuments.channelId, input.channelId),
+    sql`coalesce(${appDocuments.metadata}->>'knowledge_shadow', 'false') <> 'true'`,
+    sql`coalesce(${appDocuments.metadata}->>'eval_shadow', 'false') <> 'true'`,
+  ];
+  if (search) {
+    docConditions.push(sql`${appDocuments.name} ILIKE ${`%${search}%`}`);
+  }
+
+  const captureConditions = [eq(appDocumentCaptures.channelId, input.channelId)];
+  if (search) {
+    captureConditions.push(sql`${appDocumentCaptures.title} ILIKE ${`%${search}%`}`);
+  }
+
+  const [docCountRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(appDocuments)
+    .where(and(...docConditions));
+
+  const [captureCountRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(appDocumentCaptures)
+    .where(and(...captureConditions));
+
+  const total = (docCountRow?.count ?? 0) + (captureCountRow?.count ?? 0);
+
+  const docRows = await db
+    .select({
+      kind: sql<'document'>`'document'`,
+      id: appDocuments.id,
+      name: appDocuments.name,
+      updatedAt: appDocuments.updatedAt,
+    })
+    .from(appDocuments)
+    .where(and(...docConditions));
+
+  const captureRows = await db
+    .select({
+      kind: sql<'capture'>`'capture'`,
+      id: appDocumentCaptures.id,
+      name: appDocumentCaptures.title,
+      updatedAt: appDocumentCaptures.updatedAt,
+    })
+    .from(appDocumentCaptures)
+    .where(and(...captureConditions));
+
+  const merged = [
+    ...docRows.map((row) => ({
+      kind: row.kind,
+      id: row.id,
+      updatedAt: row.updatedAt,
+    })),
+    ...captureRows.map((row) => ({
+      kind: row.kind,
+      id: row.id,
+      updatedAt: row.updatedAt,
+    })),
+  ]
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(offset, offset + limit);
+
+  const { getCapturePublicById } = await import('./document-captures.ts');
+  const docIds = merged.filter((row) => row.kind === 'document').map((row) => row.id);
+  const captureIds = merged.filter((row) => row.kind === 'capture').map((row) => row.id);
+  const jobMap = docIds.length ? await getLatestPipelineJobsForDocuments(docIds) : new Map();
+
+  const captureStats = captureIds.length
+    ? await db
+        .select({
+          captureId: appDocumentCaptureSegments.captureId,
+          fileCount: sql<number>`count(*)::int`,
+          sizeBytes: sql<number>`coalesce(sum(${appDocumentCaptureSegments.sizeBytes}), 0)::int`,
+        })
+        .from(appDocumentCaptureSegments)
+        .where(inArray(appDocumentCaptureSegments.captureId, captureIds))
+        .groupBy(appDocumentCaptureSegments.captureId)
+    : [];
+  const captureStatsMap = new Map(
+    captureStats.map((row) => [row.captureId, { fileCount: row.fileCount, sizeBytes: row.sizeBytes }]),
+  );
+
+  const items: NonNullable<ChannelKnowledgeItem>[] = [];
+  for (const row of merged) {
+    if (row.kind === 'document') {
+      const doc = await getDocumentById(row.id);
+      if (!doc) continue;
+      items.push({
+        kind: 'document',
+        file_count: 1,
+        ...toDocumentPublic(doc, jobMap.get(row.id)),
+      });
+    } else {
+      const capture = await getCapturePublicById(row.id);
+      if (!capture) continue;
+      const stats = captureStatsMap.get(row.id);
+      items.push({
+        kind: 'capture',
+        name: capture.title,
+        file_count: stats?.fileCount ?? capture.segment_count,
+        size_bytes: stats?.sizeBytes ?? 0,
+        ...capture,
+      });
+    }
+  }
+
+  return { items, total };
 }
 
 export async function getDocumentById(id: string): Promise<DocumentRow | null> {

@@ -3,7 +3,9 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { clearSession, fetchMe, getToken, setSession, type AuthUser } from '../api/auth.ts';
 import { listAgents, type AgentInfo } from '../api/conversations.ts';
 import { AppSideNav } from '../components/AppSideNav.tsx';
+import { AppTopBar } from '../components/AppTopBar.tsx';
 import { canAccessAppPath, resolveAppHomePath } from '../shared/agent-nav.ts';
+import { getAppLayoutMode } from '../shared/app-layout-mode.ts';
 
 export type AppOutletContext = {
   user: AuthUser;
@@ -26,6 +28,9 @@ export function AppLayout() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [booting, setBooting] = useState(true);
   const [navCollapsed, setNavCollapsed] = useState(false);
+
+  const layoutMode = getAppLayoutMode(location.pathname);
+  const showSideNav = layoutMode === 'admin';
 
   async function refreshAgents() {
     const agentList = await listAgents();
@@ -75,20 +80,37 @@ export function AppLayout() {
     refreshAgents,
   };
 
+  const bodyClassName = [
+    'app-body',
+    `layout-${layoutMode}`,
+    showSideNav && navCollapsed ? 'nav-collapsed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <AppOutletContextInternal.Provider value={outletContext}>
-      <div className={`chat-layout${navCollapsed ? ' nav-collapsed' : ''}`}>
-        <AppSideNav
+      <div className="app-shell">
+        <AppTopBar
           user={user}
           userLabel={user.displayName ?? user.email}
           activePath={location.pathname}
-          collapsed={navCollapsed}
-          onToggleCollapse={() => setNavCollapsed((value) => !value)}
-          onLogout={logout}
           onNavigate={(path: string) => navigate(path)}
+          onLogout={logout}
         />
-        <div className="app-main">
-          <Outlet context={outletContext} />
+        <div className={bodyClassName}>
+          {showSideNav && (
+            <AppSideNav
+              user={user}
+              activePath={location.pathname}
+              collapsed={navCollapsed}
+              onToggleCollapse={() => setNavCollapsed((value) => !value)}
+              onNavigate={(path: string) => navigate(path)}
+            />
+          )}
+          <div className="app-main">
+            <Outlet context={outletContext} />
+          </div>
         </div>
       </div>
     </AppOutletContextInternal.Provider>

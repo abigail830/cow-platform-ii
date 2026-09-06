@@ -48,6 +48,35 @@ export type DocumentListResponse = {
   total: number;
 };
 
+export type ChannelKnowledgeDocumentItem = DocumentRecord & {
+  kind: 'document';
+  file_count: number;
+  name: string;
+};
+
+export type ChannelKnowledgeCaptureItem = {
+  kind: 'capture';
+  id: string;
+  channel_id: string;
+  name: string;
+  title: string;
+  brief: string | null;
+  input_mode: 'document' | 'audio' | 'transcript';
+  file_count: number;
+  size_bytes: number;
+  status: string;
+  updated_at: string;
+  created_at: string;
+  pipeline_job: DocumentPipelineJob | null;
+};
+
+export type ChannelKnowledgeItem = ChannelKnowledgeDocumentItem | ChannelKnowledgeCaptureItem;
+
+export type ChannelKnowledgeListResponse = {
+  items: ChannelKnowledgeItem[];
+  total: number;
+};
+
 export { CHUNK_UPLOAD_THRESHOLD_BYTES, UPLOAD_CHUNK_SIZE_BYTES } from './direct-upload.ts';
 
 async function authFetch(path: string, init?: RequestInit) {
@@ -209,6 +238,21 @@ export async function listDocuments(params: {
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   const data = await authFetch(`/api/documents?${query.toString()}`);
   return data as DocumentListResponse;
+}
+
+export async function listChannelKnowledgeItems(params: {
+  channelId: string;
+  search?: string;
+  offset?: number;
+  limit?: number;
+}): Promise<ChannelKnowledgeListResponse> {
+  const query = new URLSearchParams();
+  query.set('channel_id', params.channelId);
+  if (params.search) query.set('search', params.search);
+  if (params.offset !== undefined) query.set('offset', String(params.offset));
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  const data = await authFetch(`/api/documents/channel-items?${query.toString()}`);
+  return data as ChannelKnowledgeListResponse;
 }
 
 export async function deleteDocument(id: string): Promise<void> {

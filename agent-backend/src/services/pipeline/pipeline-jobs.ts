@@ -262,22 +262,34 @@ export async function markDocumentForJobStage(
   documentId: string,
   stage: PipelineJobStage,
 ): Promise<void> {
+  const [doc] = await db
+    .select({ metadata: appDocuments.metadata })
+    .from(appDocuments)
+    .where(eq(appDocuments.id, documentId))
+    .limit(1);
+
   if (stage === 'done') {
     await db
       .update(appDocuments)
       .set({ status: 'completed', updatedAt: new Date() })
       .where(eq(appDocuments.id, documentId));
-    return;
-  }
-  if (stage === 'failed') {
+  } else if (stage === 'failed') {
     await db
       .update(appDocuments)
       .set({ status: 'failed', updatedAt: new Date() })
       .where(eq(appDocuments.id, documentId));
-    return;
+  } else {
+    await db
+      .update(appDocuments)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(appDocuments.id, documentId));
   }
-  await db
-    .update(appDocuments)
-    .set({ status: 'running', updatedAt: new Date() })
-    .where(eq(appDocuments.id, documentId));
+
+  const meta = (doc?.metadata as Record<string, unknown> | null) ?? null;
+  if (meta?.knowledge_shadow === true && typeof meta.knowledge_capture_segment_id === 'string') {
+    const { syncDocumentCaptureSegmentFromDocumentPipeline } = await import(
+      '../documents/document-capture-segment-pipeline.ts'
+    );
+    await syncDocumentCaptureSegmentFromDocumentPipeline(meta.knowledge_capture_segment_id, stage);
+  }
 }

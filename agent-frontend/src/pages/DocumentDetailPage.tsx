@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import {
   fetchDocumentContent,
   getDocument,
@@ -199,10 +199,6 @@ export function DocumentDetailPage() {
   return (
     <div className="document-detail-page">
       <div className="document-detail-toolbar">
-        <Link to="/knowledge/documents" className="document-detail-back">
-          <ArrowLeft {...iconProps({ size: 16 })} aria-hidden />
-          Back to list
-        </Link>
         {document && (
           <div className="document-detail-title-row">
             <h2 className="document-detail-title">{document.name}</h2>

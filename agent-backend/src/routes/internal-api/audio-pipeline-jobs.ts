@@ -6,6 +6,7 @@ import {
   buildAudioPipelineJobContext,
   getAudioPipelineJobById,
   markAudioForJobStage,
+  markDocumentCaptureSegmentForAudioPipelineJobStage,
   resolveAudioPipelineJobErrorMessage,
   updateAudioPipelineJob,
   type AudioPipelineJobStage,
@@ -67,6 +68,11 @@ audioPipelineJobs.patch('/:id', async (c) => {
   if (body.stage) {
     if (job.audioId) {
       await markAudioForJobStage(job.audioId, body.stage);
+    } else if (job.documentCaptureSegmentId) {
+      await markDocumentCaptureSegmentForAudioPipelineJobStage(
+        job.documentCaptureSegmentId,
+        body.stage,
+      );
     }
     await syncEvalRunItemFromAudioPipelineJob(job.id);
   }

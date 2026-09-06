@@ -18,6 +18,7 @@ import { CapturePipelineStatus } from '../components/CapturePipelineStatus.tsx';
 import { Loader2, Search } from 'lucide-react';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useAudioOutletContext } from './AudioOutletContext.tsx';
+import { buildChannelPath } from '../shared/channel-path.ts';
 
 export function AudioCaptureListPage() {
   const { channels, selectedChannelId, loadingChannels, canWrite } = useAudioOutletContext();
@@ -32,6 +33,9 @@ export function AudioCaptureListPage() {
 
   const flatChannels = useMemo(() => flattenAudioChannels(channels), [channels]);
   const selectedChannel = flatChannels.find((channel) => channel.id === selectedChannelId) ?? null;
+  const selectedChannelPath = selectedChannel
+    ? buildChannelPath(flatChannels, selectedChannel.id)
+    : '';
   const canWriteChannel = canWrite && Boolean(selectedChannel?.my_access?.write);
 
   const loadCaptures = useCallback(async (options?: { silent?: boolean }) => {
@@ -131,6 +135,12 @@ export function AudioCaptureListPage() {
           >
             Refresh
           </button>
+          {selectedChannel && (
+            <span className="documents-channel-context" title={selectedChannelPath}>
+              Channel: <strong>{selectedChannelPath}</strong>
+              {selectedChannel.description ? ` — ${selectedChannel.description}` : ''}
+            </span>
+          )}
         </div>
         {canWriteChannel && (
           <button
@@ -143,13 +153,6 @@ export function AudioCaptureListPage() {
           </button>
         )}
       </div>
-
-      {selectedChannel && (
-        <p className="documents-channel-context">
-          Channel: <strong>{selectedChannel.name}</strong>
-          {selectedChannel.description ? ` — ${selectedChannel.description}` : ''}
-        </p>
-      )}
 
       {error && <p className="error inline">{error}</p>}
 

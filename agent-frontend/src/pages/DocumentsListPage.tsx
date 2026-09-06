@@ -2,103 +2,170 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { flattenChannels } from '../api/documentChannels.ts';
 import {
+  bulkDocumentUpload,
+  createDocumentCapture,
+  deleteDocumentCapture,
+  isCapturePipelineActive,
+  uploadCaptureAudioSegment,
+  uploadCaptureTranscriptSegment,
+} from '../api/documentCaptures.ts';
+import {
   deleteDocument,
   formatDocumentBytes,
-  listDocuments,
+  listChannelKnowledgeItems,
   moveDocument,
   runDocumentPipeline,
-  uploadDocument,
-  type DocumentRecord,
+  type ChannelKnowledgeItem,
 } from '../api/documents.ts';
-import { DocumentDeleteConfirmModal } from '../components/DocumentDeleteConfirmModal.tsx';
 import { DocumentDownloadActions } from '../components/DocumentDownloadMenu.tsx';
 import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
-import { DocumentPipelineStatus } from '../components/DocumentPipelineStatus.tsx';
-import { DocumentUploadModal } from '../components/DocumentUploadModal.tsx';
-import { IconDelete, IconMove, IconRun } from '../components/AdminActionIcons.tsx';
+import {
+  KnowledgePipelineStatus,
+  knowledgeKindLabel,
+} from '../components/KnowledgePipelineStatus.tsx';
+import { KnowledgeUploadModal } from '../components/KnowledgeUploadModal.tsx';
+import { IconDelete, IconMove, IconRun, IconView } from '../components/AdminActionIcons.tsx';
 import { Loader2, Search } from 'lucide-react';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
+import { buildChannelPath } from '../shared/channel-path.ts';
+
+function itemDetailPath(item: ChannelKnowledgeItem): string {
+  if (item.kind === 'capture') {
+    return `/knowledge/documents/captures/${item.id}`;
+  }
+  return `/knowledge/documents/${item.id}`;
+}
+
+function itemDisplayName(item: ChannelKnowledgeItem): string {
+  return item.kind === 'capture' ? item.title || item.name : item.name;
+}
+
+function itemFileCount(item: ChannelKnowledgeItem): number {
+  return item.file_count;
+}
+
+function isItemPipelineActive(item: ChannelKnowledgeItem): boolean {
+  if (item.kind === 'capture') {
+    return isCapturePipelineActive({
+      status: item.status,
+      pipeline_job: item.pipeline_job,
+    });
+  }
+  return item.status === 'running';
+}
 
 export function DocumentsListPage() {
-  const {
-    channels,
-    selectedChannelId,
-    loadingChannels,
-  } = useDocumentsOutletContext();
+  const { channels, selectedChannelId, loadingChannels, refreshChannelItems } = useDocumentsOutletContext();
 
-  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [items, setItems] = useState<ChannelKnowledgeItem[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
-  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [moveDocumentTarget, setMoveDocumentTarget] = useState<DocumentRecord | null>(null);
-  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<DocumentRecord | null>(null);
+  const [moveDocumentTarget, setMoveDocumentTarget] = useState<
+    Extract<ChannelKnowledgeItem, { kind: 'document' }> | null
+  >(null);
   const [runningDocumentIds, setRunningDocumentIds] = useState<Set<string>>(new Set());
-  const [deletingDocumentIds, setDeletingDocumentIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   const flatChannels = useMemo(() => flattenChannels(channels), [channels]);
   const selectedChannel = flatChannels.find((channel) => channel.id === selectedChannelId) ?? null;
+  const selectedChannelPath = selectedChannel
+    ? buildChannelPath(flatChannels, selectedChannel.id)
+    : '';
   const canWriteChannel = Boolean(selectedChannel?.my_access?.write);
   const channelHasPipeline = Boolean(selectedChannel?.pipeline_id);
 
-  const loadDocuments = useCallback(async (options?: { silent?: boolean }) => {
+  const loadItems = useCallback(async (options?: { silent?: boolean }) => {
     if (!selectedChannelId) {
-      setDocuments([]);
+      setItems([]);
       setTotal(0);
       return;
     }
-    if (!options?.silent) setLoadingDocuments(true);
+    if (!options?.silent) setLoadingItems(true);
     setError('');
     try {
-      const result = await listDocuments({ channelId: selectedChannelId, search });
-      setDocuments(result.items);
+      const result = await listChannelKnowledgeItems({ channelId: selectedChannelId, search });
+      setItems(result.items);
       setTotal(result.total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load documents');
+      setError(err instanceof Error ? err.message : 'Failed to load knowledge items');
     } finally {
-      if (!options?.silent) setLoadingDocuments(false);
+      if (!options?.silent) setLoadingItems(false);
     }
   }, [search, selectedChannelId]);
 
   useEffect(() => {
-    void loadDocuments();
-  }, [loadDocuments]);
+    void loadItems();
+  }, [loadItems]);
 
   useEffect(() => {
-    const hasRunning = documents.some((document) => document.status === 'running');
+    const hasRunning = items.some((item) => isItemPipelineActive(item));
     if (!hasRunning || !selectedChannelId) return;
 
     const intervalId = window.setInterval(() => {
-      void loadDocuments({ silent: true });
+      void loadItems({ silent: true });
     }, 5000);
 
     return () => window.clearInterval(intervalId);
-  }, [documents, loadDocuments, selectedChannelId]);
+  }, [items, loadItems, selectedChannelId]);
 
-  async function handleUpload(files: File[]) {
+  async function handleUploadDocuments(files: File[]) {
     if (!selectedChannelId) throw new Error('Select a channel first');
-    for (const file of files) {
-      await uploadDocument(selectedChannelId, file);
-    }
+    await bulkDocumentUpload(selectedChannelId, files);
     setUploadOpen(false);
-    await loadDocuments();
+    await loadItems();
+    await refreshChannelItems(selectedChannelId);
   }
 
-  async function handleDeleteDocument(document: DocumentRecord) {
-    setDeleteConfirmTarget(null);
-    setDeletingDocumentIds((current) => new Set(current).add(document.id));
+  async function handleCreateCapture(input: {
+    title: string;
+    brief?: string;
+    participantsHint?: string;
+    recordingMode?: string;
+    audience?: string;
+    inputMode: 'audio' | 'transcript';
+    files: File[];
+  }) {
+    if (!selectedChannelId) throw new Error('Select a channel first');
+    const capture = await createDocumentCapture({
+      channelId: selectedChannelId,
+      title: input.title,
+      brief: input.brief,
+      participantsHint: input.participantsHint,
+      recordingMode: input.recordingMode,
+      audience: input.audience,
+      inputMode: input.inputMode,
+    });
+    const uploadSegment =
+      input.inputMode === 'transcript' ? uploadCaptureTranscriptSegment : uploadCaptureAudioSegment;
+    for (const file of input.files) {
+      await uploadSegment(capture.id, file);
+    }
+    setUploadOpen(false);
+    await loadItems();
+    await refreshChannelItems(selectedChannelId);
+  }
+
+  async function handleDeleteItem(item: ChannelKnowledgeItem) {
+    setDeletingIds((current) => new Set(current).add(item.id));
     setError('');
     try {
-      await deleteDocument(document.id);
-      await loadDocuments();
+      if (item.kind === 'document') {
+        await deleteDocument(item.id);
+      } else {
+        await deleteDocumentCapture(item.id);
+      }
+      await loadItems();
+      await refreshChannelItems(selectedChannelId ?? undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete document');
+      setError(err instanceof Error ? err.message : 'Failed to delete item');
     } finally {
-      setDeletingDocumentIds((current) => {
+      setDeletingIds((current) => {
         const next = new Set(current);
-        next.delete(document.id);
+        next.delete(item.id);
         return next;
       });
     }
@@ -108,25 +175,29 @@ export function DocumentsListPage() {
     if (!moveDocumentTarget) return;
     await moveDocument(moveDocumentTarget.id, channelId);
     setMoveDocumentTarget(null);
-    await loadDocuments();
+    await loadItems();
+    await refreshChannelItems(selectedChannelId ?? undefined);
+    await refreshChannelItems(channelId);
   }
 
-  async function handleRunPipeline(document: DocumentRecord) {
+  async function handleRunPipeline(item: Extract<ChannelKnowledgeItem, { kind: 'document' }>) {
     if (!channelHasPipeline) return;
-    setRunningDocumentIds((current) => new Set(current).add(document.id));
+    setRunningDocumentIds((current) => new Set(current).add(item.id));
     setError('');
     try {
-      await runDocumentPipeline(document.id);
-      setDocuments((current) =>
-        current.map((item) => (item.id === document.id ? { ...item, status: 'running' } : item)),
+      await runDocumentPipeline(item.id);
+      setItems((current) =>
+        current.map((row) =>
+          row.kind === 'document' && row.id === item.id ? { ...row, status: 'running' } : row,
+        ),
       );
-      await loadDocuments({ silent: true });
+      await loadItems({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start pipeline');
     } finally {
       setRunningDocumentIds((current) => {
         const next = new Set(current);
-        next.delete(document.id);
+        next.delete(item.id);
         return next;
       });
     }
@@ -141,18 +212,24 @@ export function DocumentsListPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search documents…"
+              placeholder="Search knowledge items…"
               disabled={!selectedChannelId}
             />
           </div>
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => void loadDocuments()}
-            disabled={!selectedChannelId || loadingDocuments}
+            onClick={() => void loadItems()}
+            disabled={!selectedChannelId || loadingItems}
           >
             Refresh
           </button>
+          {selectedChannel && (
+            <span className="documents-channel-context" title={selectedChannelPath}>
+              Channel: <strong>{selectedChannelPath}</strong>
+              {selectedChannel.description ? ` — ${selectedChannel.description}` : ''}
+            </span>
+          )}
         </div>
         {canWriteChannel && (
           <button
@@ -161,17 +238,10 @@ export function DocumentsListPage() {
             disabled={!selectedChannelId}
             onClick={() => setUploadOpen(true)}
           >
-            + Upload
+            Upload
           </button>
         )}
       </div>
-
-      {selectedChannel && (
-        <p className="documents-channel-context">
-          Channel: <strong>{selectedChannel.name}</strong>
-          {selectedChannel.description ? ` — ${selectedChannel.description}` : ''}
-        </p>
-      )}
 
       {error && <p className="error inline">{error}</p>}
 
@@ -180,97 +250,124 @@ export function DocumentsListPage() {
           <thead>
             <tr>
               <th>Name</th>
-              <th>Type</th>
+              <th>Kind</th>
+              <th>Files</th>
               <th>Size</th>
               <th className="documents-status-col">Status</th>
-              <th>Uploaded</th>
+              <th>Updated</th>
               <th className="admin-table-actions-col">Actions</th>
             </tr>
           </thead>
           <tbody>
             {!selectedChannelId ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
-                  Select or create a channel to manage documents.
+                <td colSpan={7} className="admin-table-empty">
+                  Select or create a channel to manage knowledge items.
                 </td>
               </tr>
-            ) : loadingChannels || loadingDocuments ? (
+            ) : loadingChannels || loadingItems ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
+                <td colSpan={7} className="admin-table-empty">
                   Loading…
                 </td>
               </tr>
-            ) : documents.length === 0 ? (
+            ) : items.length === 0 ? (
               <tr>
-                <td colSpan={6} className="admin-table-empty">
-                  No documents in this channel yet.
+                <td colSpan={7} className="admin-table-empty">
+                  No knowledge items in this channel yet.
                 </td>
               </tr>
             ) : (
-              documents.map((document) => {
+              items.map((item) => {
+                const isDeleting = deletingIds.has(item.id);
+                const isDocument = item.kind === 'document';
                 const isPipelineBusy =
-                  runningDocumentIds.has(document.id) || document.status === 'running';
-                const isDeleting = deletingDocumentIds.has(document.id);
+                  isDocument &&
+                  (runningDocumentIds.has(item.id) || item.status === 'running');
 
                 return (
-                <tr key={document.id}>
-                  <td>
-                    <Link to={`/knowledge/documents/${document.id}`} className="document-name-link">
-                      {document.name}
-                    </Link>
-                  </td>
-                  <td className="documents-table-meta">{document.file_type}</td>
-                  <td className="documents-table-meta">{formatDocumentBytes(document.size_bytes)}</td>
-                  <td className="documents-status-col">
-                    <DocumentPipelineStatus document={document} />
-                  </td>
-                  <td className="documents-table-meta">
-                    {new Date(document.created_at).toLocaleString()}
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      <DocumentDownloadActions
-                        documentId={document.id}
-                        documentName={document.name}
-                        onError={setError}
-                      />
-                      {canWriteChannel && (
-                        <>
-                          <button
-                            type="button"
-                            className={`icon-btn icon-btn--run${isPipelineBusy ? ' is-busy' : ''}`}
-                            title={
-                              channelHasPipeline
-                                ? isPipelineBusy
-                                  ? 'Pipeline running…'
-                                  : 'Run pipeline'
-                                : 'Configure a pipeline on this channel first'
-                            }
-                            disabled={!channelHasPipeline || isPipelineBusy}
-                            aria-busy={isPipelineBusy}
-                            onClick={() => void handleRunPipeline(document)}
-                          >
-                            {isPipelineBusy ? (
-                              <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
-                            ) : (
-                              <IconRun />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="Move to channel"
-                            onClick={() => setMoveDocumentTarget(document)}
-                          >
-                            <IconMove />
-                          </button>
+                  <tr key={`${item.kind}-${item.id}`}>
+                    <td>
+                      <Link to={itemDetailPath(item)} className="document-name-link">
+                        {itemDisplayName(item)}
+                      </Link>
+                      {item.kind === 'capture' && item.brief ? (
+                        <div className="documents-table-meta">{item.brief}</div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <span className="document-status-badge">{knowledgeKindLabel(item)}</span>
+                    </td>
+                    <td className="documents-table-meta">{itemFileCount(item)}</td>
+                    <td className="documents-table-meta">{formatDocumentBytes(item.size_bytes)}</td>
+                    <td className="documents-status-col">
+                      <KnowledgePipelineStatus item={item} />
+                    </td>
+                    <td className="documents-table-meta">
+                      {new Date(item.updated_at).toLocaleString()}
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        <Link
+                          to={itemDetailPath(item)}
+                          className="icon-btn"
+                          title="View item"
+                          aria-label={`View ${itemDisplayName(item)}`}
+                        >
+                          <IconView />
+                        </Link>
+                        {isDocument ? (
+                          <DocumentDownloadActions
+                            documentId={item.id}
+                            documentName={item.name}
+                            onError={setError}
+                          />
+                        ) : null}
+                        {canWriteChannel && isDocument ? (
+                          <>
+                            <button
+                              type="button"
+                              className={`icon-btn icon-btn--run${isPipelineBusy ? ' is-busy' : ''}`}
+                              title={
+                                channelHasPipeline
+                                  ? isPipelineBusy
+                                    ? 'Pipeline running…'
+                                    : 'Run pipeline'
+                                  : 'Configure a pipeline on this channel first'
+                              }
+                              disabled={!channelHasPipeline || isPipelineBusy}
+                              aria-busy={isPipelineBusy}
+                              onClick={() => void handleRunPipeline(item)}
+                            >
+                              {isPipelineBusy ? (
+                                <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                              ) : (
+                                <IconRun />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Move to channel"
+                              onClick={() => setMoveDocumentTarget(item)}
+                            >
+                              <IconMove />
+                            </button>
+                          </>
+                        ) : null}
+                        {canWriteChannel ? (
                           <button
                             type="button"
                             className={`icon-btn danger icon-btn--delete${isDeleting ? ' is-busy' : ''}`}
                             title={isDeleting ? 'Deleting…' : 'Delete'}
                             disabled={isDeleting}
                             aria-busy={isDeleting}
-                            onClick={() => setDeleteConfirmTarget(document)}
+                            onClick={() => {
+                              const label = itemDisplayName(item);
+                              if (window.confirm(`Delete "${label}"?`)) {
+                                void handleDeleteItem(item);
+                              }
+                            }}
                           >
                             {isDeleting ? (
                               <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
@@ -278,11 +375,10 @@ export function DocumentsListPage() {
                               <IconDelete />
                             )}
                           </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
                 );
               })
             )}
@@ -290,17 +386,18 @@ export function DocumentsListPage() {
         </table>
       </div>
 
-      {selectedChannelId && total > documents.length && (
+      {selectedChannelId && total > items.length && (
         <p className="documents-list-meta">
-          Showing {documents.length} of {total} documents
+          Showing {items.length} of {total} items
         </p>
       )}
 
       {uploadOpen && selectedChannel && (
-        <DocumentUploadModal
+        <KnowledgeUploadModal
           channelName={selectedChannel.name}
           onCancel={() => setUploadOpen(false)}
-          onUpload={handleUpload}
+          onUploadDocuments={handleUploadDocuments}
+          onCreateCapture={handleCreateCapture}
         />
       )}
       {moveDocumentTarget && (
@@ -310,13 +407,6 @@ export function DocumentsListPage() {
           channels={channels}
           onCancel={() => setMoveDocumentTarget(null)}
           onSubmit={handleMoveDocument}
-        />
-      )}
-      {deleteConfirmTarget && (
-        <DocumentDeleteConfirmModal
-          documentName={deleteConfirmTarget.name}
-          onCancel={() => setDeleteConfirmTarget(null)}
-          onConfirm={() => void handleDeleteDocument(deleteConfirmTarget)}
         />
       )}
     </>

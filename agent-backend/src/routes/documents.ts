@@ -37,6 +37,7 @@ import {
   getDocumentContentManifest,
   getDocumentPublicById,
   getDocumentStats,
+  listChannelKnowledgeItems,
   listDocuments,
   moveDocument,
   updateDocumentMetadata,
@@ -138,6 +139,32 @@ documents.get(
     const channelIds = await listAccessibleChannelIds(user.id);
     const stats = await getDocumentStats(channelIds);
     return c.json(stats);
+  },
+);
+
+documents.get(
+  '/channel-items',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    const channelId = c.req.query('channel_id');
+    if (!channelId) return c.json({ error: 'channel_id is required' }, 400);
+
+    const denied = await denyUnlessChannelAccess(c, channelId, 'read');
+    if (denied) return denied;
+
+    try {
+      const result = await listChannelKnowledgeItems({
+        channelId,
+        search: c.req.query('search') ?? undefined,
+        offset: Number(c.req.query('offset') ?? 0),
+        limit: Number(c.req.query('limit') ?? 25),
+      });
+      return c.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to list channel items';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
   },
 );
 

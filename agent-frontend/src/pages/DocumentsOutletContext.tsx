@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
+import type { ChannelKnowledgeItem } from '../api/documents.ts';
 
 export type DocumentsOutletContext = {
   channels: DocumentChannel[];
@@ -8,6 +9,7 @@ export type DocumentsOutletContext = {
   canWrite: boolean;
   loadingChannels: boolean;
   loadChannels: () => Promise<void>;
+  refreshChannelItems: (channelId?: string) => Promise<void>;
   openCreateChannel: (parentId: string | null) => void;
   openChannelSettings: (channel: DocumentChannel) => void;
 };
@@ -29,3 +31,5 @@ export function useDocumentsOutletContext(): DocumentsOutletContext {
   if (!ctx) throw new Error('useDocumentsOutletContext must be used within DocumentsLayout');
   return ctx;
 }
+
+export type { ChannelKnowledgeItem };

@@ -17,6 +17,7 @@ import { AudioUploadModal } from '../components/AudioUploadModal.tsx';
 import { Loader2, Search } from 'lucide-react';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { useAudioOutletContext } from './AudioOutletContext.tsx';
+import { buildChannelPath } from '../shared/channel-path.ts';
 
 export function AudioListPage() {
   const { channels, selectedChannelId, loadingChannels } = useAudioOutletContext();
@@ -32,6 +33,9 @@ export function AudioListPage() {
 
   const flatChannels = useMemo(() => flattenAudioChannels(channels), [channels]);
   const selectedChannel = flatChannels.find((channel) => channel.id === selectedChannelId) ?? null;
+  const selectedChannelPath = selectedChannel
+    ? buildChannelPath(flatChannels, selectedChannel.id)
+    : '';
   const canWriteChannel = Boolean(selectedChannel?.my_access?.write);
   const channelHasPipeline = Boolean(selectedChannel?.pipeline_id);
 
@@ -131,6 +135,12 @@ export function AudioListPage() {
           >
             Refresh
           </button>
+          {selectedChannel && (
+            <span className="documents-channel-context" title={selectedChannelPath}>
+              Channel: <strong>{selectedChannelPath}</strong>
+              {selectedChannel.description ? ` — ${selectedChannel.description}` : ''}
+            </span>
+          )}
         </div>
         {canWriteChannel && (
           <button
@@ -143,13 +153,6 @@ export function AudioListPage() {
           </button>
         )}
       </div>
-
-      {selectedChannel && (
-        <p className="documents-channel-context">
-          Channel: <strong>{selectedChannel.name}</strong>
-          {selectedChannel.description ? ` — ${selectedChannel.description}` : ''}
-        </p>
-      )}
 
       {error && <p className="error inline">{error}</p>}
 

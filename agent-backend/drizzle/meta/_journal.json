@@ -547,6 +547,13 @@
       "when": 1785234000000,
       "tag": "0077_eval_audio_pipeline_jobs_no_shadow_audio",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1785235000000,
+      "tag": "0078_document_knowledge_captures",
+      "breakpoints": true
     }
   ]
 }
