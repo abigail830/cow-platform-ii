@@ -1,12 +1,12 @@
 import './load-env.ts';
 import { pathToFileURL } from 'node:url';
 import { eq, isNotNull } from 'drizzle-orm';
-import { appModelConfigs, db } from '../src/db/index.ts';
-import { closePool } from '../src/db/pool.ts';
+import { appModelConfigs, db } from '../src/infrastructure/db/index.ts';
+import { closePool } from '../src/infrastructure/db/pool.ts';
 import {
   encryptModelConfigApiKey,
   isEncryptedStoredModelApiKey,
-} from '../src/shared/model/model-config-secret.ts';
+} from '../src/model-config/infrastructure/model-config-secret.ts';
 
 /** One-time data migration: seal legacy plaintext model API keys in DB. */
 export async function reencryptLegacyModelApiKeys(): Promise<number> {

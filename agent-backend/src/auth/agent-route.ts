@@ -2,7 +2,7 @@ import type { AgentRouteHandler } from '@flue/runtime';
 import { verifyAttachmentAccessToken } from './attachment-access-token.ts';
 import { bearerToken, verifyToken } from './jwt.ts';
 import { ownsConversation } from './permissions.ts';
-import { conversationIdFromInstanceId } from '../shared/model/agent-instance-id.ts';
+import { conversationIdFromInstanceId } from '../agents/domain/agent-instance-id.ts';
 
 export function agentAttachmentsRoute(agentName: string): AgentRouteHandler {
   return async (c, next) => {

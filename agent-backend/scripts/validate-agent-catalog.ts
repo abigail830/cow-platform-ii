@@ -1,11 +1,11 @@
 import './load-env.ts';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { discoverAgentDirectories, loadAgentSpec } from '../src/agent-catalog/discover.ts';
-import { agentCatalogRoot, resolveCatalogPath } from '../src/agent-catalog/paths.ts';
-import { resolveMcpServerUrl } from '../src/agent-catalog/load-mcp.ts';
-import { closePool } from '../src/db/pool.ts';
-import { getModelConfigByName } from '../src/shared/model/model-config-store.ts';
+import { discoverAgentDirectories, loadAgentSpec } from '../src/agents/catalog/discover.ts';
+import { agentCatalogRoot, resolveCatalogPath } from '../src/agents/catalog/paths.ts';
+import { resolveMcpServerUrl } from '../src/agents/catalog/load-mcp.ts';
+import { closePool } from '../src/infrastructure/db/pool.ts';
+import { getModelConfigByName } from '../src/model-config/infrastructure/model-config-store.ts';
 
 const CHAT_AGENT_API_TYPES = new Set(['chat-completions']);
 

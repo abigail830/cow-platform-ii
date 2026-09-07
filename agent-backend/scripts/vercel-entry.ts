@@ -1,6 +1,6 @@
 import { getRequestListener } from '@hono/node-server';
 import app from '../src/app.ts';
-import { startFlueRuntimeInit } from '../src/flue-vercel-init.ts';
+import { startFlueRuntimeInit } from '../src/agents/runtime/init.ts';
 
 const vercelConfig = {
   maxDuration: 300,

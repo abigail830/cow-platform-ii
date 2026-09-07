@@ -8,9 +8,16 @@ import {
   appUsers,
   db,
   type ResourceType,
-} from '../db/index.ts';
-import { loadUserAccessProfile } from './rbac.ts';
-import type { ChannelNode } from '../services/documents/documents.ts';
+} from '../infrastructure/db/index.ts';
+import {
+  grantsCacheKey,
+  invalidateResourceGrantCache,
+  loadUserAccessProfileCached,
+  type ChannelRowLite,
+  type ResourceAccessRequestCache,
+  type ResourceAccessScope,
+} from './resource-access-request-cache.ts';
+import type { ChannelNode } from '../document/domain/channel-node.ts';
 import {
   buildChannelAncestorChain,
   filterChannelTreeWithAccess,
@@ -26,6 +33,8 @@ import {
   type ResourcePermissionFlags,
   type ResourcePermissionLevel,
 } from './resource-access-utils.ts';
+
+export type { ResourceType };
 
 export type {
   ChannelNodeWithAccess,
@@ -56,8 +65,17 @@ export type ResourceAccessPutInput = {
   }>;
 };
 
-type ChannelRowLite = { id: string; parentId: string | null; createdBy: string | null };
 type GrantRow = typeof appResourceGrants.$inferSelect;
+
+export type ResourceAccessSettingsOptions = ResourceAccessScope & {
+  myAccess?: ResourcePermissionFlags;
+};
+
+type ResourcePermissionPreload = ResourceAccessScope & {
+  channelRows?: ChannelRowLite[];
+  grantsByResource?: Map<string, GrantRow[]>;
+  admin?: boolean;
+};
 
 function flagsFromGrantRow(row: Pick<GrantRow, 'canRead' | 'canWrite' | 'canManage'>): ResourcePermissionFlags {
   return normalizeResourcePermissionFlags({
@@ -67,11 +85,26 @@ function flagsFromGrantRow(row: Pick<GrantRow, 'canRead' | 'canWrite' | 'canMana
   });
 }
 
-export async function isPlatformAdmin(userId: string): Promise<boolean> {
-  const profile = await loadUserAccessProfile(userId);
-  if (profile.roleKeys.includes('admin')) return true;
+export async function isPlatformAdmin(userId: string, scope?: ResourceAccessScope): Promise<boolean> {
+  if (scope?.cache?.platformAdmin.has(userId)) {
+    return scope.cache.platformAdmin.get(userId)!;
+  }
+
+  const profile = await loadUserAccessProfileCached(userId, scope?.cache);
+  if (profile.roleKeys.includes('admin')) {
+    scope?.cache?.platformAdmin.set(userId, true);
+    return true;
+  }
+
+  if (scope?.jwtRole === 'admin' || scope?.jwtRole === 'operator') {
+    scope?.cache?.platformAdmin.set(userId, true);
+    return true;
+  }
+
   const [user] = await db.select({ role: appUsers.role }).from(appUsers).where(eq(appUsers.id, userId)).limit(1);
-  return user?.role === 'admin' || user?.role === 'operator';
+  const admin = user?.role === 'admin' || user?.role === 'operator';
+  scope?.cache?.platformAdmin.set(userId, admin);
+  return admin;
 }
 
 async function loadOwnerId(resourceType: ResourceType, resourceId: string): Promise<string | null> {
@@ -113,20 +146,42 @@ async function loadOwnerId(resourceType: ResourceType, resourceId: string): Prom
 async function loadGrantsForResources(
   resourceType: ResourceType,
   resourceIds: string[],
+  cache?: ResourceAccessRequestCache,
 ): Promise<Map<string, GrantRow[]>> {
   if (resourceIds.length === 0) return new Map();
 
-  const rows = await db
-    .select()
-    .from(appResourceGrants)
-    .where(and(eq(appResourceGrants.resourceType, resourceType), inArray(appResourceGrants.resourceId, resourceIds)));
-
   const byResource = new Map<string, GrantRow[]>();
-  for (const row of rows) {
-    const list = byResource.get(row.resourceId) ?? [];
-    list.push(row);
-    byResource.set(row.resourceId, list);
+  const missingIds: string[] = [];
+
+  for (const resourceId of resourceIds) {
+    const cached = cache?.grantsByResource.get(grantsCacheKey(resourceType, resourceId));
+    if (cached) {
+      byResource.set(resourceId, cached);
+    } else {
+      missingIds.push(resourceId);
+    }
   }
+
+  if (missingIds.length > 0) {
+    const rows = await db
+      .select()
+      .from(appResourceGrants)
+      .where(and(eq(appResourceGrants.resourceType, resourceType), inArray(appResourceGrants.resourceId, missingIds)));
+
+    for (const resourceId of missingIds) {
+      byResource.set(resourceId, []);
+    }
+    for (const row of rows) {
+      const list = byResource.get(row.resourceId) ?? [];
+      list.push(row);
+      byResource.set(row.resourceId, list);
+      cache?.grantsByResource.set(grantsCacheKey(resourceType, row.resourceId), list);
+    }
+    for (const resourceId of missingIds) {
+      cache?.grantsByResource.set(grantsCacheKey(resourceType, resourceId), byResource.get(resourceId) ?? []);
+    }
+  }
+
   return byResource;
 }
 
@@ -156,18 +211,54 @@ async function loadAllChannelRows(): Promise<ChannelRowLite[]> {
     .from(appDocumentChannels);
 }
 
+async function loadChannelAncestorRows(
+  channelId: string,
+  cache?: ResourceAccessRequestCache,
+): Promise<ChannelRowLite[]> {
+  const rows: ChannelRowLite[] = [];
+  let currentId: string | null = channelId;
+  const seen = new Set<string>();
+
+  while (currentId && !seen.has(currentId)) {
+    seen.add(currentId);
+    const cachedRow: ChannelRowLite | undefined = cache?.channelRowsById.get(currentId);
+    if (cachedRow) {
+      rows.push(cachedRow);
+      currentId = cachedRow.parentId;
+      continue;
+    }
+
+    const [row] = await db
+      .select({
+        id: appDocumentChannels.id,
+        parentId: appDocumentChannels.parentId,
+        createdBy: appDocumentChannels.createdBy,
+      })
+      .from(appDocumentChannels)
+      .where(eq(appDocumentChannels.id, currentId))
+      .limit(1);
+    if (!row) break;
+    cache?.channelRowsById.set(currentId, row);
+    rows.push(row);
+    currentId = row.parentId;
+  }
+
+  return rows;
+}
+
 export async function resolveChannelPermission(
   userId: string,
   channelId: string,
-  preloaded?: {
-    channelRows?: ChannelRowLite[];
-    grantsByResource?: Map<string, GrantRow[]>;
-    admin?: boolean;
-  },
+  preloaded?: ResourcePermissionPreload,
 ): Promise<ResourcePermissionFlags> {
-  if (preloaded?.admin ?? (await isPlatformAdmin(userId))) return FULL_RESOURCE_ACCESS;
+  const scope = preloaded;
+  const admin =
+    preloaded?.admin ??
+    (await isPlatformAdmin(userId, scope));
+  if (admin) return FULL_RESOURCE_ACCESS;
 
-  const channelRows = preloaded?.channelRows ?? (await loadAllChannelRows());
+  const channelRows =
+    preloaded?.channelRows ?? (await loadChannelAncestorRows(channelId, scope?.cache));
   const chain = buildChannelAncestorChain(
     channelId,
     channelRows.map((row) => ({ id: row.id, parent_id: row.parentId })),
@@ -177,10 +268,7 @@ export async function resolveChannelPermission(
   const ownerById = new Map(channelRows.map((row) => [row.id, row.createdBy]));
   const grantsByResource =
     preloaded?.grantsByResource ??
-    (await loadGrantsForResources(
-      'document_channel',
-      chain,
-    ));
+    (await loadGrantsForResources('document_channel', chain, scope?.cache));
 
   const perms = chain.map((id) =>
     permissionAtLevel(userId, ownerById.get(id) ?? null, grantsByResource.get(id) ?? []),
@@ -191,11 +279,12 @@ export async function resolveChannelPermission(
 export async function resolveKnowledgeBasePermission(
   userId: string,
   knowledgeBaseId: string,
+  scope?: ResourceAccessScope,
 ): Promise<ResourcePermissionFlags> {
-  if (await isPlatformAdmin(userId)) return FULL_RESOURCE_ACCESS;
+  if (await isPlatformAdmin(userId, scope)) return FULL_RESOURCE_ACCESS;
 
   const ownerId = await loadOwnerId('knowledge_base', knowledgeBaseId);
-  const grantsByResource = await loadGrantsForResources('knowledge_base', [knowledgeBaseId]);
+  const grantsByResource = await loadGrantsForResources('knowledge_base', [knowledgeBaseId], scope?.cache);
   return permissionAtLevel(userId, ownerId, grantsByResource.get(knowledgeBaseId) ?? []);
 }
 
@@ -213,18 +302,20 @@ export async function userHasKnowledgeBaseAccess(
   userId: string,
   knowledgeBaseId: string,
   required: ResourcePermissionLevel,
+  scope?: ResourceAccessScope,
 ): Promise<boolean> {
-  const flags = await resolveKnowledgeBasePermission(userId, knowledgeBaseId);
+  const flags = await resolveKnowledgeBasePermission(userId, knowledgeBaseId, scope);
   return satisfiesResourcePermission(flags, required);
 }
 
 export async function resolveStudioAgentPermission(
   userId: string,
   studioAgentId: string,
+  scope?: ResourceAccessScope,
 ): Promise<ResourcePermissionFlags> {
-  if (await isPlatformAdmin(userId)) return FULL_RESOURCE_ACCESS;
+  if (await isPlatformAdmin(userId, scope)) return FULL_RESOURCE_ACCESS;
   const ownerId = await loadOwnerId('studio_agent', studioAgentId);
-  const grantsByResource = await loadGrantsForResources('studio_agent', [studioAgentId]);
+  const grantsByResource = await loadGrantsForResources('studio_agent', [studioAgentId], scope?.cache);
   return permissionAtLevel(userId, ownerId, grantsByResource.get(studioAgentId) ?? []);
 }
 
@@ -232,27 +323,32 @@ export async function userHasStudioAgentAccess(
   userId: string,
   studioAgentId: string,
   level: ResourcePermissionLevel,
+  scope?: ResourceAccessScope,
 ): Promise<boolean> {
-  const flags = await resolveStudioAgentPermission(userId, studioAgentId);
+  const flags = await resolveStudioAgentPermission(userId, studioAgentId, scope);
   return satisfiesResourcePermission(flags, level);
 }
 
-async function loadSkillRow(skillId: string) {
+export async function loadSkillRow(skillId: string, cache?: ResourceAccessRequestCache) {
+  const cached = cache?.skillRowsById.get(skillId);
+  if (cached) return cached;
   const [row] = await db.select().from(appSkills).where(eq(appSkills.id, skillId)).limit(1);
+  if (row) cache?.skillRowsById.set(skillId, row);
   return row ?? null;
 }
 
 export async function resolveSkillPermission(
   userId: string,
   skillId: string,
+  scope?: ResourceAccessScope,
 ): Promise<ResourcePermissionFlags> {
-  const skill = await loadSkillRow(skillId);
+  const skill = await loadSkillRow(skillId, scope?.cache);
   if (!skill) return NO_RESOURCE_ACCESS;
-  if (await isPlatformAdmin(userId)) return FULL_RESOURCE_ACCESS;
+  if (await isPlatformAdmin(userId, scope)) return FULL_RESOURCE_ACCESS;
   if (skill.origin === 'platform') {
     return { read: true, write: false, manage: false };
   }
-  const grantsByResource = await loadGrantsForResources('skill', [skillId]);
+  const grantsByResource = await loadGrantsForResources('skill', [skillId], scope?.cache);
   return permissionAtLevel(userId, skill.createdBy, grantsByResource.get(skillId) ?? []);
 }
 
@@ -260,9 +356,28 @@ export async function userHasSkillAccess(
   userId: string,
   skillId: string,
   level: ResourcePermissionLevel,
+  scope?: ResourceAccessScope,
 ): Promise<boolean> {
-  const flags = await resolveSkillPermission(userId, skillId);
+  const flags = await resolveSkillPermission(userId, skillId, scope);
   return satisfiesResourcePermission(flags, level);
+}
+
+export async function resolveViewerResourcePermission(
+  userId: string,
+  resourceType: ResourceType,
+  resourceId: string,
+  scope?: ResourceAccessScope,
+): Promise<ResourcePermissionFlags> {
+  if (resourceType === 'document_channel') {
+    return resolveChannelPermission(userId, resourceId, scope);
+  }
+  if (resourceType === 'studio_agent') {
+    return resolveStudioAgentPermission(userId, resourceId, scope);
+  }
+  if (resourceType === 'skill') {
+    return resolveSkillPermission(userId, resourceId, scope);
+  }
+  return resolveKnowledgeBasePermission(userId, resourceId, scope);
 }
 
 export async function listAccessibleChannelIds(userId: string): Promise<Set<string>> {
@@ -357,6 +472,7 @@ export async function getResourceAccessSettings(
   resourceType: ResourceType,
   resourceId: string,
   viewerUserId: string,
+  options?: ResourceAccessSettingsOptions,
 ): Promise<ResourceAccessSettings | null> {
   const ownerId = await loadOwnerId(resourceType, resourceId);
   if (ownerId === null && resourceType === 'document_channel') {
@@ -392,7 +508,7 @@ export async function getResourceAccessSettings(
     if (!exists) return null;
   }
 
-  const grants = (await loadGrantsForResources(resourceType, [resourceId])).get(resourceId) ?? [];
+  const grants = (await loadGrantsForResources(resourceType, [resourceId], options?.cache)).get(resourceId) ?? [];
   const othersGrant = grants.find((grant) => grant.granteeType === 'others');
   const userGrants = grants.filter((grant) => grant.granteeType === 'user' && grant.granteeUserId);
 
@@ -425,13 +541,8 @@ export async function getResourceAccessSettings(
     .filter((row): row is ResourceAccessGrantRow => row != null);
 
   const myAccess =
-    resourceType === 'document_channel'
-      ? await resolveChannelPermission(viewerUserId, resourceId)
-      : resourceType === 'studio_agent'
-        ? await resolveStudioAgentPermission(viewerUserId, resourceId)
-        : resourceType === 'skill'
-          ? await resolveSkillPermission(viewerUserId, resourceId)
-        : await resolveKnowledgeBasePermission(viewerUserId, resourceId);
+    options?.myAccess ??
+    (await resolveViewerResourcePermission(viewerUserId, resourceType, resourceId, options));
 
   return {
     owner: ownerId ? ((await loadUserSummary(ownerId)) ?? null) : null,
@@ -446,15 +557,11 @@ export async function replaceResourceAccessSettings(
   resourceId: string,
   actorUserId: string,
   input: ResourceAccessPutInput,
+  scope?: ResourceAccessScope,
 ): Promise<ResourceAccessSettings> {
-  const canManage =
-    resourceType === 'document_channel'
-      ? await userHasChannelAccess(actorUserId, resourceId, 'manage')
-      : resourceType === 'studio_agent'
-        ? await userHasStudioAgentAccess(actorUserId, resourceId, 'manage')
-        : resourceType === 'skill'
-          ? await userHasSkillAccess(actorUserId, resourceId, 'manage')
-        : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
+  const canManage = await resolveViewerResourcePermission(actorUserId, resourceType, resourceId, scope).then(
+    (flags) => satisfiesResourcePermission(flags, 'manage'),
+  );
   if (!canManage) throw new Error('Forbidden');
 
   const others = normalizeResourcePermissionFlags(input.others);
@@ -496,7 +603,9 @@ export async function replaceResourceAccessSettings(
     }
   });
 
-  const settings = await getResourceAccessSettings(resourceType, resourceId, actorUserId);
+  invalidateResourceGrantCache(scope?.cache, resourceType, resourceId);
+
+  const settings = await getResourceAccessSettings(resourceType, resourceId, actorUserId, scope);
   if (!settings) throw new Error('Resource not found');
   return settings;
 }
@@ -506,15 +615,11 @@ export async function transferResourceOwner(
   resourceId: string,
   actorUserId: string,
   newOwnerUserId: string,
+  scope?: ResourceAccessScope,
 ): Promise<ResourceAccessSettings> {
-  const canManage =
-    resourceType === 'document_channel'
-      ? await userHasChannelAccess(actorUserId, resourceId, 'manage')
-      : resourceType === 'studio_agent'
-        ? await userHasStudioAgentAccess(actorUserId, resourceId, 'manage')
-        : resourceType === 'skill'
-          ? await userHasSkillAccess(actorUserId, resourceId, 'manage')
-        : await userHasKnowledgeBaseAccess(actorUserId, resourceId, 'manage');
+  const canManage = await resolveViewerResourcePermission(actorUserId, resourceType, resourceId, scope).then(
+    (flags) => satisfiesResourcePermission(flags, 'manage'),
+  );
   if (!canManage) throw new Error('Forbidden');
 
   const [newOwner] = await db.select({ id: appUsers.id }).from(appUsers).where(eq(appUsers.id, newOwnerUserId)).limit(1);
@@ -561,7 +666,9 @@ export async function transferResourceOwner(
       ),
     );
 
-  const settings = await getResourceAccessSettings(resourceType, resourceId, actorUserId);
+  invalidateResourceGrantCache(scope?.cache, resourceType, resourceId);
+
+  const settings = await getResourceAccessSettings(resourceType, resourceId, actorUserId, scope);
   if (!settings) throw new Error('Resource not found');
   return settings;
 }
@@ -587,7 +694,7 @@ export async function lookupUsersForSharing(search: string | undefined, limit = 
 }
 
 export async function getDocumentChannelIdForDocument(documentId: string): Promise<string | null> {
-  const { getDocumentById } = await import('../services/documents/documents.ts');
+  const { getDocumentById } = await import('../document/application/documents.ts');
   const doc = await getDocumentById(documentId);
   return doc?.channelId ?? null;
 }

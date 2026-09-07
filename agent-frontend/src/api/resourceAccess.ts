@@ -47,15 +47,15 @@ async function authFetch(path: string, init?: RequestInit) {
 
 function accessPath(resourceType: ResourceType, resourceId: string): string {
   if (resourceType === 'document_channel') {
-    return `/api/document-channels/${resourceId}/access`;
+    return `/api/knowledge/document-channels/${resourceId}/access`;
   }
   if (resourceType === 'audio_channel') {
     return `/api/audio-channels/${resourceId}/access`;
   }
   if (resourceType === 'skill') {
-    return `/api/studio/skills/${encodeURIComponent(resourceId)}/access`;
+    return `/api/agents/studio/skills/${encodeURIComponent(resourceId)}/access`;
   }
-  return `/api/knowledge-bases/${resourceId}/access`;
+  return `/api/knowledge/knowledge-bases/${resourceId}/access`;
 }
 
 export async function fetchResourceAccess(
@@ -89,10 +89,10 @@ export async function transferResourceOwner(
 ): Promise<ResourceAccessSettings> {
   const path =
     resourceType === 'document_channel'
-      ? `/api/document-channels/${resourceId}/access/transfer-owner`
+      ? `/api/knowledge/document-channels/${resourceId}/access/transfer-owner`
       : resourceType === 'audio_channel'
         ? `/api/audio-channels/${resourceId}/access/transfer-owner`
-        : `/api/knowledge-bases/${resourceId}/access/transfer-owner`;
+        : `/api/knowledge/knowledge-bases/${resourceId}/access/transfer-owner`;
   const data = await authFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -103,7 +103,7 @@ export async function transferResourceOwner(
 
 export async function lookupUsersForSharing(search?: string): Promise<ResourceAccessUser[]> {
   const suffix = search?.trim() ? `?q=${encodeURIComponent(search.trim())}` : '';
-  const data = await authFetch(`/api/users/lookup${suffix}`);
+  const data = await authFetch(`/api/admin/users/lookup${suffix}`);
   return (data.users as ResourceAccessUser[]) ?? [];
 }
 

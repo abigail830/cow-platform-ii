@@ -1,5 +1,5 @@
 import { postgres } from '@flue/postgres';
-import { getPool } from './db/pool.ts';
+import { getPool } from './infrastructure/db/pool.ts';
 
 const pool = getPool();
 

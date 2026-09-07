@@ -91,7 +91,7 @@ async function main() {
     pass('api_key_auth_me', String((me.body.user as { email?: string })?.email ?? ''));
   }
 
-  const listKb = await authFetch(apiKey, '/api/hybrid-search/knowledge-bases');
+  const listKb = await authFetch(apiKey, '/api/knowledge/hybrid-search/knowledge-bases');
   if (listKb.status !== 200) {
     fail('api_key_hybrid_list_kb', `HTTP ${listKb.status} ${JSON.stringify(listKb.body)}`);
   } else {

@@ -1,4 +1,4 @@
-import type { AccessLevel, PermissionCategory } from '../db/schema.ts';
+import type { AccessLevel, PermissionCategory } from '../infrastructure/db/schema.ts';
 
 export const PLATFORM_BASIC_CATEGORY = 'platform-basic' as const;
 
@@ -73,7 +73,7 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
     label: 'Object storage',
     description: 'S3-compatible bucket browser and object moves.',
     routePatterns: ['/admin/storage'],
-    apiPatterns: ['/api/console/storage', '/api/console/storage/*'],
+    apiPatterns: ['/api/admin/storage', '/api/admin/storage/*'],
   },
   {
     resource: PLATFORM_BASIC_RESOURCES.PIPELINES,
@@ -87,12 +87,7 @@ const PLATFORM_BASIC_RESOURCE_DEFS: ResourceDefinition[] = [
     label: 'Builtin agents',
     description: 'Sync workflow agents for extraction, polish, and image ingest.',
     routePatterns: ['/admin/builtin-agents'],
-    apiPatterns: [
-      '/api/admin/builtin-agents',
-      '/api/admin/builtin-agents/*',
-      '/api/builtin-agents',
-      '/api/builtin-agents/*',
-    ],
+    apiPatterns: ['/api/admin/builtin-agents', '/api/admin/builtin-agents/*'],
   },
 ];
 
@@ -110,12 +105,12 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
     description: 'Channel folders and document uploads.',
     routePatterns: ['/knowledge/documents'],
     apiPatterns: [
-      '/api/document-channels',
-      '/api/document-channels/*',
-      '/api/documents',
-      '/api/documents/*',
-      '/api/document-captures',
-      '/api/document-captures/*',
+      '/api/knowledge/document-channels',
+      '/api/knowledge/document-channels/*',
+      '/api/knowledge/documents',
+      '/api/knowledge/documents/*',
+      '/api/knowledge/captures',
+      '/api/knowledge/captures/*',
     ],
   },
   {
@@ -123,7 +118,7 @@ const KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS: ResourceDefinition[] = [
     label: 'Knowledge bases',
     description: 'PageIndex knowledge bases and document import.',
     routePatterns: ['/knowledge/knowledge-bases'],
-    apiPatterns: ['/api/knowledge-bases', '/api/knowledge-bases/*'],
+    apiPatterns: ['/api/knowledge/knowledge-bases', '/api/knowledge/knowledge-bases/*'],
   },
 ];
 
@@ -157,7 +152,7 @@ const KNOWLEDGE_MANAGEMENT_FEATURE_DEFS: ResourceDefinition[] = [
     label: 'Hybrid search',
     description: 'Cross-knowledge-base hybrid retrieval playground.',
     routePatterns: ['/knowledge/hybrid-search'],
-    apiPatterns: ['/api/hybrid-search', '/api/hybrid-search/*'],
+    apiPatterns: ['/api/knowledge/hybrid-search', '/api/knowledge/hybrid-search/*'],
   },
   {
     resource: KNOWLEDGE_MANAGEMENT_RESOURCES.PAGEINDEX_SEARCH,
@@ -174,7 +169,7 @@ const AGENT_RW_RESOURCE_DEFS: ResourceDefinition[] = [
     label: 'Asset market',
     description: 'Browse platform assets and create or edit personal studio agents and MCP credentials.',
     routePatterns: ['/agents/asset-market'],
-    apiPatterns: ['/api/studio', '/api/studio/*'],
+    apiPatterns: ['/api/agents/studio', '/api/agents/studio/*'],
   },
 ];
 
@@ -184,14 +179,19 @@ const AGENT_FEATURE_DEFS: ResourceDefinition[] = [
     label: 'Agent playground',
     description: 'Chat with catalog agents and manage personal conversations.',
     routePatterns: ['/agents/playground', '/chat'],
-    apiPatterns: ['/api/agents', '/api/agents/*', '/api/conversations', '/api/conversations/*'],
+    apiPatterns: [
+      '/api/agents',
+      '/api/agents/*',
+      '/api/agents/conversations',
+      '/api/agents/conversations/*',
+    ],
   },
   {
     resource: AGENT_RESOURCES.SESSION_EXPLORER,
     label: 'Session explorer',
     description: 'Browse agent conversation history by date range and user.',
     routePatterns: ['/agents/session-explorer'],
-    apiPatterns: ['/api/session-explorer', '/api/session-explorer/*'],
+    apiPatterns: ['/api/agents/session-explorer', '/api/agents/session-explorer/*'],
   },
 ];
 

@@ -6,7 +6,7 @@ import {
   db,
   type BuiltinWorkflowKey,
   type KbFaqSettings,
-} from '../db/index.ts';
+} from '../infrastructure/db/index.ts';
 
 export type ResolvedBuiltinAgent = {
   id: string;

@@ -36,7 +36,8 @@ When adding new nav sections, follow the existing pattern: category label + `ul.
 
 ## Page background
 
-Use `var(--app-page-bg)` for chat layout, header, body, and admin pages — not the older warm gray `#f3f4f2`.
+- **App shell** (`layout-home` / `layout-flat` / `layout-admin`): gradient via `--home-page-gradient`, transparent topbar; white content panels (`.admin-table-wrap`, `.documents-layout`, etc.) stay `#fff`.
+- **Inner surfaces** that still need a flat fill: `var(--app-page-bg)` — not the older warm gray `#f3f4f2`.
 
 ## Admin pages — structure before styling
 
@@ -65,5 +66,5 @@ Copy/theme alone do not make an admin page correct. Before writing markup:
 - **Role**: predefined bundle of permission grants (`app_role_permissions`).
 - **User**: assigned one or more roles (`app_user_roles`); `/api/auth/me` returns `permissions[]`.
 - Gate nav and APIs with the **resource that owns the surface** — do not bolt a new page onto an unrelated feature key (e.g. Asset Market uses `agent:asset-market` read/write, not `agent:playground`).
-- New surfaces: add catalog entries in `rbac-catalog.ts`, grant system roles in `sync-rbac.ts`, wire `permissionKey` / `requireResourcePermission`, then run `db:migrate` (RBAC sync).
+- New surfaces: add catalog entries in `agent-backend/src/auth/rbac-catalog.ts`, grant system roles in `agent-backend/src/infrastructure/db/sync-rbac.ts`, wire `permissionKey` / `requireResourcePermission` in `agent-backend/src/apis/`, then run `db:migrate` (RBAC sync).
 - System `admin` role receives the full catalog; extend catalog in `rbac-catalog.ts` + sync.

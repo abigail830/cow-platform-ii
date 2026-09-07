@@ -92,7 +92,7 @@ export type CreateDatasourceInput = {
 
 export async function listStudioAssets(type?: string): Promise<AssetSummary[]> {
   const q = type ? `?type=${encodeURIComponent(type)}` : '';
-  const data = await authFetch(`/api/studio/assets${q}`);
+  const data = await authFetch(`/api/agents/studio/assets${q}`);
   return (data.assets ?? []) as AssetSummary[];
 }
 
@@ -108,7 +108,7 @@ export async function getSkillTree(skillId: string): Promise<{
   tree: SkillTreeNode[];
   defaultPath: string | null;
 }> {
-  const data = await authFetch(`/api/studio/assets/skills/${encodeURIComponent(skillId)}/tree`);
+  const data = await authFetch(`/api/agents/studio/skills/${encodeURIComponent(skillId)}/tree`);
   return {
     skillId: data.skillId as string,
     tree: (data.tree ?? []) as SkillTreeNode[],
@@ -121,7 +121,7 @@ export async function getSkillFile(
   path: string,
 ): Promise<{ path: string; content: string; truncated: boolean }> {
   const data = await authFetch(
-    `/api/studio/assets/skills/${encodeURIComponent(skillId)}/file?path=${encodeURIComponent(path)}`,
+    `/api/agents/studio/skills/${encodeURIComponent(skillId)}/file?path=${encodeURIComponent(path)}`,
   );
   return data as { path: string; content: string; truncated: boolean };
 }
@@ -137,7 +137,7 @@ async function sha256HexFromFile(file: File): Promise<string> {
 export async function uploadSkillZip(file: File): Promise<{ id: string; slug: string; import_status: string }> {
   if (shouldUseDirectUpload(file)) {
     const fileHash = await sha256HexFromFile(file);
-    const init = (await authFetch('/api/studio/skills/upload-init', {
+    const init = (await authFetch('/api/agents/studio/skills/upload-init', {
       method: 'POST',
       body: JSON.stringify({
         filename: file.name,
@@ -159,7 +159,7 @@ export async function uploadSkillZip(file: File): Promise<{ id: string; slug: st
       init.method ?? 'PUT',
     );
 
-    const data = await authFetch('/api/studio/skills/upload-complete', {
+    const data = await authFetch('/api/agents/studio/skills/upload-complete', {
       method: 'POST',
       body: JSON.stringify({
         filename: file.name,
@@ -175,7 +175,7 @@ export async function uploadSkillZip(file: File): Promise<{ id: string; slug: st
   if (!token) throw new Error('Not authenticated');
   const form = new FormData();
   form.append('file', file);
-  const res = await fetch(apiUrl('/api/studio/skills/upload'), {
+  const res = await fetch(apiUrl('/api/agents/studio/skills/upload'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: form,
@@ -188,7 +188,7 @@ export async function uploadSkillZip(file: File): Promise<{ id: string; slug: st
 }
 
 export async function deleteSkill(skillId: string): Promise<void> {
-  await authFetch(`/api/studio/skills/${encodeURIComponent(skillId)}`, { method: 'DELETE' });
+  await authFetch(`/api/agents/studio/skills/${encodeURIComponent(skillId)}`, { method: 'DELETE' });
 }
 
 export async function getPlatformMcpDetail(id: string): Promise<{
@@ -202,7 +202,7 @@ export async function getPlatformMcpDetail(id: string): Promise<{
     error?: string;
   };
 }> {
-  const data = await authFetch(`/api/studio/assets/mcp/${encodeURIComponent(id)}`);
+  const data = await authFetch(`/api/agents/studio/assets/mcp/${encodeURIComponent(id)}`);
   return data.mcp as {
     id: string;
     title: string;
@@ -223,12 +223,12 @@ export async function getPlatformMcpConfig(id: string): Promise<Record<string, u
 }
 
 export async function listStudioAgents(): Promise<StudioAgent[]> {
-  const data = await authFetch('/api/studio/agents');
+  const data = await authFetch('/api/agents/studio/agents');
   return (data.agents ?? []) as StudioAgent[];
 }
 
 export async function getStudioAgent(id: string): Promise<StudioAgent> {
-  const data = await authFetch(`/api/studio/agents/${id}`);
+  const data = await authFetch(`/api/agents/studio/agents/${id}`);
   return data.agent as StudioAgent;
 }
 
@@ -261,17 +261,17 @@ export type PlatformAgentDetail = {
 };
 
 export async function getPlatformAgentDetail(id: string): Promise<PlatformAgentDetail> {
-  const data = await authFetch(`/api/studio/assets/agents/${encodeURIComponent(id)}`);
+  const data = await authFetch(`/api/agents/studio/assets/agents/${encodeURIComponent(id)}`);
   return data.agent as PlatformAgentDetail;
 }
 
 export async function getPlatformAgentCopyDraft(id: string): Promise<StudioAgentDraft> {
-  const data = await authFetch(`/api/studio/assets/agents/${encodeURIComponent(id)}/copy-draft`);
+  const data = await authFetch(`/api/agents/studio/assets/agents/${encodeURIComponent(id)}/copy-draft`);
   return data.draft as StudioAgentDraft;
 }
 
 export async function createStudioAgent(body: Record<string, unknown>): Promise<StudioAgent> {
-  const data = await authFetch('/api/studio/agents', {
+  const data = await authFetch('/api/agents/studio/agents', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -282,7 +282,7 @@ export async function updateStudioAgent(
   id: string,
   body: Record<string, unknown>,
 ): Promise<StudioAgent> {
-  const data = await authFetch(`/api/studio/agents/${id}`, {
+  const data = await authFetch(`/api/agents/studio/agents/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
   });
@@ -290,27 +290,27 @@ export async function updateStudioAgent(
 }
 
 export async function deleteStudioAgent(id: string): Promise<void> {
-  await authFetch(`/api/studio/agents/${id}`, { method: 'DELETE' });
+  await authFetch(`/api/agents/studio/agents/${id}`, { method: 'DELETE' });
 }
 
 export async function warmAgent(name: string): Promise<void> {
-  await authFetch(`/api/studio/agents/${encodeURIComponent(name)}/warm`, { method: 'POST' });
+  await authFetch(`/api/agents/studio/agents/${encodeURIComponent(name)}/warm`, { method: 'POST' });
 }
 
 export async function putPlatformMcpCredential(platformMcpId: string, apiKey: string): Promise<void> {
-  await authFetch(`/api/studio/mcp-credentials/${encodeURIComponent(platformMcpId)}`, {
+  await authFetch(`/api/agents/studio/mcp-credentials/${encodeURIComponent(platformMcpId)}`, {
     method: 'PUT',
     body: JSON.stringify({ apiKey }),
   });
 }
 
 export async function listUserDatasources(): Promise<UserDatasource[]> {
-  const data = await authFetch('/api/studio/datasources');
+  const data = await authFetch('/api/agents/studio/datasources');
   return (data.datasources ?? []) as UserDatasource[];
 }
 
 export async function createUserDatasource(body: CreateDatasourceInput): Promise<UserDatasource> {
-  const data = await authFetch('/api/studio/datasources', {
+  const data = await authFetch('/api/agents/studio/datasources', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -318,7 +318,7 @@ export async function createUserDatasource(body: CreateDatasourceInput): Promise
 }
 
 export async function deleteUserDatasource(id: string): Promise<void> {
-  await authFetch(`/api/studio/datasources/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  await authFetch(`/api/agents/studio/datasources/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 /** Platform MCP templates that use datasource instances instead of API keys. */

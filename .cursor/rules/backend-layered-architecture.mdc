@@ -1,0 +1,92 @@
+---
+description: agent-backend layered architecture — apis, bounded contexts, shared infrastructure
+globs: agent-backend/**/*
+alwaysApply: false
+---
+
+# Backend layered architecture
+
+`agent-backend/src/` is organized by **HTTP surface**, **bounded contexts (BC)**, **agent runtime**, and **shared infrastructure**. Match existing paths before inventing new top-level folders.
+
+## Layers
+
+```
+apis/                    → HTTP routes only (thin: auth → application → JSON)
+{bc}/application/        → use cases, DB orchestration, job create/dispatch
+{bc}/domain/             → pure logic: validation, naming, bindings (no I/O)
+{bc}/infrastructure/     → OSS, GHA dispatch, external stores, runners
+infrastructure/          → shared DB, OSS, HTTP helpers
+auth/                    → JWT, RBAC, resource access (cross-cutting)
+agents/                  → Flue runtime, catalog, session, A2A (not a product BC)
+tools/                   → MCP / search hexagonal modules (core + adapters)
+```
+
+**Dependency direction:** `apis` → `{bc}/application` → `{bc}/domain`; I/O via `{bc}/infrastructure` or `infrastructure/*`. **`domain/` must not import application or infrastructure.**
+
+## Bounded contexts
+
+| BC | Path | Examples |
+|----|------|----------|
+| Document + capture | `document/` | `application/documents.ts`, `domain/channel-tree.ts`, `infrastructure/document-files.ts` |
+| Audio library | `audio/` | `application/audios.ts`, `infrastructure/audio-pipeline-runner.ts` |
+| Pipeline (parse) | `pipeline/` | `application/pipeline-jobs.ts`, `application/pipeline-runner.ts` |
+| Knowledge base | `kb/` | `application/knowledge-bases.ts`, `infrastructure/kb-import-runner.ts` |
+| Eval | `eval/` | `application/eval-run-dispatch.ts`, `application/eval-audio-bridge.ts` |
+| Skills | `skills/` | `application/skills.ts`, `domain/parse-skill-zip.ts` |
+| Model config | `model-config/` | `application/chat-completions.ts` |
+
+Large BCs may nest subdomains (e.g. `document/application/capture/`, `document/domain/capture/`).
+
+## HTTP (`apis/`)
+
+Mounted from `app.ts`:
+
+| Prefix | Folder |
+|--------|--------|
+| `/api/auth`, `/api/user/api-keys` | `apis/auth/` |
+| `/api/agents` | `apis/agents/` |
+| `/api/admin` | `apis/admin/` |
+| `/api/knowledge` | `apis/knowledge/` |
+| `/api/evaluation` | `apis/eval/` |
+| `/internal-api` | `apis/internal-api/` (worker job context only) |
+| `/api/mcp/*` | `tools/mcp/routes/` |
+
+Shared handlers (e.g. resource access): `apis/platform/`.
+
+## Shared infrastructure
+
+- **Schema / Drizzle:** `infrastructure/db/schema.ts`, `infrastructure/db/index.ts` — not `src/db/schema.ts`
+- **OSS:** `infrastructure/oss/` — presign helpers; BC-specific wrappers in `{bc}/infrastructure/*-files.ts`
+- **Route params:** `infrastructure/http/route-param.ts`
+
+## Agent runtime vs assets
+
+- **Runtime code:** `agents/catalog/`, `agents/runtime/`, `agents/session/` — canonical catalog path (not `agent-catalog/`)
+- **Asset files:** `agent-backend/agent-assets/` (`agents/`, `skills/`, `mcp/`, `manifest.yaml`)
+
+## Imports
+
+- Relative paths with **`.ts` suffix**; no `@/` alias
+- From `apis/knowledge/*.ts`: `../../document/application/...`, `../../auth/...`, `../../infrastructure/db/index.ts`
+
+## Removed paths — do not recreate
+
+These directories were deleted after the `apis/` + BC migration. No external client depends on them:
+
+| Removed | Replaced by |
+|---------|-------------|
+| `src/routes/` | `apis/` |
+| `src/services/` | `{bc}/application/` or `agents/session/services/` |
+| `src/agent-catalog/` | `agents/catalog/` |
+| `src/flue/` | `agents/runtime/`, `agents/a2a/` |
+| `src/db/schema.ts` | `infrastructure/db/schema.ts` |
+
+`src/db.ts` remains: Flue postgres adapter only (not schema).
+
+## New feature checklist
+
+- [ ] Route in `apis/{area}/`, business logic in `{bc}/application/`
+- [ ] Pure rules in `{bc}/domain/`; OSS/GHA in `{bc}/infrastructure/` or `infrastructure/oss/`
+- [ ] Async jobs: follow `.cursor/rules/async-pipeline-workers.mdc` + `apis/internal-api/`
+- [ ] Schema change: `infrastructure/db/schema.ts` + Drizzle migration (`.cursor/rules/database-migrations.mdc`)
+- [ ] MCP/search tool: `tools/{name}/` + optional `tools/mcp/routes/`

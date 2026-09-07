@@ -1,6 +1,6 @@
 import './load-env.ts';
-import { syncRbac } from '../src/db/sync-rbac.ts';
-import { closePool } from '../src/db/pool.ts';
+import { syncRbac } from '../src/infrastructure/db/sync-rbac.ts';
+import { closePool } from '../src/infrastructure/db/pool.ts';
 
 async function main() {
   await syncRbac();

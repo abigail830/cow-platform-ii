@@ -1,4 +1,4 @@
-import type { BuiltinWorkflowKey } from '../db/schema.ts';
+import type { BuiltinWorkflowKey } from '../infrastructure/db/schema.ts';
 
 export const DEFAULT_METADATA_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',

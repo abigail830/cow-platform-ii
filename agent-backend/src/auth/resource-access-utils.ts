@@ -1,4 +1,4 @@
-import type { ChannelNode } from '../services/documents/documents.ts';
+import type { ChannelNode } from '../document/domain/channel-node.ts';
 
 export type ResourcePermissionLevel = 'read' | 'write' | 'manage';
 

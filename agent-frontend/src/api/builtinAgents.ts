@@ -120,7 +120,7 @@ export async function listBuiltinAgents(params?: {
 export async function fetchBuiltinAgentOptions(
   workflow: BuiltinWorkflowKey,
 ): Promise<BuiltinAgentOptionsResponse> {
-  const response = await authFetch(`/api/builtin-agents/options?workflow=${workflow}`);
+  const response = await authFetch(`/api/admin/builtin-agents/options?workflow=${workflow}`);
   return (await response.json()) as BuiltinAgentOptionsResponse;
 }
 

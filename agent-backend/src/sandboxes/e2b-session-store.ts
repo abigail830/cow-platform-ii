@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { appE2bSessions, db } from '../db/index.ts';
+import { appE2bSessions, db } from '../infrastructure/db/index.ts';
 
 export async function loadE2bSandboxId(instanceId: string): Promise<string | null> {
   const rows = await db

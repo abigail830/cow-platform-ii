@@ -60,7 +60,7 @@ async function authFetch(path: string, init?: RequestInit) {
 }
 
 export async function getStorageInfo(): Promise<StorageInfo> {
-  const data = await authFetch('/api/console/storage');
+  const data = await authFetch('/api/admin/storage');
   return data as StorageInfo;
 }
 
@@ -78,7 +78,7 @@ async function fetchStorageListing(params: {
   if (params.recursive) query.set('recursive', 'true');
   const suffix = query.toString() ? `?${query.toString()}` : '';
 
-  const manifest = (await authFetch(`/api/console/storage/objects${suffix}`)) as {
+  const manifest = (await authFetch(`/api/admin/storage/objects${suffix}`)) as {
     list_url: string;
     prefix: string;
   };
@@ -117,7 +117,7 @@ async function listAllKeysUnderPrefix(prefix: string): Promise<string[]> {
 }
 
 export async function createStorageFolder(parentPrefix: string, name: string): Promise<{ prefix: string }> {
-  const data = (await authFetch('/api/console/storage/folders', {
+  const data = (await authFetch('/api/admin/storage/folders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ parent_prefix: parentPrefix, name }),
@@ -167,7 +167,7 @@ export async function moveStorageItems(input: {
     folderObjectKeys[normalized] = await listAllKeysUnderPrefix(normalized);
   }
 
-  const data = (await authFetch('/api/console/storage/move', {
+  const data = (await authFetch('/api/admin/storage/move', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

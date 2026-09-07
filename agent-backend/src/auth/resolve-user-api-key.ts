@@ -1,5 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm';
-import { appUserApiKeys, appUsers, db } from '../db/index.ts';
+import { appUserApiKeys, appUsers, db } from '../infrastructure/db/index.ts';
 import type { AuthUser } from './jwt.ts';
 import {
   apiKeyLookupPrefix,

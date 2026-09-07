@@ -1,9 +1,9 @@
 import './load-env.ts';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { appAgentPermissions, appRoles, appUserRoles, appUsers, db } from '../src/db/index.ts';
-import { syncRbac } from '../src/db/sync-rbac.ts';
-import { closePool } from '../src/db/pool.ts';
+import { appAgentPermissions, appRoles, appUserRoles, appUsers, db } from '../src/infrastructure/db/index.ts';
+import { syncRbac } from '../src/infrastructure/db/sync-rbac.ts';
+import { closePool } from '../src/infrastructure/db/pool.ts';
 
 const SEED_USERS = [
   {

@@ -60,7 +60,7 @@ export async function listExplorerSessions(
   if (query.sessionId?.trim()) params.set('sessionId', query.sessionId.trim());
   if (query.keyword?.trim()) params.set('keyword', query.keyword.trim());
 
-  const data = await authFetch(`/api/session-explorer/sessions?${params.toString()}`);
+  const data = await authFetch(`/api/agents/session-explorer/sessions?${params.toString()}`);
   return {
     sessions: (data.sessions ?? []) as ExplorerSession[],
     isAdmin: Boolean(data.isAdmin),
@@ -71,7 +71,7 @@ export async function getExplorerSessionMessages(conversationId: string): Promis
   session: ExplorerSession;
   messages: ExplorerMessage[];
 }> {
-  const data = await authFetch(`/api/session-explorer/sessions/${encodeURIComponent(conversationId)}/messages`);
+  const data = await authFetch(`/api/agents/session-explorer/sessions/${encodeURIComponent(conversationId)}/messages`);
   return {
     session: data.session as ExplorerSession,
     messages: (data.messages ?? []) as ExplorerMessage[],

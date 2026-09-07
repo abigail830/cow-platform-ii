@@ -1,5 +1,5 @@
 import './load-env.ts';
-import { getPool, closePool } from '../src/db/pool.ts';
+import { getPool, closePool } from '../src/infrastructure/db/pool.ts';
 
 const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:8787';
 const ADMIN_EMAIL = process.env.SMOKE_ADMIN_EMAIL ?? 'admin@example.com';
@@ -73,7 +73,7 @@ async function main() {
     return summarize();
   }
 
-  const createChannel = await authJson(adminToken, '/api/document-channels', {
+  const createChannel = await authJson(adminToken, '/api/knowledge/document-channels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: `ACL Verify ${Date.now()}` }),
@@ -85,7 +85,7 @@ async function main() {
   channelId = createChannel.body.id as string;
   pass('create_channel', channelId);
 
-  const channelAccess = await authJson(adminToken, `/api/document-channels/${channelId}/access`);
+  const channelAccess = await authJson(adminToken, `/api/knowledge/document-channels/${channelId}/access`);
   if (channelAccess.status !== 200) {
     fail('get_channel_access', JSON.stringify(channelAccess.body));
   } else {
@@ -94,7 +94,7 @@ async function main() {
     else fail('get_channel_access', 'owner should have manage');
   }
 
-  const createKb = await authJson(adminToken, '/api/knowledge-bases', {
+  const createKb = await authJson(adminToken, '/api/knowledge/knowledge-bases', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: `ACL KB ${Date.now()}`, type: 'page_index' }),
@@ -107,7 +107,7 @@ async function main() {
   }
 
   if (kbId) {
-    const kbAccess = await authJson(adminToken, `/api/knowledge-bases/${kbId}/access`);
+    const kbAccess = await authJson(adminToken, `/api/knowledge/knowledge-bases/${kbId}/access`);
     if (kbAccess.status === 200) pass('get_kb_access');
     else fail('get_kb_access', JSON.stringify(kbAccess.body));
   }
@@ -127,12 +127,12 @@ async function main() {
     userId = (me.body.id as string) ?? '';
   }
 
-  const userChannelForbidden = await authJson(userToken, `/api/document-channels/${channelId}`);
+  const userChannelForbidden = await authJson(userToken, `/api/knowledge/document-channels/${channelId}`);
   if (userChannelForbidden.status === 403) pass('user_channel_forbidden_before_share');
   else fail('user_channel_forbidden_before_share', `expected 403, got ${userChannelForbidden.status}`);
 
   if (userId) {
-    const shareChannel = await authJson(adminToken, `/api/document-channels/${channelId}/access`, {
+    const shareChannel = await authJson(adminToken, `/api/knowledge/document-channels/${channelId}/access`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -143,20 +143,20 @@ async function main() {
     if (shareChannel.status === 200) pass('share_channel_read_with_user');
     else fail('share_channel_read_with_user', JSON.stringify(shareChannel.body));
 
-    const userChannelAllowed = await authJson(userToken, `/api/document-channels/${channelId}`);
+    const userChannelAllowed = await authJson(userToken, `/api/knowledge/document-channels/${channelId}`);
     if (userChannelAllowed.status === 200) pass('user_channel_read_after_share');
     else fail('user_channel_read_after_share', `expected 200, got ${userChannelAllowed.status}`);
 
     const userListDocsForbidden = await authJson(
       userToken,
-      `/api/documents?channel_id=${encodeURIComponent(channelId)}`,
+      `/api/knowledge/documents?channel_id=${encodeURIComponent(channelId)}`,
     );
     if (userListDocsForbidden.status === 200) pass('user_list_docs_read');
     else fail('user_list_docs_read', `expected 200, got ${userListDocsForbidden.status}`);
   }
 
   if (kbId && userId) {
-    const shareKb = await authJson(adminToken, `/api/knowledge-bases/${kbId}/access`, {
+    const shareKb = await authJson(adminToken, `/api/knowledge/knowledge-bases/${kbId}/access`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -167,11 +167,11 @@ async function main() {
     if (shareKb.status === 200) pass('share_kb_read_with_user');
     else fail('share_kb_read_with_user', JSON.stringify(shareKb.body));
 
-    const userKbAllowed = await authJson(userToken, `/api/knowledge-bases/${kbId}`);
+    const userKbAllowed = await authJson(userToken, `/api/knowledge/knowledge-bases/${kbId}`);
     if (userKbAllowed.status === 200) pass('user_kb_read_after_share');
     else fail('user_kb_read_after_share', `expected 200, got ${userKbAllowed.status}`);
 
-    const userKbList = await authJson(userToken, '/api/knowledge-bases');
+    const userKbList = await authJson(userToken, '/api/knowledge/knowledge-bases');
     const items = (userKbList.body.items as Array<{ id: string }> | undefined) ?? [];
     if (userKbList.status === 403) {
       pass('user_kb_list_forbidden_without_module_perm');
@@ -182,7 +182,7 @@ async function main() {
     }
   }
 
-  const lookup = await authJson(userToken, '/api/users/lookup?q=admin');
+  const lookup = await authJson(userToken, '/api/admin/users/lookup?q=admin');
   if (lookup.status === 200 && Array.isArray(lookup.body.users)) pass('user_lookup');
   else fail('user_lookup', JSON.stringify(lookup.body));
 
@@ -192,10 +192,10 @@ async function main() {
   else fail('migration_grants_table_present', JSON.stringify(tableCheck.rows[0]));
 
   if (channelId) {
-    await authJson(adminToken, `/api/document-channels/${channelId}`, { method: 'DELETE' });
+    await authJson(adminToken, `/api/knowledge/document-channels/${channelId}`, { method: 'DELETE' });
   }
   if (kbId) {
-    await authJson(adminToken, `/api/knowledge-bases/${kbId}`, { method: 'DELETE' });
+    await authJson(adminToken, `/api/knowledge/knowledge-bases/${kbId}`, { method: 'DELETE' });
   }
 
   await summarize();

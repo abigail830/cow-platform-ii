@@ -1,6 +1,6 @@
 ---
 description: Platform MCP assets follow Cursor/Claude mcpServers connection shape
-globs: agent-backend/agent-assets/mcp/**/*,agent-backend/src/agent-assets/parse-mcp-servers.ts,agent-backend/src/agent-catalog/load-mcp.ts
+globs: agent-backend/agent-assets/mcp/**/*,agent-backend/src/agent-assets/parse-mcp-servers.ts,agent-backend/src/agents/catalog/load-mcp.ts
 alwaysApply: false
 ---
 

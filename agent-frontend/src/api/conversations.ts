@@ -57,12 +57,12 @@ export async function listAgents(): Promise<AgentInfo[]> {
 }
 
 export async function listConversations(agentName: string): Promise<Conversation[]> {
-  const data = await authFetch(`/api/conversations?agent=${encodeURIComponent(agentName)}`);
+  const data = await authFetch(`/api/agents/conversations?agent=${encodeURIComponent(agentName)}`);
   return (data.conversations ?? []) as Conversation[];
 }
 
 export async function createConversation(agentName: string, title: string): Promise<Conversation> {
-  const data = await authFetch('/api/conversations', {
+  const data = await authFetch('/api/agents/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ agentName, title }),
@@ -71,7 +71,7 @@ export async function createConversation(agentName: string, title: string): Prom
 }
 
 export async function patchConversation(id: string, title: string): Promise<Conversation> {
-  const data = await authFetch(`/api/conversations/${id}`, {
+  const data = await authFetch(`/api/agents/conversations/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title }),

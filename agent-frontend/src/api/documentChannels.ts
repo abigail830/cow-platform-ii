@@ -78,12 +78,12 @@ function mapPipelineOptions(
 }
 
 export async function listDocumentChannels(): Promise<DocumentChannel[]> {
-  const data = await authFetch('/api/document-channels');
+  const data = await authFetch('/api/knowledge/document-channels');
   return (data.channels as DocumentChannel[]) ?? [];
 }
 
 export async function fetchChannelProcessingOptions(): Promise<KnowledgeChannelProcessingOptions> {
-  const data = await authFetch('/api/document-channels/processing-options');
+  const data = await authFetch('/api/knowledge/document-channels/processing-options');
   return {
     documentPipelines: mapPipelineOptions(
       (data.document_pipelines as KnowledgeChannelProcessingOptions['documentPipelines']) ??
@@ -101,7 +101,7 @@ export async function fetchChannelProcessingOptions(): Promise<KnowledgeChannelP
 export async function fetchDocumentChannelAsrHotwords(
   channelId: string,
 ): Promise<ChannelAsrHotwordsResponse> {
-  const data = await authFetch(`/api/document-channels/${channelId}/hotwords`);
+  const data = await authFetch(`/api/knowledge/document-channels/${channelId}/hotwords`);
   return data as ChannelAsrHotwordsResponse;
 }
 
@@ -110,7 +110,7 @@ export async function createDocumentChannel(input: {
   description?: string;
   parentId?: string | null;
 }): Promise<DocumentChannel> {
-  const data = await authFetch('/api/document-channels', {
+  const data = await authFetch('/api/knowledge/document-channels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -134,7 +134,7 @@ export async function updateDocumentChannel(
     autoStartPipeline?: boolean;
   },
 ): Promise<DocumentChannel> {
-  const data = await authFetch(`/api/document-channels/${id}`, {
+  const data = await authFetch(`/api/knowledge/document-channels/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -151,7 +151,7 @@ export async function updateDocumentChannel(
 }
 
 export async function deleteDocumentChannel(id: string): Promise<void> {
-  await authFetch(`/api/document-channels/${id}`, { method: 'DELETE' });
+  await authFetch(`/api/knowledge/document-channels/${id}`, { method: 'DELETE' });
 }
 
 export function flattenChannels(channels: DocumentChannel[]): DocumentChannel[] {

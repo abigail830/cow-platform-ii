@@ -162,7 +162,7 @@ async function authFetch(path: string, init?: RequestInit) {
 }
 
 export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
-  const data = await authFetch('/api/knowledge-bases');
+  const data = await authFetch('/api/knowledge/knowledge-bases');
   return (data.items as KnowledgeBase[]) ?? [];
 }
 
@@ -171,7 +171,7 @@ export async function createKnowledgeBase(input: {
   description?: string;
   type: KnowledgeBaseType;
 }): Promise<KnowledgeBase> {
-  const data = await authFetch('/api/knowledge-bases', {
+  const data = await authFetch('/api/knowledge/knowledge-bases', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -193,7 +193,7 @@ export async function updateKnowledgeBase(
     faq_settings?: KbFaqSettings;
   },
 ): Promise<KnowledgeBase> {
-  const data = await authFetch(`/api/knowledge-bases/${id}`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -227,21 +227,21 @@ export type RagProcessingOptions = {
 };
 
 export async function fetchFaqProcessingOptions(): Promise<FaqProcessingOptions> {
-  const data = await authFetch('/api/knowledge-bases/faq-processing-options');
+  const data = await authFetch('/api/knowledge/knowledge-bases/faq-processing-options');
   return data as FaqProcessingOptions;
 }
 
 export async function fetchRagProcessingOptions(): Promise<RagProcessingOptions> {
-  const data = await authFetch('/api/knowledge-bases/rag-processing-options');
+  const data = await authFetch('/api/knowledge/knowledge-bases/rag-processing-options');
   return data as RagProcessingOptions;
 }
 
 export async function deleteKnowledgeBase(id: string): Promise<void> {
-  await authFetch(`/api/knowledge-bases/${id}`, { method: 'DELETE' });
+  await authFetch(`/api/knowledge/knowledge-bases/${id}`, { method: 'DELETE' });
 }
 
 export async function getKnowledgeBase(id: string): Promise<KnowledgeBase> {
-  const data = await authFetch(`/api/knowledge-bases/${id}`);
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${id}`);
   return data as KnowledgeBase;
 }
 
@@ -254,7 +254,7 @@ export async function listKbItems(
   if (options?.limit != null) params.set('limit', String(options.limit));
   if (options?.includeContent) params.set('include_content', 'true');
   const qs = params.toString();
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items${qs ? `?${qs}` : ''}`);
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/items${qs ? `?${qs}` : ''}`);
   return data as { items: KbItem[]; total: number };
 }
 
@@ -276,16 +276,16 @@ export async function listAllKbItemDocumentIds(knowledgeBaseId: string): Promise
 }
 
 export async function getKbItem(knowledgeBaseId: string, itemId: string): Promise<KbItem> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items/${itemId}`);
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/items/${itemId}`);
   return data as KbItem;
 }
 
 export async function deleteKbItem(knowledgeBaseId: string, itemId: string): Promise<void> {
-  await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items/${itemId}`, { method: 'DELETE' });
+  await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/items/${itemId}`, { method: 'DELETE' });
 }
 
 export async function deleteKbItems(knowledgeBaseId: string, itemIds: string[]): Promise<number> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/items/batch-delete`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/items/batch-delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ item_ids: itemIds }),
@@ -294,7 +294,7 @@ export async function deleteKbItems(knowledgeBaseId: string, itemIds: string[]):
 }
 
 export async function fetchImportSources(): Promise<ImportSources> {
-  const data = await authFetch('/api/knowledge-bases/import-sources');
+  const data = await authFetch('/api/knowledge/knowledge-bases/import-sources');
   return data as ImportSources;
 }
 
@@ -302,7 +302,7 @@ export async function startKbImport(
   knowledgeBaseId: string,
   input: { channelIds?: string[]; documentIds?: string[] },
 ): Promise<{ job: KbImportJob; document_count: number }> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/import`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -314,7 +314,7 @@ export async function startKbImport(
 }
 
 export async function getKbImportJob(knowledgeBaseId: string, jobId: string): Promise<KbImportJob> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/import-jobs/${jobId}`);
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/import-jobs/${jobId}`);
   return data as KbImportJob;
 }
 
@@ -323,7 +323,7 @@ export async function getActiveKbImportJob(
   jobKind?: string,
 ): Promise<KbImportJob | null> {
   const params = jobKind ? `?job_kind=${encodeURIComponent(jobKind)}` : '';
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/import-jobs/active${params}`);
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/import-jobs/active${params}`);
   return (data.job as KbImportJob | null) ?? null;
 }
 
@@ -336,7 +336,7 @@ export async function listIndexedDocuments(
   if (options?.limit != null) params.set('limit', String(options.limit));
   const qs = params.toString();
   const data = await authFetch(
-    `/api/knowledge-bases/${knowledgeBaseId}/indexed-documents${qs ? `?${qs}` : ''}`,
+    `/api/knowledge/knowledge-bases/${knowledgeBaseId}/indexed-documents${qs ? `?${qs}` : ''}`,
   );
   return data as { items: KbIndexedDocument[]; total: number };
 }
@@ -368,7 +368,7 @@ export async function listDocumentChunks(
   if (options?.limit != null) params.set('limit', String(options.limit));
   const qs = params.toString();
   const data = await authFetch(
-    `/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/chunks${qs ? `?${qs}` : ''}`,
+    `/api/knowledge/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/chunks${qs ? `?${qs}` : ''}`,
   );
   return data as KbDocumentChunks;
 }
@@ -378,7 +378,7 @@ export async function deleteDocumentChunks(
   documentId: string,
 ): Promise<number> {
   const data = await authFetch(
-    `/api/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/chunks`,
+    `/api/knowledge/knowledge-bases/${knowledgeBaseId}/documents/${documentId}/chunks`,
     { method: 'DELETE' },
   );
   return (data.deleted as number) ?? 0;
@@ -399,7 +399,7 @@ export async function listKbFaqs(
   if (options?.publication_status) params.set('publication_status', options.publication_status);
   if (options?.q) params.set('q', options.q);
   const qs = params.toString();
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs${qs ? `?${qs}` : ''}`);
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/faqs${qs ? `?${qs}` : ''}`);
   return data as { items: KbFaq[]; total: number };
 }
 
@@ -407,7 +407,7 @@ export async function createKbFaq(
   knowledgeBaseId: string,
   input: { question: string; answer: string },
 ): Promise<KbFaq> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/faqs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -420,7 +420,7 @@ export async function updateKbFaq(
   faqId: string,
   input: { question?: string; answer?: string },
 ): Promise<KbFaq> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/${faqId}`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/faqs/${faqId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -429,7 +429,7 @@ export async function updateKbFaq(
 }
 
 export async function deleteKbFaqs(knowledgeBaseId: string, faqIds: string[]): Promise<number> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/batch-delete`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/faqs/batch-delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ faq_ids: faqIds }),
@@ -441,7 +441,7 @@ export async function batchPublishKbFaqs(
   knowledgeBaseId: string,
   faqIds: string[],
 ): Promise<{ published_count: number; index_job?: KbImportJob }> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/batch-publish`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/faqs/batch-publish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ faq_ids: faqIds }),
@@ -453,7 +453,7 @@ export async function batchDraftKbFaqs(
   knowledgeBaseId: string,
   faqIds: string[],
 ): Promise<{ draft_count: number }> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/batch-draft`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/faqs/batch-draft`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ faq_ids: faqIds }),
@@ -465,7 +465,7 @@ export async function polishKbFaqAnswer(
   knowledgeBaseId: string,
   input: { faq_id?: string; question?: string; answer?: string },
 ): Promise<{ answer: string }> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/faqs/polish`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/faqs/polish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -481,7 +481,7 @@ export async function startKbFaqExtract(
   knowledgeBaseId: string,
   input: { channelIds?: string[]; documentIds?: string[] },
 ): Promise<{ job: KbImportJob; document_count: number }> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/extract`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/extract`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -496,7 +496,7 @@ export async function startKbFaqIndex(
   knowledgeBaseId: string,
   faqIds: string[],
 ): Promise<{ job: KbImportJob; faq_count: number }> {
-  const data = await authFetch(`/api/knowledge-bases/${knowledgeBaseId}/index-faqs`, {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/index-faqs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ faq_ids: faqIds }),

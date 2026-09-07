@@ -60,7 +60,7 @@ Frontend defaults to [http://localhost:5180](http://localhost:5180) — set `COR
 | Command | Purpose |
 |---------|---------|
 | `npm run setup` | **First-time / fresh DB** — migrate + seed users |
-| `npm run db:generate` | Generate a new migration from `src/db/schema.ts` (after schema edits) |
+| `npm run db:generate` | Generate a new migration from `src/infrastructure/db/schema.ts` (after schema edits) |
 | `npm run db:validate-migrations` | Check SQL files and `drizzle/meta/_journal.json` stay in sync |
 | `npm run db:migrate` | Validate + apply schema migrations + RBAC sync (idempotent) |
 | `npm run seed` | Upsert demo users + RBAC role assignment |
@@ -74,7 +74,7 @@ Already ran `seed:rbac` manually? That is fine; re-running `db:migrate` is safe 
 
 All database schema changes **must** go through Drizzle migrations — never run `ALTER TABLE` / `CREATE TABLE` directly against the database.
 
-1. Edit `src/db/schema.ts`.
+1. Edit `src/infrastructure/db/schema.ts`.
 2. Run `npm run db:generate` — creates `drizzle/NNNN_*.sql` and updates `drizzle/meta/_journal.json`.
 3. Commit the `.sql` file and journal metadata together.
 4. Apply with `npm run db:migrate` (also runs automatically via `./scripts/start.sh` / `restart.sh`).

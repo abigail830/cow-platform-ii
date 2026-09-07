@@ -8,16 +8,16 @@ import {
   db,
   type BuiltinWorkflowKey,
   type SyncAgentTriggerType,
-} from '../db/index.ts';
+} from '../infrastructure/db/index.ts';
 import { applyPromptTemplate } from './apply-template.ts';
 import {
   resolveWorkflowAgent,
   type BuiltinAgentOverride,
   type ResolvedBuiltinAgent,
 } from './resolve-workflow-agent.ts';
-import { outboundFetch } from '../shared/lib/outbound-fetch.ts';
-import { callModelChatCompletion, chatCompletionsUrl } from '../services/models/model-chat-completions.ts';
-import { resolveModelCliParams } from '../services/models/model-cli-params.ts';
+import { outboundFetch } from '../lib/outbound-fetch.ts';
+import { callModelChatCompletion, chatCompletionsUrl } from '../model-config/application/chat-completions.ts';
+import { resolveModelCliParams } from '../model-config/infrastructure/model-cli-params.ts';
 
 const AUDIT_CONTENT_MAX = 8000;
 const LLM_TIMEOUT_MS = Number(process.env.SYNC_AGENT_TIMEOUT_MS ?? 120_000);

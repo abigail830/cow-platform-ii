@@ -2,13 +2,14 @@ import type { Context } from 'hono';
 import { getUser } from './jwt.ts';
 import {
   getDocumentChannelIdForDocument,
+  loadSkillRow,
   resolveChannelPermission,
   resolveKnowledgeBasePermission,
-  userHasSkillAccess,
+  resolveSkillPermission,
+  satisfiesResourcePermission,
   type ResourcePermissionLevel,
 } from './resource-access.ts';
-import { eq } from 'drizzle-orm';
-import { appSkills, db } from '../db/index.ts';
+import { scopeFromContext } from './resource-access-request-cache.ts';
 
 export async function denyUnlessChannelAccess(
   c: Context,
@@ -16,11 +17,10 @@ export async function denyUnlessChannelAccess(
   required: ResourcePermissionLevel,
 ): Promise<Response | null> {
   const user = getUser(c);
-  const allowed = await resolveChannelPermission(user.id, channelId).then((flags) => {
-    if (required === 'manage') return flags.manage;
-    if (required === 'write') return flags.write || flags.manage;
-    return flags.read || flags.write || flags.manage;
-  });
+  const scope = scopeFromContext(c);
+  const allowed = await resolveChannelPermission(user.id, channelId, scope).then((flags) =>
+    satisfiesResourcePermission(flags, required),
+  );
   if (!allowed) return c.json({ error: 'Forbidden' }, 403);
   return null;
 }
@@ -41,14 +41,11 @@ export async function denyUnlessKnowledgeBaseAccess(
   required: ResourcePermissionLevel,
 ): Promise<Response | null> {
   const user = getUser(c);
-  const flags = await resolveKnowledgeBasePermission(user.id, knowledgeBaseId);
-  const allowed =
-    required === 'manage'
-      ? flags.manage
-      : required === 'write'
-        ? flags.write || flags.manage
-        : flags.read || flags.write || flags.manage;
-  if (!allowed) return c.json({ error: 'Forbidden' }, 403);
+  const scope = scopeFromContext(c);
+  const flags = await resolveKnowledgeBasePermission(user.id, knowledgeBaseId, scope);
+  if (!satisfiesResourcePermission(flags, required)) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
   return null;
 }
 
@@ -58,13 +55,16 @@ export async function denyUnlessSkillAccess(
   required: ResourcePermissionLevel,
 ): Promise<Response | null> {
   const user = getUser(c);
-  const [skill] = await db.select().from(appSkills).where(eq(appSkills.id, skillId)).limit(1);
+  const scope = scopeFromContext(c);
+  const skill = await loadSkillRow(skillId, scope.cache);
   if (!skill) return c.json({ error: 'Skill not found' }, 404);
   if (skill.origin === 'platform' && required === 'read') {
     return null;
   }
-  const allowed = await userHasSkillAccess(user.id, skillId, required);
-  if (!allowed) return c.json({ error: 'Forbidden' }, 403);
+  const flags = await resolveSkillPermission(user.id, skillId, scope);
+  if (!satisfiesResourcePermission(flags, required)) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
   return null;
 }
 

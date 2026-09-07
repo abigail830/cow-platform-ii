@@ -9,7 +9,7 @@ All PostgreSQL schema changes in this repo **must** go through Drizzle migration
 
 ## Do
 
-1. Edit `agent-backend/src/db/schema.ts`.
+1. Edit `agent-backend/src/infrastructure/db/schema.ts`.
 2. Run `npm run db:generate` in `agent-backend/` — creates `drizzle/NNNN_*.sql` and updates `drizzle/meta/_journal.json`.
 3. Commit the `.sql` file **and** journal metadata together.
 4. Apply with `npm run db:migrate` (validates SQL ↔ journal, then migrates + RBAC sync).
@@ -33,4 +33,4 @@ npm run db:migrate               # apply pending migrations
 
 ## RBAC note
 
-`db:migrate` also runs RBAC catalog sync from `src/auth/rbac-catalog.ts`. Permission/role **data** can be updated in code + migrate; permission **schema** still follows migrations only.
+`db:migrate` also runs RBAC catalog sync from `src/infrastructure/db/sync-rbac.ts` (catalog source: `src/auth/rbac-catalog.ts`). Permission/role **data** can be updated in code + migrate; permission **schema** still follows migrations only.

@@ -1,8 +1,8 @@
 import type { AuthUser } from './jwt.ts';
-import { appConversations, appStudioAgents, db } from '../db/index.ts';
-import { isAgentVisibleToRoles } from '../agent-catalog/agent-access.ts';
-import { getAgentRegistry } from '../agent-catalog/registry.ts';
-import { bootAgentCatalog } from '../agent-catalog/boot.ts';
+import { appConversations, appStudioAgents, db } from '../infrastructure/db/index.ts';
+import { isAgentVisibleToRoles } from '../agents/catalog/agent-access.ts';
+import { getAgentRegistry } from '../agents/catalog/registry.ts';
+import { ensureAgentCatalogReady } from '../agents/catalog/boot.ts';
 import { userHasStudioAgentAccess } from './resource-access.ts';
 import { loadUserAccessProfile } from './rbac.ts';
 import { and, eq } from 'drizzle-orm';
@@ -18,7 +18,7 @@ export async function getUserRoleKeys(user: AuthUser): Promise<string[]> {
  * Agents visible in Playground for this user: FS (role) ∪ studio (ACL read).
  */
 export async function listAllowedAgents(user: AuthUser): Promise<string[]> {
-  bootAgentCatalog();
+  await ensureAgentCatalogReady();
   const roleKeys = await getUserRoleKeys(user);
   const registry = getAgentRegistry();
   const allowed: string[] = [];
@@ -43,7 +43,7 @@ export async function listAllowedAgents(user: AuthUser): Promise<string[]> {
 
 /** Gate creating a new conversation for an agent (same rule as menu visibility). */
 export async function canAccessAgent(user: AuthUser, agentName: string): Promise<boolean> {
-  bootAgentCatalog();
+  await ensureAgentCatalogReady();
   const entry = getAgentRegistry().get(agentName);
   if (!entry) return false;
   if (entry.spec.source === 'studio') {

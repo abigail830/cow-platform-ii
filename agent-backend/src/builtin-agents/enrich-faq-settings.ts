@@ -1,7 +1,7 @@
-import type { KbFaqSettings } from '../db/schema.ts';
+import type { KbFaqSettings } from '../infrastructure/db/schema.ts';
 import { resolveKbFaqWorkflowAgent } from './resolve-workflow-agent.ts';
-import { getPipelineConfigById } from '../shared/pipeline/pipeline-config-store.ts';
-import { resolveFaqExtractPipeline } from '../shared/kb/faq-pipeline-binding.ts';
+import { getPipelineConfigById } from '../pipeline/infrastructure/pipeline-config-store.ts';
+import { resolveFaqExtractPipeline } from '../kb/domain/faq-pipeline-binding.ts';
 
 export type EnrichedKbFaqSettings = KbFaqSettings & {
   /** Populated from resolved polish agent for UI. */

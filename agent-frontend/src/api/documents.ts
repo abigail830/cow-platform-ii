@@ -126,7 +126,7 @@ function parseJsonRecord(raw: string | null): Record<string, unknown> | null {
 }
 
 export async function getDocument(id: string): Promise<DocumentRecord> {
-  const data = await authFetch(`/api/documents/${id}`);
+  const data = await authFetch(`/api/knowledge/documents/${id}`);
   return data as DocumentRecord;
 }
 
@@ -140,7 +140,7 @@ export async function fetchDocumentContent(
       ? AbortSignal.timeout(timeoutMs)
       : undefined;
   const manifest = (await authFetch(
-    `/api/documents/${id}/content`,
+    `/api/knowledge/documents/${id}/content`,
     signal ? { signal } : undefined,
   )) as DocumentContentManifest;
 
@@ -189,7 +189,7 @@ async function resolveDocumentMarkdownImages(
   }
 
   try {
-    const presigned = (await authFetch(`/api/documents/${documentId}/download/bundle-presign`, {
+    const presigned = (await authFetch(`/api/knowledge/documents/${documentId}/download/bundle-presign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paths: [...pathSet] }),
@@ -230,7 +230,7 @@ export async function listDocuments(params: {
   if (params.search) query.set('search', params.search);
   if (params.offset !== undefined) query.set('offset', String(params.offset));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
-  const data = await authFetch(`/api/documents?${query.toString()}`);
+  const data = await authFetch(`/api/knowledge/documents?${query.toString()}`);
   return data as DocumentListResponse;
 }
 
@@ -245,12 +245,12 @@ export async function listChannelKnowledgeItems(params: {
   if (params.search) query.set('search', params.search);
   if (params.offset !== undefined) query.set('offset', String(params.offset));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
-  const data = await authFetch(`/api/documents/channel-items?${query.toString()}`);
+  const data = await authFetch(`/api/knowledge/documents/channel-items?${query.toString()}`);
   return data as ChannelKnowledgeListResponse;
 }
 
 export async function deleteDocument(id: string): Promise<void> {
-  await authFetch(`/api/documents/${id}`, { method: 'DELETE' });
+  await authFetch(`/api/knowledge/documents/${id}`, { method: 'DELETE' });
 }
 
 export async function downloadDocument(id: string): Promise<void> {
@@ -259,7 +259,7 @@ export async function downloadDocument(id: string): Promise<void> {
 }
 
 export async function getDocumentDownloadUrl(id: string): Promise<{ url: string; filename: string }> {
-  const data = await authFetch(`/api/documents/${id}/download`);
+  const data = await authFetch(`/api/knowledge/documents/${id}/download`);
   return {
     url: data.url as string,
     filename: (data.filename as string) || 'download',
@@ -283,7 +283,7 @@ async function downloadDocumentBundleViaServer(
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
 
-  const res = await fetch(apiUrl(`/api/documents/${id}/download/bundle`), {
+  const res = await fetch(apiUrl(`/api/knowledge/documents/${id}/download/bundle`), {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -306,7 +306,7 @@ async function downloadDocumentBundleViaBrowser(
   id: string,
   suggestedFilename: string,
 ): Promise<void> {
-  const manifest = (await authFetch(`/api/documents/${id}/download/bundle-manifest`)) as {
+  const manifest = (await authFetch(`/api/knowledge/documents/${id}/download/bundle-manifest`)) as {
     file_hash: string;
     archive_filename: string;
     files: Array<{ path: string; url: string }>;
@@ -327,7 +327,7 @@ async function downloadDocumentBundleViaBrowser(
           (path) => !fileMap.has(path),
         );
         if (extraPaths.length > 0) {
-          const presigned = (await authFetch(`/api/documents/${id}/download/bundle-presign`, {
+          const presigned = (await authFetch(`/api/knowledge/documents/${id}/download/bundle-presign`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ paths: extraPaths }),
@@ -400,7 +400,7 @@ function triggerBrowserDownload(url: string, filename: string) {
 }
 
 export async function moveDocument(id: string, channelId: string): Promise<DocumentRecord> {
-  const data = await authFetch(`/api/documents/${id}`, {
+  const data = await authFetch(`/api/knowledge/documents/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ channel_id: channelId }),
@@ -409,7 +409,7 @@ export async function moveDocument(id: string, channelId: string): Promise<Docum
 }
 
 export async function runDocumentPipeline(id: string): Promise<{ status: string }> {
-  const data = await authFetch(`/api/documents/${id}/run-pipeline`, { method: 'POST' });
+  const data = await authFetch(`/api/knowledge/documents/${id}/run-pipeline`, { method: 'POST' });
   return data as { status: string };
 }
 
@@ -417,7 +417,7 @@ export async function updateDocumentMetadata(
   id: string,
   metadata: Record<string, unknown>,
 ): Promise<{ metadata: Record<string, unknown> }> {
-  const data = await authFetch(`/api/documents/${id}/metadata`, {
+  const data = await authFetch(`/api/knowledge/documents/${id}/metadata`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ metadata }),
@@ -427,7 +427,7 @@ export async function updateDocumentMetadata(
 
 async function uploadDocumentDirect(channelId: string, file: File): Promise<DocumentRecord> {
   const fileHash = await sha256HexFromFile(file);
-  const init = (await authFetch('/api/documents/upload-init', {
+  const init = (await authFetch('/api/knowledge/documents/upload-init', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -452,7 +452,7 @@ async function uploadDocumentDirect(channelId: string, file: File): Promise<Docu
     await putFileToPresignedUrl(uploadUrl, file, init.headers ?? {}, init.method ?? 'PUT');
   }
 
-  const data = await authFetch('/api/documents/upload-complete', {
+  const data = await authFetch('/api/knowledge/documents/upload-complete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -470,7 +470,7 @@ async function uploadSingleFile(channelId: string, file: File): Promise<Document
   const form = new FormData();
   form.append('channel_id', channelId);
   form.append('file', file);
-  const data = await authFetch('/api/documents/upload', { method: 'POST', body: form });
+  const data = await authFetch('/api/knowledge/documents/upload', { method: 'POST', body: form });
   return data as DocumentRecord;
 }
 
@@ -491,7 +491,7 @@ async function uploadFileInChunks(channelId: string, file: File): Promise<Docume
     form.append('file_chunk', chunk, file.name);
     if (uploadId) form.append('upload_id', uploadId);
 
-    const data = await authFetch('/api/documents/upload-chunk', { method: 'POST', body: form });
+    const data = await authFetch('/api/knowledge/documents/upload-chunk', { method: 'POST', body: form });
     if (data.upload_id && typeof data.upload_id === 'string') {
       uploadId = data.upload_id;
       continue;

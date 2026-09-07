@@ -6,7 +6,7 @@ import {
   appWorkflowBindings,
   db,
   type BuiltinWorkflowKey,
-} from '../db/index.ts';
+} from '../infrastructure/db/index.ts';
 import { BUILTIN_AGENT_SEEDS } from './defaults.ts';
 
 type LegacyFaqSettings = {

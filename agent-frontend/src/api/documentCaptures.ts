@@ -258,7 +258,7 @@ export async function listDocumentCaptures(input: {
 }): Promise<{ items: DocumentCaptureRecord[]; total: number }> {
   const params = new URLSearchParams({ channel_id: input.channelId });
   if (input.search?.trim()) params.set('search', input.search.trim());
-  return authFetch(`/api/document-captures?${params}`) as Promise<{
+  return authFetch(`/api/knowledge/captures?${params}`) as Promise<{
     items: DocumentCaptureRecord[];
     total: number;
   }>;
@@ -273,7 +273,7 @@ export async function createDocumentCapture(input: {
   audience?: string;
   inputMode?: DocumentCaptureInputMode;
 }): Promise<DocumentCaptureRecord> {
-  return authFetch('/api/document-captures', {
+  return authFetch('/api/knowledge/captures', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -293,7 +293,7 @@ export async function getDocumentCapture(
   options?: { sync?: boolean },
 ): Promise<DocumentCaptureDetail> {
   const query = options?.sync === false ? '?sync=false' : '';
-  return authFetch(`/api/document-captures/${id}${query}`) as Promise<DocumentCaptureDetail>;
+  return authFetch(`/api/knowledge/captures/${id}${query}`) as Promise<DocumentCaptureDetail>;
 }
 
 type CaptureSegmentUploadInitResponse = {
@@ -311,7 +311,7 @@ async function uploadCaptureSegmentDirect(
   segmentLabel?: string,
 ): Promise<DocumentCaptureDetail> {
   const fileHash = await sha256HexFromFile(file);
-  const init = (await authFetch(`/api/document-captures/${captureId}/segments/upload-init`, {
+  const init = (await authFetch(`/api/knowledge/captures/${captureId}/segments/upload-init`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -328,7 +328,7 @@ async function uploadCaptureSegmentDirect(
     await putFileToPresignedUrl(uploadUrl, file, init.headers ?? {}, init.method ?? 'PUT');
   }
 
-  const data = await authFetch(`/api/document-captures/${captureId}/segments`, {
+  const data = await authFetch(`/api/knowledge/captures/${captureId}/segments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -354,7 +354,7 @@ export async function uploadCaptureDocumentSegment(
   const form = new FormData();
   form.append('file', file);
   if (segmentLabel?.trim()) form.append('segment_label', segmentLabel.trim());
-  const data = await authFetch(`/api/document-captures/${captureId}/segments`, {
+  const data = await authFetch(`/api/knowledge/captures/${captureId}/segments`, {
     method: 'POST',
     body: form,
   });
@@ -377,7 +377,7 @@ export async function uploadCaptureTranscriptSegment(
   const transcriptMarkdown = await readTranscriptFileText(file);
 
   const init = (await authFetch(
-    `/api/document-captures/${captureId}/segments/transcript-upload-init`,
+    `/api/knowledge/captures/${captureId}/segments/transcript-upload-init`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -428,7 +428,7 @@ export async function uploadCaptureTranscriptSegment(
       'PUT',
     );
 
-    const data = await authFetch(`/api/document-captures/${captureId}/segments`, {
+    const data = await authFetch(`/api/knowledge/captures/${captureId}/segments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -506,7 +506,7 @@ export async function reorderCaptureSegments(
   captureId: string,
   orderedSegmentIds: string[],
 ): Promise<DocumentCaptureDetail> {
-  return authFetch(`/api/document-captures/${captureId}/segments/order`, {
+  return authFetch(`/api/knowledge/captures/${captureId}/segments/order`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ordered_segment_ids: orderedSegmentIds }),
@@ -514,7 +514,7 @@ export async function reorderCaptureSegments(
 }
 
 export async function runCapturePipeline(captureId: string): Promise<DocumentCaptureDetail> {
-  const data = await authFetch(`/api/document-captures/${captureId}/run-pipeline`, {
+  const data = await authFetch(`/api/knowledge/captures/${captureId}/run-pipeline`, {
     method: 'POST',
   });
   return (data as { capture: DocumentCaptureDetail }).capture;
@@ -525,7 +525,7 @@ export async function runCaptureSegmentPipeline(
   segmentId: string,
 ): Promise<DocumentCaptureDetail> {
   const data = await authFetch(
-    `/api/document-captures/${captureId}/segments/${segmentId}/run-pipeline`,
+    `/api/knowledge/captures/${captureId}/segments/${segmentId}/run-pipeline`,
     { method: 'POST' },
   );
   return (data as { capture: DocumentCaptureDetail }).capture;
@@ -542,7 +542,7 @@ export async function presignCapturePostProcessArtifacts(
   artifacts: CapturePostProcessArtifactKind[],
 ): Promise<Array<{ artifact: CapturePostProcessArtifactKind; url: string }>> {
   const data = await authFetch(
-    `/api/document-captures/${captureId}/post-process-artifacts-presign`,
+    `/api/knowledge/captures/${captureId}/post-process-artifacts-presign`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -624,7 +624,7 @@ export async function updateDocumentCapture(
     audience?: string;
   },
 ): Promise<DocumentCaptureDetail> {
-  return authFetch(`/api/document-captures/${id}`, {
+  return authFetch(`/api/knowledge/captures/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -638,5 +638,5 @@ export async function updateDocumentCapture(
 }
 
 export async function deleteDocumentCapture(id: string): Promise<void> {
-  await authFetch(`/api/document-captures/${id}`, { method: 'DELETE' });
+  await authFetch(`/api/knowledge/captures/${id}`, { method: 'DELETE' });
 }

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { agentAssetsRoot } from '../agent-catalog/paths.ts';
+import { agentAssetsRoot } from '../agents/catalog/paths.ts';
 
 export type AssetType = 'agent' | 'skill' | 'mcp' | 'sandbox';
 

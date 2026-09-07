@@ -1,7 +1,7 @@
 import './load-env.ts';
 import { createFlueClient } from '@flue/sdk';
-import { getPool, closePool } from '../src/db/pool.ts';
-import { toAgentInstanceId } from '../src/shared/model/agent-instance-id.ts';
+import { getPool, closePool } from '../src/infrastructure/db/pool.ts';
+import { toAgentInstanceId } from '../src/agents/domain/agent-instance-id.ts';
 
 const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:8787';
 const EMAIL = process.env.SMOKE_EMAIL ?? 'user@example.com';
@@ -116,7 +116,7 @@ async function main() {
 
   const auth = { Authorization: `Bearer ${token}` };
 
-  const convRes = await fetch(`${BASE}/api/conversations`, {
+  const convRes = await fetch(`${BASE}/api/agents/conversations`, {
     method: 'POST',
     headers: { ...auth, 'Content-Type': 'application/json' },
     body: JSON.stringify({ agentName: 'content-studio', title: 'Smoke test' }),

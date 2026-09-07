@@ -70,7 +70,7 @@ async function main() {
   const stamp = Date.now();
   let faqKbId = '';
 
-  const createPageIndex = await authJson(adminToken, '/api/knowledge-bases', {
+  const createPageIndex = await authJson(adminToken, '/api/knowledge/knowledge-bases', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -96,7 +96,7 @@ async function main() {
     pass('page_index_pipeline_link', pipelineName);
   }
 
-  const createRag = await authJson(adminToken, '/api/knowledge-bases', {
+  const createRag = await authJson(adminToken, '/api/knowledge/knowledge-bases', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -127,7 +127,7 @@ async function main() {
     }
   }
 
-  const list = await authJson(adminToken, '/api/knowledge-bases');
+  const list = await authJson(adminToken, '/api/knowledge/knowledge-bases');
   if (list.status !== 200 || !Array.isArray(list.body.items)) {
     fail('list_knowledge_bases', JSON.stringify(list.body));
   } else {
@@ -136,7 +136,7 @@ async function main() {
     else pass('list_knowledge_bases');
   }
 
-  const sources = await authJson(adminToken, '/api/knowledge-bases/import-sources');
+  const sources = await authJson(adminToken, '/api/knowledge/knowledge-bases/import-sources');
   if (sources.status !== 200 || !Array.isArray(sources.body.channels)) {
     fail('import_sources', JSON.stringify(sources.body));
   } else {
@@ -144,7 +144,7 @@ async function main() {
   }
 
   if (ragKbId) {
-    const ragImportNoConfig = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/import`, {
+    const ragImportNoConfig = await authJson(adminToken, `/api/knowledge/knowledge-bases/${ragKbId}/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ document_ids: ['00000000-0000-0000-0000-000000000001'] }),
@@ -155,7 +155,7 @@ async function main() {
       fail('rag_import_requires_embedding', `expected 400, got ${ragImportNoConfig.status}`);
     }
 
-    const ragEmptyImport = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/import`, {
+    const ragEmptyImport = await authJson(adminToken, `/api/knowledge/knowledge-bases/${ragKbId}/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ document_ids: [] }),
@@ -163,19 +163,19 @@ async function main() {
     if (ragEmptyImport.status === 400) pass('rag_empty_import_rejected', '400 as expected');
     else fail('rag_empty_import_rejected', `expected 400, got ${ragEmptyImport.status}`);
 
-    const ragIndexed = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/indexed-documents`);
+    const ragIndexed = await authJson(adminToken, `/api/knowledge/knowledge-bases/${ragKbId}/indexed-documents`);
     if (ragIndexed.status !== 200 || !Array.isArray(ragIndexed.body.items)) {
       fail('rag_indexed_documents', JSON.stringify(ragIndexed.body));
     } else {
       pass('rag_indexed_documents', `total=${ragIndexed.body.total}`);
     }
 
-    const ragItems = await authJson(adminToken, `/api/knowledge-bases/${ragKbId}/items`);
+    const ragItems = await authJson(adminToken, `/api/knowledge/knowledge-bases/${ragKbId}/items`);
     if (ragItems.status === 400) pass('rag_items_rejected', '400 as expected');
     else fail('rag_items_rejected', `expected 400, got ${ragItems.status}`);
   }
 
-  const createFaq = await authJson(adminToken, '/api/knowledge-bases', {
+  const createFaq = await authJson(adminToken, '/api/knowledge/knowledge-bases', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -211,7 +211,7 @@ async function main() {
   }
 
   if (faqKbId) {
-    const createManualFaq = await authJson(adminToken, `/api/knowledge-bases/${faqKbId}/faqs`, {
+    const createManualFaq = await authJson(adminToken, `/api/knowledge/knowledge-bases/${faqKbId}/faqs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -225,14 +225,14 @@ async function main() {
       pass('create_manual_faq', createManualFaq.body.id as string);
     }
 
-    const listFaqs = await authJson(adminToken, `/api/knowledge-bases/${faqKbId}/faqs`);
+    const listFaqs = await authJson(adminToken, `/api/knowledge/knowledge-bases/${faqKbId}/faqs`);
     if (listFaqs.status !== 200 || !Array.isArray(listFaqs.body.items)) {
       fail('list_faqs', JSON.stringify(listFaqs.body));
     } else {
       pass('list_faqs', `total=${listFaqs.body.total}`);
       const faqId = (listFaqs.body.items as Array<{ id: string }>)?.[0]?.id;
       if (faqId) {
-        const publish = await authJson(adminToken, `/api/knowledge-bases/${faqKbId}/faqs/batch-publish`, {
+        const publish = await authJson(adminToken, `/api/knowledge/knowledge-bases/${faqKbId}/faqs/batch-publish`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ faq_ids: [faqId] }),
@@ -240,7 +240,7 @@ async function main() {
         if (publish.status !== 200) fail('batch_publish_faq', JSON.stringify(publish.body));
         else pass('batch_publish_faq');
 
-        const indexNoEmbed = await authJson(adminToken, `/api/knowledge-bases/${faqKbId}/index-faqs`, {
+        const indexNoEmbed = await authJson(adminToken, `/api/knowledge/knowledge-bases/${faqKbId}/index-faqs`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ faq_ids: [faqId] }),
@@ -251,18 +251,18 @@ async function main() {
     }
   }
 
-  const getKb = await authJson(adminToken, `/api/knowledge-bases/${pageIndexKbId}`);
+  const getKb = await authJson(adminToken, `/api/knowledge/knowledge-bases/${pageIndexKbId}`);
   if (getKb.status !== 200) fail('get_knowledge_base', JSON.stringify(getKb.body));
   else pass('get_knowledge_base');
 
-  const items = await authJson(adminToken, `/api/knowledge-bases/${pageIndexKbId}/items`);
+  const items = await authJson(adminToken, `/api/knowledge/knowledge-bases/${pageIndexKbId}/items`);
   if (items.status !== 200 || !Array.isArray(items.body.items)) {
     fail('list_kb_items', JSON.stringify(items.body));
   } else {
     pass('list_kb_items', `total=${items.body.total}`);
   }
 
-  const emptyImport = await authJson(adminToken, `/api/knowledge-bases/${pageIndexKbId}/import`, {
+  const emptyImport = await authJson(adminToken, `/api/knowledge/knowledge-bases/${pageIndexKbId}/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ channel_ids: [], document_ids: [] }),
@@ -276,7 +276,7 @@ async function main() {
     const channelWithDoc = channels.find((ch) => (docsByChannel[ch.id]?.length ?? 0) > 0);
     const docId = channelWithDoc ? docsByChannel[channelWithDoc.id][0]?.id : undefined;
     if (docId) {
-      const startImport = await authJson(adminToken, `/api/knowledge-bases/${pageIndexKbId}/import`, {
+      const startImport = await authJson(adminToken, `/api/knowledge/knowledge-bases/${pageIndexKbId}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ document_ids: [docId] }),
@@ -293,11 +293,11 @@ async function main() {
             await new Promise((r) => setTimeout(r, 2000));
             const polled = await authJson(
               adminToken,
-              `/api/knowledge-bases/${pageIndexKbId}/import-jobs/${job.id}`,
+              `/api/knowledge/knowledge-bases/${pageIndexKbId}/import-jobs/${job.id}`,
             );
             if (polled.status === 200 && (polled.body.status === 'completed' || polled.body.status === 'failed')) {
               pass('import_job_finished', String(polled.body.status));
-              const afterItems = await authJson(adminToken, `/api/knowledge-bases/${pageIndexKbId}/items`);
+              const afterItems = await authJson(adminToken, `/api/knowledge/knowledge-bases/${pageIndexKbId}/items`);
               const kbItems = (afterItems.body.items as Array<{ import_status: string }>) ?? [];
               if (kbItems.some((it) => it.import_status === 'completed')) {
                 pass('kb_item_imported', 'at least one completed');

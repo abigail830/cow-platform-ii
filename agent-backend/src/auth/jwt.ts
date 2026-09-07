@@ -1,6 +1,7 @@
 import type { Context, Next } from 'hono';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { isApiKeyToken } from './api-key.ts';
+import { getOrCreateRequestCache } from './resource-access-request-cache.ts';
 
 export type UserRole = 'user' | 'operator' | 'admin';
 
@@ -46,6 +47,7 @@ export async function requireAuth(c: Context, next: Next) {
     if (!user) return c.json({ error: 'Unauthorized' }, 401);
     c.set('user', user);
     c.set('authMethod', 'api-key');
+    getOrCreateRequestCache(c);
     await next();
     return;
   }
@@ -54,6 +56,7 @@ export async function requireAuth(c: Context, next: Next) {
     const user = verifyToken(token);
     c.set('user', user);
     c.set('authMethod', 'jwt');
+    getOrCreateRequestCache(c);
     await next();
   } catch {
     return c.json({ error: 'Unauthorized' }, 401);
@@ -68,6 +71,7 @@ export async function requireSessionAuth(c: Context, next: Next) {
     const user = verifyToken(token);
     c.set('user', user);
     c.set('authMethod', 'jwt');
+    getOrCreateRequestCache(c);
     await next();
   } catch {
     return c.json({ error: 'Unauthorized' }, 401);

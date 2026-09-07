@@ -4,7 +4,7 @@ import {
   appSyncAgentMessages,
   appSyncAgentRuns,
   db,
-} from '../db/index.ts';
+} from '../infrastructure/db/index.ts';
 
 export type BuiltinAgentUsageStats = {
   total_runs: number;

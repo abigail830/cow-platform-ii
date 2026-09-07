@@ -1,0 +1,429 @@
+import { desc, eq, inArray } from 'drizzle-orm';
+import {
+  appDocumentCaptureSegments,
+  appDocuments,
+  appPipelineJobs,
+  db,
+  type PipelineJobStage,
+  type PipelineProvider,
+} from '../../infrastructure/db/index.ts';
+import { getChannelById } from '../../document/application/documents.ts';
+import { getS3Config } from '../../infrastructure/oss/s3-config.ts';
+
+/** Document Channel parse pipelines (async cloud submit → poll → finalize). */
+export const ASYNC_PIPELINE_NAMES = new Set([
+  'baidu-doc-parse',
+  'aliyun-docmind-parse',
+  'paddleocr-doc-parse',
+]);
+
+export function isDocumentAsyncPipelineName(pipelineName: string): boolean {
+  return ASYNC_PIPELINE_NAMES.has(pipelineName);
+}
+
+export function pipelineProviderForName(pipelineName: string): PipelineProvider | null {
+  if (pipelineName === 'baidu-doc-parse') return 'baidu';
+  if (pipelineName === 'paddleocr-doc-parse') return 'paddle';
+  if (pipelineName === 'aliyun-docmind-parse') return 'aliyun';
+  return null;
+}
+
+const ACTIVE_PIPELINE_JOB_STAGES = new Set<PipelineJobStage>([
+  'submitted',
+  'parsed',
+  'extracted_metadata',
+]);
+
+export function isActivePipelineJobStage(stage: string): boolean {
+  return ACTIVE_PIPELINE_JOB_STAGES.has(stage as PipelineJobStage);
+}
+
+function s3PrefixFromKey(s3Key: string): string {
+  const normalized = s3Key.replace(/\\/g, '/');
+  const idx = normalized.lastIndexOf('/');
+  return idx >= 0 ? normalized.slice(0, idx) : normalized;
+}
+
+/** Normalize pipeline override: blank → null (non-system pipelines may omit YAML). */
+export function snapshotConfigYaml(configYaml: string | null | undefined): string | null {
+  const raw = configYaml?.trim();
+  return raw ? raw : null;
+}
+
+export type PipelineJobContext = {
+  id: string;
+  document_id: string;
+  pipeline_name: string;
+  provider: PipelineProvider;
+  stage: PipelineJobStage;
+  external_job_id: string | null;
+  config_yaml: string | null;
+  error_message: string | null;
+  document: {
+    id: string;
+    name: string;
+    file_type: string;
+    s3_key: string;
+    file_hash: string;
+    channel_id: string;
+  };
+  input_uri: string;
+  s3_prefix: string;
+  /** Canonical document bundle prefix (doc.s3_key dir); UI reads artifacts here. */
+  document_s3_prefix: string;
+  /** When set, worker must write only to s3_prefix (eval-runs) — no document OSS/API writes. */
+  eval_run_item_id: string | null;
+  api_url: string;
+};
+
+export async function createPipelineJob(input: {
+  documentId?: string | null;
+  documentCaptureSegmentId?: string | null;
+  pipelineName: string;
+  provider: PipelineProvider;
+  configYaml?: string | null;
+  evalRunItemId?: string | null;
+}): Promise<typeof appPipelineJobs.$inferSelect> {
+  const evalRunItemId = input.evalRunItemId?.trim() || null;
+  const documentId = input.documentId?.trim() || null;
+  const documentCaptureSegmentId = input.documentCaptureSegmentId?.trim() || null;
+  if (!evalRunItemId && !documentId && !documentCaptureSegmentId) {
+    throw new Error('Pipeline job requires documentId, documentCaptureSegmentId, or evalRunItemId');
+  }
+  if (evalRunItemId && (documentId || documentCaptureSegmentId)) {
+    throw new Error('Eval pipeline jobs must not reference a library document or capture segment');
+  }
+
+  const [row] = await db
+    .insert(appPipelineJobs)
+    .values({
+      documentId,
+      documentCaptureSegmentId,
+      pipelineName: input.pipelineName,
+      provider: input.provider,
+      stage: 'submitted',
+      configYaml: snapshotConfigYaml(input.configYaml),
+      evalRunItemId,
+    })
+    .returning();
+  return row!;
+}
+
+export async function getPipelineJobById(id: string): Promise<typeof appPipelineJobs.$inferSelect | null> {
+  const [row] = await db.select().from(appPipelineJobs).where(eq(appPipelineJobs.id, id)).limit(1);
+  return row ?? null;
+}
+
+export async function getLatestPipelineJobForDocument(
+  documentId: string,
+): Promise<typeof appPipelineJobs.$inferSelect | null> {
+  const [row] = await db
+    .select()
+    .from(appPipelineJobs)
+    .where(eq(appPipelineJobs.documentId, documentId))
+    .orderBy(desc(appPipelineJobs.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function getLatestPipelineJobForSegment(
+  segmentId: string,
+): Promise<typeof appPipelineJobs.$inferSelect | null> {
+  const [row] = await db
+    .select()
+    .from(appPipelineJobs)
+    .where(eq(appPipelineJobs.documentCaptureSegmentId, segmentId))
+    .orderBy(desc(appPipelineJobs.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function getLatestPipelineJobsForSegments(
+  segmentIds: string[],
+): Promise<Map<string, typeof appPipelineJobs.$inferSelect>> {
+  if (segmentIds.length === 0) return new Map();
+
+  const rows = await db
+    .select()
+    .from(appPipelineJobs)
+    .where(inArray(appPipelineJobs.documentCaptureSegmentId, segmentIds))
+    .orderBy(desc(appPipelineJobs.createdAt));
+
+  const map = new Map<string, typeof appPipelineJobs.$inferSelect>();
+  for (const row of rows) {
+    if (!row.documentCaptureSegmentId) continue;
+    if (!map.has(row.documentCaptureSegmentId)) {
+      map.set(row.documentCaptureSegmentId, row);
+    }
+  }
+  return map;
+}
+
+function resolveArtifactDocumentIdFromSegmentMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!metadata) return null;
+  if (typeof metadata.legacy_document_id === 'string') return metadata.legacy_document_id;
+  if (typeof metadata.library_document_id === 'string') return metadata.library_document_id;
+  return null;
+}
+
+export async function getLatestPipelineJobsForDocuments(
+  documentIds: string[],
+): Promise<Map<string, typeof appPipelineJobs.$inferSelect>> {
+  if (documentIds.length === 0) return new Map();
+
+  const rows = await db
+    .select()
+    .from(appPipelineJobs)
+    .where(inArray(appPipelineJobs.documentId, documentIds))
+    .orderBy(desc(appPipelineJobs.createdAt));
+
+  const map = new Map<string, typeof appPipelineJobs.$inferSelect>();
+  for (const row of rows) {
+    if (!row.documentId) continue;
+    if (!map.has(row.documentId)) map.set(row.documentId, row);
+  }
+  return map;
+}
+
+export function pipelineJobToPublic(job: typeof appPipelineJobs.$inferSelect) {
+  return {
+    id: job.id,
+    stage: job.stage,
+    pipeline_name: job.pipelineName,
+    error_message: job.errorMessage,
+    external_job_id: job.externalJobId,
+    updated_at: job.updatedAt.toISOString(),
+  };
+}
+
+export async function updatePipelineJob(
+  id: string,
+  input: {
+    stage?: PipelineJobStage;
+    externalJobId?: string | null;
+    errorMessage?: string | null;
+  },
+): Promise<typeof appPipelineJobs.$inferSelect | null> {
+  const [row] = await db
+    .update(appPipelineJobs)
+    .set({
+      ...(input.stage !== undefined ? { stage: input.stage } : {}),
+      ...(input.externalJobId !== undefined ? { externalJobId: input.externalJobId } : {}),
+      ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(appPipelineJobs.id, id))
+    .returning();
+  return row ?? null;
+}
+
+export async function listSubmittedJobs(provider?: PipelineProvider): Promise<typeof appPipelineJobs.$inferSelect[]> {
+  return db
+    .select()
+    .from(appPipelineJobs)
+    .where(eq(appPipelineJobs.stage, 'submitted'));
+}
+
+export async function buildPipelineJobContext(jobId: string): Promise<PipelineJobContext> {
+  const job = await getPipelineJobById(jobId);
+  if (!job) throw new Error('Pipeline job not found');
+
+  const s3 = getS3Config();
+  if (!s3) throw new Error('Object storage is not configured');
+
+  const apiUrl =
+    process.env.OPENKMS_API_URL?.trim() ||
+    `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
+
+  if (job.evalRunItemId) {
+    const { buildEvalLinkedDocumentPipelineContextOverrides } = await import(
+      '../../eval/application/eval-document-bridge.ts'
+    );
+    const overrides = await buildEvalLinkedDocumentPipelineContextOverrides(job.evalRunItemId);
+    if (!overrides) throw new Error('Eval run item not found');
+
+    return {
+      id: job.id,
+      document_id: job.evalRunItemId,
+      pipeline_name: job.pipelineName,
+      provider: job.provider as PipelineProvider,
+      stage: job.stage as PipelineJobStage,
+      external_job_id: job.externalJobId,
+      config_yaml: job.configYaml ?? null,
+      error_message: job.errorMessage,
+      document: {
+        id: job.evalRunItemId,
+        name: overrides.dataset_item_name,
+        file_type: overrides.file_type,
+        s3_key: overrides.s3_key,
+        file_hash: overrides.file_hash,
+        channel_id: '',
+      },
+      input_uri: overrides.input_uri,
+      s3_prefix: overrides.s3_prefix,
+      document_s3_prefix: overrides.s3_prefix,
+      eval_run_item_id: job.evalRunItemId,
+      api_url: apiUrl,
+    };
+  }
+
+  if (job.documentCaptureSegmentId) {
+    const [segment] = await db
+      .select()
+      .from(appDocumentCaptureSegments)
+      .where(eq(appDocumentCaptureSegments.id, job.documentCaptureSegmentId))
+      .limit(1);
+    if (!segment) throw new Error('Document capture segment not found');
+
+    const artifactDocumentId =
+      job.documentId?.trim() ||
+      resolveArtifactDocumentIdFromSegmentMetadata(segment.metadata as Record<string, unknown> | null);
+
+    let doc: typeof appDocuments.$inferSelect | null = null;
+    if (artifactDocumentId) {
+      const [artifactDoc] = await db
+        .select()
+        .from(appDocuments)
+        .where(eq(appDocuments.id, artifactDocumentId))
+        .limit(1);
+      doc = artifactDoc ?? null;
+    }
+
+    const channel = await getChannelById(segment.channelId);
+    if (!channel) throw new Error('Channel not found');
+
+    const inputUri = `s3://${s3.bucket}/${segment.s3Key}`;
+    const s3Prefix = s3PrefixFromKey(segment.s3Key);
+    const documentIdForWorker = doc?.id ?? segment.id;
+
+    return {
+      id: job.id,
+      document_id: documentIdForWorker,
+      pipeline_name: job.pipelineName,
+      provider: job.provider as PipelineProvider,
+      stage: job.stage as PipelineJobStage,
+      external_job_id: job.externalJobId,
+      config_yaml: job.configYaml ?? null,
+      error_message: job.errorMessage,
+      document: {
+        id: documentIdForWorker,
+        name: segment.name,
+        file_type: segment.fileType,
+        s3_key: segment.s3Key,
+        file_hash: segment.fileHash,
+        channel_id: segment.channelId,
+      },
+      input_uri: inputUri,
+      s3_prefix: s3Prefix,
+      document_s3_prefix: s3Prefix,
+      eval_run_item_id: null,
+      api_url: apiUrl,
+    };
+  }
+
+  if (!job.documentId) throw new Error('Pipeline job has no document or capture segment');
+
+  const [doc] = await db.select().from(appDocuments).where(eq(appDocuments.id, job.documentId)).limit(1);
+  if (!doc) throw new Error('Document not found');
+
+  const channel = await getChannelById(doc.channelId);
+  if (!channel) throw new Error('Channel not found');
+
+  const inputUri = `s3://${s3.bucket}/${doc.s3Key}`;
+  const s3Prefix = s3PrefixFromKey(doc.s3Key);
+
+  return {
+    id: job.id,
+    document_id: doc.id,
+    pipeline_name: job.pipelineName,
+    provider: job.provider as PipelineProvider,
+    stage: job.stage as PipelineJobStage,
+    external_job_id: job.externalJobId,
+    config_yaml: job.configYaml ?? null,
+    error_message: job.errorMessage,
+    document: {
+      id: doc.id,
+      name: doc.name,
+      file_type: doc.fileType,
+      s3_key: doc.s3Key,
+      file_hash: doc.fileHash,
+      channel_id: doc.channelId,
+    },
+    input_uri: inputUri,
+    s3_prefix: s3Prefix,
+    document_s3_prefix: s3Prefix,
+    eval_run_item_id: null,
+    api_url: apiUrl,
+  };
+}
+
+export async function applyPipelineJobStageSideEffects(
+  job: typeof appPipelineJobs.$inferSelect,
+  stage: PipelineJobStage,
+): Promise<void> {
+  if (job.evalRunItemId) {
+    const { syncEvalRunItemFromDocumentPipelineJob } = await import('../../eval/application/eval-document-bridge.ts');
+    await syncEvalRunItemFromDocumentPipelineJob(job.id);
+    return;
+  }
+
+  if (job.documentCaptureSegmentId) {
+    const { syncDocumentCaptureSegmentFromDocumentPipeline } = await import(
+      '../../document/application/document-capture-segment-pipeline.ts'
+    );
+    await syncDocumentCaptureSegmentFromDocumentPipeline(job.documentCaptureSegmentId, stage);
+    if (job.documentId) {
+      await markDocumentForJobStage(job.documentId, stage, { syncCapture: false });
+    }
+    return;
+  }
+
+  if (job.documentId) {
+    await markDocumentForJobStage(job.documentId, stage);
+  }
+}
+
+export async function markDocumentForJobStage(
+  documentId: string,
+  stage: PipelineJobStage,
+  options?: { syncCapture?: boolean },
+): Promise<void> {
+  const syncCapture = options?.syncCapture ?? true;
+
+  if (stage === 'done') {
+    await db
+      .update(appDocuments)
+      .set({ status: 'completed', updatedAt: new Date() })
+      .where(eq(appDocuments.id, documentId));
+  } else if (stage === 'failed') {
+    await db
+      .update(appDocuments)
+      .set({ status: 'failed', updatedAt: new Date() })
+      .where(eq(appDocuments.id, documentId));
+  } else {
+    await db
+      .update(appDocuments)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(appDocuments.id, documentId));
+  }
+
+  if (!syncCapture) return;
+
+  const [doc] = await db
+    .select({ metadata: appDocuments.metadata })
+    .from(appDocuments)
+    .where(eq(appDocuments.id, documentId))
+    .limit(1);
+
+  const meta = (doc?.metadata as Record<string, unknown> | null) ?? null;
+  const segmentId =
+    typeof meta?.knowledge_capture_segment_id === 'string' ? meta.knowledge_capture_segment_id : null;
+  if (segmentId) {
+    const { syncDocumentCaptureSegmentFromDocumentPipeline } = await import(
+      '../../document/application/document-capture-segment-pipeline.ts'
+    );
+    await syncDocumentCaptureSegmentFromDocumentPipeline(segmentId, stage);
+  }
+}

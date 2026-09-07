@@ -1,4 +1,9 @@
+import type { UserRole } from './jwt.ts';
 import { eq, inArray } from 'drizzle-orm';
+import {
+  loadUserAccessProfileCached,
+  type ResourceAccessRequestCache,
+} from './resource-access-request-cache.ts';
 import {
   appPermissions,
   appRolePermissions,
@@ -7,7 +12,7 @@ import {
   appUsers,
   db,
   type AccessLevel,
-} from '../db/index.ts';
+} from '../infrastructure/db/index.ts';
 import {
   accessFromPermissionKey,
   ADMIN_RESOURCES,
@@ -83,10 +88,16 @@ export async function userHasResourcePermission(
   category: string,
   resource: string,
   required: AccessLevel,
+  options?: { profile?: UserAccessProfile; cache?: ResourceAccessRequestCache; jwtRole?: UserRole },
 ): Promise<boolean> {
-  const profile = await loadUserAccessProfile(userId);
+  const profile =
+    options?.profile ?? (await loadUserAccessProfileCached(userId, options?.cache));
   if (profile.permissionKeys.size > 0) {
     return hasResourcePermission(profile.permissionKeys, category, resource, required);
+  }
+
+  if (options?.jwtRole === 'admin' || options?.jwtRole === 'operator') {
+    return true;
   }
 
   const [user] = await db.select({ role: appUsers.role }).from(appUsers).where(eq(appUsers.id, userId)).limit(1);
@@ -100,18 +111,27 @@ export async function userHasPermission(
   userId: string,
   permissionKey: string,
   required: AccessLevel,
+  options?: { profile?: UserAccessProfile; cache?: ResourceAccessRequestCache; jwtRole?: UserRole },
 ): Promise<boolean> {
-  const profile = await loadUserAccessProfile(userId);
+  const profile =
+    options?.profile ?? (await loadUserAccessProfileCached(userId, options?.cache));
   if (profile.permissionKeys.size > 0) {
     return hasPermissionKey(profile.permissionKeys, permissionKey, required);
+  }
+
+  if (options?.jwtRole === 'admin' || options?.jwtRole === 'operator') {
+    return true;
   }
 
   const [user] = await db.select({ role: appUsers.role }).from(appUsers).where(eq(appUsers.id, userId)).limit(1);
   return user?.role === 'admin' || user?.role === 'operator';
 }
 
-export async function userCanSeeAdmin(userId: string): Promise<boolean> {
-  const profile = await loadUserAccessProfile(userId);
+export async function userCanSeeAdmin(
+  userId: string,
+  cache?: ResourceAccessRequestCache,
+): Promise<boolean> {
+  const profile = await loadUserAccessProfileCached(userId, cache);
   if (profile.permissionKeys.size > 0) {
     return canSeeAdminNav(profile.permissionKeys);
   }

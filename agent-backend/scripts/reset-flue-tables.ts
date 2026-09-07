@@ -1,5 +1,5 @@
 import './load-env.ts';
-import { getPool, closePool } from '../src/db/pool.ts';
+import { getPool, closePool } from '../src/infrastructure/db/pool.ts';
 
 /**
  * Drop legacy Flue 0.11 persistence tables so Flue 1.0 beta can recreate schema v4.

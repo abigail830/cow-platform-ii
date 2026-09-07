@@ -116,12 +116,12 @@ async function authFetch(path: string, init?: RequestInit) {
 }
 
 export async function listHybridSearchKnowledgeBases(): Promise<SearchableKnowledgeBase[]> {
-  const data = await authFetch('/api/hybrid-search/knowledge-bases');
+  const data = await authFetch('/api/knowledge/hybrid-search/knowledge-bases');
   return (data.items as SearchableKnowledgeBase[]) ?? [];
 }
 
 export async function runHybridSearch(body: HybridSearchRequest): Promise<HybridSearchResponse> {
-  return (await authFetch('/api/hybrid-search', {
+  return (await authFetch('/api/knowledge/hybrid-search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -129,14 +129,14 @@ export async function runHybridSearch(body: HybridSearchRequest): Promise<Hybrid
 }
 
 export async function getHybridSearchPreferences(): Promise<HybridSearchPreferences> {
-  const data = await authFetch('/api/hybrid-search/preferences');
+  const data = await authFetch('/api/knowledge/hybrid-search/preferences');
   return data.preferences as HybridSearchPreferences;
 }
 
 export async function patchHybridSearchPreferences(
   patch: Partial<HybridSearchPreferences>,
 ): Promise<HybridSearchPreferences> {
-  const data = await authFetch('/api/hybrid-search/preferences', {
+  const data = await authFetch('/api/knowledge/hybrid-search/preferences', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),

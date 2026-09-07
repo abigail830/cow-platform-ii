@@ -1,6 +1,6 @@
 import './load-env.ts';
-import { getPool, closePool } from '../src/db/pool.ts';
-import { isStorageEnabled } from '../src/storage/s3-config.ts';
+import { getPool, closePool } from '../src/infrastructure/db/pool.ts';
+import { isStorageEnabled } from '../src/infrastructure/oss/s3-config.ts';
 
 const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:8787';
 const ADMIN_EMAIL = process.env.SMOKE_ADMIN_EMAIL ?? 'admin@example.com';
@@ -74,14 +74,14 @@ async function main() {
 
   try {
     const userToken = await login(USER_EMAIL, USER_PASSWORD);
-    const forbidden = await authJson(userToken, '/api/document-channels');
+    const forbidden = await authJson(userToken, '/api/knowledge/document-channels');
     if (forbidden.status === 403) pass('user_forbidden_channels', '403 as expected');
     else fail('user_forbidden_channels', `expected 403, got ${forbidden.status}`);
   } catch (error) {
     fail('user_forbidden_channels', error instanceof Error ? error.message : String(error));
   }
 
-  const createRoot = await authJson(adminToken, '/api/document-channels', {
+  const createRoot = await authJson(adminToken, '/api/knowledge/document-channels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: `Verify Root ${Date.now()}`, description: 'integration test' }),
@@ -93,7 +93,7 @@ async function main() {
   rootChannelId = createRoot.body.id as string;
   pass('create_root_channel', rootChannelId);
 
-  const createChild = await authJson(adminToken, '/api/document-channels', {
+  const createChild = await authJson(adminToken, '/api/knowledge/document-channels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: 'Verify Child', parent_id: rootChannelId }),
@@ -105,7 +105,7 @@ async function main() {
   childChannelId = createChild.body.id as string;
   pass('create_child_channel', childChannelId);
 
-  const tree = await authJson(adminToken, '/api/document-channels');
+  const tree = await authJson(adminToken, '/api/knowledge/document-channels');
   if (tree.status !== 200 || !Array.isArray(tree.body.channels)) {
     fail('list_channel_tree', JSON.stringify(tree.body));
   } else {
@@ -117,7 +117,7 @@ async function main() {
     }
   }
 
-  const rename = await authJson(adminToken, `/api/document-channels/${childChannelId}`, {
+  const rename = await authJson(adminToken, `/api/knowledge/document-channels/${childChannelId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: 'Verify Child Renamed' }),
@@ -125,11 +125,11 @@ async function main() {
   if (rename.status !== 200) fail('rename_channel', JSON.stringify(rename.body));
   else pass('rename_channel');
 
-  const stats = await authJson(adminToken, '/api/documents/stats');
+  const stats = await authJson(adminToken, '/api/knowledge/documents/stats');
   if (stats.status !== 200) fail('document_stats', JSON.stringify(stats.body));
   else pass('document_stats', JSON.stringify(stats.body));
 
-  const emptyList = await authJson(adminToken, `/api/documents?channel_id=${encodeURIComponent(rootChannelId)}`);
+  const emptyList = await authJson(adminToken, `/api/knowledge/documents?channel_id=${encodeURIComponent(rootChannelId)}`);
   if (emptyList.status !== 200 || !Array.isArray(emptyList.body.items)) {
     fail('list_documents_empty', JSON.stringify(emptyList.body));
   } else {
@@ -144,7 +144,7 @@ async function main() {
     chunkA.append('total_chunks', '2');
     chunkA.append('file_chunk', new Blob(['chunk-a-'], { type: 'application/pdf' }), 'chunked.pdf');
 
-    const chunkARes = await fetch(`${BASE}/api/documents/upload-chunk`, {
+    const chunkARes = await fetch(`${BASE}/api/knowledge/documents/upload-chunk`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}` },
       body: chunkA,
@@ -161,7 +161,7 @@ async function main() {
       chunkB.append('upload_id', chunkABody.upload_id as string);
       chunkB.append('file_chunk', new Blob(['chunk-b'], { type: 'application/pdf' }), 'chunked.pdf');
 
-      const chunkBRes = await fetch(`${BASE}/api/documents/upload-chunk`, {
+      const chunkBRes = await fetch(`${BASE}/api/knowledge/documents/upload-chunk`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${adminToken}` },
         body: chunkB,
@@ -172,7 +172,7 @@ async function main() {
       } else {
         const chunkedDocumentId = chunkBBody.id as string;
         pass('upload_document_chunked', chunkedDocumentId);
-        const deletedChunked = await authJson(adminToken, `/api/documents/${chunkedDocumentId}`, {
+        const deletedChunked = await authJson(adminToken, `/api/knowledge/documents/${chunkedDocumentId}`, {
           method: 'DELETE',
         });
         if (deletedChunked.status === 200) pass('delete_document_chunked');
@@ -184,7 +184,7 @@ async function main() {
     form.append('channel_id', rootChannelId);
     form.append('file', new Blob(['verify-document-content'], { type: 'application/pdf' }), 'verify.pdf');
 
-    const uploadRes = await fetch(`${BASE}/api/documents/upload`, {
+    const uploadRes = await fetch(`${BASE}/api/knowledge/documents/upload`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}` },
       body: form,
@@ -200,7 +200,7 @@ async function main() {
     if (documentId) {
       const listed = await authJson(
         adminToken,
-        `/api/documents?channel_id=${encodeURIComponent(rootChannelId)}`,
+        `/api/knowledge/documents?channel_id=${encodeURIComponent(rootChannelId)}`,
       );
       const items = listed.body.items as Array<{ id: string }>;
       if (listed.status === 200 && items.some((item) => item.id === documentId)) {
@@ -209,14 +209,14 @@ async function main() {
         fail('list_documents_after_upload', JSON.stringify(listed.body));
       }
 
-      const download = await authJson(adminToken, `/api/documents/${documentId}/download`);
+      const download = await authJson(adminToken, `/api/knowledge/documents/${documentId}/download`);
       if (download.status === 200 && typeof download.body.url === 'string') {
         pass('download_document', download.body.filename as string);
       } else {
         fail('download_document', JSON.stringify(download.body));
       }
 
-      const moved = await authJson(adminToken, `/api/documents/${documentId}`, {
+      const moved = await authJson(adminToken, `/api/knowledge/documents/${documentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel_id: childChannelId }),
@@ -227,7 +227,7 @@ async function main() {
         fail('move_document', JSON.stringify(moved.body));
       }
 
-      const movedBack = await authJson(adminToken, `/api/documents/${documentId}`, {
+      const movedBack = await authJson(adminToken, `/api/knowledge/documents/${documentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel_id: rootChannelId }),
@@ -238,7 +238,7 @@ async function main() {
         fail('move_document_back', JSON.stringify(movedBack.body));
       }
 
-      const deleted = await authJson(adminToken, `/api/documents/${documentId}`, { method: 'DELETE' });
+      const deleted = await authJson(adminToken, `/api/knowledge/documents/${documentId}`, { method: 'DELETE' });
       if (deleted.status === 200) pass('delete_document');
       else fail('delete_document', JSON.stringify(deleted.body));
       documentId = '';
@@ -247,13 +247,13 @@ async function main() {
     pass('upload_document_skipped', 'storage not configured');
   }
 
-  const deleteChild = await authJson(adminToken, `/api/document-channels/${childChannelId}`, {
+  const deleteChild = await authJson(adminToken, `/api/knowledge/document-channels/${childChannelId}`, {
     method: 'DELETE',
   });
   if (deleteChild.status !== 200) fail('delete_child_channel', JSON.stringify(deleteChild.body));
   else pass('delete_child_channel');
 
-  const deleteRoot = await authJson(adminToken, `/api/document-channels/${rootChannelId}`, {
+  const deleteRoot = await authJson(adminToken, `/api/knowledge/document-channels/${rootChannelId}`, {
     method: 'DELETE',
   });
   if (deleteRoot.status !== 200) fail('delete_root_channel', JSON.stringify(deleteRoot.body));
