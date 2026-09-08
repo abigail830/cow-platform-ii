@@ -36,14 +36,7 @@
   "engines": {
     "node": "22.x"
   },
-  "overrides": {
-    "tsx": {
-      "esbuild": "0.28.2"
-    },
-    "wrangler": {
-      "esbuild": "0.28.2"
-    }
-  },
+  "packageManager": "npm@10.9.2",
   "dependencies": {
     "@a2a-js/sdk": "^1.0.1",
     "@aws-sdk/client-s3": "^3.1096.0",
