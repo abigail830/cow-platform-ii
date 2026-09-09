@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Settings, User } from 'lucide-react';
 import type { AuthUser } from '../api/auth.ts';
-import {
-  AGENTS_CATEGORY,
-  KNOWLEDGE_MANAGEMENT_CATEGORY,
-  KNOWLEDGE_MANAGEMENT_PAGES,
-  type NavPage,
-} from '../shared/admin-nav.ts';
+import { KNOWLEDGE_MANAGEMENT_PAGES, type NavPage } from '../shared/admin-nav.ts';
 import {
   isAdminSectionPath,
   isAgentsSectionPath,
@@ -17,7 +12,6 @@ import { HOME_PATH, visibleAgentPages } from '../shared/agent-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { NavPageIcon } from './icons/NavIcons.tsx';
 import { iconProps } from './icons/icon-props.ts';
-import { User } from 'lucide-react';
 
 type AppTopBarProps = {
   user: AuthUser;
@@ -137,34 +131,36 @@ export function AppTopBar({ user, userLabel, activePath, onNavigate, onLogout }:
       </div>
 
       <nav className="topbar-nav" aria-label="Main">
-        <div className="topbar-nav-pill">
+        <div className="topbar-nav-links">
           <TopNavDropdown
-            label={AGENTS_CATEGORY}
+            label="Agents"
             items={agentItems}
             activePath={activePath}
             isSectionActive={isAgentsSectionPath(activePath)}
             onNavigate={onNavigate}
           />
           <TopNavDropdown
-            label={KNOWLEDGE_MANAGEMENT_CATEGORY}
+            label="Knowledge"
             items={knowledgeItems}
             activePath={activePath}
             isSectionActive={isKnowledgeSectionPath(activePath)}
             onNavigate={onNavigate}
           />
-          {showAdmin && (
-            <button
-              type="button"
-              className={`topbar-nav-item${isAdminSectionPath(activePath) ? ' active' : ''}`}
-              onClick={handleAdminClick}
-            >
-              Admin
-            </button>
-          )}
         </div>
       </nav>
 
       <div className="topbar-right">
+        {showAdmin && (
+          <button
+            type="button"
+            className={`topbar-admin-entry${isAdminSectionPath(activePath) ? ' active' : ''}`}
+            onClick={handleAdminClick}
+            title="Administration"
+            aria-label="Administration"
+          >
+            <Settings {...iconProps()} aria-hidden />
+          </button>
+        )}
         <div className="topbar-user-wrap" ref={userMenuRef}>
           <button
             type="button"
