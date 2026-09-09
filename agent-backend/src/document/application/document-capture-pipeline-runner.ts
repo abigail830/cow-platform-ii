@@ -15,7 +15,9 @@ import { resolvePipelineWorkerMode } from '../../pipeline/application/pipeline-w
 import { getChannelById } from './documents.ts';
 import {
   createDocumentCapturePipelineJob,
+  getLatestDocumentCapturePipelineJob,
 } from './document-capture-pipeline-jobs.ts';
+import { retryFailedJob } from '../../pipeline/application/async-job-retry.ts';
 import { isCapturePostProcessPipelineName } from '../domain/capture/capture-post-process-pipeline-names.ts';
 import {
   DEFAULT_CAPTURE_POST_PROCESS_WORKFLOW_FILE,
@@ -193,6 +195,18 @@ export async function startDocumentCapturePostProcess(
 
   if (capture.status === 'post_processing') {
     throw new Error('Post-process pipeline is already running for this capture');
+  }
+
+  const latestJob = await getLatestDocumentCapturePipelineJob(captureId);
+  if (latestJob?.stage === 'failed') {
+    const retry = await retryFailedJob('capture_pipeline', latestJob.id);
+    if (retry.retried) {
+      await db
+        .update(appDocumentCaptures)
+        .set({ status: 'post_processing', updatedAt: new Date() })
+        .where(eq(appDocumentCaptures.id, captureId));
+      return { status: 'post_processing', job_id: latestJob.id };
+    }
   }
 
   const { assessDocumentCaptureReadiness } = await import('./document-capture-readiness.ts');

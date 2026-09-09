@@ -1,5 +1,7 @@
 from openkms_cli.pipeline.capture_merge import merge_segment_turns, parse_transcript_markdown
 from openkms_cli.pipeline.capture_structure import build_topics, classify_capture
+from openkms_cli.pipeline.capture_materialize import build_combined_markdown, resolve_index_content
+from openkms_cli.pipeline.capture_post_process import PROGRESS_STAGES, _progress_index, _should_skip_step
 
 
 SAMPLE_MD = """# meeting.m4a
@@ -69,3 +71,39 @@ def test_classify_capture_uses_hint_and_facets():
     assert result["recording_mode"] == "structured_interview"
     assert result["needs_review"] is False
     assert result["content_facets_by_topic"]
+
+
+def test_progress_index_and_skip_step():
+    assert _progress_index("submitted") == 0
+    assert _progress_index("extracting") == PROGRESS_STAGES.index("extracting")
+    assert _should_skip_step("structuring", "extracting", "captures/x/structured.json", object(), "bucket") is False
+
+    class FakeClient:
+        def head_object(self, **kwargs):
+            return {"ok": True}
+
+    assert _should_skip_step(
+        "structuring",
+        "extracting",
+        "captures/x/structured.json",
+        FakeClient(),
+        "bucket",
+    )
+
+
+def test_build_combined_markdown_includes_summary_and_extraction():
+    md = build_combined_markdown(
+        capture={"title": "Weekly sync", "brief": "Team update"},
+        summary_md="## Highlights\nDone.",
+        extraction={"knowledge_points": [{"text": "Ship API v2"}]},
+        structured={"topics": [{"label": "API", "preview": "Contract review"}]},
+    )
+    assert "# Weekly sync" in md
+    assert "## Summary" in md
+    assert "Ship API v2" in md
+    assert "### API" in md
+
+
+def test_resolve_index_content_defaults_to_combined():
+    assert resolve_index_content({}) == {"audio": "combined"}
+    assert resolve_index_content({"index_content": {"audio": "summary"}})["audio"] == "summary"

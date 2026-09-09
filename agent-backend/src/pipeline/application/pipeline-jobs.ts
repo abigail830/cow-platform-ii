@@ -4,6 +4,7 @@ import {
   appDocuments,
   appPipelineJobs,
   db,
+  type AsyncJobMetrics,
   type PipelineJobStage,
   type PipelineProvider,
 } from '../../infrastructure/db/index.ts';
@@ -204,6 +205,7 @@ export async function updatePipelineJob(
     stage?: PipelineJobStage;
     externalJobId?: string | null;
     errorMessage?: string | null;
+    metrics?: AsyncJobMetrics | null;
   },
 ): Promise<typeof appPipelineJobs.$inferSelect | null> {
   const [row] = await db
@@ -212,6 +214,7 @@ export async function updatePipelineJob(
       ...(input.stage !== undefined ? { stage: input.stage } : {}),
       ...(input.externalJobId !== undefined ? { externalJobId: input.externalJobId } : {}),
       ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
+      ...(input.metrics !== undefined ? { metrics: input.metrics } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appPipelineJobs.id, id))

@@ -43,15 +43,25 @@ def _seed_audio_duration_metrics(ctx: dict[str, Any], metrics: dict[str, Any]) -
         metrics.setdefault("audio_duration_source", "dataset")
 
 
-def fail_audio_job(api_url: str, job_id: str, message: str, *, metrics: dict[str, Any] | None = None) -> None:
+def fail_audio_job(
+    api_url: str,
+    job_id: str,
+    message: str,
+    *,
+    metrics: dict[str, Any] | None = None,
+    failed_from_stage: str | None = None,
+) -> None:
     console.print(f"[red]{message}[/red]")
+    payload = dict(metrics or {})
+    if failed_from_stage:
+        payload["failed_from_stage"] = failed_from_stage
     try:
         patch_audio_job(
             api_url,
             job_id,
             stage="failed",
             error_message=message[:2000],
-            metrics=metrics,
+            metrics=payload or None,
         )
     except AudioPipelineJobApiError as e:
         console.print(f"[yellow]Could not mark audio job failed: {e}[/yellow]")
@@ -167,6 +177,16 @@ def _submit_aliyun(ctx: dict[str, Any], api_url: str, job_id: str) -> None:
     patch_audio_job(api_url, job_id, stage="transcribing", external_job_id=task_id)
 
 
+def _transcript_artifacts_exist(s3_client, bucket: str, s3_prefix: str) -> bool:
+    prefix = s3_prefix if s3_prefix.endswith("/") else f"{s3_prefix}/"
+    key = f"{prefix}transcript.md"
+    try:
+        s3_client.head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:
+        return False
+
+
 def poll_audio_job(job_id: str, api_url: str | None = None, *, metrics: dict[str, Any] | None = None) -> None:
     cfg = get_cli_settings()
     api = (api_url or cfg.openkms_api_url).rstrip("/")
@@ -179,6 +199,20 @@ def poll_audio_job(job_id: str, api_url: str | None = None, *, metrics: dict[str
     stage = str(ctx.get("stage") or "")
     if stage in {"done", "failed"}:
         console.print(f"[dim]Audio job {job_id} stage={stage}; skip poll[/dim]")
+        return
+
+    bucket, _ = parse_s3_uri(ctx["input_uri"])
+    s3_prefix = str(ctx.get("s3_prefix") or "")
+    client = get_s3_client(
+        cfg.aws_endpoint_url or None,
+        cfg.aws_access_key_id,
+        cfg.aws_secret_access_key,
+        cfg.aws_region,
+    )
+    if stage == "transcribing" and _transcript_artifacts_exist(client, bucket, s3_prefix):
+        console.print(f"[dim]Audio job {job_id} transcript exists — skip ASR poll[/dim]")
+        patch_audio_job(api, job_id, stage="done", metrics=metrics)
+        console.print(f"[green]Audio job {job_id} done — transcript already present[/green]")
         return
 
     external_id = (ctx.get("external_job_id") or "").strip()
@@ -201,7 +235,7 @@ def poll_audio_job(job_id: str, api_url: str | None = None, *, metrics: dict[str
             max_wait_seconds=max(cfg.async_max_wait_seconds, 7200),
         )
     except AliyunAsrError as e:
-        fail_audio_job(api, job_id, str(e), metrics=metrics)
+        fail_audio_job(api, job_id, str(e), metrics=metrics, failed_from_stage=stage)
         raise SystemExit(1) from e
 
     finalize_audio_job(job_id, api, ctx, data, metrics=metrics)
@@ -284,8 +318,12 @@ def run_async_audio_job(job_id: str, api_url: str | None = None) -> None:
         console.print(f"[dim]Audio job {job_id} already done[/dim]")
         return
     if stage == "failed":
-        console.print(f"[red]Audio job {job_id} is failed[/red]")
+        console.print(
+            f"[red]Audio job {job_id} is failed — run retry from the API before re-dispatching[/red]"
+        )
         raise SystemExit(1)
+
+    current_stage = stage or "submitted"
 
     if stage == "submitted" and not (ctx.get("external_job_id") or "").strip():
         submit_started = time.monotonic()
@@ -293,6 +331,7 @@ def run_async_audio_job(job_id: str, api_url: str | None = None) -> None:
         metrics["submit_duration_ms"] = _elapsed_ms(submit_started)
         ctx = get_audio_job_context(api, job_id)
         stage = str(ctx.get("stage") or "")
+        current_stage = stage or current_stage
 
     if stage in {"submitted", "transcribing"}:
         asr_started = time.monotonic()

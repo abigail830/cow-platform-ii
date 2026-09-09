@@ -332,8 +332,15 @@ export function AgentChatPanel({
         <ChatLinkResolveContext.Provider value={resolveLinkHref}>
         <PublishedArtifactsContext.Provider value={publishedArtifacts}>
         <div className="chat-column">
-          {!agent.historyReady && agent.messages.length === 0 && (
-            <p className="empty">Loading conversation…</p>
+          {!agent.historyReady && agent.messages.length === 0 && !agent.error && (
+            <p className="empty">
+              {agent.status === 'connecting' ? 'Connecting to agent…' : 'Loading conversation…'}
+            </p>
+          )}
+          {!agent.historyReady && agent.error && (
+            <p className="error inline">
+              {agent.error.message || 'Could not load conversation. Check backend logs and database connectivity.'}
+            </p>
           )}
           {agent.historyReady && rows.length === 0 && !initialMessage && (
             <p className="empty">
@@ -375,7 +382,9 @@ export function AgentChatPanel({
               <AssistantInProgress status={agent.status} />
             </div>
           )}
-          {agent.error && <p className="error inline">{agent.error.message}</p>}
+          {agent.error && agent.historyReady && (
+            <p className="error inline">{agent.error.message}</p>
+          )}
           <div ref={messagesEndRef} />
         </div>
         </PublishedArtifactsContext.Provider>

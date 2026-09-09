@@ -13,6 +13,11 @@ import type { AudioPipelineJobStage } from '../../infrastructure/db/index.ts';
 import { spawnAsyncAudioPipelineWorker } from '../../audio/infrastructure/audio-pipeline-runner.ts';
 import { updateEvalRunItem } from '../../eval/application/eval-pipeline-jobs.ts';
 import { syncEvalRunItemFromAudioPipelineJob } from '../../eval/application/eval-audio-bridge.ts';
+import {
+  maybeAutoRetryAfterFailed,
+  resolveAsyncJobPatchMetrics,
+} from '../../pipeline/application/async-job-retry.ts';
+import type { AsyncJobMetrics } from '../../infrastructure/db/index.ts';
 
 const audioPipelineJobs = new Hono();
 
@@ -40,7 +45,7 @@ audioPipelineJobs.patch('/:id', async (c) => {
     stage?: AudioPipelineJobStage;
     external_job_id?: string | null;
     error_message?: string | null;
-    metrics?: Record<string, unknown> | null;
+    metrics?: Partial<AsyncJobMetrics> | Record<string, unknown> | null;
   }>();
 
   const job = await getAudioPipelineJobById(id);
@@ -54,6 +59,14 @@ audioPipelineJobs.patch('/:id', async (c) => {
     await updateEvalRunItem(job.evalRunItemId, { metrics });
   }
 
+  const jobMetrics = resolveAsyncJobPatchMetrics({
+    domain: 'audio_pipeline',
+    previousStage: job.stage,
+    existingMetrics: job.metrics,
+    newStage: body.stage,
+    metricsPatch: body.metrics,
+  });
+
   const updated = await updateAudioPipelineJob(job.id, {
     stage: body.stage,
     externalJobId: body.external_job_id,
@@ -62,6 +75,7 @@ audioPipelineJobs.patch('/:id', async (c) => {
           errorMessage: resolveAudioPipelineJobErrorMessage(job.errorMessage, body.error_message),
         }
       : {}),
+    ...(jobMetrics !== undefined ? { metrics: jobMetrics } : {}),
   });
 
   if (body.stage) {
@@ -72,6 +86,10 @@ audioPipelineJobs.patch('/:id', async (c) => {
       );
     }
     await syncEvalRunItemFromAudioPipelineJob(job.id);
+  }
+
+  if (body.stage === 'failed' && !job.evalRunItemId) {
+    await maybeAutoRetryAfterFailed('audio_pipeline', job.id);
   }
 
   return c.json({ ok: true, job: updated });

@@ -13,6 +13,7 @@ import {
   type KbImportJobKind,
   type KbFaqSettings,
   type KbItemImportStatus,
+  type AsyncJobMetrics,
 } from '../../infrastructure/db/index.ts';
 import { buildChannelPath, collectDescendantIds } from '../../document/domain/channel-tree.ts';
 import { getChannelById, getDocumentById } from '../../document/application/documents.ts';
@@ -849,6 +850,7 @@ export async function updateKbImportJob(
     completedCount?: number;
     failedCount?: number;
     errorMessage?: string | null;
+    metrics?: AsyncJobMetrics | null;
   },
 ) {
   const [row] = await db
@@ -858,6 +860,7 @@ export async function updateKbImportJob(
       ...(input.completedCount !== undefined ? { completedCount: input.completedCount } : {}),
       ...(input.failedCount !== undefined ? { failedCount: input.failedCount } : {}),
       ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
+      ...(input.metrics !== undefined ? { metrics: input.metrics } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appKbImportJobs.id, id))

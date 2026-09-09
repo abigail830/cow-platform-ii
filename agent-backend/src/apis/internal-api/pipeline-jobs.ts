@@ -8,6 +8,11 @@ import {
   updatePipelineJob,
   type PipelineJobStage,
 } from '../../pipeline/application/pipeline-jobs.ts';
+import {
+  maybeAutoRetryAfterFailed,
+  resolveAsyncJobPatchMetrics,
+} from '../../pipeline/application/async-job-retry.ts';
+import type { AsyncJobMetrics } from '../../infrastructure/db/index.ts';
 import { spawnAsyncPipelineWorker } from '../../pipeline/application/pipeline-runner.ts';
 import { resolvePipelineWorkerMode } from '../../pipeline/application/pipeline-worker-mode.ts';
 
@@ -78,19 +83,33 @@ pipelineJobs.patch('/:id', async (c) => {
     stage?: PipelineJobStage;
     external_job_id?: string | null;
     error_message?: string | null;
+    metrics?: Partial<AsyncJobMetrics> | Record<string, unknown> | null;
   }>();
 
   const job = await getPipelineJobById(id);
   if (!job) return c.json({ error: 'Pipeline job not found' }, 404);
 
+  const metrics = resolveAsyncJobPatchMetrics({
+    domain: 'document_pipeline',
+    previousStage: job.stage,
+    existingMetrics: job.metrics,
+    newStage: body.stage,
+    metricsPatch: body.metrics,
+  });
+
   const updated = await updatePipelineJob(job.id, {
     stage: body.stage,
     externalJobId: body.external_job_id,
     errorMessage: body.error_message,
+    ...(metrics !== undefined ? { metrics } : {}),
   });
 
   if (body.stage) {
     await applyPipelineJobStageSideEffects(job, body.stage);
+  }
+
+  if (body.stage === 'failed' && !job.evalRunItemId) {
+    await maybeAutoRetryAfterFailed('document_pipeline', job.id);
   }
 
   return c.json({ ok: true, job: updated });

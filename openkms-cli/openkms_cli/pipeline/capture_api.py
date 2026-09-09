@@ -74,11 +74,14 @@ def patch_capture_job(
     *,
     stage: str | None = None,
     error_message: str | None = None,
+    metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {}
     if stage is not None:
         body["stage"] = stage
     if error_message is not None:
         body["error_message"] = error_message
+    if metrics is not None:
+        body["metrics"] = metrics
     base = api_url.rstrip("/")
     return _request("PATCH", f"{base}/internal-api/audio-capture-pipeline/jobs/{job_id}", json_body=body)

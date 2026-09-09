@@ -9,6 +9,11 @@ import {
 } from '../../document/application/document-capture-pipeline-jobs.ts';
 import type { CapturePipelineJobStage } from '../../infrastructure/db/index.ts';
 import { spawnDocumentCapturePostProcessWorker } from '../../document/application/document-capture-pipeline-runner.ts';
+import {
+  maybeAutoRetryAfterFailed,
+  resolveAsyncJobPatchMetrics,
+} from '../../pipeline/application/async-job-retry.ts';
+import type { AsyncJobMetrics } from '../../infrastructure/db/index.ts';
 
 const audioCapturePipelineJobs = new Hono();
 
@@ -37,18 +42,32 @@ audioCapturePipelineJobs.patch('/:id', async (c) => {
   const body = await c.req.json<{
     stage?: CapturePipelineJobStage;
     error_message?: string | null;
+    metrics?: Partial<AsyncJobMetrics> | Record<string, unknown> | null;
   }>();
 
   const documentJob = await getDocumentCapturePipelineJobById(id);
   if (!documentJob) return c.json({ error: 'Capture pipeline job not found' }, 404);
 
+  const metrics = resolveAsyncJobPatchMetrics({
+    domain: 'capture_pipeline',
+    previousStage: documentJob.stage,
+    existingMetrics: documentJob.metrics,
+    newStage: body.stage,
+    metricsPatch: body.metrics,
+  });
+
   const updated = await updateDocumentCapturePipelineJob(documentJob.id, {
     stage: body.stage,
     errorMessage: body.error_message,
+    ...(metrics !== undefined ? { metrics } : {}),
   });
 
   if (body.stage) {
     await markDocumentCaptureForJobStage(documentJob.captureId, body.stage);
+  }
+
+  if (body.stage === 'failed') {
+    await maybeAutoRetryAfterFailed('capture_pipeline', documentJob.id);
   }
 
   return c.json({ ok: true, job: updated });

@@ -1,4 +1,4 @@
-"""Capture post-process pipeline: merge → structure → classify → extract → synthesize."""
+"""Capture post-process pipeline: merge → structure → classify → extract → synthesize → materialize."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from openkms_cli.core.workflow_config import resolve_job_workflow_config
 from openkms_cli.pipeline.capture_api import CapturePipelineJobApiError, get_capture_job_context, patch_capture_job
 from openkms_cli.pipeline.capture_config import resolve_post_process_config, workflow_temperature
 from openkms_cli.pipeline.capture_llm import resolve_capture_llm_model, workflow_llm_model_name
+from openkms_cli.pipeline.capture_materialize import materialize_capture_for_index
 from openkms_cli.pipeline.capture_merge import merge_segment_turns
 from openkms_cli.pipeline.capture_structure import (
     build_chapters,
@@ -27,11 +28,26 @@ from openkms_cli.pipeline.storage import get_s3_client
 
 console = Console(stderr=True)
 
+PROGRESS_STAGES = ["structuring", "classifying", "extracting", "synthesizing", "materializing"]
 
-def fail_capture_job(api_url: str, job_id: str, message: str) -> None:
+
+def fail_capture_job(
+    api_url: str,
+    job_id: str,
+    message: str,
+    *,
+    failed_from_stage: str | None = None,
+) -> None:
     console.print(f"[red]{message}[/red]")
+    metrics = {"failed_from_stage": failed_from_stage} if failed_from_stage else None
     try:
-        patch_capture_job(api_url, job_id, stage="failed", error_message=message[:2000])
+        patch_capture_job(
+            api_url,
+            job_id,
+            stage="failed",
+            error_message=message[:2000],
+            metrics=metrics,
+        )
     except CapturePipelineJobApiError as e:
         console.print(f"[yellow]Could not mark capture job failed: {e}[/yellow]")
 
@@ -105,6 +121,16 @@ def _required_artifact_keys(artifact_keys: dict[str, str], pp_cfg: dict[str, Any
     return keys
 
 
+def _artifact_exists(s3_client: Any, bucket: str, key: str | None) -> bool:
+    if not key:
+        return False
+    try:
+        s3_client.head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:
+        return False
+
+
 def _artifact_keys_present(
     s3_client: Any,
     bucket: str,
@@ -112,11 +138,27 @@ def _artifact_keys_present(
     pp_cfg: dict[str, Any],
 ) -> bool:
     for key in _required_artifact_keys(artifact_keys, pp_cfg).values():
-        try:
-            s3_client.head_object(Bucket=bucket, Key=key)
-        except Exception:
+        if not _artifact_exists(s3_client, bucket, key):
             return False
     return True
+
+
+def _progress_index(stage: str) -> int:
+    normalized = stage.strip()
+    if normalized in {"", "submitted"}:
+        return 0
+    try:
+        return PROGRESS_STAGES.index(normalized)
+    except ValueError:
+        return 0
+
+
+def _should_skip_step(step_stage: str, resume_stage: str, artifact_key: str | None, s3_client: Any, bucket: str) -> bool:
+    step_i = PROGRESS_STAGES.index(step_stage)
+    resume_i = _progress_index(resume_stage)
+    if step_i >= resume_i:
+        return False
+    return _artifact_exists(s3_client, bucket, artifact_key)
 
 
 def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
@@ -135,6 +177,7 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
     workflow = _load_workflow(ctx)
     pp_cfg = resolve_post_process_config(workflow)
     temperature = workflow_temperature(workflow)
+    current_stage = stage if stage in PROGRESS_STAGES else "structuring"
 
     if stage == "done":
         if bucket and artifact_keys and _artifact_keys_present(
@@ -154,22 +197,24 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
             f"[yellow]Capture job {job_id} marked done but artifacts are missing — re-running post-process[/yellow]"
         )
         patch_capture_job(api, job_id, stage="structuring")
+        stage = "structuring"
+        current_stage = "structuring"
     if stage == "failed":
-        console.print(f"[red]Capture job {job_id} is failed[/red]")
+        console.print(f"[red]Capture job {job_id} is failed — run retry from the API before re-dispatching[/red]")
         raise SystemExit(1)
 
     segments = ctx.get("segments") or []
     if not segments:
-        fail_capture_job(api, job_id, "Capture has no segments")
+        fail_capture_job(api, job_id, "Capture has no segments", failed_from_stage=current_stage)
         raise SystemExit(1)
 
     incomplete = [s for s in segments if str(s.get("status")) != "completed"]
     if incomplete:
-        fail_capture_job(api, job_id, "Not all segments are transcribed")
+        fail_capture_job(api, job_id, "Not all segments are transcribed", failed_from_stage=current_stage)
         raise SystemExit(1)
 
     if not cfg.aws_access_key_id or not cfg.aws_secret_access_key:
-        fail_capture_job(api, job_id, "AWS credentials required for S3 access")
+        fail_capture_job(api, job_id, "AWS credentials required for S3 access", failed_from_stage=current_stage)
         raise SystemExit(1)
 
     bucket = str(ctx.get("bucket") or "")
@@ -199,141 +244,185 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
                 )
         except RuntimeError as e:
             if _needs_llm(pp_cfg):
-                fail_capture_job(api, job_id, str(e))
+                fail_capture_job(api, job_id, str(e), failed_from_stage=current_stage)
                 raise SystemExit(1) from e
             console.print(f"[yellow]LLM resolve skipped: {e}[/yellow]")
 
     def loader(key: str) -> str:
         return _read_transcript(client, bucket, key)
 
-    try:
-        patch_capture_job(api, job_id, stage="structuring")
-        turns = merge_segment_turns(segments, transcript_loader=loader)
+    resume_stage = stage if stage in PROGRESS_STAGES else "structuring"
 
+    try:
+        structured_key = str(artifact_keys.get("structured_transcript") or "")
+        recording_context_key = str(artifact_keys.get("recording_context") or "")
+        extraction_key = str(artifact_keys.get("extraction") or "")
+        summary_key = str(artifact_keys.get("summary") or "")
+
+        structured: dict[str, Any] | None = None
+        recording_context: dict[str, Any] | None = None
+        extraction: dict[str, Any] | None = None
         capture = ctx.get("capture") or {}
-        topics: list[dict[str, Any]] = []
-        if bool(segment_cfg.get("enabled", True)):
-            if _step_mode(segment_cfg) == "llm":
+
+        if not _should_skip_step("structuring", resume_stage, structured_key, client, bucket):
+            current_stage = "structuring"
+            patch_capture_job(api, job_id, stage="structuring")
+            turns = merge_segment_turns(segments, transcript_loader=loader)
+
+            topics: list[dict[str, Any]] = []
+            if bool(segment_cfg.get("enabled", True)):
+                if _step_mode(segment_cfg) == "llm":
+                    if not llm_model:
+                        raise RuntimeError("segment_topics.mode=llm requires model_name")
+                    topics = llm_build_topics(
+                        turns=turns,
+                        capture=capture,
+                        segment_cfg=segment_cfg,
+                        model_params=llm_model,
+                        temperature=temperature,
+                    )
+                else:
+                    topics = build_topics(
+                        turns,
+                        window_minutes=int(segment_cfg.get("window_minutes") or 12),
+                        preview_max_chars=int(segment_cfg.get("preview_max_chars") or 160),
+                    )
+
+            chapters: list[dict[str, Any]] = []
+            if bool(chapters_cfg.get("enabled", True)) and topics:
+                if _step_mode(chapters_cfg) == "one_per_topic":
+                    chapters = build_chapters(topics)
+
+            structured = {
+                "capture_id": ctx.get("capture_id"),
+                "turn_count": len(turns),
+                "turns": turns,
+                "topics": topics,
+                "chapters": chapters,
+                "structure_modes": {
+                    "segment_topics": _step_mode(segment_cfg),
+                    "chapters": _step_mode(chapters_cfg),
+                    "classify": _step_mode(classify_cfg),
+                    "extract": _step_mode(extract_cfg),
+                    "synthesize_summary": str(synthesize_cfg.get("mode") or "llm")
+                    if _synthesize_enabled(pp_cfg)
+                    else "disabled",
+                },
+            }
+            if llm_model:
+                structured["llm_model"] = llm_model.get("model_name")
+            _put_json(client, bucket, structured_key, structured)
+        elif structured_key:
+            raw = client.get_object(Bucket=bucket, Key=structured_key)["Body"].read()
+            structured = json.loads(raw.decode("utf-8"))
+
+        topics = (structured or {}).get("topics") if isinstance(structured, dict) else []
+
+        if not _should_skip_step("classifying", resume_stage, recording_context_key, client, bucket):
+            current_stage = "classifying"
+            patch_capture_job(api, job_id, stage="classifying")
+            if not structured:
+                raise RuntimeError("structured_transcript artifact missing for classify step")
+
+            audience = str(capture.get("audience") or "unknown")
+            if _step_mode(classify_cfg) == "llm":
                 if not llm_model:
-                    raise RuntimeError("segment_topics.mode=llm requires model_name")
-                topics = llm_build_topics(
-                    turns=turns,
+                    raise RuntimeError("classify.mode=llm requires model_name")
+                classification = llm_classify_capture(
                     capture=capture,
-                    segment_cfg=segment_cfg,
+                    audience=audience,
+                    topics=topics or [],
+                    classify_cfg=classify_cfg,
                     model_params=llm_model,
                     temperature=temperature,
                 )
             else:
-                topics = build_topics(
-                    turns,
-                    window_minutes=int(segment_cfg.get("window_minutes") or 12),
-                    preview_max_chars=int(segment_cfg.get("preview_max_chars") or 160),
+                classification = classify_capture(
+                    recording_mode_hint=capture.get("recording_mode"),
+                    audience=audience,
+                    turns=structured.get("turns") or [],
+                    topics=topics or [],
+                    classify_cfg=classify_cfg,
                 )
 
-        chapters: list[dict[str, Any]] = []
-        if bool(chapters_cfg.get("enabled", True)) and topics:
-            if _step_mode(chapters_cfg) == "one_per_topic":
-                chapters = build_chapters(topics)
+            recording_context = {
+                "capture_id": capture.get("id"),
+                "title": capture.get("title"),
+                "brief": capture.get("brief"),
+                "participants_hint": capture.get("participants_hint"),
+                "recording_mode": classification.get("recording_mode"),
+                "audience": classification.get("audience"),
+                "classification": classification,
+            }
+            _put_json(client, bucket, recording_context_key, recording_context)
+        elif recording_context_key:
+            raw = client.get_object(Bucket=bucket, Key=recording_context_key)["Body"].read()
+            recording_context = json.loads(raw.decode("utf-8"))
 
-        structured = {
-            "capture_id": ctx.get("capture_id"),
-            "turn_count": len(turns),
-            "turns": turns,
-            "topics": topics,
-            "chapters": chapters,
-            "structure_modes": {
-                "segment_topics": _step_mode(segment_cfg),
-                "chapters": _step_mode(chapters_cfg),
-                "classify": _step_mode(classify_cfg),
-                "extract": _step_mode(extract_cfg),
-                "synthesize_summary": str(synthesize_cfg.get("mode") or "llm")
-                if _synthesize_enabled(pp_cfg)
-                else "disabled",
-            },
-        }
-        if llm_model:
-            structured["llm_model"] = llm_model.get("model_name")
+        if not _should_skip_step("extracting", resume_stage, extraction_key, client, bucket):
+            current_stage = "extracting"
+            patch_capture_job(api, job_id, stage="extracting")
+            if not structured or not recording_context:
+                raise RuntimeError("Missing artifacts for extract step")
+            classification = recording_context.get("classification") or {}
 
-        artifact_keys = ctx.get("artifact_keys") or {}
-
-        patch_capture_job(api, job_id, stage="classifying")
-        _put_json(client, bucket, artifact_keys["structured_transcript"], structured)
-
-        audience = str(capture.get("audience") or "unknown")
-        if _step_mode(classify_cfg) == "llm":
-            if not llm_model:
-                raise RuntimeError("classify.mode=llm requires model_name")
-            classification = llm_classify_capture(
-                capture=capture,
-                audience=audience,
-                topics=topics,
-                classify_cfg=classify_cfg,
-                model_params=llm_model,
-                temperature=temperature,
-            )
-        else:
-            classification = classify_capture(
-                recording_mode_hint=capture.get("recording_mode"),
-                audience=audience,
-                turns=turns,
-                topics=topics,
-                classify_cfg=classify_cfg,
-            )
-
-        recording_context = {
-            "capture_id": capture.get("id"),
-            "title": capture.get("title"),
-            "brief": capture.get("brief"),
-            "participants_hint": capture.get("participants_hint"),
-            "recording_mode": classification.get("recording_mode"),
-            "audience": classification.get("audience"),
-            "classification": classification,
-        }
-        _put_json(client, bucket, artifact_keys["recording_context"], recording_context)
-
-        patch_capture_job(api, job_id, stage="extracting")
-
-        if _step_mode(extract_cfg) == "llm":
-            if not llm_model:
-                raise RuntimeError("extract.mode=llm requires model_name")
-            extraction = llm_extract_knowledge(
-                capture=capture,
-                classification=classification,
-                topics=topics,
-                turns=turns,
-                extract_cfg=extract_cfg,
-                model_params=llm_model,
-                temperature=temperature,
-            )
-        else:
-            extraction = extract_knowledge(
-                capture=capture,
-                classification=classification,
-                topics=topics,
-                turns=turns,
-                extract_cfg=extract_cfg,
-            )
-
-        _put_json(client, bucket, artifact_keys["extraction"], extraction)
+            if _step_mode(extract_cfg) == "llm":
+                if not llm_model:
+                    raise RuntimeError("extract.mode=llm requires model_name")
+                extraction = llm_extract_knowledge(
+                    capture=capture,
+                    classification=classification,
+                    topics=topics or [],
+                    turns=structured.get("turns") or [],
+                    extract_cfg=extract_cfg,
+                    model_params=llm_model,
+                    temperature=temperature,
+                )
+            else:
+                extraction = extract_knowledge(
+                    capture=capture,
+                    classification=classification,
+                    topics=topics or [],
+                    turns=structured.get("turns") or [],
+                    extract_cfg=extract_cfg,
+                )
+            _put_json(client, bucket, extraction_key, extraction)
+        elif extraction_key:
+            raw = client.get_object(Bucket=bucket, Key=extraction_key)["Body"].read()
+            extraction = json.loads(raw.decode("utf-8"))
 
         if _synthesize_enabled(pp_cfg):
-            patch_capture_job(api, job_id, stage="synthesizing")
-            summary_key = artifact_keys.get("summary")
-            if not summary_key:
-                raise RuntimeError("artifact_keys.summary is required when synthesize_summary is enabled")
-            summary_md = synthesize_summary(
-                capture=capture,
-                recording_context=recording_context,
-                extraction=extraction,
-                structured_topics=topics,
-                synthesize_cfg=synthesize_cfg,
-                model_params=llm_model,
-                temperature=temperature,
+            if not _should_skip_step("synthesizing", resume_stage, summary_key, client, bucket):
+                current_stage = "synthesizing"
+                patch_capture_job(api, job_id, stage="synthesizing")
+                if not recording_context or not extraction:
+                    raise RuntimeError("Missing artifacts for synthesize step")
+                if not summary_key:
+                    raise RuntimeError("artifact_keys.summary is required when synthesize_summary is enabled")
+                summary_md = synthesize_summary(
+                    capture=capture,
+                    recording_context=recording_context,
+                    extraction=extraction,
+                    structured_topics=topics or [],
+                    synthesize_cfg=synthesize_cfg,
+                    model_params=llm_model,
+                    temperature=temperature,
+                )
+                _put_text(client, bucket, summary_key, summary_md)
+
+        if ctx.get("materialize_for_index"):
+            materialized_key = (
+                f"documents/{str(ctx.get('index_file_hash') or '').strip()}/markdown.md"
+                if ctx.get("index_file_hash")
+                else None
             )
-            _put_text(client, bucket, summary_key, summary_md)
+            if not _should_skip_step("materializing", resume_stage, materialized_key, client, bucket):
+                current_stage = "materializing"
+                patch_capture_job(api, job_id, stage="materializing")
+                materialize_capture_for_index(ctx=ctx, s3_client=client, bucket=bucket, api_url=api)
 
         patch_capture_job(api, job_id, stage="done")
         console.print(f"[green]Capture job {job_id} done — artifacts uploaded[/green]")
     except Exception as e:
-        fail_capture_job(api, job_id, str(e))
+        fail_capture_job(api, job_id, str(e), failed_from_stage=current_stage)
         raise SystemExit(1) from e

@@ -7,6 +7,11 @@ import {
   updateKbImportJob,
   type KbImportJobStatus,
 } from '../../kb/application/knowledge-bases.ts';
+import {
+  maybeAutoRetryAfterFailed,
+  resolveAsyncJobPatchMetrics,
+} from '../../pipeline/application/async-job-retry.ts';
+import type { AsyncJobMetrics } from '../../infrastructure/db/index.ts';
 
 const kbImportJobs = new Hono();
 
@@ -35,17 +40,31 @@ kbImportJobs.patch('/:id', async (c) => {
     completed_count?: number;
     failed_count?: number;
     error_message?: string | null;
+    metrics?: Partial<AsyncJobMetrics> | Record<string, unknown> | null;
   }>().catch(() => ({}));
 
   const job = await getKbImportJobById(id);
   if (!job) return c.json({ error: 'Job not found' }, 404);
+
+  const metrics = resolveAsyncJobPatchMetrics({
+    domain: 'kb_import',
+    previousStage: job.status,
+    existingMetrics: job.metrics,
+    newStage: body.status,
+    metricsPatch: body.metrics,
+  });
 
   const updated = await updateKbImportJob(id, {
     status: body.status,
     completedCount: body.completed_count,
     failedCount: body.failed_count,
     errorMessage: body.error_message,
+    ...(metrics !== undefined ? { metrics } : {}),
   });
+
+  if (body.status === 'failed') {
+    await maybeAutoRetryAfterFailed('kb_import', id);
+  }
 
   return c.json({ ok: true, job: updated });
 });

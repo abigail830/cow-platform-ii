@@ -357,9 +357,19 @@ export const CAPTURE_PIPELINE_JOB_STAGES = [
   'classifying',
   'extracting',
   'synthesizing',
+  'materializing',
   'done',
   'failed',
 ] as const;
+
+/** Retry / resume metadata on async pipeline job rows (see async-job-retry.ts). */
+export type AsyncJobMetrics = {
+  retry_attempt?: number;
+  max_attempts?: number;
+  failed_from_stage?: string;
+  last_error_code?: string;
+  last_retry_at?: string;
+};
 export type CapturePipelineJobStage = (typeof CAPTURE_PIPELINE_JOB_STAGES)[number];
 
 export const DOCUMENT_CAPTURE_INPUT_MODES = ['document', 'audio', 'transcript'] as const;
@@ -440,6 +450,7 @@ export const appDocumentCapturePipelineJobs = pgTable(
     stage: text('stage').$type<CapturePipelineJobStage>().notNull().default('submitted'),
     configYaml: text('config_yaml'),
     errorMessage: text('error_message'),
+    metrics: jsonb('metrics').$type<AsyncJobMetrics | null>(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -465,6 +476,7 @@ export const appAudioPipelineJobs = pgTable(
     configYaml: text('config_yaml'),
     asrVocabularyIdSnapshot: text('asr_vocabulary_id_snapshot'),
     errorMessage: text('error_message'),
+    metrics: jsonb('metrics').$type<AsyncJobMetrics | null>(),
     evalRunItemId: uuid('eval_run_item_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -573,6 +585,7 @@ export const appKbImportJobs = pgTable(
     errorMessage: text('error_message'),
     /** Snapshot of pipeline config_yaml at job create; null = CLI uses packaged default. */
     configYaml: text('config_yaml'),
+    metrics: jsonb('metrics').$type<AsyncJobMetrics | null>(),
     createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -758,6 +771,7 @@ export const appPipelineJobs = pgTable(
     /** Snapshot of pipeline config_yaml at job create; null = CLI uses packaged default. */
     configYaml: text('config_yaml'),
     errorMessage: text('error_message'),
+    metrics: jsonb('metrics').$type<AsyncJobMetrics | null>(),
     evalRunItemId: uuid('eval_run_item_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

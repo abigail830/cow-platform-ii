@@ -561,6 +561,13 @@
       "when": 1785236000000,
       "tag": "0079_drop_legacy_audio_knowledge",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1785237000000,
+      "tag": "0080_async_job_metrics",
+      "breakpoints": true
     }
   ]
 }

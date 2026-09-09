@@ -29,6 +29,7 @@ import {
   pipelineProviderForName,
   updatePipelineJob,
 } from './pipeline-jobs.ts';
+import { retryFailedJob } from './async-job-retry.ts';
 
 function repoRootFromBackend(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -264,6 +265,14 @@ export async function startDocumentPipeline(documentId: string): Promise<{ statu
   }
 
   const existingJob = await getLatestPipelineJobForDocument(documentId);
+  if (existingJob?.stage === 'failed') {
+    const retry = await retryFailedJob('document_pipeline', existingJob.id);
+    if (retry.retried) {
+      await updateDocumentStatus(documentId, 'running');
+      return { status: 'running', job_id: existingJob.id };
+    }
+  }
+
   if (existingJob && isActivePipelineJobStage(existingJob.stage)) {
     if (doc.status !== 'running') {
       await updateDocumentStatus(documentId, 'running');

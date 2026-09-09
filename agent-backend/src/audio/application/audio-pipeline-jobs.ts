@@ -1,5 +1,5 @@
 import { desc, eq, inArray } from 'drizzle-orm';
-import { appAudioPipelineJobs, appDocumentCaptureSegments, db, type AudioPipelineJobStage } from '../../infrastructure/db/index.ts';
+import { appAudioPipelineJobs, appDocumentCaptureSegments, db, type AsyncJobMetrics, type AudioPipelineJobStage } from '../../infrastructure/db/index.ts';
 import { getChannelById } from '../../document/application/documents.ts';
 import { getS3Config } from '../../infrastructure/oss/s3-config.ts';
 import { audioStoragePrefix } from '../../audio/infrastructure/audio-files.ts';
@@ -147,6 +147,7 @@ export async function updateAudioPipelineJob(
     stage?: AudioPipelineJobStage;
     externalJobId?: string | null;
     errorMessage?: string | null;
+    metrics?: AsyncJobMetrics | null;
   },
 ): Promise<typeof appAudioPipelineJobs.$inferSelect | null> {
   const [row] = await db
@@ -155,6 +156,7 @@ export async function updateAudioPipelineJob(
       ...(input.stage !== undefined ? { stage: input.stage } : {}),
       ...(input.externalJobId !== undefined ? { externalJobId: input.externalJobId } : {}),
       ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
+      ...(input.metrics !== undefined ? { metrics: input.metrics } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appAudioPipelineJobs.id, id))

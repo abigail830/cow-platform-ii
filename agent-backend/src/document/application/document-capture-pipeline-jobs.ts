@@ -4,6 +4,7 @@ import {
   appDocumentCaptures,
   appDocumentCaptureSegments,
   db,
+  type AsyncJobMetrics,
   type CapturePipelineJobStage,
 } from '../../infrastructure/db/index.ts';
 import { getS3Config } from '../../infrastructure/oss/s3-config.ts';
@@ -16,6 +17,7 @@ import {
 } from '../../document/infrastructure/audio-capture-files.ts';
 import { transcriptS3Key, asrResultS3Key } from '../../audio/infrastructure/audio-files.ts';
 import { snapshotConfigYaml } from '../../audio/application/audio-pipeline-jobs.ts';
+import { parseCaptureMaterializeContext } from '../domain/capture/capture-materialize-context.ts';
 
 export async function createDocumentCapturePipelineJob(input: {
   captureId: string;
@@ -92,6 +94,7 @@ export async function updateDocumentCapturePipelineJob(
   input: {
     stage?: CapturePipelineJobStage;
     errorMessage?: string | null;
+    metrics?: AsyncJobMetrics | null;
   },
 ): Promise<typeof appDocumentCapturePipelineJobs.$inferSelect | null> {
   const [row] = await db
@@ -99,6 +102,7 @@ export async function updateDocumentCapturePipelineJob(
     .set({
       ...(input.stage !== undefined ? { stage: input.stage } : {}),
       ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
+      ...(input.metrics !== undefined ? { metrics: input.metrics } : {}),
       updatedAt: new Date(),
     })
     .where(eq(appDocumentCapturePipelineJobs.id, id))
@@ -130,6 +134,9 @@ export async function buildDocumentCapturePipelineJobContext(jobId: string) {
     process.env.OPENKMS_API_URL?.trim() ||
     `http://127.0.0.1:${process.env.PORT?.trim() || '8787'}`;
 
+  const metadata = (capture.metadata as Record<string, unknown>) ?? {};
+  const materialize = parseCaptureMaterializeContext(metadata, segments[0]?.fileHash);
+
   return {
     id: job.id,
     capture_id: capture.id,
@@ -137,6 +144,10 @@ export async function buildDocumentCapturePipelineJobContext(jobId: string) {
     stage: job.stage as CapturePipelineJobStage,
     config_yaml: job.configYaml ?? null,
     error_message: job.errorMessage,
+    materialize_for_index: materialize.materialize_for_index,
+    index_document_id: materialize.index_document_id,
+    index_content: materialize.index_content,
+    index_file_hash: materialize.index_file_hash,
     capture: {
       id: capture.id,
       channel_id: capture.channelId,
