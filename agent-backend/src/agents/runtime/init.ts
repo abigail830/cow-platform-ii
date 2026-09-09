@@ -231,6 +231,9 @@ async function runFlueRuntimeInit(): Promise<void> {
 
   initialized = true;
 
+  const { startMcpLifecycleHealthCheck } = await import('../catalog/mcp/connection-cache.ts');
+  startMcpLifecycleHealthCheck();
+
   void runSubmissionGovernanceAtStartup({
     submissions: executionStore.submissions,
     abortInstance: (agentName, instanceId) => agentCoordinator.abortInstance(agentName, instanceId),

@@ -22,6 +22,10 @@ export const mcpServerSchema = z
     /** Forward Playground Authorization / OpenKMS API key headers on loopback MCP calls. */
     useAgentRequestHeaders: z.boolean().default(false).optional(),
     allowTools: z.array(z.string()).optional(),
+    /** Pi-style lifecycle: lazy (default) connects on first tool call; eager at agent init. */
+    lifecycle: z.enum(['lazy', 'eager', 'keep-alive']).default('lazy').optional(),
+    /** Idle disconnect for lazy servers (ms). 0 disables auto-close. Default from MCP_DEFAULT_IDLE_TIMEOUT_MS. */
+    idleTimeoutMs: z.number().int().min(0).optional(),
   })
   .refine((value) => Boolean(value.urlEnv?.trim() || value.internalPath?.trim()), {
     message: 'MCP server requires urlEnv or internalPath',

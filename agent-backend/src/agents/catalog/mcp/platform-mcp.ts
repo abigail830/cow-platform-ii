@@ -1,4 +1,4 @@
-import { connectMcpServer, type McpServerConnection, type ToolDefinition } from '@flue/runtime';
+import { connectMcpServer, type ToolDefinition } from '@flue/runtime';
 import { and, eq } from 'drizzle-orm';
 import { expandMcpTemplateString, parseMcpServersJson } from '../../../agent-assets/parse-mcp-servers.ts';
 import { loadPlatformMcpTemplate } from '../../../agent-assets/manifest.ts';
@@ -7,12 +7,19 @@ import { appUserMcpCredentials, db } from '../../../infrastructure/db/index.ts';
 import { createAgentRequestForwardingFetch, getAgentRequestContext } from '../../runtime/agent-request-context.ts';
 import { decryptModelConfigApiKey } from '../../../model-config/infrastructure/model-config-secret.ts';
 import type { LoadedAgentSpec, McpServerYaml } from '../schema.ts';
-import { getMcpConnectionCache } from './connection-cache.ts';
+import { connectYamlMcpServer } from './connect-yaml-mcp-server.ts';
+import { wrapDeferredMcpTools } from './deferred-mcp-tools.ts';
+import {
+  buildMcpScopeKey,
+  resolveMcpIdleTimeoutMs,
+  resolveMcpLifecycle,
+  shouldConnectAtAgentInit,
+} from './mcp-lifecycle.ts';
+import { ensureMcpConnection } from './mcp-lifecycle-manager.ts';
+import { getStaticMcpToolMetadata } from './mcp-metadata-cache.ts';
 import {
   HYBRID_SEARCH_MCP_API_KEY_ENV,
   PAGEINDEX_SEARCH_MCP_API_KEY_ENV,
-  resolveMcpServerHeaders,
-  resolveMcpServerUrl,
   resolveOpenkmsApiBaseUrl,
 } from './resolve-url.ts';
 import { filterMcpTools } from './tool-filter.ts';
@@ -57,6 +64,66 @@ function resolvePlatformMcpApiKey(
   return undefined;
 }
 
+async function connectPlatformMcpServer(
+  platformMcpId: string,
+  server: { name: string; url: string; transport: 'streamable-http' | 'sse'; headers?: Record<string, string> },
+) {
+  return connectMcpServer(server.name, {
+    url: server.url,
+    transport: server.transport,
+    headers: server.headers,
+    ...(isPlatformLoopbackMcp(platformMcpId)
+      ? { fetch: createAgentRequestForwardingFetch() }
+      : {}),
+  });
+}
+
+function registerYamlMcpServerTools(options: {
+  agentId: string;
+  userId?: string;
+  server: McpServerYaml;
+  allowTools?: string[];
+}): ToolDefinition[] {
+  const lifecycle = resolveMcpLifecycle(options.server);
+  const idleTimeoutMs = resolveMcpIdleTimeoutMs(options.server);
+  const scopeKey = buildMcpScopeKey({
+    agentId: options.agentId,
+    userId: options.userId,
+    serverName: options.server.name,
+  });
+  const metadataTools = getStaticMcpToolMetadata(options.server.name, options.allowTools);
+  return wrapDeferredMcpTools({
+    scopeKey,
+    metadataTools,
+    connect: () => connectYamlMcpServer(options.server),
+    lifecycle,
+    idleTimeoutMs,
+    allowTools: options.allowTools,
+  });
+}
+
+async function registerYamlMcpServerToolsEager(options: {
+  agentId: string;
+  userId?: string;
+  server: McpServerYaml;
+  allowTools?: string[];
+}): Promise<ToolDefinition[]> {
+  const lifecycle = resolveMcpLifecycle(options.server);
+  const idleTimeoutMs = resolveMcpIdleTimeoutMs(options.server);
+  const scopeKey = buildMcpScopeKey({
+    agentId: options.agentId,
+    userId: options.userId,
+    serverName: options.server.name,
+  });
+  const connection = await ensureMcpConnection({
+    scopeKey,
+    connect: () => connectYamlMcpServer(options.server),
+    lifecycle,
+    idleTimeoutMs,
+  });
+  return filterMcpTools(connection, options.allowTools);
+}
+
 /** Probe a platform MCP once and return discovered tool names (Cursor-style runtime list). */
 export async function listPlatformMcpDiscoveredTools(
   platformMcpId: string,
@@ -94,13 +161,11 @@ export async function listPlatformMcpDiscoveredTools(
             ]),
           )
         : undefined;
-      const connection = await connectMcpServer(server.name, {
+      const connection = await connectPlatformMcpServer(platformMcpId, {
+        name: server.name,
         url,
         transport: server.transport,
         headers,
-        ...(isPlatformLoopbackMcp(platformMcpId)
-          ? { fetch: createAgentRequestForwardingFetch() }
-          : {}),
       });
       try {
         for (const tool of connection.tools) {
@@ -128,87 +193,109 @@ export async function connectStudioPlatformMcp(spec: LoadedAgentSpec): Promise<T
   if (ids.length === 0) return [];
 
   const userId = getAgentRequestContext()?.userId;
-  const cacheKey = `${spec.id}::${userId ?? 'anon'}`;
-  const connectionCache = getMcpConnectionCache();
-  let connections = connectionCache.get(cacheKey);
-  if (!connections) {
-    connections = [];
-    for (const platformMcpId of ids) {
-      const template = loadPlatformMcpTemplate(platformMcpId);
-      const parsed = parseMcpServersJson({ mcpServers: template.mcpServers });
-      if (!parsed.ok) throw new Error(parsed.error);
-      const userKey = await userApiKeyForPlatformMcp(platformMcpId, userId);
-      const apiKey = resolvePlatformMcpApiKey(platformMcpId, userKey);
-      if (!apiKey) {
-        throw new Error(
-          `Missing MCP credentials for "${platformMcpId}". Save your key in Asset Market.`,
-        );
-      }
-      for (const server of parsed.servers) {
-        const url = expandMcpTemplateString(server.url, {
-          OPENKMS_API_URL: resolveOpenkmsApiBaseUrl(),
-          USER_API_KEY: apiKey,
+  const tools: ToolDefinition[] = [];
+
+  for (const platformMcpId of ids) {
+    const template = loadPlatformMcpTemplate(platformMcpId);
+    const parsed = parseMcpServersJson({ mcpServers: template.mcpServers });
+    if (!parsed.ok) throw new Error(parsed.error);
+    const userKey = await userApiKeyForPlatformMcp(platformMcpId, userId);
+    const apiKey = resolvePlatformMcpApiKey(platformMcpId, userKey);
+    if (!apiKey) {
+      throw new Error(
+        `Missing MCP credentials for "${platformMcpId}". Save your key in Asset Market.`,
+      );
+    }
+    for (const server of parsed.servers) {
+      const url = expandMcpTemplateString(server.url, {
+        OPENKMS_API_URL: resolveOpenkmsApiBaseUrl(),
+        USER_API_KEY: apiKey,
+      });
+      const headers = server.headers
+        ? Object.fromEntries(
+            Object.entries(server.headers).map(([k, v]) => [
+              k,
+              expandMcpTemplateString(v, {
+                OPENKMS_API_URL: resolveOpenkmsApiBaseUrl(),
+                USER_API_KEY: apiKey,
+              }),
+            ]),
+          )
+        : undefined;
+      const lifecycle = resolveMcpLifecycle({ lifecycle: 'lazy' });
+      const idleTimeoutMs = resolveMcpIdleTimeoutMs({});
+      const scopeKey = buildMcpScopeKey({
+        agentId: spec.id,
+        userId,
+        serverName: server.name,
+        suffix: platformMcpId,
+      });
+      const connect = () =>
+        connectPlatformMcpServer(platformMcpId, {
+          name: server.name,
+          url,
+          transport: server.transport,
+          headers,
         });
-        const headers = server.headers
-          ? Object.fromEntries(
-              Object.entries(server.headers).map(([k, v]) => [
-                k,
-                expandMcpTemplateString(v, {
-                  OPENKMS_API_URL: resolveOpenkmsApiBaseUrl(),
-                  USER_API_KEY: apiKey,
-                }),
-              ]),
-            )
-          : undefined;
-        connections.push(
-          await connectMcpServer(server.name, {
-            url,
-            transport: server.transport,
-            headers,
-            ...(isPlatformLoopbackMcp(platformMcpId)
-              ? { fetch: createAgentRequestForwardingFetch() }
-              : {}),
+
+      if (shouldConnectAtAgentInit(lifecycle)) {
+        const connection = await ensureMcpConnection({
+          scopeKey,
+          connect,
+          lifecycle,
+          idleTimeoutMs,
+        });
+        tools.push(...filterMcpTools(connection, undefined));
+      } else {
+        const byServer = getStaticMcpToolMetadata(server.name, undefined);
+        const metadataTools =
+          byServer.length > 0 ? byServer : getStaticMcpToolMetadata(platformMcpId, undefined);
+        tools.push(
+          ...wrapDeferredMcpTools({
+            scopeKey,
+            metadataTools,
+            connect,
+            lifecycle,
+            idleTimeoutMs,
           }),
         );
       }
     }
-    connectionCache.set(cacheKey, connections);
   }
 
-  const tools: ToolDefinition[] = [];
-  for (const connection of connections) {
-    tools.push(...filterMcpTools(connection, undefined));
-  }
   return tools;
 }
 
 export async function connectYamlMcpServers(
   spec: LoadedAgentSpec,
-): Promise<{ connections: McpServerConnection[]; tools: ToolDefinition[] }> {
-  if (!spec.mcp.length) return { connections: [], tools: [] };
+): Promise<{ tools: ToolDefinition[] }> {
+  if (!spec.mcp.length) return { tools: [] };
 
-  const connectionCache = getMcpConnectionCache();
-  let connections = connectionCache.get(spec.id);
-  if (!connections) {
-    connections = await Promise.all(
-      spec.mcp.map((server) => connectYamlMcpServer(server)),
-    );
-    connectionCache.set(spec.id, connections);
-  }
-
+  const userId = getAgentRequestContext()?.userId;
   const tools: ToolDefinition[] = [];
-  for (const connection of connections) {
-    const serverSpec = spec.mcp.find((entry) => entry.name === connection.name);
-    tools.push(...filterMcpTools(connection, serverSpec?.allowTools));
-  }
-  return { connections, tools };
-}
 
-async function connectYamlMcpServer(server: McpServerYaml): Promise<McpServerConnection> {
-  return connectMcpServer(server.name, {
-    url: resolveMcpServerUrl(server),
-    transport: server.transport,
-    headers: resolveMcpServerHeaders(server),
-    ...(server.useAgentRequestHeaders ? { fetch: createAgentRequestForwardingFetch() } : {}),
-  });
+  for (const server of spec.mcp) {
+    const lifecycle = resolveMcpLifecycle(server);
+    if (shouldConnectAtAgentInit(lifecycle)) {
+      tools.push(
+        ...(await registerYamlMcpServerToolsEager({
+          agentId: spec.id,
+          userId,
+          server,
+          allowTools: server.allowTools,
+        })),
+      );
+    } else {
+      tools.push(
+        ...registerYamlMcpServerTools({
+          agentId: spec.id,
+          userId,
+          server,
+          allowTools: server.allowTools,
+        }),
+      );
+    }
+  }
+
+  return { tools };
 }

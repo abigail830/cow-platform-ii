@@ -19,6 +19,7 @@ skills:
 
 mcp:
   - name: hybrid-search
+    lifecycle: lazy
     urlEnv: HYBRID_SEARCH_MCP_URL
     transport: streamable-http
     headersEnv:
@@ -28,6 +29,7 @@ mcp:
       - mcp__hybrid-search__list_knowledge_bases
       - mcp__hybrid-search__hybrid_search
   - name: zhipu-web-search
+    lifecycle: lazy
     urlEnv: ZHIPU_WEB_SEARCH_MCP_URL
     transport: streamable-http
     headersEnv:

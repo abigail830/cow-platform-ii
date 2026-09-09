@@ -16,6 +16,7 @@ skills:
 
 mcp:
   - name: pageindex-search
+    lifecycle: lazy
     urlEnv: PAGEINDEX_SEARCH_MCP_URL
     transport: streamable-http
     headersEnv:

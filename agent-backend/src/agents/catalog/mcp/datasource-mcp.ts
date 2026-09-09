@@ -5,9 +5,14 @@ import { listDatasourceIdsByNamesForUser } from '../../../tools/database-mcp/dat
 import { appUserDatasources, db } from '../../../infrastructure/db/index.ts';
 import { getAgentRequestContext } from '../../runtime/agent-request-context.ts';
 import type { LoadedAgentSpec } from '../schema.ts';
-import { getMcpConnectionCache } from './connection-cache.ts';
+import { wrapDeferredMcpTools } from './deferred-mcp-tools.ts';
+import { buildMcpScopeKey, resolveMcpIdleTimeoutMs, resolveMcpLifecycle } from './mcp-lifecycle.ts';
+import { ensureMcpConnection } from './mcp-lifecycle-manager.ts';
+import { getDatasourceMcpToolMetadata } from './mcp-metadata-cache.ts';
 import { resolveOpenkmsApiBaseUrl } from './resolve-url.ts';
 import { filterMcpTools } from './tool-filter.ts';
+
+const DATASOURCE_LIFECYCLE = 'lazy' as const;
 
 function createDatasourceForwardingFetch(datasourceId: string): typeof fetch {
   return async (input, init) => {
@@ -33,6 +38,19 @@ function datasourceMcpPath(type: string): string {
   throw new Error(`Unsupported datasource type "${type}"`);
 }
 
+async function connectDatasourceMcpServer(
+  datasourceId: string,
+  serverName: string,
+  type: string,
+) {
+  const url = `${resolveOpenkmsApiBaseUrl()}${datasourceMcpPath(type)}`;
+  return connectMcpServer(serverName, {
+    url,
+    transport: 'streamable-http',
+    fetch: createDatasourceForwardingFetch(datasourceId),
+  });
+}
+
 async function connectDatasourcesByIds(
   specId: string,
   userId: string,
@@ -40,49 +58,44 @@ async function connectDatasourcesByIds(
 ): Promise<ToolDefinition[]> {
   if (ids.length === 0) return [];
 
-  const cacheKey = `${specId}::${userId}::ds::${[...new Set(ids)].sort().join(',')}`;
-  const connectionCache = getMcpConnectionCache();
-  let connections = connectionCache.get(cacheKey);
-  if (!connections) {
-    connections = [];
-    const rows = await db
-      .select({
-        id: appUserDatasources.id,
-        name: appUserDatasources.name,
-        type: appUserDatasources.type,
-      })
-      .from(appUserDatasources)
-      .where(
-        and(eq(appUserDatasources.createdBy, userId), inArray(appUserDatasources.id, ids)),
-      );
+  const rows = await db
+    .select({
+      id: appUserDatasources.id,
+      name: appUserDatasources.name,
+      type: appUserDatasources.type,
+    })
+    .from(appUserDatasources)
+    .where(and(eq(appUserDatasources.createdBy, userId), inArray(appUserDatasources.id, ids)));
 
-    const rowById = new Map(rows.map((row) => [row.id, row]));
-    for (const datasourceId of ids) {
-      const row = rowById.get(datasourceId);
-      if (!row) continue;
-      const url = `${resolveOpenkmsApiBaseUrl()}${datasourceMcpPath(row.type)}`;
-      try {
-        connections.push(
-          await connectMcpServer(row.name, {
-            url,
-            transport: 'streamable-http',
-            fetch: createDatasourceForwardingFetch(datasourceId),
-          }),
-        );
-      } catch (error) {
-        console.warn(
-          `[mcp] datasource "${row.name}" (${datasourceId}) unavailable:`,
-          error instanceof Error ? error.message : error,
-        );
-      }
-    }
-    connectionCache.set(cacheKey, connections);
-  }
-
+  const rowById = new Map(rows.map((row) => [row.id, row]));
   const tools: ToolDefinition[] = [];
-  for (const connection of connections) {
-    tools.push(...filterMcpTools(connection, undefined));
+  const lifecycle = resolveMcpLifecycle({ lifecycle: DATASOURCE_LIFECYCLE });
+  const idleTimeoutMs = resolveMcpIdleTimeoutMs({});
+
+  for (const datasourceId of ids) {
+    const row = rowById.get(datasourceId);
+    if (!row) continue;
+
+    const scopeKey = buildMcpScopeKey({
+      agentId: specId,
+      userId,
+      serverName: row.name,
+      suffix: `ds:${datasourceId}`,
+    });
+    const connect = () => connectDatasourceMcpServer(datasourceId, row.name, row.type);
+    const metadataTools = getDatasourceMcpToolMetadata(row.name);
+
+    tools.push(
+      ...wrapDeferredMcpTools({
+        scopeKey,
+        metadataTools,
+        connect,
+        lifecycle,
+        idleTimeoutMs,
+      }),
+    );
   }
+
   return tools;
 }
 
@@ -105,4 +118,28 @@ export async function connectFsAgentDatasources(spec: LoadedAgentSpec): Promise<
     return [];
   }
   return connectDatasourcesByIds(spec.id, userId, ids);
+}
+
+/** Eager datasource connect for tests or explicit warm paths. */
+export async function connectDatasourceMcpEager(options: {
+  specId: string;
+  userId: string;
+  datasourceId: string;
+  serverName: string;
+  type: string;
+}): Promise<ToolDefinition[]> {
+  const scopeKey = buildMcpScopeKey({
+    agentId: options.specId,
+    userId: options.userId,
+    serverName: options.serverName,
+    suffix: `ds:${options.datasourceId}`,
+  });
+  const connection = await ensureMcpConnection({
+    scopeKey,
+    connect: () =>
+      connectDatasourceMcpServer(options.datasourceId, options.serverName, options.type),
+    lifecycle: 'eager',
+    idleTimeoutMs: 0,
+  });
+  return filterMcpTools(connection, undefined);
 }

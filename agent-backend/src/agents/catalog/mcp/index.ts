@@ -1,4 +1,8 @@
-export { closeAllMcpConnections, resetMcpConnectionsForTests } from './connection-cache.ts';
+export {
+  closeAllMcpConnections,
+  resetMcpConnectionsForTests,
+  startMcpLifecycleHealthCheck,
+} from './connection-cache.ts';
 export {
   HYBRID_SEARCH_MCP_API_KEY_ENV,
   PAGEINDEX_SEARCH_MCP_API_KEY_ENV,

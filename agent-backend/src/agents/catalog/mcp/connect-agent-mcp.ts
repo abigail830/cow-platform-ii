@@ -12,9 +12,9 @@ export async function connectAgentMcpTools(spec: LoadedAgentSpec): Promise<ToolD
     return [...platform, ...datasources];
   }
 
-  const [yamlResult, datasourceTools] = await Promise.all([
+  const [yamlTools, datasourceTools] = await Promise.all([
     connectYamlMcpServers(spec),
     connectFsAgentDatasources(spec),
   ]);
-  return [...yamlResult.tools, ...datasourceTools];
+  return [...yamlTools.tools, ...datasourceTools];
 }
