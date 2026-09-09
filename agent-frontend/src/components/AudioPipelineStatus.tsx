@@ -35,9 +35,9 @@ function inferFailedStepIndex(job: NonNullable<SegmentPipelineRecord['pipeline_j
   return 0;
 }
 
-function buildSteps(audio: SegmentPipelineRecord): StepDef[] {
+function buildSteps(audio: SegmentPipelineRecord, showPipelineTrack: boolean): StepDef[] {
   const steps: StepDef[] = [UPLOAD_STEP];
-  if (audio.pipeline_job) {
+  if (audio.pipeline_job || showPipelineTrack) {
     for (const step of PIPELINE_STEPS) {
       steps.push({ key: step.stage, label: step.label });
     }
@@ -51,7 +51,10 @@ function dotClassForStep(
   job: SegmentPipelineRecord['pipeline_job'],
 ): string {
   let dotClass = 'pipeline-step-dot';
-  if (!job) return `${dotClass} complete`;
+  if (!job) {
+    if (index === 0) return `${dotClass} complete`;
+    return `${dotClass} pending`;
+  }
 
   if (index === 0) return `${dotClass} complete`;
 
@@ -107,18 +110,30 @@ function buildTooltip(audio: SegmentPipelineRecord, job: SegmentPipelineRecord['
 
 type AudioPipelineStatusProps = {
   audio: SegmentPipelineRecord;
+  compact?: boolean;
+  showPipelineTrack?: boolean;
 };
 
-export function AudioPipelineStatus({ audio }: AudioPipelineStatusProps) {
+export function AudioPipelineStatus({
+  audio,
+  compact = false,
+  showPipelineTrack = false,
+}: AudioPipelineStatusProps) {
   const job = audio.pipeline_job;
-  const steps = buildSteps(audio);
+  const steps = buildSteps(audio, showPipelineTrack);
   const lastIndex = steps.length - 1;
   const status = resolveEffectiveAudioStatus(audio);
+  const failed = status === 'failed' || job?.stage === 'failed';
 
   return (
-    <div className="document-pipeline-status" title={buildTooltip(audio, job)}>
+    <div
+      className={`document-pipeline-status${compact ? ' document-pipeline-status--compact' : ''}`.trim()}
+      title={buildTooltip(audio, job)}
+    >
       <div
-        className={`document-pipeline-stepper${steps.length === 1 ? ' is-single' : ''}`}
+        className={`document-pipeline-stepper${steps.length === 1 ? ' is-single' : ''}${
+          compact ? ' document-pipeline-stepper--list-labeled' : ''
+        }`.trim()}
         aria-label="Audio transcription progress"
       >
         {steps.map((step, index) => (
@@ -142,11 +157,11 @@ export function AudioPipelineStatus({ audio }: AudioPipelineStatusProps) {
           </div>
         ))}
       </div>
-      {status === 'failed' && job?.error_message && (
+      {failed && job?.error_message ? (
         <p className="document-pipeline-error" title={job.error_message}>
           {shortenErrorMessage(job.error_message)}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

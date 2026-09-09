@@ -19,6 +19,7 @@ import { setPlatformFlueStores } from './platform-flue-stores.ts';
 import { runSubmissionGovernanceAtStartup } from './submission-governance.ts';
 import { createDefaultEnvFactory } from './default-env.ts';
 import { normalizeBuiltModules } from './normalize-modules.ts';
+import { startMcpLifecycleHealthCheck } from '../catalog/mcp/connection-cache.ts';
 
 let initialized = false;
 let initPromise: Promise<void> | undefined;
@@ -231,7 +232,6 @@ async function runFlueRuntimeInit(): Promise<void> {
 
   initialized = true;
 
-  const { startMcpLifecycleHealthCheck } = await import('../catalog/mcp/connection-cache.ts');
   startMcpLifecycleHealthCheck();
 
   void runSubmissionGovernanceAtStartup({

@@ -4,6 +4,7 @@ import type { McpServerConnection, ToolDefinition } from '@flue/runtime';
 import * as v from 'valibot';
 import { defineTool } from '@flue/runtime';
 import { wrapDeferredMcpTools } from './deferred-mcp-tools.ts';
+import { getPreparedToolAdapter, registerPreparedToolAdapter } from './mcp-prepared-tool.ts';
 import {
   closeAllMcpConnections,
   ensureMcpConnection,
@@ -36,14 +37,20 @@ test('getStaticMcpToolMetadata returns hybrid-search tools without network', () 
 test('lazy deferred tool does not connect until run()', async () => {
   resetMcpConnectionsForTests();
   let connectCalls = 0;
-  const realTool = defineTool({
+  const realTool: ToolDefinition = {
     name: 'mcp__hybrid-search__hybrid_search',
     description: 'search',
     input: v.object({ query: v.string() }),
     async run() {
-      return { ok: true };
+      throw new Error('MCP stub');
+    },
+  };
+  registerPreparedToolAdapter(realTool, {
+    async execute() {
+      return JSON.stringify({ ok: true });
     },
   });
+  Object.freeze(realTool);
 
   const deferred = wrapDeferredMcpTools({
     scopeKey: buildMcpScopeKey({ agentId: 'content-studio', userId: 'u1', serverName: 'hybrid-search' }),
@@ -60,11 +67,13 @@ test('lazy deferred tool does not connect until run()', async () => {
   assert.equal(connectCalls, 0);
   assert.equal(deferred.length, 1);
 
-  const result = await deferred[0]!.run({ input: { query: 'policy' } });
-  assert.deepEqual(result, { ok: true });
+  const adapter = getPreparedToolAdapter(deferred[0]!);
+  assert.ok(adapter);
+  const result = await adapter!.execute({ query: 'policy' });
+  assert.deepEqual(JSON.parse(result), { ok: true });
   assert.equal(connectCalls, 1);
 
-  await deferred[0]!.run({ input: { query: 'policy again' } });
+  await adapter!.execute({ query: 'policy again' });
   assert.equal(connectCalls, 1);
 
   await closeAllMcpConnections();

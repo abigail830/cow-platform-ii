@@ -49,7 +49,16 @@ export function agentCatalogRoot(): string {
 export function resolveCatalogPath(relativePath: string, agentDir: string): string {
   const trimmed = relativePath.trim();
   if (trimmed.startsWith('/')) {
-    return resolve(backendRoot, trimmed.slice(1));
+    const withoutLeadingSlash = trimmed.slice(1);
+    // Prefer agentAssetsRoot() — backendRoot may stop at src/agent-assets in dev (TS sources).
+    if (withoutLeadingSlash === 'agent-assets' || withoutLeadingSlash.startsWith('agent-assets/')) {
+      const suffix =
+        withoutLeadingSlash === 'agent-assets'
+          ? ''
+          : withoutLeadingSlash.slice('agent-assets/'.length);
+      return suffix ? resolve(agentAssetsRoot(), suffix) : agentAssetsRoot();
+    }
+    return resolve(backendRoot, withoutLeadingSlash);
   }
   return resolve(agentDir, trimmed);
 }

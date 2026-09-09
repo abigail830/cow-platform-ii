@@ -62,6 +62,9 @@ export type ChannelKnowledgeCaptureItem = {
   updated_at: string;
   created_at: string;
   pipeline_job: DocumentPipelineJob | null;
+  primary_segment_id: string | null;
+  segment_status: string | null;
+  segment_pipeline_job: DocumentPipelineJob | null;
 };
 
 export type ChannelKnowledgeItem = ChannelKnowledgeCaptureItem;

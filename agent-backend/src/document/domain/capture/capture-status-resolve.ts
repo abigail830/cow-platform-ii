@@ -28,8 +28,10 @@ export function segmentAsrState(segment: CaptureStatusSegment): SegmentAsrState 
 export function resolveCaptureStatusFromSegments(
   segments: CaptureStatusSegment[],
   captureJob?: { stage: string } | null,
+  inputMode?: 'document' | 'audio' | 'transcript',
 ): AudioCaptureStatus {
-  const jobStage = captureJob?.stage ?? null;
+  const usePostProcessJob = inputMode !== 'document';
+  const jobStage = usePostProcessJob ? (captureJob?.stage ?? null) : null;
   if (jobStage === 'done') return 'done';
   if (jobStage === 'failed') return 'failed';
   if (jobStage && POST_PROCESS_ACTIVE_STAGES.has(jobStage)) return 'post_processing';
@@ -38,7 +40,11 @@ export function resolveCaptureStatusFromSegments(
 
   const states = segments.map(segmentAsrState);
   if (states.some((state) => state === 'failed')) return 'failed';
-  if (states.some((state) => state === 'running')) return 'transcribing';
-  if (states.every((state) => state === 'completed')) return 'ready';
+  if (states.some((state) => state === 'running')) {
+    return inputMode === 'document' ? 'running' : 'transcribing';
+  }
+  if (states.every((state) => state === 'completed')) {
+    return inputMode === 'document' ? 'done' : 'ready';
+  }
   return 'draft';
 }

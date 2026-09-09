@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { discoverAgentDirectories, loadAgentSpec } from './discover.ts';
+import { existsSync } from 'node:fs';
 import { agentAssetsRoot, agentCatalogRoot, resolveCatalogPath } from './paths.ts';
 
 test('discovers platform agents under agent-assets/agents', () => {
@@ -15,11 +16,12 @@ test('discovers platform agents under agent-assets/agents', () => {
   }
 });
 
-test('shared skill paths resolve from backend root', () => {
+test('shared skill paths resolve under agent-assets root', () => {
   const agentDir = `${agentCatalogRoot()}/content-studio`;
   const skillPath = resolveCatalogPath('/agent-assets/skills/kb-qa', agentDir);
   assert.ok(skillPath.includes('agent-assets/skills/kb-qa'));
-  assert.ok(skillPath.startsWith(agentAssetsRoot().replace(/\/$/, '')) || skillPath.includes('agent-assets'));
+  assert.equal(skillPath, resolveCatalogPath('/agent-assets/skills/kb-qa', agentDir));
+  assert.ok(existsSync(`${skillPath}/SKILL.md`));
 });
 
 test('content-studio prompt covers knowledge Q&A and content generation', () => {

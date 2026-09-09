@@ -45,6 +45,10 @@ function s3PrefixFromKey(s3Key: string): string {
   return idx >= 0 ? normalized.slice(0, idx) : normalized;
 }
 
+function jobForceMetadataExtract(job: typeof appPipelineJobs.$inferSelect): boolean {
+  return Boolean(job.metrics?.force_metadata_extract);
+}
+
 /** Normalize pipeline override: blank → null (non-system pipelines may omit YAML). */
 export function snapshotConfigYaml(configYaml: string | null | undefined): string | null {
   const raw = configYaml?.trim();
@@ -75,6 +79,7 @@ export type PipelineJobContext = {
   /** When set, worker must write only to s3_prefix (eval-runs) — no document OSS/API writes. */
   eval_run_item_id: string | null;
   api_url: string;
+  force_metadata_extract: boolean;
 };
 
 export async function createPipelineJob(input: {
@@ -84,6 +89,7 @@ export async function createPipelineJob(input: {
   provider: PipelineProvider;
   configYaml?: string | null;
   evalRunItemId?: string | null;
+  metrics?: AsyncJobMetrics | null;
 }): Promise<typeof appPipelineJobs.$inferSelect> {
   const evalRunItemId = input.evalRunItemId?.trim() || null;
   const documentId = input.documentId?.trim() || null;
@@ -105,6 +111,7 @@ export async function createPipelineJob(input: {
       stage: 'submitted',
       configYaml: snapshotConfigYaml(input.configYaml),
       evalRunItemId,
+      metrics: input.metrics ?? null,
     })
     .returning();
   return row!;
@@ -164,9 +171,26 @@ function resolveArtifactDocumentIdFromSegmentMetadata(
   metadata: Record<string, unknown> | null | undefined,
 ): string | null {
   if (!metadata) return null;
-  if (typeof metadata.legacy_document_id === 'string') return metadata.legacy_document_id;
-  if (typeof metadata.library_document_id === 'string') return metadata.library_document_id;
+  if (typeof metadata.legacy_document_id === 'string') return metadata.legacy_document_id.trim() || null;
+  if (typeof metadata.library_document_id === 'string') return metadata.library_document_id.trim() || null;
   return null;
+}
+
+export async function resolvePipelineJobArtifactDocumentId(
+  job: typeof appPipelineJobs.$inferSelect,
+): Promise<string | null> {
+  if (job.documentId?.trim()) return job.documentId.trim();
+  if (!job.documentCaptureSegmentId) return null;
+
+  const [segment] = await db
+    .select({ metadata: appDocumentCaptureSegments.metadata })
+    .from(appDocumentCaptureSegments)
+    .where(eq(appDocumentCaptureSegments.id, job.documentCaptureSegmentId))
+    .limit(1);
+
+  return resolveArtifactDocumentIdFromSegmentMetadata(
+    segment?.metadata as Record<string, unknown> | null,
+  );
 }
 
 export async function getLatestPipelineJobsForDocuments(
@@ -269,6 +293,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
       document_s3_prefix: overrides.s3_prefix,
       eval_run_item_id: job.evalRunItemId,
       api_url: apiUrl,
+      force_metadata_extract: false,
     };
   }
 
@@ -323,6 +348,7 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
       document_s3_prefix: s3Prefix,
       eval_run_item_id: null,
       api_url: apiUrl,
+      force_metadata_extract: jobForceMetadataExtract(job),
     };
   }
 
@@ -359,7 +385,70 @@ export async function buildPipelineJobContext(jobId: string): Promise<PipelineJo
     document_s3_prefix: s3Prefix,
     eval_run_item_id: null,
     api_url: apiUrl,
+    force_metadata_extract: jobForceMetadataExtract(job),
   };
+}
+
+async function maybeSyncExtractedMetadataFromStorage(documentId: string): Promise<boolean> {
+  try {
+    const { getDocumentById, updateDocumentMetadata } = await import('../../document/application/documents.ts');
+    const { hasExtractedMetadataContent, metadataNeedsExtraction } = await import(
+      '../../document/application/document-metadata-extraction.ts'
+    );
+    const { readStorageText, storagePrefixFromS3Key } = await import('../../infrastructure/oss/storage-read.ts');
+
+    const doc = await getDocumentById(documentId);
+    if (!doc || !metadataNeedsExtraction(doc.metadata as Record<string, unknown>)) {
+      return hasExtractedMetadataContent(doc?.metadata as Record<string, unknown>);
+    }
+
+    const prefix = storagePrefixFromS3Key(doc.s3Key);
+    const raw = await readStorageText(`${prefix}/extracted_metadata.json`);
+    if (!raw?.trim()) return false;
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+    const { metadata } = await updateDocumentMetadata(documentId, parsed as Record<string, unknown>);
+    return hasExtractedMetadataContent(metadata);
+  } catch {
+    return false;
+  }
+}
+
+/** After worker marks done: sync OSS sidecar and fail job when metadata is still empty but required. */
+export async function ensureDocumentMetadataAfterPipelineDone(
+  job: typeof appPipelineJobs.$inferSelect,
+): Promise<void> {
+  if (job.evalRunItemId) return;
+
+  const { metadataExtractEnabledInJobSnapshot } = await import('../domain/pipeline-workflow-config.ts');
+  if (!metadataExtractEnabledInJobSnapshot(job.configYaml)) return;
+
+  const documentId = await resolvePipelineJobArtifactDocumentId(job);
+  if (!documentId) {
+    await updatePipelineJob(job.id, {
+      stage: 'failed',
+      errorMessage:
+        'Metadata extraction requires a library document id on the pipeline job (missing document_id / library_document_id)',
+    });
+    return;
+  }
+
+  const hasMetadata = await maybeSyncExtractedMetadataFromStorage(documentId);
+  if (hasMetadata) return;
+
+  await updatePipelineJob(job.id, {
+    stage: 'failed',
+    errorMessage:
+      'Metadata extraction did not populate document metadata (empty LLM result, skipped extraction, or storage/API sync failed)',
+  });
+  await markDocumentForJobStage(documentId, 'failed', { syncCapture: !job.documentCaptureSegmentId });
+  if (job.documentCaptureSegmentId) {
+    const { syncDocumentCaptureSegmentFromDocumentPipeline } = await import(
+      '../../document/application/document-capture-segment-pipeline.ts'
+    );
+    await syncDocumentCaptureSegmentFromDocumentPipeline(job.documentCaptureSegmentId, 'failed');
+  }
 }
 
 export async function applyPipelineJobStageSideEffects(
@@ -377,8 +466,9 @@ export async function applyPipelineJobStageSideEffects(
       '../../document/application/document-capture-segment-pipeline.ts'
     );
     await syncDocumentCaptureSegmentFromDocumentPipeline(job.documentCaptureSegmentId, stage);
-    if (job.documentId) {
-      await markDocumentForJobStage(job.documentId, stage, { syncCapture: false });
+    const documentId = await resolvePipelineJobArtifactDocumentId(job);
+    if (documentId) {
+      await markDocumentForJobStage(documentId, stage, { syncCapture: false });
     }
     return;
   }

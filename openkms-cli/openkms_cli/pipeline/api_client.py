@@ -13,6 +13,29 @@ from openkms_cli.pipeline.storage import get_s3_client
 
 console = Console(stderr=True)
 
+METADATA_CONTENT_KEYS = (
+    "abstract",
+    "author",
+    "publish_date",
+    "source",
+    "tags",
+    "categories",
+    "title",
+)
+
+
+def extracted_metadata_has_content(extracted: dict | None) -> bool:
+    if not extracted:
+        return False
+    for key in METADATA_CONTENT_KEYS:
+        val = extracted.get(key)
+        if val is None or val == "":
+            continue
+        if isinstance(val, list) and len(val) == 0:
+            continue
+        return True
+    return False
+
 
 def resolve_api_request_auth(
     *, required: bool = False,
@@ -152,9 +175,13 @@ def document_metadata_needs_extraction_via_api(
     document_id: str,
     auth_headers: dict,
     basic_auth: tuple[str, str] | None,
+    *,
+    force: bool = False,
 ) -> bool | None:
     base = api_url.rstrip("/")
     url = f"{base}/internal-api/documents/{document_id}/metadata-needs-extraction"
+    if force:
+        url = f"{url}?force=true"
     for attempt in range(2):
         resp = requests.get(url, headers={**auth_headers}, auth=basic_auth, timeout=30)
         if resp.ok:
@@ -191,22 +218,23 @@ def run_pipeline_metadata_extraction(
     task,
     auth_headers: dict,
     basic_auth: tuple[str, str] | None,
-) -> tuple[dict, tuple[str, str] | None]:
+    force_extract: bool = False,
+) -> tuple[dict, tuple[str, str] | None, bool]:
     if not extract_metadata or not document_id or not result.get("markdown"):
-        return auth_headers, basic_auth
+        return auth_headers, basic_auth, False
 
     auth_headers, basic_auth, has_api_auth = resolve_api_request_auth(required=True)
     if not has_api_auth:
-        return auth_headers, basic_auth
+        return auth_headers, basic_auth, False
 
     needs_extraction = document_metadata_needs_extraction_via_api(
-        api_url, document_id, auth_headers, basic_auth
+        api_url, document_id, auth_headers, basic_auth, force=force_extract
     )
     if needs_extraction is False:
         console.print(
             "[dim]Skipped metadata extraction: document metadata is already populated[/dim]"
         )
-        return auth_headers, basic_auth
+        return auth_headers, basic_auth, False
     if needs_extraction is None:
         console.print(
             "[yellow]Could not check document metadata via API; proceeding with extraction.[/yellow]"
@@ -238,7 +266,7 @@ def run_pipeline_metadata_extraction(
         from openkms_cli.parse.extract import extract_metadata_sync
     except ImportError:
         console.print("[yellow]Metadata extraction skipped: pip install openkms-cli[metadata][/yellow]")
-        return auth_headers, basic_auth
+        return auth_headers, basic_auth, False
 
     model_config = {
         "base_url": model_connection.get("base_url"),
@@ -267,9 +295,9 @@ def run_pipeline_metadata_extraction(
             "[dim]Document parse finished; fix the extraction model (e.g. 502 from chat/completions) "
             "or use Extract on the document page when it is healthy.[/dim]"
         )
-        return auth_headers, basic_auth
+        return auth_headers, basic_auth, False
 
-    if extracted is not None:
+    if extracted is not None and extracted_metadata_has_content(extracted):
         persist_extracted_metadata_sidecar(
             extracted,
             hash_dir=hash_dir,
@@ -292,8 +320,16 @@ def run_pipeline_metadata_extraction(
                 f"[yellow]PUT metadata failed: {resp.status_code} {resp.text[:200]}[/yellow]"
             )
             console.print(f"[dim]PUT {put_url}[/dim]")
-            console.print("[dim]Metadata is on storage; the worker merges it when the job completes.[/dim]")
+            console.print(
+                "[dim]Metadata sidecar is on storage; backend syncs it when the job completes.[/dim]"
+            )
         else:
             console.print("[green]Metadata updated via API[/green]")
+        return auth_headers, basic_auth, True
 
-    return auth_headers, basic_auth
+    if extracted is not None:
+        console.print(
+            "[yellow]Metadata extraction returned no usable fields (all empty/null)[/yellow]"
+        )
+
+    return auth_headers, basic_auth, False

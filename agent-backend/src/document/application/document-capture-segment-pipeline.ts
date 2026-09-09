@@ -4,6 +4,7 @@ import {
   appDocumentCaptures,
   appDocuments,
   db,
+  type AudioPipelineJobStage,
   type PipelineJobStage,
 } from '../../infrastructure/db/index.ts';
 import { getPipelineConfigById } from '../../pipeline/infrastructure/pipeline-config-store.ts';
@@ -12,6 +13,7 @@ import { isTranscriptSourceMetadata } from './capture/capture-transcript-upload.
 import {
   audioPipelineProviderForName,
   createAudioPipelineJob,
+  getLatestAudioPipelineJobsForDocumentCaptureSegments,
   isAudioAsyncPipelineName,
 } from '../../audio/application/audio-pipeline-jobs.ts';
 import { spawnAsyncAudioPipelineWorker } from '../../audio/infrastructure/audio-pipeline-runner.ts';
@@ -24,6 +26,29 @@ import {
 } from './document-capture-pipeline-runner.ts';
 import { assessDocumentCaptureReadiness } from './document-capture-readiness.ts';
 import { syncDocumentCaptureStatus } from './document-capture-status.ts';
+import { retryFailedJob } from '../../pipeline/application/async-job-retry.ts';
+import { stripExtractedMetadataFields } from './document-metadata-extraction.ts';
+import {
+  getLatestPipelineJobForSegment,
+  isActivePipelineJobStage,
+} from '../../pipeline/application/pipeline-jobs.ts';
+
+const ACTIVE_AUDIO_PIPELINE_JOB_STAGES = new Set<AudioPipelineJobStage>(['submitted', 'transcribing']);
+
+function isActiveAudioPipelineJobStage(stage: string): boolean {
+  return ACTIVE_AUDIO_PIPELINE_JOB_STAGES.has(stage as AudioPipelineJobStage);
+}
+
+function resolveLibraryDocumentId(metadata: Record<string, unknown> | null | undefined): string | null {
+  if (!metadata) return null;
+  if (typeof metadata.library_document_id === 'string' && metadata.library_document_id.trim()) {
+    return metadata.library_document_id.trim();
+  }
+  if (typeof metadata.legacy_document_id === 'string' && metadata.legacy_document_id.trim()) {
+    return metadata.legacy_document_id.trim();
+  }
+  return null;
+}
 
 async function getSegmentWithCapture(segmentId: string) {
   const [segment] = await db
@@ -43,10 +68,37 @@ async function getSegmentWithCapture(segmentId: string) {
   return { segment, capture };
 }
 
-async function startDocumentCaptureSegmentDocumentPipeline(
+async function ensureSegmentLibraryDocument(
   segment: typeof appDocumentCaptureSegments.$inferSelect,
   captureId: string,
-): Promise<void> {
+): Promise<string> {
+  const knowledgeMetadata = {
+    knowledge_capture_id: captureId,
+    knowledge_capture_segment_id: segment.id,
+    knowledge_archived: true,
+  };
+
+  const existingDocumentId = resolveLibraryDocumentId(segment.metadata as Record<string, unknown> | null);
+  if (existingDocumentId) {
+    const [existing] = await db
+      .select({ metadata: appDocuments.metadata })
+      .from(appDocuments)
+      .where(eq(appDocuments.id, existingDocumentId))
+      .limit(1);
+
+    await db
+      .update(appDocuments)
+      .set({
+        metadata: {
+          ...(existing?.metadata ?? {}),
+          ...knowledgeMetadata,
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(appDocuments.id, existingDocumentId));
+    return existingDocumentId;
+  }
+
   const document = await createDocumentRecord({
     channelId: segment.channelId,
     name: segment.name,
@@ -59,11 +111,7 @@ async function startDocumentCaptureSegmentDocumentPipeline(
   await db
     .update(appDocuments)
     .set({
-      metadata: {
-        knowledge_capture_id: captureId,
-        knowledge_capture_segment_id: segment.id,
-        knowledge_archived: true,
-      },
+      metadata: knowledgeMetadata,
       updatedAt: new Date(),
     })
     .where(eq(appDocuments.id, document.id));
@@ -76,9 +124,22 @@ async function startDocumentCaptureSegmentDocumentPipeline(
         library_document_id: document.id,
         knowledge_capture_id: captureId,
       },
-      status: 'running',
       updatedAt: new Date(),
     })
+    .where(eq(appDocumentCaptureSegments.id, segment.id));
+
+  return document.id;
+}
+
+async function startDocumentCaptureSegmentDocumentPipeline(
+  segment: typeof appDocumentCaptureSegments.$inferSelect,
+  captureId: string,
+): Promise<{ job_id: string }> {
+  const documentId = await ensureSegmentLibraryDocument(segment, captureId);
+
+  await db
+    .update(appDocumentCaptureSegments)
+    .set({ status: 'running', updatedAt: new Date() })
     .where(eq(appDocumentCaptureSegments.id, segment.id));
 
   const channel = await getChannelById(segment.channelId);
@@ -86,7 +147,7 @@ async function startDocumentCaptureSegmentDocumentPipeline(
     console.info(
       `[document-capture] skip parse — channel ${segment.channelId} has no pipeline_id`,
     );
-    return;
+    return { job_id: '' };
   }
 
   const pipeline = await getPipelineConfigById(channel.pipelineId);
@@ -98,9 +159,6 @@ async function startDocumentCaptureSegmentDocumentPipeline(
     '../../pipeline/application/pipeline-jobs.ts'
   );
   const { spawnAsyncPipelineWorker } = await import('../../pipeline/application/pipeline-runner.ts');
-  const { resolvePipelineConfigYamlSnapshot } = await import(
-    '../../pipeline/domain/pipeline-default-config.ts'
-  );
 
   const provider = pipelineProviderForName(pipeline.pipelineName);
   if (!provider || !isDocumentAsyncPipelineName(pipeline.pipelineName)) {
@@ -113,27 +171,46 @@ async function startDocumentCaptureSegmentDocumentPipeline(
     isSystem: pipeline.isSystem,
   });
 
+  const latestJob = await getLatestPipelineJobForSegment(segment.id);
+  const isManualRerun = latestJob?.stage === 'done';
+  if (isManualRerun) {
+    const [existingDoc] = await db
+      .select({ metadata: appDocuments.metadata })
+      .from(appDocuments)
+      .where(eq(appDocuments.id, documentId))
+      .limit(1);
+    await db
+      .update(appDocuments)
+      .set({
+        metadata: stripExtractedMetadataFields(existingDoc?.metadata as Record<string, unknown>),
+        updatedAt: new Date(),
+      })
+      .where(eq(appDocuments.id, documentId));
+  }
+
   const job = await createPipelineJob({
     documentCaptureSegmentId: segment.id,
-    documentId: document.id,
+    documentId,
     pipelineName: pipeline.pipelineName,
     provider,
     configYaml,
+    metrics: isManualRerun ? { force_metadata_extract: true } : null,
   });
 
   await spawnAsyncPipelineWorker(job.id, pipeline.pipelineName);
+  return { job_id: job.id };
 }
 
 async function startDocumentCaptureSegmentAudioPipeline(
   segmentId: string,
   channelId: string,
-): Promise<void> {
+): Promise<{ job_id: string }> {
   const channel = await getChannelById(channelId);
   if (!channel?.transcriptionPipelineId) {
     console.info(
       `[document-capture] skip ASR — channel ${channelId} has no transcription_pipeline_id`,
     );
-    return;
+    return { job_id: '' };
   }
 
   const pipeline = await getPipelineConfigById(channel.transcriptionPipelineId);
@@ -166,6 +243,85 @@ async function startDocumentCaptureSegmentAudioPipeline(
     .where(eq(appDocumentCaptureSegments.id, segmentId));
 
   await spawnAsyncAudioPipelineWorker(job.id, pipeline.pipelineName);
+  return { job_id: job.id };
+}
+
+export async function startDocumentCaptureSegmentPipeline(
+  captureId: string,
+  segmentId: string,
+): Promise<{ status: string; job_id?: string }> {
+  const ctx = await getSegmentWithCapture(segmentId);
+  if (!ctx) throw new Error('Segment not found');
+  if (ctx.capture.id !== captureId) throw new Error('Segment does not belong to this capture');
+
+  const { segment, capture } = ctx;
+  if (capture.inputMode === 'transcript') {
+    throw new Error('Transcript segments do not require processing');
+  }
+
+  if (capture.inputMode === 'document') {
+    const latestJob = await getLatestPipelineJobForSegment(segmentId);
+    if (latestJob?.stage === 'failed') {
+      const retry = await retryFailedJob('document_pipeline', latestJob.id);
+      if (retry.retried) {
+        await db
+          .update(appDocumentCaptureSegments)
+          .set({ status: 'running', updatedAt: new Date() })
+          .where(eq(appDocumentCaptureSegments.id, segmentId));
+        void syncDocumentCaptureStatus(captureId);
+        return { status: 'running', job_id: latestJob.id };
+      }
+    }
+
+    if (latestJob && isActivePipelineJobStage(latestJob.stage)) {
+      await db
+        .update(appDocumentCaptureSegments)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(eq(appDocumentCaptureSegments.id, segmentId));
+      const { spawnAsyncPipelineWorker } = await import('../../pipeline/application/pipeline-runner.ts');
+      await spawnAsyncPipelineWorker(latestJob.id, latestJob.pipelineName);
+      void syncDocumentCaptureStatus(captureId);
+      return { status: 'running', job_id: latestJob.id };
+    }
+
+    const started = await startDocumentCaptureSegmentDocumentPipeline(segment, captureId);
+    if (!started.job_id) {
+      throw new Error('Channel has no document parse pipeline configured');
+    }
+    void syncDocumentCaptureStatus(captureId);
+    return { status: 'running', job_id: started.job_id };
+  }
+
+  const audioJobs = await getLatestAudioPipelineJobsForDocumentCaptureSegments([segmentId]);
+  const latestJob = audioJobs.get(segmentId) ?? null;
+  if (latestJob?.stage === 'failed') {
+    const retry = await retryFailedJob('audio_pipeline', latestJob.id);
+    if (retry.retried) {
+      await db
+        .update(appDocumentCaptureSegments)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(eq(appDocumentCaptureSegments.id, segmentId));
+      void syncDocumentCaptureStatus(captureId);
+      return { status: 'running', job_id: latestJob.id };
+    }
+  }
+
+  if (latestJob && isActiveAudioPipelineJobStage(latestJob.stage)) {
+    await db
+      .update(appDocumentCaptureSegments)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(appDocumentCaptureSegments.id, segmentId));
+    await spawnAsyncAudioPipelineWorker(latestJob.id, latestJob.pipelineName);
+    void syncDocumentCaptureStatus(captureId);
+    return { status: 'running', job_id: latestJob.id };
+  }
+
+  const started = await startDocumentCaptureSegmentAudioPipeline(segmentId, segment.channelId);
+  if (!started.job_id) {
+    throw new Error('Channel has no transcription pipeline configured');
+  }
+  void syncDocumentCaptureStatus(captureId);
+  return { status: 'running', job_id: started.job_id };
 }
 
 export async function afterDocumentCaptureSegmentAttached(segmentId: string): Promise<void> {
@@ -217,10 +373,6 @@ export async function syncDocumentCaptureSegmentFromDocumentPipeline(
     .set({ status: segmentStatus, updatedAt: new Date() })
     .where(eq(appDocumentCaptureSegments.id, segmentId));
 
-  if (stage === 'done') {
-    void maybeStartDocumentCapturePostProcess(ctx.capture.id);
-  }
-
   void syncDocumentCaptureStatus(ctx.capture.id);
 }
 
@@ -260,6 +412,13 @@ export async function maybeStartDocumentCapturePostProcess(captureId: string): P
     .where(eq(appDocumentCaptures.id, captureId))
     .limit(1);
   if (!capture) return;
+
+  if (capture.inputMode === 'document') {
+    console.info(
+      `[document-capture-post-process] skip — document captures use parse pipeline only (capture ${captureId})`,
+    );
+    return;
+  }
 
   const readiness = await assessDocumentCaptureReadiness(captureId);
   if (!readiness.ready) return;

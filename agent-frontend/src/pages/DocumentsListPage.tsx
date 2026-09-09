@@ -6,7 +6,8 @@ import {
   bulkSegmentCaptureUpload,
   createDocumentCapture,
   deleteDocumentCapture,
-  isCapturePipelineActive,
+  runCapturePipeline,
+  runCaptureSegmentPipeline,
   uploadCaptureAudioSegment,
   uploadCaptureTranscriptSegment,
 } from '../api/documentCaptures.ts';
@@ -16,13 +17,20 @@ import {
   type ChannelKnowledgeItem,
 } from '../api/documents.ts';
 import {
+  isKnowledgeItemPipelineActive,
+  isKnowledgeItemRunBusy,
+  knowledgeItemRunActionLabel,
+  knowledgeItemRunBusyLabel,
+  resolveKnowledgeItemRunTarget,
+} from '../api/knowledge-item-pipeline.ts';
+import {
   KnowledgePipelineStatus,
   knowledgeKindLabel,
 } from '../components/KnowledgePipelineStatus.tsx';
 import { KnowledgeUploadModal } from '../components/KnowledgeUploadModal.tsx';
 import { IconDelete, IconView } from '../components/AdminActionIcons.tsx';
 import { KnowledgeFileTypeIcon } from '../components/icons/file-type-icon.tsx';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Play, Search } from 'lucide-react';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
 import { buildChannelPath } from '../shared/channel-path.ts';
 
@@ -41,10 +49,7 @@ function itemFileCount(item: ChannelKnowledgeItem): number {
 }
 
 function isItemPipelineActive(item: ChannelKnowledgeItem): boolean {
-  return isCapturePipelineActive({
-    status: item.status,
-    pipeline_job: item.pipeline_job,
-  });
+  return isKnowledgeItemPipelineActive(item);
 }
 
 export function DocumentsListPage() {
@@ -57,6 +62,7 @@ export function DocumentsListPage() {
   const [error, setError] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [runningItemIds, setRunningItemIds] = useState<Set<string>>(new Set());
 
   const flatChannels = useMemo(() => flattenChannels(channels), [channels]);
   const selectedChannel = flatChannels.find((channel) => channel.id === selectedChannelId) ?? null;
@@ -147,6 +153,33 @@ export function DocumentsListPage() {
     setUploadOpen(false);
     await loadItems();
     await refreshChannelItems(selectedChannelId);
+  }
+
+  async function handleRunItemPipeline(item: ChannelKnowledgeItem) {
+    if (isKnowledgeItemPipelineActive(item)) return;
+    const action = resolveKnowledgeItemRunTarget(item);
+    if (!action) return;
+
+    setRunningItemIds((current) => new Set(current).add(item.id));
+    setError('');
+    try {
+      if (action === 'segment') {
+        if (!item.primary_segment_id) throw new Error('No segment available to process');
+        await runCaptureSegmentPipeline(item.id, item.primary_segment_id);
+      } else {
+        await runCapturePipeline(item.id);
+      }
+      await loadItems({ silent: true });
+      await refreshChannelItems(selectedChannelId ?? undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start pipeline');
+    } finally {
+      setRunningItemIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+    }
   }
 
   async function handleDeleteItem(item: ChannelKnowledgeItem) {
@@ -244,6 +277,14 @@ export function DocumentsListPage() {
             ) : (
               items.map((item) => {
                 const isDeleting = deletingIds.has(item.id);
+                const isRunning = runningItemIds.has(item.id);
+                const runTarget = resolveKnowledgeItemRunTarget(item);
+                const runBusy = isKnowledgeItemRunBusy(item) || isRunning;
+                const runLabel = runTarget
+                  ? runBusy
+                    ? knowledgeItemRunBusyLabel(item, runTarget)
+                    : knowledgeItemRunActionLabel(item, runTarget)
+                  : null;
 
                 return (
                   <tr key={item.id}>
@@ -280,6 +321,23 @@ export function DocumentsListPage() {
                         >
                           <IconView />
                         </Link>
+                        {canWriteChannel && runTarget ? (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title={runLabel ?? 'Run pipeline'}
+                            aria-label={`${runLabel ?? 'Run pipeline'} for ${itemDisplayName(item)}`}
+                            aria-busy={runBusy}
+                            disabled={runBusy || isDeleting}
+                            onClick={() => void handleRunItemPipeline(item)}
+                          >
+                            {runBusy ? (
+                              <Loader2 {...iconProps({ className: 'icon-btn-spin' })} />
+                            ) : (
+                              <Play {...iconProps()} />
+                            )}
+                          </button>
+                        ) : null}
                         {canWriteChannel ? (
                           <button
                             type="button"

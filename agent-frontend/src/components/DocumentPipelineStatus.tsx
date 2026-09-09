@@ -71,9 +71,9 @@ function inferPipelineFailedStepIndex(job: DocumentPipelineJob): number {
   return 1;
 }
 
-function buildSteps(document: DocumentRecord): StepDef[] {
+function buildSteps(document: DocumentRecord, showPipelineTrack: boolean): StepDef[] {
   const steps: StepDef[] = [UPLOAD_STEP];
-  if (document.pipeline_job) {
+  if (document.pipeline_job || showPipelineTrack) {
     for (const step of PIPELINE_STEPS) {
       steps.push({ key: step.stage, label: step.label });
     }
@@ -89,7 +89,8 @@ function dotClassForStep(
   let dotClass = 'pipeline-step-dot';
 
   if (!job) {
-    return `${dotClass} complete`;
+    if (index === 0) return `${dotClass} complete`;
+    return `${dotClass} pending`;
   }
 
   if (index === 0) return `${dotClass} complete`;
@@ -108,7 +109,14 @@ function dotClassForStep(
   if (progress < 0) return `${dotClass} pending`;
 
   if (pipelineIndex < progress) return `${dotClass} complete`;
-  if (pipelineIndex === progress && document.status === 'running') return `${dotClass} active`;
+  if (
+    pipelineIndex === progress &&
+    job.stage !== 'done' &&
+    job.stage !== 'failed' &&
+    (document.status === 'running' || document.status === 'uploaded')
+  ) {
+    return `${dotClass} active`;
+  }
   if (pipelineIndex <= progress) return `${dotClass} complete`;
   return `${dotClass} pending`;
 }
@@ -144,17 +152,30 @@ function buildTooltip(document: DocumentRecord, job: DocumentPipelineJob | null)
 
 type DocumentPipelineStatusProps = {
   document: DocumentRecord;
+  compact?: boolean;
+  /** Always render parse pipeline nodes (list view). */
+  showPipelineTrack?: boolean;
 };
 
-export function DocumentPipelineStatus({ document }: DocumentPipelineStatusProps) {
+export function DocumentPipelineStatus({
+  document,
+  compact = false,
+  showPipelineTrack = false,
+}: DocumentPipelineStatusProps) {
   const job = document.pipeline_job;
-  const steps = buildSteps(document);
+  const steps = buildSteps(document, showPipelineTrack);
   const lastIndex = steps.length - 1;
+  const failed = document.status === 'failed' || job?.stage === 'failed';
 
   return (
-    <div className="document-pipeline-status" title={buildTooltip(document, job)}>
+    <div
+      className={`document-pipeline-status${compact ? ' document-pipeline-status--compact' : ''}`.trim()}
+      title={buildTooltip(document, job)}
+    >
       <div
-        className={`document-pipeline-stepper${steps.length === 1 ? ' is-single' : ''}`}
+        className={`document-pipeline-stepper${steps.length === 1 ? ' is-single' : ''}${
+          compact ? ' document-pipeline-stepper--list-labeled' : ''
+        }`.trim()}
         aria-label="Document progress"
       >
         {steps.map((step, index) => (
@@ -178,11 +199,11 @@ export function DocumentPipelineStatus({ document }: DocumentPipelineStatusProps
           </div>
         ))}
       </div>
-      {document.status === 'failed' && job?.error_message && (
+      {failed && job?.error_message ? (
         <p className="document-pipeline-error" title={job.error_message}>
           {shortenErrorMessage(job.error_message)}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

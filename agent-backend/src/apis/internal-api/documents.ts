@@ -64,8 +64,9 @@ documents.get('/:id/metadata-needs-extraction', async (c) => {
 
   const doc = await getDocumentById(id);
   if (!doc) return c.json({ error: 'Document not found' }, 404);
+  const force = c.req.query('force') === 'true';
   return c.json({
-    needs_extraction: metadataNeedsExtraction(doc.metadata as Record<string, unknown>),
+    needs_extraction: metadataNeedsExtraction(doc.metadata as Record<string, unknown>, { force }),
   });
 });
 

@@ -33,7 +33,7 @@ function resolveArtifactDocumentId(metadata: Record<string, unknown> | null | un
   return null;
 }
 
-function toCapturePublic(
+export function toCapturePublic(
   row: DocumentCaptureRow,
   job?: Awaited<ReturnType<typeof getLatestDocumentCapturePipelineJob>>,
   segmentCount = 0,
@@ -207,13 +207,16 @@ export async function listDocumentCaptures(input: {
           captureSegments,
           audioJobs,
         );
+        const postProcessJob =
+          row.inputMode === 'document' ? null : captureJob ? { stage: captureJob.stage } : null;
         const resolvedStatus = resolveCaptureStatusFromSegments(
           statusSegments,
-          captureJob ? { stage: captureJob.stage } : null,
+          postProcessJob,
+          row.inputMode,
         );
         return toCapturePublic(
           { ...row, status: resolvedStatus },
-          captureJob,
+          row.inputMode === 'document' ? undefined : captureJob,
           countMap.get(row.id) ?? 0,
         );
       }),
@@ -235,7 +238,8 @@ export async function getCapturePublicById(id: string) {
   const row = await getDocumentCaptureById(id);
   if (!row) return null;
 
-  const job = await getLatestDocumentCapturePipelineJob(id);
+  const job =
+    row.inputMode === 'document' ? null : await getLatestDocumentCapturePipelineJob(id);
   const [countRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(appDocumentCaptureSegments)
@@ -274,11 +278,13 @@ export async function getCaptureWithSegments(id: string, options?: { sync?: bool
       ? await getLatestPipelineJobsForSegments(segments.map((segment) => segment.id))
       : new Map();
 
-  const captureJob = await getLatestDocumentCapturePipelineJob(id);
+  const captureJob =
+    row.inputMode === 'document' ? null : await getLatestDocumentCapturePipelineJob(id);
   const statusSegments = await buildDocumentCaptureStatusSegments(row.inputMode, segments, audioJobs);
   const resolvedStatus = resolveCaptureStatusFromSegments(
     statusSegments,
     captureJob ? { stage: captureJob.stage } : null,
+    row.inputMode,
   );
 
   const capture = toCapturePublic(

@@ -473,10 +473,12 @@ def run_metadata_extraction_from_ctx(
         fail_job(api, job_id, message)
         raise RuntimeError(message)
 
+    force_extract = bool(ctx.get("force_metadata_extract"))
+    extracted_ok = False
     try:
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
             task = progress.add_task("Extracting metadata...", total=None)
-            auth_headers, basic_auth = run_pipeline_metadata_extraction(
+            auth_headers, basic_auth, extracted_ok = run_pipeline_metadata_extraction(
                 result=result,
                 hash_dir=hash_dir,
                 prefix=prefix,
@@ -495,10 +497,16 @@ def run_metadata_extraction_from_ctx(
                 task=task,
                 auth_headers=auth_headers,
                 basic_auth=basic_auth,
+                force_extract=force_extract,
             )
     except Exception as e:
         fail_job(api, job_id, str(e) or e.__class__.__name__)
         raise
+
+    if not extracted_ok:
+        message = "Metadata extraction did not produce document metadata"
+        fail_job(api, job_id, message)
+        raise RuntimeError(message)
 
     patch_job(api, job_id, stage="extracted_metadata")
     patch_job(api, job_id, stage="done")

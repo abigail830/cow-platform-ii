@@ -6303,7 +6303,7 @@ select:focus-visible {
 }
 
 .documents-main-panel .admin-table .documents-status-col {
-  min-width: 15rem;
+  min-width: 18rem;
   vertical-align: middle;
 }
 
@@ -6350,6 +6350,30 @@ select:focus-visible {
   justify-content: flex-start;
   gap: 0.35rem;
   min-width: 0;
+}
+
+.document-pipeline-status--compact {
+  gap: 0;
+}
+
+.document-pipeline-stepper.document-pipeline-stepper--list {
+  --pipeline-stepper-width: 9.5rem;
+}
+
+.document-pipeline-stepper.document-pipeline-stepper--list .pipeline-step-label {
+  display: none;
+}
+
+.document-pipeline-stepper.document-pipeline-stepper--list-labeled {
+  --pipeline-stepper-width: 14rem;
+}
+
+.document-pipeline-stepper.document-pipeline-stepper--list-labeled .pipeline-step-label {
+  font-size: 0.5625rem;
+}
+
+.documents-status-col .document-pipeline-stepper.capture-post-process-stepper {
+  --pipeline-stepper-width: 11rem;
 }
 
 .document-pipeline-error {

@@ -193,6 +193,10 @@ export async function startDocumentCapturePostProcess(
     .limit(1);
   if (!capture) throw new Error('Capture not found');
 
+  if (capture.inputMode === 'document') {
+    throw new Error('Document captures use the document parse pipeline on segments, not post-process');
+  }
+
   if (capture.status === 'post_processing') {
     throw new Error('Post-process pipeline is already running for this capture');
   }

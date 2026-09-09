@@ -94,6 +94,9 @@ export function DocumentsLayout() {
       updated_at: '',
       created_at: '',
       pipeline_job: null,
+      primary_segment_id: null,
+      segment_status: null,
+      segment_pipeline_job: null,
     };
   }, [captureMatch?.params.captureId, channelItems, selectedChannelId]);
 

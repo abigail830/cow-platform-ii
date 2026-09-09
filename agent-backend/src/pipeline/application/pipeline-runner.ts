@@ -236,11 +236,28 @@ async function startAsyncPipelineJob(documentId: string): Promise<{ jobId: strin
     isSystem: pipeline.isSystem,
   });
 
+  const { getLatestPipelineJobForDocument } = await import('./pipeline-jobs.ts');
+  const { stripExtractedMetadataFields } = await import(
+    '../../document/application/document-metadata-extraction.ts'
+  );
+  const latestJob = await getLatestPipelineJobForDocument(doc.id);
+  const isManualRerun = latestJob?.stage === 'done';
+  if (isManualRerun) {
+    await db
+      .update(appDocuments)
+      .set({
+        metadata: stripExtractedMetadataFields(doc.metadata as Record<string, unknown>),
+        updatedAt: new Date(),
+      })
+      .where(eq(appDocuments.id, doc.id));
+  }
+
   const job = await createPipelineJob({
     documentId: doc.id,
     pipelineName: pipeline.pipelineName,
     provider,
     configYaml,
+    metrics: isManualRerun ? { force_metadata_extract: true } : null,
   });
 
   await spawnAsyncPipelineWorker(job.id, pipeline.pipelineName, apiUrl);

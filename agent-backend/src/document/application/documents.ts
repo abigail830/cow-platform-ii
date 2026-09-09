@@ -14,8 +14,13 @@ import { buildChannelTree, collectChannelSubtreeIds, collectDescendantIds } from
 import {
   getLatestPipelineJobForDocument,
   getLatestPipelineJobsForDocuments,
+  getLatestPipelineJobsForSegments,
   pipelineJobToPublic,
 } from '../../pipeline/application/pipeline-jobs.ts';
+import {
+  audioPipelineJobToPublic,
+  getLatestAudioPipelineJobsForDocumentCaptureSegments,
+} from '../../audio/application/audio-pipeline-jobs.ts';
 import {
   EVAL_SHADOW_DOCUMENT_CHANNEL_NAME,
 } from '../../eval/application/eval-shadow-document.ts';
@@ -340,6 +345,9 @@ export type ChannelKnowledgeItem = {
   name: string;
   file_count: number;
   size_bytes: number;
+  primary_segment_id: string | null;
+  segment_status: string | null;
+  segment_pipeline_job: DocumentPipelineJobPublic | null;
 } & NonNullable<Awaited<ReturnType<typeof import('./document-captures.ts').getCapturePublicById>>>;
 
 export async function listChannelKnowledgeItems(input: {
@@ -368,7 +376,7 @@ export async function listChannelKnowledgeItems(input: {
   const total = captureCountRow?.count ?? 0;
 
   const captureRows = await db
-    .select({ id: appDocumentCaptures.id })
+    .select()
     .from(appDocumentCaptures)
     .where(and(...captureConditions))
     .orderBy(desc(appDocumentCaptures.updatedAt))
@@ -376,7 +384,17 @@ export async function listChannelKnowledgeItems(input: {
     .offset(offset);
 
   const captureIds = captureRows.map((row) => row.id);
-  const { getCapturePublicById } = await import('./document-captures.ts');
+  const { toCapturePublic } = await import('./document-captures.ts');
+  const { getLatestDocumentCapturePipelineJobsForCaptures } = await import(
+    './document-capture-pipeline-jobs.ts'
+  );
+  const { buildDocumentCaptureStatusSegments } = await import('./document-capture-status.ts');
+  const { resolveCaptureStatusFromSegments } = await import(
+    '../domain/capture/capture-status-resolve.ts'
+  );
+  const capturePostProcessJobs = captureIds.length
+    ? await getLatestDocumentCapturePipelineJobsForCaptures(captureIds)
+    : new Map();
 
   const captureStats = captureIds.length
     ? await db
@@ -393,19 +411,75 @@ export async function listChannelKnowledgeItems(input: {
     captureStats.map((row) => [row.captureId, { fileCount: row.fileCount, sizeBytes: row.sizeBytes }]),
   );
 
-  const items: NonNullable<ChannelKnowledgeItem>[] = [];
-  for (const row of captureRows) {
-    const capture = await getCapturePublicById(row.id);
-    if (!capture) continue;
-    const stats = captureStatsMap.get(row.id);
-    items.push({
-      kind: 'capture',
-      name: capture.title,
-      file_count: stats?.fileCount ?? capture.segment_count,
-      size_bytes: stats?.sizeBytes ?? 0,
-      ...capture,
-    });
+  const segmentRows = captureIds.length
+    ? await db
+        .select()
+        .from(appDocumentCaptureSegments)
+        .where(inArray(appDocumentCaptureSegments.captureId, captureIds))
+        .orderBy(asc(appDocumentCaptureSegments.segmentIndex), asc(appDocumentCaptureSegments.createdAt))
+    : [];
+  const primarySegmentByCapture = new Map<string, (typeof segmentRows)[number]>();
+  for (const segment of segmentRows) {
+    if (!primarySegmentByCapture.has(segment.captureId)) {
+      primarySegmentByCapture.set(segment.captureId, segment);
+    }
   }
+  const segmentsByCapture = new Map<string, (typeof segmentRows)[number][]>();
+  for (const segment of segmentRows) {
+    const list = segmentsByCapture.get(segment.captureId) ?? [];
+    list.push(segment);
+    segmentsByCapture.set(segment.captureId, list);
+  }
+
+  const allSegmentIds = segmentRows.map((segment) => segment.id);
+  const documentSegmentJobs = await getLatestPipelineJobsForSegments(allSegmentIds);
+  const audioSegmentJobs = await getLatestAudioPipelineJobsForDocumentCaptureSegments(allSegmentIds);
+
+  const items: NonNullable<ChannelKnowledgeItem>[] = await Promise.all(
+    captureRows.map(async (row) => {
+      const captureSegments = segmentsByCapture.get(row.id) ?? [];
+      const statusSegments = await buildDocumentCaptureStatusSegments(
+        row.inputMode,
+        captureSegments,
+        audioSegmentJobs,
+      );
+      const captureJob = capturePostProcessJobs.get(row.id);
+      const postProcessJob =
+        row.inputMode === 'document' ? null : captureJob ? { stage: captureJob.stage } : null;
+      const resolvedStatus = resolveCaptureStatusFromSegments(
+        statusSegments,
+        postProcessJob,
+        row.inputMode,
+      );
+      const stats = captureStatsMap.get(row.id);
+      const capture = toCapturePublic(
+        { ...row, status: resolvedStatus },
+        row.inputMode === 'document' ? undefined : captureJob,
+        stats?.fileCount ?? captureSegments.length,
+      );
+      const primarySegment = primarySegmentByCapture.get(row.id) ?? null;
+      let segmentPipelineJob: DocumentPipelineJobPublic | null = null;
+      if (primarySegment) {
+        if (row.inputMode === 'document') {
+          const job = documentSegmentJobs.get(primarySegment.id);
+          segmentPipelineJob = job ? pipelineJobToPublic(job) : null;
+        } else if (row.inputMode === 'audio') {
+          const job = audioSegmentJobs.get(primarySegment.id);
+          segmentPipelineJob = job ? audioPipelineJobToPublic(job) : null;
+        }
+      }
+      return {
+        kind: 'capture' as const,
+        name: capture.title,
+        file_count: stats?.fileCount ?? capture.segment_count,
+        size_bytes: stats?.sizeBytes ?? 0,
+        primary_segment_id: primarySegment?.id ?? null,
+        segment_status: primarySegment?.status ?? null,
+        segment_pipeline_job: segmentPipelineJob,
+        ...capture,
+      };
+    }),
+  );
 
   return { items, total };
 }

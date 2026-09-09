@@ -38,4 +38,22 @@ describe('capture-status', () => {
     );
     assert.equal(status, 'post_processing');
   });
+
+  it('document captures ignore post-process job and resolve done when parse completes', () => {
+    const status = resolveCaptureStatusFromSegments(
+      [{ status: 'completed', pipeline_job: { stage: 'done' } }],
+      { stage: 'failed' },
+      'document',
+    );
+    assert.equal(status, 'done');
+  });
+
+  it('document captures use running while parse is in flight', () => {
+    const status = resolveCaptureStatusFromSegments(
+      [{ status: 'running', pipeline_job: { stage: 'transcribing' } }],
+      null,
+      'document',
+    );
+    assert.equal(status, 'running');
+  });
 });

@@ -85,10 +85,12 @@ export async function syncDocumentCaptureStatus(captureId: string) {
     audioJobs,
   );
 
-  const captureJob = await getLatestDocumentCapturePipelineJob(captureId);
+  const captureJob =
+    capture.inputMode === 'document' ? null : await getLatestDocumentCapturePipelineJob(captureId);
   const nextStatus = resolveCaptureStatusFromSegments(
     statusSegments,
     captureJob ? { stage: captureJob.stage } : null,
+    capture.inputMode,
   );
 
   if (capture.status !== nextStatus) {

@@ -40,6 +40,7 @@ import {
   updateDocumentCapture,
 } from '../../document/application/document-captures.ts';
 import { startDocumentCapturePostProcess } from '../../document/application/document-capture-pipeline-runner.ts';
+import { startDocumentCaptureSegmentPipeline } from '../../document/application/document-capture-segment-pipeline.ts';
 import {
   AUDIO_CAPTURE_AUDIENCES,
   AUDIO_CAPTURE_RECORDING_MODES,
@@ -603,6 +604,33 @@ documentCaptures.delete(
       return c.json(refreshed);
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : 'Detach failed' }, 400);
+    }
+  },
+);
+
+documentCaptures.post(
+  '/:id/segments/:segmentId/run-pipeline',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    const segmentId = routeParam(c, 'segmentId');
+    if (!id || !segmentId) return c.json({ error: 'Capture id and segment id are required' }, 400);
+
+    const capture = await getCaptureWithSegments(id);
+    if (!capture) return c.json({ error: 'Capture not found' }, 404);
+
+    const denied = await denyUnlessChannelAccess(c, capture.channel_id, 'write');
+    if (denied) return denied;
+
+    const segment = capture.segments.find((row) => row.id === segmentId);
+    if (!segment) return c.json({ error: 'Segment not found' }, 404);
+
+    try {
+      const result = await startDocumentCaptureSegmentPipeline(id, segmentId);
+      const refreshed = await getCaptureWithSegments(id);
+      return c.json({ ...result, capture: refreshed });
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : 'Failed to start segment pipeline' }, 400);
     }
   },
 );

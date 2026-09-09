@@ -4,6 +4,7 @@ import { routeParam } from '../../infrastructure/http/route-param.ts';
 import {
   applyPipelineJobStageSideEffects,
   buildPipelineJobContext,
+  ensureDocumentMetadataAfterPipelineDone,
   getPipelineJobById,
   updatePipelineJob,
   type PipelineJobStage,
@@ -106,6 +107,13 @@ pipelineJobs.patch('/:id', async (c) => {
 
   if (body.stage) {
     await applyPipelineJobStageSideEffects(job, body.stage);
+    if (body.stage === 'done') {
+      try {
+        await ensureDocumentMetadataAfterPipelineDone({ ...job, stage: 'done' });
+      } catch (error) {
+        console.error('[pipeline] metadata validation after done failed:', error);
+      }
+    }
   }
 
   if (body.stage === 'failed' && !job.evalRunItemId) {

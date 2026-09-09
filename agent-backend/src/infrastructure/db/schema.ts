@@ -369,6 +369,8 @@ export type AsyncJobMetrics = {
   failed_from_stage?: string;
   last_error_code?: string;
   last_retry_at?: string;
+  /** Manual re-run: always run LLM metadata extraction even if fields look populated. */
+  force_metadata_extract?: boolean;
 };
 export type CapturePipelineJobStage = (typeof CAPTURE_PIPELINE_JOB_STAGES)[number];
 
