@@ -149,8 +149,10 @@ export function KnowledgeUploadModal({
         aria-labelledby="knowledge-upload-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="knowledge-upload-title">Upload</h2>
-        <p className="admin-form-hint">Channel: {channelName}</p>
+        <div className="knowledge-upload-modal-heading">
+          <h2 id="knowledge-upload-title">Upload</h2>
+          <p className="admin-form-hint knowledge-upload-channel-hint">Channel: {channelName}</p>
+        </div>
 
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div className="capture-artifact-tabs" role="tablist" aria-label="Input type">
@@ -177,18 +179,6 @@ export function KnowledgeUploadModal({
                 className={`knowledge-upload-form-panel${isDocumentTab ? ' is-hidden' : ''}`}
                 aria-hidden={isDocumentTab}
               >
-            <label className="form-checkbox knowledge-upload-separate-captures">
-              <input
-                type="checkbox"
-                className="brand-checkbox"
-                checked={separateCaptures}
-                disabled={busy}
-                onChange={(event) => setSeparateCaptures(event.target.checked)}
-              />
-              <span>Separate captures</span>
-              <SeparateCapturesTooltip />
-            </label>
-
             <div className="form-grid">
               {!separateCaptures ? (
                 <label className="form-field form-field-wide">
@@ -345,6 +335,19 @@ export function KnowledgeUploadModal({
           {error && <p className="error">{error}</p>}
 
           <div className="modal-actions">
+            {!isDocumentTab ? (
+              <label className="form-checkbox knowledge-upload-separate-captures">
+                <input
+                  type="checkbox"
+                  className="brand-checkbox"
+                  checked={separateCaptures}
+                  disabled={busy}
+                  onChange={(event) => setSeparateCaptures(event.target.checked)}
+                />
+                <span>Separate captures</span>
+                <SeparateCapturesTooltip />
+              </label>
+            ) : null}
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
               Cancel
             </button>

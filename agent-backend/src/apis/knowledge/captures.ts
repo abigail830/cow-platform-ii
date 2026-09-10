@@ -41,6 +41,7 @@ import {
 } from '../../document/application/document-captures.ts';
 import { startDocumentCapturePostProcess } from '../../document/application/document-capture-pipeline-runner.ts';
 import { startDocumentCaptureSegmentPipeline } from '../../document/application/document-capture-segment-pipeline.ts';
+import { presignCaptureSegmentPreview } from '../../document/application/capture/capture-segment-preview.ts';
 import {
   AUDIO_CAPTURE_AUDIENCES,
   AUDIO_CAPTURE_RECORDING_MODES,
@@ -580,6 +581,33 @@ documentCaptures.patch(
       return c.json(refreshed);
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : 'Reorder failed' }, 400);
+    }
+  },
+);
+
+documentCaptures.get(
+  '/:id/segments/:segmentId/preview',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    const segmentId = routeParam(c, 'segmentId');
+    if (!id || !segmentId) return c.json({ error: 'Capture id and segment id are required' }, 400);
+
+    const meta = await getCaptureChannelMeta(id);
+    if (!meta) return c.json({ error: 'Capture not found' }, 404);
+
+    const denied = await denyUnlessChannelAccess(c, meta.channel_id, 'read');
+    if (denied) return denied;
+
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    try {
+      const preview = await presignCaptureSegmentPreview(id, segmentId);
+      if (!preview) return c.json({ error: 'Segment not found' }, 404);
+      return c.json(preview);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      return c.json({ error: formatStorageError(error) }, 400);
     }
   },
 );

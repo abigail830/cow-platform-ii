@@ -531,6 +531,27 @@ export async function runCaptureSegmentPipeline(
   return (data as { capture: DocumentCaptureDetail }).capture;
 }
 
+export type CaptureSegmentPreview = {
+  playback_url: string | null;
+  transcript_url: string;
+  filename: string;
+};
+
+/** Mint playback + transcript URLs for this open action only — do not cache across reloads. */
+export async function presignCaptureSegmentPreview(
+  captureId: string,
+  segmentId: string,
+): Promise<CaptureSegmentPreview> {
+  const data = await authFetch(
+    `/api/knowledge/captures/${captureId}/segments/${segmentId}/preview`,
+  );
+  return {
+    playback_url: (data.playback_url as string | null) ?? null,
+    transcript_url: String(data.transcript_url ?? ''),
+    filename: String(data.filename ?? 'segment'),
+  };
+}
+
 export type CapturePostProcessArtifactKind =
   | 'structured_transcript'
   | 'recording_context'

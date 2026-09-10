@@ -4400,6 +4400,22 @@ textarea {
 }
 
 /* Upload modal — fixed body height; spare space goes to file list when present, else bottom */
+.knowledge-upload-modal-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  margin: 0 0 0.75rem;
+}
+
+.knowledge-upload-modal-heading h2 {
+  margin: 0;
+}
+
+.knowledge-upload-modal .knowledge-upload-channel-hint {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+}
 .knowledge-upload-modal .capture-artifact-tabs {
   width: 100%;
 }
@@ -4453,7 +4469,12 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin-bottom: 0.75rem;
+  margin: 0 auto 0 0;
+}
+
+.knowledge-upload-modal .knowledge-upload-separate-captures .field-tooltip-panel {
+  top: auto;
+  bottom: calc(100% + 0.35rem);
 }
 
 .knowledge-upload-modal .document-upload-dropzone {
@@ -6785,9 +6806,31 @@ select:focus-visible {
 }
 
 .knowledge-item-name-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.knowledge-item-name-link svg {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+}
+
+.knowledge-item-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.knowledge-item-title {
+  line-height: 1.35;
+}
+
+.knowledge-item-brief {
+  line-height: 1.35;
 }
 
 .document-name-link--table {

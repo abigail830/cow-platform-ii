@@ -293,12 +293,15 @@ export function DocumentsListPage() {
                         <KnowledgeFileTypeIcon
                           filename={item.title || item.name}
                           inputMode={item.input_mode}
+                          aria-hidden
                         />
-                        {itemDisplayName(item)}
+                        <span className="knowledge-item-copy">
+                          <span className="knowledge-item-title">{itemDisplayName(item)}</span>
+                          {item.brief ? (
+                            <span className="knowledge-item-brief documents-table-meta">{item.brief}</span>
+                          ) : null}
+                        </span>
                       </Link>
-                      {item.brief ? (
-                        <div className="documents-table-meta">{item.brief}</div>
-                      ) : null}
                     </td>
                     <td>
                       <span className="document-status-badge">{knowledgeKindLabel(item)}</span>

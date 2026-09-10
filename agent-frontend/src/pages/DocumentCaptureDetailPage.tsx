@@ -40,10 +40,12 @@ import {
 import { formatDocumentBytes } from '../api/documents.ts';
 import { isAudioPipelineActive } from '../api/capture-pipeline-utils.ts';
 import { downloadTextFile, withDownloadExtension } from '../shared/download-text.ts';
+import { IconView } from '../components/AdminActionIcons.tsx';
 import { AudioPipelineStatus } from '../components/AudioPipelineStatus.tsx';
 import { DocumentPipelineStatus } from '../components/DocumentPipelineStatus.tsx';
 import { CaptureDetailsPanel } from '../components/CaptureDetailsPanel.tsx';
 import { CapturePipelineStatus } from '../components/CapturePipelineStatus.tsx';
+import { CaptureSegmentDrawer } from '../components/CaptureSegmentDrawer.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
 import { Markdown } from '../chat/Markdown.tsx';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
@@ -366,6 +368,35 @@ function structuredTranscriptTurns(artifact: unknown): StructuredTranscriptTurn[
   return [];
 }
 
+function structuredTranscriptTurnHeading(turn: StructuredTranscriptTurn, index: number): string {
+  const timestamp = asDisplayString(turn.timestamp);
+  const speaker = asDisplayString(turn.speaker);
+  if (timestamp && speaker) return `### [${timestamp}] ${speaker}`;
+  if (timestamp) return `### [${timestamp}]`;
+  if (speaker) return `### ${speaker}`;
+  return `### ${asDisplayString(turn.turn_id) || `Turn ${index + 1}`}`;
+}
+
+function formatStructuredTranscriptMarkdown(input: {
+  captureTitle: string;
+  artifact: unknown;
+}): string {
+  const lines: string[] = [`# ${input.captureTitle}`, '', '## Structured transcript', ''];
+  const turns = structuredTranscriptTurns(input.artifact);
+  if (turns.length === 0) {
+    lines.push('No turns in this transcript.', '');
+    return `${lines.join('\n').trim()}\n`;
+  }
+
+  for (const [index, turn] of turns.entries()) {
+    lines.push(structuredTranscriptTurnHeading(turn, index), '');
+    const text = asDisplayString(turn.text).trim();
+    lines.push(text || '—', '');
+  }
+
+  return `${lines.join('\n').trim()}\n`;
+}
+
 export function DocumentCaptureDetailPage() {
   const { captureId } = useParams<{ captureId: string }>();
   const { setSelectedChannelId, canWrite } = useDocumentsOutletContext();
@@ -403,6 +434,8 @@ export function DocumentCaptureDetailPage() {
   const prevPipelineJobIdRef = useRef<string | null>(null);
   const prevJobStageRef = useRef<string | null>(null);
   const postProcessJustFinishedRef = useRef(false);
+  const [openSegmentId, setOpenSegmentId] = useState<string | null>(null);
+  const [openSegmentLabel, setOpenSegmentLabel] = useState<string | null>(null);
   const [transcribingSegmentIds, setTranscribingSegmentIds] = useState<Set<string>>(new Set());
 
   function segmentUploadFn(inputMode: DocumentCaptureInputMode) {
@@ -680,6 +713,8 @@ export function DocumentCaptureDetailPage() {
     setExtractionView('timeline');
     setShowExtractionTagging(false);
     setArtifactPreviewMaximized(false);
+    setOpenSegmentId(null);
+    setOpenSegmentLabel(null);
     prevPostProcessActiveRef.current = false;
     prevPipelineJobIdRef.current = null;
     prevJobStageRef.current = null;
@@ -806,6 +841,17 @@ export function DocumentCaptureDetailPage() {
   ]);
 
   const canWriteCapture = canWrite && Boolean(capture);
+
+  function openSegmentDrawer(segmentId: string, segmentLabel: string | null) {
+    setOpenSegmentId(segmentId);
+    setOpenSegmentLabel(segmentLabel);
+  }
+
+  const closeSegmentDrawer = useCallback(() => {
+    setOpenSegmentId(null);
+    setOpenSegmentLabel(null);
+    void loadCapture({ silent: true });
+  }, [loadCapture]);
 
   async function handleSaveDetails(input: {
     brief: string | null;
@@ -1324,7 +1370,21 @@ export function DocumentCaptureDetailPage() {
                   {capture.segments.map((segment, index) => (
                     <tr key={segment.id}>
                       <td>{segment.segment_index ?? index}</td>
-                      <td>{segment.segment_label || segment.name}</td>
+                      <td>
+                        {!documentFileCapture ? (
+                          <button
+                            type="button"
+                            className="document-name-link document-name-link--table"
+                            onClick={() =>
+                              openSegmentDrawer(segment.id, segment.segment_label || segment.name)
+                            }
+                          >
+                            {segment.segment_label || segment.name}
+                          </button>
+                        ) : (
+                          segment.segment_label || segment.name
+                        )}
+                      </td>
                       <td className="documents-table-meta">{formatSegmentBytes(segment.size_bytes)}</td>
                       <td className="documents-status-col">
                         {transcriptCapture || isTranscriptSegment(segment) ? (
@@ -1359,6 +1419,19 @@ export function DocumentCaptureDetailPage() {
                       </td>
                       <td>
                         <div className="row-actions">
+                          {!documentFileCapture ? (
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="View transcript"
+                              aria-label={`View ${segment.name}`}
+                              onClick={() =>
+                                openSegmentDrawer(segment.id, segment.segment_label || segment.name)
+                              }
+                            >
+                              <IconView />
+                            </button>
+                          ) : null}
                           {canWriteCapture && !transcriptCapture ? (
                             <>
                               <button
@@ -1481,23 +1554,45 @@ export function DocumentCaptureDetailPage() {
                   </div>
                   <div className="capture-artifact-tabs-actions">
                   {artifactTab === 'structured_transcript' && structuredArtifact != null ? (
-                    <div className="capture-structured-transcript-views" role="group" aria-label="Transcript view">
-                      <button
-                        type="button"
-                        className={`capture-structured-transcript-view${structuredTranscriptView === 'table' ? ' active' : ''}`}
-                        aria-pressed={structuredTranscriptView === 'table'}
-                        onClick={() => setStructuredTranscriptView('table')}
-                      >
-                        Table
-                      </button>
-                      <button
-                        type="button"
-                        className={`capture-structured-transcript-view${structuredTranscriptView === 'json' ? ' active' : ''}`}
-                        aria-pressed={structuredTranscriptView === 'json'}
-                        onClick={() => setStructuredTranscriptView('json')}
-                      >
-                        Raw
-                      </button>
+                    <div className="capture-extraction-toolbar">
+                      <div className="capture-structured-transcript-views" role="group" aria-label="Transcript view">
+                        <button
+                          type="button"
+                          className={`capture-structured-transcript-view${structuredTranscriptView === 'table' ? ' active' : ''}`}
+                          aria-pressed={structuredTranscriptView === 'table'}
+                          onClick={() => setStructuredTranscriptView('table')}
+                        >
+                          Table
+                        </button>
+                        <button
+                          type="button"
+                          className={`capture-structured-transcript-view${structuredTranscriptView === 'json' ? ' active' : ''}`}
+                          aria-pressed={structuredTranscriptView === 'json'}
+                          onClick={() => setStructuredTranscriptView('json')}
+                        >
+                          Raw
+                        </button>
+                      </div>
+                      <div className="document-detail-toolbar-actions">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          title="Download structured transcript as Markdown"
+                          onClick={() =>
+                            downloadTextFile(
+                              formatStructuredTranscriptMarkdown({
+                                captureTitle: capture.title,
+                                artifact: structuredArtifact,
+                              }),
+                              withDownloadExtension(`${capture.title}-structured-transcript`, 'md'),
+                              'text/markdown;charset=utf-8',
+                            )
+                          }
+                        >
+                          <Download {...iconProps()} aria-hidden />
+                          .md
+                        </button>
+                      </div>
                     </div>
                   ) : null}
                   {artifactTab === 'extraction' && extractionArtifact != null ? (
@@ -1619,6 +1714,15 @@ export function DocumentCaptureDetailPage() {
           )}
         </section>
       </div>
+
+      <CaptureSegmentDrawer
+        open={openSegmentId != null}
+        captureId={capture.id}
+        segment={capture.segments.find((segment) => segment.id === openSegmentId) ?? null}
+        segmentLabel={openSegmentLabel}
+        transcriptOnly={transcriptCapture}
+        onClose={closeSegmentDrawer}
+      />
     </div>
   );
 }
