@@ -25,6 +25,7 @@ import { isAgentLiveSseRequest, parseAgentInstancePath } from './agents/runtime/
 import { recoverOrphanedPipelineWorkOnStartup, startPipelinePollScheduler } from './pipeline/application/pipeline-poller.ts';
 import { cleanupExpiredSessionFiles } from './agents/session/services/session-files-cleanup.ts';
 import { registerOpenApi } from './apis/openapi/register-openapi.ts';
+import { registerInProcessMcpFetch } from './agents/runtime/platform-mcp-loopback-fetch.ts';
 
 registerModelProviders();
 void recoverOrphanedPipelineWorkOnStartup()
@@ -142,5 +143,6 @@ flueRoutes.route('/', flue());
 app.route('/api', flueRoutes);
 
 registerOpenApi(app);
+registerInProcessMcpFetch(app.fetch.bind(app));
 
 export default app;

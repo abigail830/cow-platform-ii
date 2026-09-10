@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { createPlatformMcpFetch } from './platform-mcp-loopback-fetch.ts';
 
 export type AgentRequestContext = {
   instanceId?: string;
@@ -22,18 +23,5 @@ export function getAgentRequestContext(): AgentRequestContext | undefined {
 
 /** Forward Playground auth headers when the agent runtime calls loopback MCP. Request headers override static env headers. */
 export function createAgentRequestForwardingFetch(): typeof fetch {
-  return async (input, init) => {
-    const ctx = getAgentRequestContext();
-    const headers = new Headers(init?.headers);
-    if (ctx?.authorization) {
-      headers.set('authorization', ctx.authorization);
-    }
-    if (ctx?.openkmsApiKey) {
-      headers.set('x-openkms-api-key', ctx.openkmsApiKey);
-    }
-    if (ctx?.instanceId) {
-      headers.set('x-flue-instance-id', ctx.instanceId);
-    }
-    return fetch(input, { ...init, headers });
-  };
+  return createPlatformMcpFetch();
 }

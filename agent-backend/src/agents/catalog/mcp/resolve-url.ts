@@ -9,17 +9,21 @@ export function resolveOpenkmsApiBaseUrl(): string {
   return process.env.OPENKMS_API_URL?.trim()?.replace(/\/$/, '') ?? 'http://127.0.0.1:8787';
 }
 
-function resolveHeaders(headersEnv?: Record<string, string>): HeadersInit | undefined {
+function resolveHeaders(
+  headersEnv?: Record<string, string>,
+  options?: { allowMissing?: boolean },
+): HeadersInit | undefined {
   if (!headersEnv) return undefined;
   const headers: Record<string, string> = {};
   for (const [header, envName] of Object.entries(headersEnv)) {
     const value = process.env[envName]?.trim();
     if (!value) {
+      if (options?.allowMissing) continue;
       throw new Error(`Missing MCP header env ${envName} for header ${header}`);
     }
     headers[header] = value;
   }
-  return headers;
+  return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
 export function resolveMcpServerUrl(server: McpServerYaml): string {
@@ -47,5 +51,5 @@ export function resolveMcpServerUrl(server: McpServerYaml): string {
 }
 
 export function resolveMcpServerHeaders(server: McpServerYaml): HeadersInit | undefined {
-  return resolveHeaders(server.headersEnv);
+  return resolveHeaders(server.headersEnv, { allowMissing: server.useAgentRequestHeaders });
 }
