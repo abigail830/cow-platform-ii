@@ -6,6 +6,7 @@ import {
   bulkSegmentCaptureUpload,
   createDocumentCapture,
   deleteDocumentCapture,
+  moveDocumentCapture,
   runCapturePipeline,
   runCaptureSegmentPipeline,
   uploadCaptureAudioSegment,
@@ -28,10 +29,12 @@ import {
   knowledgeKindLabel,
 } from '../components/KnowledgePipelineStatus.tsx';
 import { KnowledgeUploadModal } from '../components/KnowledgeUploadModal.tsx';
-import { IconDelete, IconView } from '../components/AdminActionIcons.tsx';
+import { DocumentMoveModal } from '../components/DocumentMoveModal.tsx';
+import { IconDelete, IconMove, IconView } from '../components/AdminActionIcons.tsx';
 import { KnowledgeFileTypeIcon } from '../components/icons/file-type-icon.tsx';
 import { Loader2, Play, Search } from 'lucide-react';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
+import { channelHasWriteAccess } from '../shared/channel-access.ts';
 import { buildChannelPath } from '../shared/channel-path.ts';
 
 import { iconProps } from '../components/icons/icon-props.ts';
@@ -61,6 +64,7 @@ export function DocumentsListPage() {
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [movingItem, setMovingItem] = useState<ChannelKnowledgeItem | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [runningItemIds, setRunningItemIds] = useState<Set<string>>(new Set());
 
@@ -69,7 +73,7 @@ export function DocumentsListPage() {
   const selectedChannelPath = selectedChannel
     ? buildChannelPath(flatChannels, selectedChannel.id)
     : '';
-  const canWriteChannel = Boolean(selectedChannel?.my_access?.write);
+  const canWriteChannel = channelHasWriteAccess(selectedChannel);
 
   const loadItems = useCallback(async (options?: { silent?: boolean }) => {
     if (!selectedChannelId) {
@@ -179,6 +183,18 @@ export function DocumentsListPage() {
         next.delete(item.id);
         return next;
       });
+    }
+  }
+
+  async function handleMoveItem(channelId: string) {
+    if (!movingItem) return;
+    const sourceChannelId = movingItem.channel_id;
+    await moveDocumentCapture(movingItem.id, channelId);
+    setMovingItem(null);
+    await loadItems();
+    await refreshChannelItems(sourceChannelId);
+    if (channelId !== sourceChannelId) {
+      await refreshChannelItems(channelId);
     }
   }
 
@@ -344,6 +360,18 @@ export function DocumentsListPage() {
                         {canWriteChannel ? (
                           <button
                             type="button"
+                            className="icon-btn"
+                            title="Move to channel"
+                            aria-label={`Move ${itemDisplayName(item)}`}
+                            disabled={isDeleting}
+                            onClick={() => setMovingItem(item)}
+                          >
+                            <IconMove />
+                          </button>
+                        ) : null}
+                        {canWriteChannel ? (
+                          <button
+                            type="button"
                             className={`icon-btn danger icon-btn--delete${isDeleting ? ' is-busy' : ''}`}
                             title={isDeleting ? 'Deleting…' : 'Delete'}
                             disabled={isDeleting}
@@ -377,6 +405,16 @@ export function DocumentsListPage() {
           Showing {items.length} of {total} items
         </p>
       )}
+
+      {movingItem ? (
+        <DocumentMoveModal
+          itemName={itemDisplayName(movingItem)}
+          currentChannelId={movingItem.channel_id}
+          channels={channels}
+          onCancel={() => setMovingItem(null)}
+          onSubmit={handleMoveItem}
+        />
+      ) : null}
 
       {uploadOpen && selectedChannel && (
         <KnowledgeUploadModal

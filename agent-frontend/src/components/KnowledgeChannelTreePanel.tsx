@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Folder, Loader2, Plus, Settings, Trash2 } from 'lucide-react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
 import type { ChannelKnowledgeItem } from '../api/documents.ts';
+import { channelHasWriteAccess } from '../shared/channel-access.ts';
 import { KnowledgeFileTypeIcon } from './icons/file-type-icon.tsx';
 import { iconProps } from './icons/icon-props.ts';
 
@@ -10,10 +11,6 @@ export type KnowledgeTreeSelection =
 
 function channelCanManage(channel: DocumentChannel): boolean {
   return Boolean(channel.my_access?.manage);
-}
-
-function channelCanWrite(channel: DocumentChannel): boolean {
-  return Boolean(channel.my_access?.write);
 }
 
 function itemDisplayName(item: ChannelKnowledgeItem): string {
@@ -87,7 +84,7 @@ function ChannelTreeBranch({
   const channelActive =
     selection?.type === 'channel' && selection.channelId === channel.id;
   const canManage = channelCanManage(channel);
-  const canWrite = channelCanWrite(channel);
+  const canWrite = channelHasWriteAccess(channel);
 
   return (
     <li className="knowledge-tree-node">

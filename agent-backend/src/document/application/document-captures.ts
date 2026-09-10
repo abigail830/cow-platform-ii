@@ -23,6 +23,7 @@ import {
   buildDocumentCaptureStatusSegments,
   syncDocumentCaptureStatus,
 } from './document-capture-status.ts';
+import { getChannelById } from './documents.ts';
 
 export type DocumentCaptureRow = typeof appDocumentCaptures.$inferSelect;
 
@@ -31,6 +32,18 @@ function resolveArtifactDocumentId(metadata: Record<string, unknown> | null | un
   if (typeof metadata.library_document_id === 'string') return metadata.library_document_id;
   if (typeof metadata.legacy_document_id === 'string') return metadata.legacy_document_id;
   return null;
+}
+
+function linkedDocumentIds(metadata: Record<string, unknown> | null | undefined): string[] {
+  if (!metadata) return [];
+  const ids = new Set<string>();
+  if (typeof metadata.library_document_id === 'string' && metadata.library_document_id.trim()) {
+    ids.add(metadata.library_document_id.trim());
+  }
+  if (typeof metadata.legacy_document_id === 'string' && metadata.legacy_document_id.trim()) {
+    ids.add(metadata.legacy_document_id.trim());
+  }
+  return [...ids];
 }
 
 export function toCapturePublic(
@@ -335,6 +348,52 @@ export async function updateDocumentCapture(
 
   if (!row) return null;
   return getCapturePublicById(row.id);
+}
+
+/** Reassign channel membership only — do not copy, rewrite, or delete OSS parse/ASR artifacts. */
+export async function moveDocumentCapture(
+  id: string,
+  channelId: string,
+): Promise<ReturnType<typeof toCapturePublic> | null> {
+  const existing = await getDocumentCaptureById(id);
+  if (!existing) return null;
+
+  const channel = await getChannelById(channelId);
+  if (!channel) throw new Error('Channel not found');
+
+  if (existing.channelId === channelId) {
+    return getCapturePublicById(existing.id);
+  }
+
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    await tx
+      .update(appDocumentCaptures)
+      .set({ channelId, updatedAt: now })
+      .where(eq(appDocumentCaptures.id, id));
+
+    await tx
+      .update(appDocumentCaptureSegments)
+      .set({ channelId, updatedAt: now })
+      .where(eq(appDocumentCaptureSegments.captureId, id));
+
+    const segments = await tx
+      .select({ metadata: appDocumentCaptureSegments.metadata })
+      .from(appDocumentCaptureSegments)
+      .where(eq(appDocumentCaptureSegments.captureId, id));
+
+    const documentIds = [
+      ...new Set(segments.flatMap((segment) => linkedDocumentIds(segment.metadata))),
+    ];
+    if (documentIds.length > 0) {
+      await tx
+        .update(appDocuments)
+        .set({ channelId, updatedAt: now })
+        .where(inArray(appDocuments.id, documentIds));
+    }
+  });
+
+  return getCapturePublicById(id);
 }
 
 export async function deleteDocumentCapture(id: string): Promise<boolean> {

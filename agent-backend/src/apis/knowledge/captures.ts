@@ -36,6 +36,7 @@ import {
   getCaptureChannelMeta,
   getCaptureWithSegments,
   listDocumentCaptures,
+  moveDocumentCapture,
   reorderCaptureSegments,
   updateDocumentCapture,
 } from '../../document/application/document-captures.ts';
@@ -290,7 +291,23 @@ documentCaptures.patch(
       participants_hint?: string | null;
       recording_mode?: string | null;
       audience?: string;
+      channel_id?: string;
     }>();
+
+    if (body.channel_id) {
+      const destDenied = await denyUnlessChannelAccess(c, body.channel_id, 'write');
+      if (destDenied) return destDenied;
+      try {
+        const moved = await moveDocumentCapture(id, body.channel_id);
+        if (!moved) return c.json({ error: 'Capture not found' }, 404);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to move item';
+        const status = message.includes('not found') ? 404 : 400;
+        return c.json({ error: message }, status);
+      }
+      const refreshed = await getCaptureWithSegments(id);
+      return c.json(refreshed);
+    }
 
     if (body.recording_mode && !AUDIO_CAPTURE_RECORDING_MODES.includes(body.recording_mode as never)) {
       return c.json({ error: 'Invalid recording_mode' }, 400);

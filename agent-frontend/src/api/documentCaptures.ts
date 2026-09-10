@@ -658,6 +658,17 @@ export async function updateDocumentCapture(
   }) as Promise<DocumentCaptureDetail>;
 }
 
+export async function moveDocumentCapture(
+  id: string,
+  channelId: string,
+): Promise<DocumentCaptureDetail> {
+  return authFetch(`/api/knowledge/captures/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel_id: channelId }),
+  }) as Promise<DocumentCaptureDetail>;
+}
+
 export async function deleteDocumentCapture(id: string): Promise<void> {
   await authFetch(`/api/knowledge/captures/${id}`, { method: 'DELETE' });
 }

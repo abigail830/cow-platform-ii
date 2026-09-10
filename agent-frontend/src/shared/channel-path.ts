@@ -7,6 +7,7 @@ type ChannelWithParent = {
 export function buildChannelPath(
   flatChannels: readonly ChannelWithParent[],
   channelId: string,
+  separator = ' / ',
 ): string {
   const byId = new Map(flatChannels.map((channel) => [channel.id, channel]));
   const parts: string[] = [];
@@ -15,5 +16,5 @@ export function buildChannelPath(
     parts.unshift(current.name);
     current = current.parent_id ? byId.get(current.parent_id) : undefined;
   }
-  return parts.join(' / ');
+  return parts.join(separator);
 }

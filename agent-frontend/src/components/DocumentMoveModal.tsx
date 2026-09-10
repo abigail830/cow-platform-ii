@@ -1,48 +1,25 @@
 import { useMemo, useState } from 'react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
-import { flattenChannels } from '../api/documentChannels.ts';
+import { listWritableChannelMoveOptions } from '../shared/channel-access.ts';
 
 type DocumentMoveModalProps = {
-  documentName: string;
+  itemName: string;
   currentChannelId: string;
   channels: DocumentChannel[];
   onCancel: () => void;
   onSubmit: (channelId: string) => Promise<void>;
 };
 
-function channelLabel(channel: DocumentChannel, depth: number): string {
-  const indent = depth > 0 ? `${'  '.repeat(depth)}` : '';
-  return `${indent}${channel.name}`;
-}
-
-function channelDepth(channels: DocumentChannel[], targetId: string, depth = 0): number {
-  for (const channel of channels) {
-    if (channel.id === targetId) return depth;
-    if (channel.children.length > 0) {
-      const found = channelDepth(channel.children, targetId, depth + 1);
-      if (found >= 0) return found;
-    }
-  }
-  return -1;
-}
-
 export function DocumentMoveModal({
-  documentName,
+  itemName,
   currentChannelId,
   channels,
   onCancel,
   onSubmit,
 }: DocumentMoveModalProps) {
-  const flatChannels = useMemo(() => flattenChannels(channels), [channels]);
   const options = useMemo(
-    () =>
-      flatChannels
-        .filter((channel) => channel.id !== currentChannelId)
-        .map((channel) => ({
-          id: channel.id,
-          label: channelLabel(channel, channelDepth(channels, channel.id)),
-        })),
-    [channels, currentChannelId, flatChannels],
+    () => listWritableChannelMoveOptions(channels, currentChannelId),
+    [channels, currentChannelId],
   );
 
   const [channelId, setChannelId] = useState(options[0]?.id ?? '');
@@ -60,7 +37,7 @@ export function DocumentMoveModal({
     try {
       await onSubmit(channelId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to move document');
+      setError(err instanceof Error ? err.message : 'Failed to move item');
     } finally {
       setBusy(false);
     }
@@ -68,10 +45,15 @@ export function DocumentMoveModal({
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-card model-config-form" onClick={(event) => event.stopPropagation()}>
-        <h2>Move document</h2>
+      <div
+        className="modal-card model-config-form"
+        role="dialog"
+        aria-labelledby="knowledge-move-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="knowledge-move-title">Move to channel</h2>
         <p className="admin-form-hint">
-          Move <strong>{documentName}</strong> to another channel.
+          Move <strong>{itemName}</strong> to another channel. Parsed artifacts stay in place.
         </p>
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div className="form-grid">
@@ -85,7 +67,7 @@ export function DocumentMoveModal({
                 autoFocus
               >
                 {options.length === 0 ? (
-                  <option value="">No other channels available</option>
+                  <option value="">No other writable channels</option>
                 ) : (
                   options.map((option) => (
                     <option key={option.id} value={option.id}>
@@ -102,7 +84,7 @@ export function DocumentMoveModal({
               Cancel
             </button>
             <button type="submit" className="btn-primary" disabled={busy || options.length === 0}>
-              {busy ? 'Moving…' : 'Move document'}
+              {busy ? 'Moving…' : 'Move'}
             </button>
           </div>
         </form>
