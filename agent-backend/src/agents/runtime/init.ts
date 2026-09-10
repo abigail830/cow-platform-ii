@@ -20,6 +20,10 @@ import { runSubmissionGovernanceAtStartup } from './submission-governance.ts';
 import { createDefaultEnvFactory } from './default-env.ts';
 import { normalizeBuiltModules } from './normalize-modules.ts';
 import { startMcpLifecycleHealthCheck } from '../catalog/mcp/connection-cache.ts';
+import {
+  repairWedgedConversationStream,
+  repairWedgedConversationStreamWithRetry,
+} from './repair-wedged-conversation-stream.ts';
 
 let initialized = false;
 let initPromise: Promise<void> | undefined;
@@ -191,16 +195,35 @@ async function runFlueRuntimeInit(): Promise<void> {
 
   const dispatchQueue = createNodeDispatchQueue(agentCoordinator);
 
+  async function repairConversationAfterAbort(agentName: string, instanceId: string): Promise<void> {
+    await repairWedgedConversationStreamWithRetry(agentName, instanceId);
+    await agentCoordinator.reconcileSubmissions();
+  }
+
   configureFlueRuntime({
     target: 'node',
     devMode: process.env.FLUE_MODE === 'local',
     temporaryLocalExposure: false,
     agents,
     workflows,
-    createAgentAdmission: (agentName, instanceId) =>
-      agentCoordinator.createAdmission(agentName, instanceId),
-    abortAgentInstance: (agentName, instanceId) =>
-      agentCoordinator.abortInstance(agentName, instanceId),
+    createAgentAdmission: (agentName, instanceId) => {
+      const admit = agentCoordinator.createAdmission(agentName, instanceId);
+      return async (payload, onEvent, waitForResult, traceCarrier) => {
+        try {
+          await repairWedgedConversationStream(agentName, instanceId);
+        } catch (error) {
+          console.error('[flue:conversation-repair] pre-admission repair failed:', error);
+        }
+        return admit(payload, onEvent, waitForResult, traceCarrier);
+      };
+    },
+    abortAgentInstance: async (agentName, instanceId) => {
+      const aborted = await agentCoordinator.abortInstance(agentName, instanceId);
+      void repairConversationAfterAbort(agentName, instanceId).catch((error) => {
+        console.error('[flue:conversation-repair] post-abort repair failed:', error);
+      });
+      return aborted;
+    },
     dispatchQueue,
     activityGate,
     admitWorkflow: ({ workflowName, input }) => {
