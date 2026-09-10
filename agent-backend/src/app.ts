@@ -46,7 +46,10 @@ const app = new Hono();
 app.use(
   '*',
   cors({
-    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5180,http://127.0.0.1:5180').split(','),
+    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5180,http://127.0.0.1:5180')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
     allowHeaders: [
       'Authorization',
       'Content-Type',
@@ -58,6 +61,7 @@ app.use(
       'mcp-protocol-version',
     ],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    exposeHeaders: ['Stream-Next-Offset', 'Stream-Up-To-Date'],
   }),
 );
 
@@ -83,6 +87,11 @@ flueRoutes.use('*', async (c, next) => {
       rememberOpenKmsApiKeyForInstance(parsed.instanceId, c.req.raw);
       const method = c.req.method;
       const isSse = isAgentLiveSseRequest(c.req.url, c.req.header('accept'));
+      const isAttachment = new URL(c.req.url).pathname.includes('/attachments/');
+      if (!isAttachment && (method === 'GET' || method === 'HEAD')) {
+        c.header('Cache-Control', 'no-store');
+        c.header('X-Accel-Buffering', 'no');
+      }
       if (method === 'POST') {
         agentInstanceStreamRegistry.touchActivity(parsed.instanceId, { extendMs: 10 * 60 * 1000 });
       } else if ((method === 'GET' || method === 'HEAD') && isSse) {

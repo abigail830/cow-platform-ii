@@ -4,6 +4,7 @@ import { startFlueRuntimeInit } from '../src/agents/runtime/init.ts';
 
 const vercelConfig = {
   maxDuration: 300,
+  supportsResponseStreaming: true,
 };
 
 const handler = getRequestListener(app.fetch.bind(app));

@@ -85,9 +85,11 @@ curl https://<backend>/health
 
 After a good deploy, the Vercel function size should be ~10 MB (full esbuild bundle), not ~5 MB (Hono preset compiling `src/` only).
 
-## SSE / agent streaming
+## Live updates / agent streaming
 
-`maxDuration: 300` is set in `.vc-config.json`. Vercel **Hobby** still caps execution at **10s**; **Pro** is required for longer agent SSE streams.
+`maxDuration: 300` and `supportsResponseStreaming: true` are set in `.vc-config.json`. Vercel **Hobby** still caps execution at **10s**; **Pro** is required for long-poll waits (~30s) and agent turns.
+
+Do **not** use Flue SSE (`VITE_FLUE_LIVE_MODE=sse`) against this serverless backend. `ConversationStreamStore.subscribe()` is in-process only, so a live SSE GET on one instance never sees admissions that ran on another. Production frontend uses **`long-poll`**.
 
 ## Known serverless limits
 

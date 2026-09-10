@@ -4,6 +4,7 @@ import { useMemo, type ReactNode } from 'react';
 import { flueApiBaseUrl } from '../api/base.ts';
 import { getToken } from '../api/auth.ts';
 import { getAgentApiKey, OPENKMS_API_KEY_HEADER } from '../api/agent-api-key.ts';
+import { createFlueFetch } from '../chat/flue-fetch.ts';
 
 export function FlueAuthProvider({ children }: { children: ReactNode }) {
   const client = useMemo(
@@ -18,7 +19,7 @@ export function FlueAuthProvider({ children }: { children: ReactNode }) {
           if (agentApiKey) headers[OPENKMS_API_KEY_HEADER] = agentApiKey;
           return headers;
         },
-        fetch: (input, init) => globalThis.fetch(input, init),
+        fetch: createFlueFetch(),
       }),
     [],
   );

@@ -28,12 +28,16 @@ import {
 let initialized = false;
 let initPromise: Promise<void> | undefined;
 
+const READY_TIMEOUT_MS = Number(process.env.FLUE_READY_TIMEOUT_MS ?? 20_000);
+
 /** Start Flue init in the background (Vercel cold start). Safe to call multiple times. */
 export function startFlueRuntimeInit(): void {
   if (!initPromise) {
+    const startedAt = Date.now();
     initPromise = runFlueRuntimeInit()
       .then(() => {
         initialized = true;
+        console.info(`[flue] runtime ready in ${Date.now() - startedAt}ms`);
       })
       .catch((error) => {
         initPromise = undefined;
@@ -45,7 +49,24 @@ export function startFlueRuntimeInit(): void {
 /** Await Flue runtime readiness — only needed before agent/workflow Flue routes. */
 export async function ensureFlueReady(): Promise<void> {
   startFlueRuntimeInit();
-  await initPromise!;
+  const pending = initPromise!;
+  if (!Number.isFinite(READY_TIMEOUT_MS) || READY_TIMEOUT_MS <= 0) {
+    await pending;
+    return;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      pending,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`[flue] Runtime init timed out after ${READY_TIMEOUT_MS}ms`));
+        }, READY_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export async function initFlueRuntime(): Promise<void> {

@@ -14,7 +14,7 @@ Deploy as a **separate** Vercel project from `agent-backend` (e.g. frontend = `c
 | Variable | Required | Notes |
 |----------|----------|--------|
 | `VITE_API_ORIGIN` | **Yes** | Backend origin, e.g. `https://cow-platform-ii.vercel.app` (no trailing slash). Set in **Vercel env** or committed `.env.production` — **not** in local `.env` (breaks `npm run dev`). |
-| `VITE_FLUE_LIVE_MODE` | No | Default `sse` |
+| `VITE_FLUE_LIVE_MODE` | No | Production **forces `long-poll`** (SSE cannot see work from another serverless instance). Set `VITE_FLUE_ALLOW_SSE=1` only to debug SSE. Local default `sse`. |
 
 **Local dev:** use `.env.development` only (`VITE_API_ORIGIN` unset). Copy `.env.example` → `.env` if needed; do not point `VITE_API_ORIGIN` at production while developing locally.
 
@@ -30,6 +30,8 @@ Deploy as a **separate** Vercel project from `agent-backend` (e.g. frontend = `c
 
 Leave `VITE_API_ORIGIN` unset in `.env`. Vite proxy (`vite.config.ts`) forwards `/api` to `http://127.0.0.1:8787`.
 
-## SSE note
+## Live updates (do not use SSE on Vercel)
 
-Agent chat uses SSE end-to-end. Backend needs Vercel **Pro** for `maxDuration` > 10s on serverless functions.
+Flue `subscribe()` is **in-process only**. On Vercel the admission worker and the browser's live GET run in **different serverless instances**, so SSE never sees new tokens and can hold the function until `maxDuration`. Production therefore uses **`VITE_FLUE_LIVE_MODE=long-poll`**.
+
+Backend still needs Vercel **Pro** for `maxDuration` > 10s so a long-poll wait (up to ~30s) is not killed.

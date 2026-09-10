@@ -99,6 +99,7 @@ writeFileSync(
       handler: 'index.cjs',
       launcherType: 'Nodejs',
       maxDuration: 300,
+      supportsResponseStreaming: true,
       regions,
     },
     null,
