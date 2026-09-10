@@ -4399,7 +4399,7 @@ textarea {
   margin-top: 1rem;
 }
 
-/* Upload modal — fixed body height; spare space stays at the bottom, not in the dropzone */
+/* Upload modal — fixed body height; spare space goes to file list when present, else bottom */
 .knowledge-upload-modal .capture-artifact-tabs {
   width: 100%;
 }
@@ -4419,11 +4419,22 @@ textarea {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+.knowledge-upload-modal .knowledge-upload-modal-body:has(.document-upload-file-list) .knowledge-upload-modal-stack {
+  flex: 1 1 auto;
 }
 
 .knowledge-upload-modal .knowledge-upload-modal-spacer {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.knowledge-upload-modal .knowledge-upload-modal-body:has(.document-upload-file-list) .knowledge-upload-modal-spacer {
+  flex: 0 0 0;
+  height: 0;
+  overflow: hidden;
 }
 
 .knowledge-upload-modal .knowledge-upload-form-panel {
@@ -4458,10 +4469,14 @@ textarea {
 
 .knowledge-upload-modal .knowledge-upload-file-list-slot {
   flex: 0 0 auto;
-  max-height: 5.5rem;
+  margin-top: 0.75rem;
+  min-height: 0;
+}
+
+.knowledge-upload-modal .knowledge-upload-modal-body:has(.document-upload-file-list) .knowledge-upload-file-list-slot {
+  flex: 1 1 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
-  margin-top: 0.75rem;
 }
 
 .knowledge-upload-modal .knowledge-upload-modal-body--document .document-upload-dropzone {
