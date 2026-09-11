@@ -1,4 +1,22 @@
-const CUSTOMIZATION_PATH = '/audio/application/asr/customization';
+/** Same service prefix as openkms-cli transcription (`/services/audio/asr/transcription`). */
+const CUSTOMIZATION_PATH = '/services/audio/asr/customization';
+
+/** Vocabulary API uses DashScope native /api/v1, not OpenAI compatible-mode. */
+export function normalizeDashScopeAsrBaseUrl(baseUrl: string): string {
+  const base = baseUrl.trim().replace(/\/$/, '');
+  if (!base) return base;
+  if (/dashscope(?:-intl|-us)?\.aliyuncs\.com\/compatible-mode\/v1$/i.test(base)) {
+    return base.replace(/\/compatible-mode\/v1$/i, '/api/v1');
+  }
+  if (/\.maas\.aliyuncs\.com\/compatible-mode\/v1$/i.test(base)) {
+    return base.replace(/\/compatible-mode\/v1$/i, '/api/v1');
+  }
+  return base;
+}
+
+export function dashScopeVocabularyUrl(baseUrl: string): string {
+  return `${normalizeDashScopeAsrBaseUrl(baseUrl)}${CUSTOMIZATION_PATH}`;
+}
 
 export type DashScopeVocabularyCredentials = {
   apiKey: string;
@@ -36,7 +54,7 @@ export async function dashScopeCreateVocabulary(
     vocabulary: VocabularyEntry[];
   },
 ): Promise<string> {
-  const url = `${creds.baseUrl.replace(/\/$/, '')}${CUSTOMIZATION_PATH}`;
+  const url = dashScopeVocabularyUrl(creds.baseUrl);
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -72,7 +90,7 @@ export async function dashScopeUpdateVocabulary(
     vocabulary: VocabularyEntry[];
   },
 ): Promise<void> {
-  const url = `${creds.baseUrl.replace(/\/$/, '')}${CUSTOMIZATION_PATH}`;
+  const url = dashScopeVocabularyUrl(creds.baseUrl);
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -95,7 +113,7 @@ export async function dashScopeDeleteVocabulary(
   creds: DashScopeVocabularyCredentials,
   vocabularyId: string,
 ): Promise<void> {
-  const url = `${creds.baseUrl.replace(/\/$/, '')}${CUSTOMIZATION_PATH}`;
+  const url = dashScopeVocabularyUrl(creds.baseUrl);
   const response = await fetch(url, {
     method: 'POST',
     headers: {
