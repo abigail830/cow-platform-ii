@@ -23,6 +23,7 @@ import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../la
 import { getNavPage } from '../shared/admin-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { DocumentsOutletProvider } from './DocumentsOutletContext.tsx';
+import { ResizableSplitHandle } from '../components/ResizableSplitHandle.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 
 const PAGE = getNavPage('/knowledge/documents')!;
@@ -65,9 +66,19 @@ export function DocumentsLayout() {
   const [forbidden, setForbidden] = useState(false);
   const [channelModal, setChannelModal] = useState<ChannelModalState | null>(null);
 
-  const { containerRef, leftPct, onHandleMouseDown } = useResizableSplit('documents-channel-split', 18, {
+  const {
+    containerRef,
+    leftPct,
+    isDragging,
+    leftCollapsed,
+    onHandleMouseDown,
+    collapseLeft,
+    expandLeft,
+    resetLeftSize,
+  } = useResizableSplit('documents-channel-split', 18, {
     minPct: 12,
     maxPct: 42,
+    collapsibleLeft: true,
   });
 
   const isListRoute = location.pathname === '/knowledge/documents';
@@ -342,7 +353,7 @@ export function DocumentsLayout() {
 
         <div
           ref={containerRef}
-          className="documents-layout"
+          className={`documents-layout${leftCollapsed ? ' documents-layout--left-collapsed' : ''}`}
           style={{ ['--documents-left-pct' as string]: `${leftPct}%` }}
         >
           <KnowledgeChannelTreePanel
@@ -364,12 +375,15 @@ export function DocumentsLayout() {
             onCollapseAll={handleCollapseAllChannels}
           />
 
-          <div
-            className="documents-split-handle"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize channel panel"
+          <ResizableSplitHandle
+            isDragging={isDragging}
+            leftCollapsed={leftCollapsed}
+            collapsibleLeft
+            ariaLabel="Resize channel panel"
             onMouseDown={onHandleMouseDown}
+            onCollapseLeft={collapseLeft}
+            onExpandLeft={expandLeft}
+            onDoubleClick={resetLeftSize}
           />
 
           <section className="documents-main-panel">
