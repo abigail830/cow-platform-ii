@@ -1,7 +1,4 @@
-import {
-  extensionFromFilename,
-  isFileImage,
-} from './file-text-extract-constants.ts';
+import { extensionFromFilename, isFileImage } from './file-text-extract-constants.ts';
 
 export type ExtractResult = {
   text: string;
@@ -68,16 +65,7 @@ export async function extractFileText(params: {
   }
 
   if (isFileImage(params.filename)) {
-    if (!params.fileId?.trim()) {
-      throw new Error('fileId is required for image text extraction');
-    }
-    const { extractFileImageText } = await import('./file-image-text-extract.ts');
-    return extractFileImageText({
-      fileId: params.fileId.trim(),
-      filename: params.filename,
-      mimeType: params.mimeType,
-      bytes: params.bytes,
-    });
+    throw new Error('Image text extraction is not supported');
   }
 
   throw new Error(`Unsupported file extension: ${ext || '(none)'}`);

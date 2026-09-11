@@ -353,8 +353,15 @@ textarea {
   display: flex;
   align-items: center;
   justify-self: end;
-  gap: 0.25rem;
+  gap: 0.5rem;
   min-width: 0;
+}
+
+.topbar-right-divider {
+  width: 1px;
+  height: 1.375rem;
+  background: #e2e8f0;
+  flex-shrink: 0;
 }
 
 .topbar-brand {
@@ -461,8 +468,8 @@ textarea {
 .topbar-admin-entry {
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.25rem;
+  height: 2.25rem;
   padding: 0;
   border: none;
   border-radius: 8px;
@@ -536,8 +543,8 @@ textarea {
 .topbar-avatar {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: #f3f4f6;
   color: #9ca3af;
@@ -545,7 +552,7 @@ textarea {
 }
 
 .topbar-user-email {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: #6b7280;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2898,7 +2905,7 @@ textarea {
 
 .eval-dataset-list-entry {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.4rem;
   min-width: 0;
 }
@@ -2918,8 +2925,11 @@ textarea {
 }
 
 .eval-dataset-list-desc {
-  line-height: 1.25;
-  margin: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .eval-run-list-name:hover,
@@ -2932,7 +2942,8 @@ textarea {
 .eval-dataset-list-icon {
   flex-shrink: 0;
   color: var(--brand-orange);
-  align-self: center;
+  align-self: flex-start;
+  margin-top: 0.15rem;
 }
 
 .eval-dataset-item-reference {
@@ -8848,6 +8859,14 @@ select:focus-visible {
 
 .builtin-agent-name-link:hover strong {
   color: var(--brand-orange);
+}
+
+.builtin-agent-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .builtin-agents-table .builtin-agent-table-meta {

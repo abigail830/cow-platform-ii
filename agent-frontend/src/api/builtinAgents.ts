@@ -2,11 +2,7 @@ import { apiUrl } from './base.ts';
 import { getToken } from './auth.ts';
 import { formatApiError } from './http.ts';
 
-export type BuiltinWorkflowKey =
-  | 'session_image_extract'
-  | 'metadata_extract'
-  | 'faq_extract'
-  | 'faq_polish';
+export type BuiltinWorkflowKey = 'faq_polish';
 
 export type BuiltinAgent = {
   id: string;

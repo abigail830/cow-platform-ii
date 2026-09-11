@@ -265,7 +265,7 @@ export function EvalDatasetsListPage() {
                           {row.name}
                         </Link>
                         {row.description ? (
-                          <div className="admin-muted eval-dataset-list-desc">{row.description}</div>
+                          <span className="knowledge-item-brief eval-dataset-list-desc">{row.description}</span>
                         ) : null}
                       </div>
                     </div>

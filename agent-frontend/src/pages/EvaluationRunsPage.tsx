@@ -1742,7 +1742,7 @@ export function EvaluationRunsListPage() {
                           {run.name}
                         </Link>
                         {run.description ? (
-                          <div className="admin-muted eval-dataset-list-desc">{run.description}</div>
+                          <span className="knowledge-item-brief eval-dataset-list-desc">{run.description}</span>
                         ) : null}
                       </div>
                     </div>

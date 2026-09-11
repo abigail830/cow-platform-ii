@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Copy, Pencil, Trash2 } from 'lucide-react';
+import { Bot, Copy, Pencil, Trash2 } from 'lucide-react';
 import {
   deleteBuiltinAgent,
   listBuiltinAgents,
@@ -139,12 +139,21 @@ export function BuiltinAgentsPage() {
               {agents.map((agent) => (
                 <tr key={agent.id}>
                   <td>
-                    <Link to={`/admin/builtin-agents/${agent.id}`} className="builtin-agent-name-link">
-                      <strong>{agent.name}</strong>
-                    </Link>
-                    {agent.is_system && <span className="admin-badge">System</span>}
-                    <div className="builtin-agent-table-meta admin-muted">
-                      {agent.description?.trim() || agent.slug}
+                    <div className="eval-dataset-list-entry">
+                      <Bot {...iconProps({ size: 16, className: 'eval-dataset-list-icon' })} aria-hidden />
+                      <div className="eval-dataset-list-text">
+                        <div className="builtin-agent-name-row">
+                          <Link to={`/admin/builtin-agents/${agent.id}`} className="eval-run-list-name">
+                            {agent.name}
+                          </Link>
+                          {agent.is_system ? <span className="admin-badge">System</span> : null}
+                        </div>
+                        {(agent.description?.trim() || agent.slug) && (
+                          <span className="knowledge-item-brief eval-dataset-list-desc">
+                            {agent.description?.trim() || agent.slug}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="builtin-agent-table-meta">

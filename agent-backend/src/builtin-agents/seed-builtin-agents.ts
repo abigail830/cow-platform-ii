@@ -62,14 +62,13 @@ export async function seedBuiltinAgents(): Promise<void> {
 
   if (existing.length === 0) {
     const chatModelId = await pickDefaultModel('chat-completions');
-    const vlmModelId = await pickDefaultModel('vlm');
     if (!chatModelId) {
       console.warn('[builtin-agents] Skipping seed: no chat-completions model configured.');
       return;
     }
 
     for (const seed of BUILTIN_AGENT_SEEDS) {
-      const modelConfigId = seed.apiType === 'vlm' ? vlmModelId ?? chatModelId : chatModelId;
+      const modelConfigId = chatModelId;
       const [row] = await db
         .insert(appBuiltinAgentDefs)
         .values({

@@ -48,16 +48,13 @@ export function BuiltinAgentEditPage() {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
-  const [workflowKey, setWorkflowKey] = useState<BuiltinWorkflowKey>('faq_extract');
+  const [workflowKey, setWorkflowKey] = useState<BuiltinWorkflowKey>('faq_polish');
   const [modelConfigId, setModelConfigId] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [userPromptTemplate, setUserPromptTemplate] = useState('');
   const [temperature, setTemperature] = useState('0.2');
 
   const [chatModels, setChatModels] = useState<ModelConfig[]>([]);
-  const [vlmModels, setVlmModels] = useState<ModelConfig[]>([]);
-
-  const models = workflowKey === 'session_image_extract' ? vlmModels : chatModels;
 
   const applyAgentToForm = useCallback((row: BuiltinAgent) => {
     setAgent(row);
@@ -73,20 +70,13 @@ export function BuiltinAgentEditPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([
-      listModelConfigs({ apiType: 'chat-completions', limit: 100 }),
-      listModelConfigs({ apiType: 'vlm', limit: 100 }),
-    ])
-      .then(([chat, vlm]) => {
+    void listModelConfigs({ apiType: 'chat-completions', limit: 100 })
+      .then((chat) => {
         if (cancelled) return;
         setChatModels(chat.models);
-        setVlmModels(vlm.models);
       })
       .catch(() => {
-        if (!cancelled) {
-          setChatModels([]);
-          setVlmModels([]);
-        }
+        if (!cancelled) setChatModels([]);
       });
     return () => {
       cancelled = true;
@@ -142,7 +132,7 @@ export function BuiltinAgentEditPage() {
           name: name.trim(),
           description: description.trim() || null,
           workflow_key: workflowKey,
-          api_type: workflowKey === 'session_image_extract' ? 'vlm' : 'chat-completions',
+          api_type: 'chat-completions',
           model_config_id: modelConfigId,
           system_prompt: systemPrompt,
           user_prompt_template: userPromptTemplate,
@@ -293,7 +283,7 @@ export function BuiltinAgentEditPage() {
                 disabled={!canWrite}
               >
                 <option value="">Select model…</option>
-                {models.map((model) => (
+                {chatModels.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.name} ({model.modelId})
                   </option>
@@ -342,7 +332,7 @@ export function BuiltinAgentEditPage() {
         <BuiltinAgentPlayground
           agentId={agent.id}
           workflowKey={agent.workflow_key}
-          models={models}
+          models={chatModels}
           baseConfig={{
             modelConfigId,
             systemPrompt,

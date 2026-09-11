@@ -24,7 +24,6 @@ export function useResizableSplit(
   const preCollapseLeftPctRef = useRef(defaultLeftPct);
 
   const [isDragging, setIsDragging] = useState(false);
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
 
   const [leftPct, setLeftPct] = useState(() => {
     const stored = localStorage.getItem(storageKey);
@@ -35,12 +34,7 @@ export function useResizableSplit(
   });
 
   leftPctRef.current = leftPct;
-
-  useEffect(() => {
-    if (collapsibleLeft && leftPct <= 0) {
-      setLeftCollapsed(true);
-    }
-  }, [collapsibleLeft, leftPct]);
+  const leftCollapsed = collapsibleLeft && leftPct <= 0;
 
   const onHandleMouseDown = useCallback((event: ReactMouseEvent) => {
     event.preventDefault();
@@ -54,13 +48,11 @@ export function useResizableSplit(
     if (leftPctRef.current > 0) {
       preCollapseLeftPctRef.current = leftPctRef.current;
     }
-    setLeftCollapsed(true);
     setLeftPct(0);
     localStorage.setItem(storageKey, '0');
   }, [storageKey]);
 
   const expandLeft = useCallback(() => {
-    setLeftCollapsed(false);
     const restore = preCollapseLeftPctRef.current;
     const next = Math.min(maxPct, Math.max(minPct, restore));
     setLeftPct(next);
@@ -68,7 +60,6 @@ export function useResizableSplit(
   }, [maxPct, minPct, storageKey]);
 
   const resetLeftSize = useCallback(() => {
-    setLeftCollapsed(false);
     setLeftPct(defaultLeftPct);
     localStorage.setItem(storageKey, String(defaultLeftPct));
   }, [defaultLeftPct, storageKey]);
@@ -80,19 +71,10 @@ export function useResizableSplit(
       const next = ((event.clientX - rect.left) / rect.width) * 100;
 
       const collapsed = collapsibleLeft && leftPctRef.current <= 0;
-
-      if (collapsibleLeft && collapsed && next > 1.5) {
-        setLeftCollapsed(false);
-      }
-
       const floor = collapsibleLeft && collapsed ? 0 : minPct;
       let clamped = Math.min(maxPct, Math.max(floor, next));
-      if (collapsibleLeft && clamped > 0 && collapsed) {
-        setLeftCollapsed(false);
-      }
       if (collapsibleLeft && clamped <= 0) {
         clamped = 0;
-        setLeftCollapsed(true);
       }
       setLeftPct(clamped);
     }
@@ -105,7 +87,6 @@ export function useResizableSplit(
       document.body.style.userSelect = '';
 
       if (collapsibleLeft && leftPctRef.current <= 0) {
-        setLeftCollapsed(true);
         setLeftPct(0);
         localStorage.setItem(storageKey, '0');
         return;
@@ -113,7 +94,6 @@ export function useResizableSplit(
 
       if (collapsibleLeft && leftPctRef.current > 0) {
         preCollapseLeftPctRef.current = leftPctRef.current;
-        setLeftCollapsed(false);
       }
       localStorage.setItem(storageKey, String(leftPctRef.current));
     }

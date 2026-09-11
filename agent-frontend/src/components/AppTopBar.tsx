@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Settings, User } from 'lucide-react';
+import { Toolbox, User } from 'lucide-react';
 import type { AuthUser } from '../api/auth.ts';
 import { KNOWLEDGE_MANAGEMENT_PAGES } from '../shared/admin-nav.ts';
 import { isAdminSectionPath, resolveDefaultAdminPath } from '../shared/app-layout-mode.ts';
@@ -83,9 +83,10 @@ export function AppTopBar({ user, userLabel, activePath, onNavigate, onLogout }:
             title="Administration"
             aria-label="Administration"
           >
-            <Settings {...iconProps()} aria-hidden />
+            <Toolbox {...iconProps({ size: 18 })} aria-hidden />
           </button>
         )}
+        {showAdmin && <span className="topbar-right-divider" aria-hidden />}
         <div className="topbar-user-wrap" ref={userMenuRef}>
           <button
             type="button"
@@ -96,7 +97,7 @@ export function AppTopBar({ user, userLabel, activePath, onNavigate, onLogout }:
             title={userLabel}
           >
             <span className="topbar-avatar" aria-hidden>
-              <User {...iconProps()} />
+              <User {...iconProps({ size: 18 })} />
             </span>
             <span className="topbar-user-email">{userLabel}</span>
           </button>

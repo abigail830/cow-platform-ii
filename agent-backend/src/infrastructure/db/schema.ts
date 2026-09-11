@@ -726,12 +726,7 @@ export const appPipelineJobs = pgTable(
   ],
 );
 
-export const BUILTIN_WORKFLOW_KEYS = [
-  'session_image_extract',
-  'metadata_extract',
-  'faq_extract',
-  'faq_polish',
-] as const;
+export const BUILTIN_WORKFLOW_KEYS = ['faq_polish'] as const;
 export type BuiltinWorkflowKey = (typeof BUILTIN_WORKFLOW_KEYS)[number];
 
 export const BUILTIN_OUTPUT_MODES = ['text', 'json', 'structured'] as const;
