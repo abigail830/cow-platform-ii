@@ -6574,23 +6574,42 @@ select:focus-visible {
 
 .kb-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1rem;
 }
 
+@media (min-width: 1200px) {
+  .kb-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1199.98px) {
+  .kb-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .kb-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 1rem 1.1rem 0.65rem;
-  border: 1px solid #e2e8f0;
+  border: none;
   border-radius: 10px;
   background: #fff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 14px rgba(15, 23, 42, 0.06);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .kb-card:hover {
-  border-color: var(--brand-orange-muted);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  box-shadow:
+    0 2px 6px rgba(15, 23, 42, 0.06),
+    0 8px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
 .kb-card-main {
@@ -6645,8 +6664,25 @@ select:focus-visible {
   cursor: default;
 }
 
+.kb-card-type-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  padding: 0.22rem 0.55rem;
+  border-radius: 0 10px 0 8px;
+  background: var(--brand-orange);
+  color: #ffffff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
 .kb-card-title {
   margin: 0;
+  padding-right: 3.25rem;
   font-size: 1rem;
   font-weight: 600;
   overflow: hidden;
@@ -6654,22 +6690,9 @@ select:focus-visible {
   white-space: nowrap;
 }
 
-.kb-type-badge {
-  display: inline-block;
-  font-size: 0.6875rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
-  background: var(--brand-orange-soft);
-  color: var(--brand-orange-hover);
-  font-weight: 600;
-}
-
-.kb-card-type-row {
-  margin-top: 0.35rem;
-}
-
 .kb-card-description {
-  margin: 0.35rem 0 0;
+  margin: 0.25rem 0 0;
+  min-height: calc(0.8125rem * 1.45 * 2);
   font-size: 0.8125rem;
   line-height: 1.45;
   color: #64748b;

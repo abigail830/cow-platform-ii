@@ -196,12 +196,10 @@ export function KnowledgeBasesListPage() {
         <div className="kb-card-grid">
           {filteredItems.map((kb) => (
             <article key={kb.id} className="kb-card">
+              <span className="kb-card-type-corner">{typeLabel(kb.type)}</span>
               <Link to={`/knowledge/knowledge-bases/${kb.id}`} className="kb-card-main">
                 <h2 className="kb-card-title">{kb.name}</h2>
-                <div className="kb-card-type-row">
-                  <span className="kb-type-badge">{typeLabel(kb.type)}</span>
-                </div>
-                {kb.description && <p className="kb-card-description">{kb.description}</p>}
+                <p className="kb-card-description">{kb.description ?? ''}</p>
               </Link>
               <div className="kb-card-footer">
                 <p className="kb-card-meta">{kb.item_count ?? 0} items</p>
