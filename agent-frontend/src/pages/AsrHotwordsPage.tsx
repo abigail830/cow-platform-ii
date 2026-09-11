@@ -140,8 +140,8 @@ export function AsrHotwordsPage() {
         <header className="admin-header">
           <AdminPageTitle main={PAGE.titleMain} accent={PAGE.titleAccent} />
           <AdminPageDescription>
-            Manage ASR hotwords and tag audio channels. Linked words are merged and synced to DashScope
-            as a precompiled vocabulary when a channel transcription pipeline runs.
+            Manage ASR hotwords and tag document channels. Linked words are merged and synced to DashScope
+            when a channel starts an ASR transcription job (save is instant; vocabulary compile runs at job time).
           </AdminPageDescription>
         </header>
 

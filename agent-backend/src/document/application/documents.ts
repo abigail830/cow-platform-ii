@@ -241,22 +241,14 @@ export async function updateChannel(
     .returning();
 
   if (input.transcriptionPipelineId !== undefined) {
-    try {
-      const { syncDocumentChannelAsrVocabularyIfPipelineChanged } = await import(
-        '../../audio/application/asr-hotwords.ts'
-      );
-      await syncDocumentChannelAsrVocabularyIfPipelineChanged(
-        id,
-        existing.transcriptionPipelineId,
-        input.transcriptionPipelineId,
-      );
-    } catch (error) {
-      // Channel row is already saved; vocabulary sync runs again on hotword save or ASR job dispatch.
-      console.warn(
-        `[document-channels] ASR vocabulary sync skipped after pipeline update for ${id}:`,
-        error instanceof Error ? error.message : error,
-      );
-    }
+    const { invalidateDocumentChannelAsrVocabularyIfPipelineChanged } = await import(
+      '../../audio/application/asr-hotwords.ts'
+    );
+    await invalidateDocumentChannelAsrVocabularyIfPipelineChanged(
+      id,
+      existing.transcriptionPipelineId,
+      input.transcriptionPipelineId,
+    );
   }
 
   return toChannelPublic(row!);

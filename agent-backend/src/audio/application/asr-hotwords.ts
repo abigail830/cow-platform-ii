@@ -253,14 +253,22 @@ export async function syncDocumentChannelAsrVocabulary(channelId: string): Promi
     .where(eq(appDocumentChannels.id, channelId));
 }
 
-export async function resyncDocumentChannelsForHotword(hotwordId: string): Promise<void> {
-  const links = await db
-    .select({ channelId: appAsrHotwordDocumentChannels.channelId })
+async function hotwordCountForDocumentChannel(channelId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
     .from(appAsrHotwordDocumentChannels)
-    .where(eq(appAsrHotwordDocumentChannels.hotwordId, hotwordId));
-  for (const link of links) {
-    await syncDocumentChannelAsrVocabulary(link.channelId);
-  }
+    .where(eq(appAsrHotwordDocumentChannels.channelId, channelId));
+  return row?.count ?? 0;
+}
+
+/** Mark channel vocabularies stale after hotword edits — DashScope sync runs on ASR job dispatch. */
+async function invalidateDocumentChannelAsrVocabulary(channelIds: string[]): Promise<void> {
+  const unique = [...new Set(channelIds)];
+  if (unique.length === 0) return;
+  await db
+    .update(appDocumentChannels)
+    .set({ asrVocabularySyncedAt: null, updatedAt: new Date() })
+    .where(inArray(appDocumentChannels.id, unique));
 }
 
 async function replaceHotwordDocumentChannels(hotwordId: string, channelIds: string[]): Promise<void> {
@@ -304,9 +312,7 @@ export async function createAsrHotword(
 
   if (channelIds.length > 0) {
     await replaceHotwordDocumentChannels(row!.id, channelIds);
-    for (const channelId of [...new Set(channelIds)]) {
-      await syncDocumentChannelAsrVocabulary(channelId);
-    }
+    await invalidateDocumentChannelAsrVocabulary(channelIds);
   }
 
   const channelMap = await channelIdsForHotwords([row!.id]);
@@ -350,15 +356,8 @@ export async function updateAsrHotword(
   if (input.channelIds !== undefined) {
     await replaceHotwordDocumentChannels(id, input.channelIds);
     for (const channelId of input.channelIds) affectedChannels.add(channelId);
-  } else {
-    await resyncDocumentChannelsForHotword(id);
   }
-
-  if (input.channelIds !== undefined) {
-    for (const channelId of affectedChannels) {
-      await syncDocumentChannelAsrVocabulary(channelId);
-    }
-  }
+  await invalidateDocumentChannelAsrVocabulary([...affectedChannels]);
 
   const channelMap = await channelIdsForHotwords([row!.id]);
   return toPublic(row!, channelMap.get(row!.id) ?? []);
@@ -370,35 +369,43 @@ export async function deleteAsrHotword(id: string): Promise<void> {
 
   const channelIds = [...existing.channel_ids];
   await db.delete(appAsrHotwords).where(eq(appAsrHotwords.id, id));
-
-  for (const channelId of channelIds) {
-    await syncDocumentChannelAsrVocabulary(channelId);
-  }
+  await invalidateDocumentChannelAsrVocabulary(channelIds);
 }
 
 export async function getDocumentChannelAsrVocabularyIdForJob(channelId: string): Promise<string | null> {
   const channel = await getChannelById(channelId);
-  if (!channel?.asrVocabularyId?.trim()) return null;
+  if (!channel) return null;
+
+  const hotwordCount = await hotwordCountForDocumentChannel(channelId);
+  if (hotwordCount === 0) {
+    if (channel.asrVocabularyId?.trim()) {
+      await syncDocumentChannelAsrVocabulary(channelId);
+    }
+    return null;
+  }
+
   const creds = await resolveDocumentChannelAsrCredentials(channelId);
   if (!creds) return null;
-  if (channel.asrVocabularyTargetModel !== creds.targetModel) {
+
+  const stale =
+    !channel.asrVocabularyId?.trim() ||
+    !channel.asrVocabularySyncedAt ||
+    channel.asrVocabularyTargetModel !== creds.targetModel;
+
+  if (stale) {
     await syncDocumentChannelAsrVocabulary(channelId);
     const refreshed = await getChannelById(channelId);
     return refreshed?.asrVocabularyId?.trim() || null;
   }
+
   return channel.asrVocabularyId.trim();
 }
 
-export async function syncDocumentChannelAsrVocabularyIfPipelineChanged(
+export async function invalidateDocumentChannelAsrVocabularyIfPipelineChanged(
   channelId: string,
   previousTranscriptionPipelineId: string | null,
   nextTranscriptionPipelineId: string | null,
 ): Promise<void> {
   if (previousTranscriptionPipelineId === nextTranscriptionPipelineId) return;
-  const links = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(appAsrHotwordDocumentChannels)
-    .where(eq(appAsrHotwordDocumentChannels.channelId, channelId));
-  if ((links[0]?.count ?? 0) === 0) return;
-  await syncDocumentChannelAsrVocabulary(channelId);
+  await invalidateDocumentChannelAsrVocabulary([channelId]);
 }

@@ -507,12 +507,19 @@ export function ChannelSettingsModal({
 
           {error && <p className="error">{error}</p>}
           <div className="modal-actions">
-            {tab === 'hotwords' && channelHotwords?.asr_vocabulary_synced_at ? (
+            {tab === 'hotwords' && (channelHotwords?.hotwords.length ?? 0) > 0 ? (
               <p className="admin-form-hint channel-hotwords-sync-meta">
-                Vocabulary synced at {new Date(channelHotwords.asr_vocabulary_synced_at).toLocaleString()}
-                {channelHotwords.asr_vocabulary_target_model
-                  ? ` for ${channelHotwords.asr_vocabulary_target_model}.`
-                  : '.'}
+                {channelHotwords?.asr_vocabulary_synced_at ? (
+                  <>
+                    Vocabulary last synced at{' '}
+                    {new Date(channelHotwords.asr_vocabulary_synced_at).toLocaleString()}
+                    {channelHotwords.asr_vocabulary_target_model
+                      ? ` for ${channelHotwords.asr_vocabulary_target_model}.`
+                      : '.'}
+                  </>
+                ) : (
+                  <>Vocabulary compiles on the next ASR job for this channel.</>
+                )}
               </p>
             ) : null}
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
