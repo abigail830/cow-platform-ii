@@ -45,8 +45,11 @@ Run `npx tsc --noEmit` locally before deploy to catch type errors.
 | `OPENKMS_CLI_BASIC_USER` / `OPENKMS_CLI_BASIC_PASSWORD` | internal-api auth |
 | `GITHUB_PIPELINE_TOKEN` | PAT with `actions:write` on `cow-platform-ii` |
 | `GITHUB_PIPELINE_REPOSITORY` | `abigail830/cow-platform-ii` |
-| `MODEL_PROFILE` + provider keys | Agent models |
 | `AWS_*` | OSS document + audio storage |
+
+LLM / embedding API keys are stored in **Admin → Model Configuration** (database), not in Vercel env.
+
+Pipeline parse/transcribe secrets (`OPENKMS_BAIDU_*`, `OPENKMS_DOCMIND_*`, etc.) belong in **GitHub Actions secrets** for `openkms-cli` workers — not on the backend Vercel project unless you run `PIPELINE_WORKER=spawn` locally.
 
 **OSS CORS (required for document detail and browser uploads):** Parsed content (`markdown.md`, `page_index.json`) is fetched by the **browser** via presigned URLs. Document, audio, and capture segment uploads use **presigned PUT** from the browser directly to OSS (bypasses Vercel's ~4.5 MB request body limit). In Aliyun OSS → bucket → **Cross-Origin Resource Sharing**, allow your frontend origin (e.g. `https://cow-platform.vercel.app`), with methods **`GET`, `PUT`, `HEAD`** and headers `*`. Without GET CORS, the detail page shows storage read errors while the list still works. Without PUT CORS, large uploads fail with a network/CORS error.
 
@@ -60,8 +63,8 @@ Knowledge base import uses **separate** jobs (`app_kb_import_jobs`) and GHA work
 
 | Variable | Notes |
 |----------|--------|
-| `KB_PAGEINDEX_IMPORT_WORKER` | `github_actions` on Vercel (default); `spawn` for local dev |
-| `GITHUB_KB_PAGEINDEX_IMPORT_WORKFLOW` | Default `openkms-kb-pageindex-import.yml` |
+| `KB_IMPORT_WORKER` | `github_actions` on Vercel (default); `spawn` for local dev |
+| `GITHUB_KB_IMPORT_WORKFLOW` | Default `openkms-kb-pageindex-import.yml` |
 | `GITHUB_PIPELINE_TOKEN` / `GITHUB_PIPELINE_REPOSITORY` | Same PAT/repo as document pipeline (workflow dispatch) |
 
 Enable the workflow in GitHub **Actions** for this repo. After deploy, smoke test locally: `npm run verify:knowledge-bases` (backend must be running).
@@ -84,12 +87,6 @@ curl https://<backend>/health
 ```
 
 After a good deploy, the Vercel function size should be ~10 MB (full esbuild bundle), not ~5 MB (Hono preset compiling `src/` only).
-
-## Live updates / agent streaming
-
-`maxDuration: 300` and `supportsResponseStreaming: true` are set in `.vc-config.json`. Vercel **Hobby** still caps execution at **10s**; **Pro** is required for long-poll waits (~30s) and agent turns.
-
-Do **not** use Flue SSE (`VITE_FLUE_LIVE_MODE=sse`) against this serverless backend. `ConversationStreamStore.subscribe()` is in-process only, so a live SSE GET on one instance never sees admissions that ran on another. Production frontend uses **`long-poll`**.
 
 ## Known serverless limits
 

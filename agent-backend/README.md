@@ -1,6 +1,6 @@
 # Agent Backend
 
-Hono API for the Agent Platform (auth, admin, agents).
+Hono API for the Agent Platform (auth, knowledge management, evaluation, admin).
 
 ## Prerequisites
 
