@@ -314,7 +314,7 @@ export function DocumentsListPage() {
                         <span className="knowledge-item-copy">
                           <span className="knowledge-item-title">{itemDisplayName(item)}</span>
                           {item.brief ? (
-                            <span className="knowledge-item-brief documents-table-meta">{item.brief}</span>
+                            <span className="knowledge-item-brief">{item.brief}</span>
                           ) : null}
                         </span>
                       </Link>

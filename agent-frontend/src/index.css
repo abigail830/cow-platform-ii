@@ -5475,10 +5475,24 @@ select:focus-visible {
 
 .knowledge-item-title {
   line-height: 1.35;
+  font-weight: 500;
+  color: #0f172a;
 }
 
 .knowledge-item-brief {
   line-height: 1.35;
+  font-size: 0.75rem;
+  font-weight: 400;
+  font-style: italic;
+  color: #94a3b8;
+}
+
+.document-name-link:hover .knowledge-item-title {
+  color: var(--brand-orange);
+}
+
+.document-name-link:hover .knowledge-item-brief {
+  color: #64748b;
 }
 
 .document-name-link--table {
