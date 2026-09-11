@@ -4,6 +4,7 @@ node_modules/
 data/
 dist/
 .flue/
+.flue-vite/
 .vercel/
 api/index.js
 api/index.mjs

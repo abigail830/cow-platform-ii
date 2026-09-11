@@ -18,6 +18,10 @@ import {
   updateChannel,
 } from '../../document/application/documents.ts';
 import { listHotwordsForDocumentChannel } from '../../audio/application/asr-hotwords.ts';
+import { isAudioAsyncPipelineName } from '../../audio/domain/audio-pipeline-names.ts';
+import { isCapturePostProcessPipelineName } from '../../document/domain/capture/capture-post-process-pipeline-names.ts';
+import { isDocumentAsyncPipelineName } from '../../pipeline/application/pipeline-jobs.ts';
+import { listPipelineConfigs } from '../../pipeline/infrastructure/pipeline-config-store.ts';
 
 const channels = new Hono();
 
@@ -28,13 +32,6 @@ channels.get(
   requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
   async (c) => {
     try {
-    const { listPipelineConfigs } = await import('../pipeline/infrastructure/pipeline-config-store.ts');
-    const { isDocumentAsyncPipelineName } = await import('../pipeline/application/pipeline-jobs.ts');
-    const { isAudioAsyncPipelineName } = await import('../audio/domain/audio-pipeline-names.ts');
-    const { isCapturePostProcessPipelineName } = await import(
-      '../document/domain/capture/capture-post-process-pipeline-names.ts'
-    );
-
     const { pipelines } = await listPipelineConfigs({ enabledOnly: true, limit: 100 });
     const documentPipelines = pipelines.filter((pipeline) =>
       isDocumentAsyncPipelineName(pipeline.pipelineName),
