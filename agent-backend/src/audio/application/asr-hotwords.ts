@@ -127,6 +127,14 @@ export async function listHotwordsForDocumentChannel(channelId: string): Promise
   return rows.map((row) => toPublic(row, channelMap.get(row.id) ?? []));
 }
 
+async function firstChannelIdWithAsrPipeline(channelIds: string[]): Promise<string | null> {
+  for (const channelId of channelIds) {
+    const channel = await getChannelById(channelId);
+    if (channel?.transcriptionPipelineId) return channelId;
+  }
+  return channelIds[0] ?? null;
+}
+
 async function resolveDocumentChannelAsrCredentials(channelId: string) {
   const channel = await getChannelById(channelId);
   if (!channel?.transcriptionPipelineId) return null;
@@ -273,7 +281,9 @@ export async function createAsrHotword(
   input: AsrHotwordInput & { channelIds?: string[]; createdBy?: string | null },
 ): Promise<AsrHotwordPublic> {
   const channelIds = input.channelIds ?? [];
-  const creds = channelIds.length > 0 ? await resolveDocumentChannelAsrCredentials(channelIds[0]) : null;
+  const credsChannelId =
+    channelIds.length > 0 ? await firstChannelIdWithAsrPipeline(channelIds) : null;
+  const creds = credsChannelId ? await resolveDocumentChannelAsrCredentials(credsChannelId) : null;
   const providerModelId = creds?.targetModel ?? 'qwen-audio-3.0-asr-flash-filetrans';
 
   const text = validateHotwordText(input.text);
@@ -310,9 +320,12 @@ export async function updateAsrHotword(
   const existing = await getAsrHotwordById(id);
   if (!existing) throw new Error('Hotword not found');
 
-  const creds = await resolveDocumentChannelAsrCredentials(
-    existing.channel_ids[0] ?? (input.channelIds?.[0] ?? ''),
-  );
+  const weightChannelIds = input.channelIds ?? existing.channel_ids;
+  const credsChannelId =
+    weightChannelIds.length > 0 ? await firstChannelIdWithAsrPipeline(weightChannelIds) : null;
+  const creds = credsChannelId
+    ? await resolveDocumentChannelAsrCredentials(credsChannelId)
+    : null;
   const providerModelId = creds?.targetModel ?? 'qwen-audio-3.0-asr-flash-filetrans';
 
   const text = input.text !== undefined ? validateHotwordText(input.text) : existing.text;

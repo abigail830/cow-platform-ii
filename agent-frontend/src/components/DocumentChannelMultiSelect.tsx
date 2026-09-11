@@ -165,9 +165,7 @@ function ChannelTreeNode({
             ) : null}
           </span>
           <Folder {...iconProps({ size: 16, className: 'audio-channel-tree-folder' })} />
-          <span className="audio-channel-tree-label" title={channel.name}>
-            {channel.name}
-          </span>
+          <span className="audio-channel-tree-label">{channel.name}</span>
         </button>
       </div>
       {hasChildren && expanded ? (

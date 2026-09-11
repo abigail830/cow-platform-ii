@@ -9,6 +9,7 @@ import {
   db,
 } from '../../infrastructure/db/index.ts';
 import { getPipelineConfigById } from '../../pipeline/infrastructure/pipeline-config-store.ts';
+import { getDefaultKnowledgeChannelPipelineIds } from '../domain/knowledge-channel-pipeline-defaults.ts';
 import type { ChannelNode } from '../domain/channel-node.ts';
 import { buildChannelTree, collectChannelSubtreeIds, collectDescendantIds } from '../domain/channel-tree.ts';
 import {
@@ -119,6 +120,11 @@ export async function createChannel(input: {
     );
 
   const maxSort = siblings.reduce((max, row) => Math.max(max, row.sortOrder), -1);
+  const defaults = await getDefaultKnowledgeChannelPipelineIds();
+
+  const pipelineId = parent?.pipelineId ?? defaults.documentPipelineId;
+  const transcriptionPipelineId = parent?.transcriptionPipelineId ?? defaults.transcriptionPipelineId;
+  const postProcessPipelineId = parent?.postProcessPipelineId ?? defaults.postProcessPipelineId;
 
   const [row] = await db
     .insert(appDocumentChannels)
@@ -127,10 +133,11 @@ export async function createChannel(input: {
       description: input.description?.trim() || null,
       parentId: input.parentId ?? null,
       sortOrder: maxSort + 1,
-      pipelineId: parent?.pipelineId ?? null,
-      transcriptionPipelineId: parent?.transcriptionPipelineId ?? null,
-      postProcessPipelineId: parent?.postProcessPipelineId ?? null,
-      autoStartPipeline: parent?.pipelineId || parent?.transcriptionPipelineId ? parent.autoStartPipeline : false,
+      pipelineId,
+      transcriptionPipelineId,
+      postProcessPipelineId,
+      autoStartPipeline:
+        pipelineId || transcriptionPipelineId ? (parent?.autoStartPipeline ?? false) : false,
       createdBy: input.createdBy ?? null,
     })
     .returning();
