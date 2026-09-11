@@ -181,6 +181,14 @@ export function ChannelSettingsModal({
     postProcessPipelines[0]?.id ||
     '';
 
+  const resolvedTranscriptionPipelineId =
+    transcriptionPipelineId ||
+    transcriptionPipelines.find(
+      (pipeline) => pipeline.pipelineName === DEFAULT_KNOWLEDGE_TRANSCRIPTION_PIPELINE_NAME,
+    )?.id ||
+    transcriptionPipelines[0]?.id ||
+    '';
+
   useEffect(() => {
     if (!knowledgePipelineMode || !options || optionsLoading || knowledgeDefaultsAppliedRef.current) return;
     knowledgeDefaultsAppliedRef.current = true;
@@ -236,7 +244,7 @@ export function ChannelSettingsModal({
         ...(knowledgePipelineMode
           ? {
               postProcessPipelineId: resolvedPostProcessPipelineId || null,
-              transcriptionPipelineId: transcriptionPipelineId || null,
+              transcriptionPipelineId: resolvedTranscriptionPipelineId || null,
             }
           : {}),
         autoStartPipeline: knowledgePipelineMode

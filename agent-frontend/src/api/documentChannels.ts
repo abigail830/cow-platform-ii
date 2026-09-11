@@ -60,12 +60,25 @@ export const DEFAULT_KNOWLEDGE_POST_PROCESS_PIPELINE_NAME = 'audio-capture-post-
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
-  });
+  let res: Response;
+  try {
+    res = await fetch(apiUrl(path), {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Network error (${detail}). Check API connectivity and try again.`);
+  }
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  let data: Record<string, unknown> = {};
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      throw new Error(`Invalid API response (${res.status})`);
+    }
+  }
   if (!res.ok) throw new Error(formatApiError(data.error, `HTTP ${res.status}`));
   return data;
 }
