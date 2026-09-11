@@ -4685,6 +4685,13 @@ select:focus-visible {
   color: #0f172a;
 }
 
+.documents-channel-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
 .documents-channel-empty {
   margin: 0;
   color: #64748b;

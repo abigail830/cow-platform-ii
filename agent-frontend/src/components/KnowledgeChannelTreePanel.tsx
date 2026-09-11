@@ -1,4 +1,13 @@
-import { ChevronDown, ChevronRight, Folder, Loader2, Plus, Settings, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FoldVertical,
+  Loader2,
+  Plus,
+  Settings,
+  Trash2,
+} from 'lucide-react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
 import type { ChannelKnowledgeItem } from '../api/documents.ts';
 import { channelHasWriteAccess } from '../shared/channel-access.ts';
@@ -44,6 +53,7 @@ type KnowledgeChannelTreePanelProps = {
   onCreateChild: (parentId: string) => void;
   onSettings: (channel: DocumentChannel) => void;
   onDeleteChannel: (channel: DocumentChannel) => void;
+  onCollapseAll: () => void;
 };
 
 function ChannelTreeBranch({
@@ -247,16 +257,33 @@ export function KnowledgeChannelTreePanel({
   onCreateChild,
   onSettings,
   onDeleteChannel,
+  onCollapseAll,
 }: KnowledgeChannelTreePanelProps) {
+  const hasExpandedChannels = expandedChannelIds.size > 0;
+
   return (
     <aside className="documents-channel-panel knowledge-channel-tree-panel">
       <div className="documents-channel-panel-header">
         <h2>Channels</h2>
-        {canCreateRoot && (
-          <button type="button" className="btn-secondary" onClick={onCreateRoot}>
-            + New
-          </button>
-        )}
+        <div className="documents-channel-panel-header-actions">
+          {channels.length > 0 && (
+            <button
+              type="button"
+              className="icon-btn"
+              title="Collapse all channels"
+              aria-label="Collapse all channels"
+              disabled={!hasExpandedChannels}
+              onClick={onCollapseAll}
+            >
+              <FoldVertical {...iconProps()} aria-hidden />
+            </button>
+          )}
+          {canCreateRoot && (
+            <button type="button" className="btn-secondary" onClick={onCreateRoot}>
+              + New
+            </button>
+          )}
+        </div>
       </div>
       {channels.length === 0 ? (
         <p className="documents-channel-empty">{emptyMessage}</p>

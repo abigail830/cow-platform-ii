@@ -260,6 +260,10 @@ export function DocumentsLayout() {
     }
   }
 
+  function handleCollapseAllChannels() {
+    setExpandedChannelIds(new Set());
+  }
+
   function handleToggleExpand(channelId: string) {
     setExpandedChannelIds((current) => {
       const next = new Set(current);
@@ -357,6 +361,7 @@ export function DocumentsLayout() {
             onCreateChild={(parentId) => setChannelModal({ mode: 'create', parentId })}
             onSettings={(channel) => setChannelModal({ mode: 'settings', channel })}
             onDeleteChannel={(channel) => void handleDeleteChannel(channel)}
+            onCollapseAll={handleCollapseAllChannels}
           />
 
           <div
