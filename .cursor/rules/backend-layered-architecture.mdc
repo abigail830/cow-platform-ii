@@ -76,12 +76,10 @@ These directories were deleted after the `apis/` + BC migration. No external cli
 | Removed | Replaced by |
 |---------|-------------|
 | `src/routes/` | `apis/` |
-| `src/services/` | `{bc}/application/` or `agents/session/services/` |
-| `src/agent-catalog/` | `agents/catalog/` |
-| `src/flue/` | `agents/runtime/`, `agents/a2a/` |
+| `src/services/` | `{bc}/application/` |
+| `src/agent-catalog/` | *(removed — interactive agents stack deleted)* |
+| `src/flue/` | *(removed — Flue runtime deleted)* |
 | `src/db/schema.ts` | `infrastructure/db/schema.ts` |
-
-`src/db.ts` remains: Flue postgres adapter only (not schema).
 
 ## New feature checklist
 

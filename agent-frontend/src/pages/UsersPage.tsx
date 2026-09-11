@@ -44,7 +44,7 @@ export function UsersPage() {
     void load();
   }, [load]);
 
-  if (forbidden) return <Navigate to="/agents/playground" replace />;
+  if (forbidden) return <Navigate to="/" replace />;
 
   return (
     <>

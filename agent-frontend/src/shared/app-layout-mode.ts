@@ -6,7 +6,6 @@ import {
   PLATFORM_BASIC_PAGES,
 } from './admin-nav.ts';
 import { hasPermission } from './permissions.ts';
-import { visibleAgentPages } from './agent-nav.ts';
 
 export type AppLayoutMode = 'home' | 'flat' | 'admin';
 
@@ -22,21 +21,7 @@ export function isAdminSectionPath(pathname: string): boolean {
 }
 
 export function isFlatSectionPath(pathname: string): boolean {
-  return (
-    pathname.startsWith('/agents/') ||
-    pathname.startsWith('/knowledge/') ||
-    pathname === '/chat' ||
-    pathname.startsWith('/chat/') ||
-    pathname.startsWith('/settings/')
-  );
-}
-
-export function isAgentsSectionPath(pathname: string): boolean {
-  return pathname.startsWith('/agents/') || pathname === '/chat' || pathname.startsWith('/chat/');
-}
-
-export function isKnowledgeSectionPath(pathname: string): boolean {
-  return pathname.startsWith('/knowledge/');
+  return pathname.startsWith('/knowledge/') || pathname.startsWith('/settings/');
 }
 
 /** First admin-section route the user may open (Evaluation → Platform basic → Administration). */
@@ -47,11 +32,6 @@ export function resolveDefaultAdminPath(user: AuthUser): string {
     ...ADMIN_PAGES,
   ].filter((item) => hasPermission(user, item.permissionKey, 'read'));
   return candidates[0]?.path ?? '/';
-}
-
-/** First agents route the user may open. */
-export function resolveDefaultAgentsPath(user: AuthUser): string {
-  return visibleAgentPages(user)[0]?.path ?? '/';
 }
 
 /** First knowledge route the user may open. */

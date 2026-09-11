@@ -182,7 +182,7 @@ export function ObjectStoragePage() {
   }
 
   if (forbidden) {
-    return <Navigate to="/agents/playground" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return (

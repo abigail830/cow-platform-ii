@@ -8,7 +8,7 @@ describe('openapi', () => {
   it('generates paths from registered Hono routes', async () => {
     const app = new Hono();
     app.get('/api/knowledge/documents', (c) => c.json({ documents: [] }));
-    app.get('/api/agents/studio/assets', (c) => c.json({ assets: [] }));
+    app.get('/api/admin/models', (c) => c.json({ models: [] }));
     app.post('/api/auth/login', (c) => c.json({ token: 't' }));
 
     const raw = await generateSpecs(app, {
@@ -21,7 +21,7 @@ describe('openapi', () => {
     const spec = enrichOpenApiSpec(raw);
     const paths = Object.keys(spec.paths ?? {});
     assert.ok(paths.includes('/api/knowledge/documents'));
-    assert.ok(paths.includes('/api/agents/studio/assets'));
+    assert.ok(paths.includes('/api/admin/models'));
     assert.ok(paths.includes('/api/auth/login'));
     const login = spec.paths?.['/api/auth/login']?.post;
     assert.ok(login);

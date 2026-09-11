@@ -68,7 +68,7 @@ export function KnowledgeBaseDetailRouter() {
   }, [knowledgeBaseId]);
 
   if (forbidden) {
-    return <Navigate to="/agents/playground" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (!knowledgeBaseId || notFound) {

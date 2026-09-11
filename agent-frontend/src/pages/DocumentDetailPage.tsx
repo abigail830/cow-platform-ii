@@ -13,7 +13,7 @@ import { MindmapMetadataPanel, parseMindmapParsingResult } from '../components/M
 import { formatDocumentStatusLabel } from '../components/DocumentPipelineStatus.tsx';
 import { PageIndexTreePanel, type PageIndexNode, type PageIndexTree } from '../components/PageIndexTree.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
-import { Markdown } from '../chat/Markdown.tsx';
+import { Markdown } from '../components/Markdown.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import {
   findPageIndexNode,

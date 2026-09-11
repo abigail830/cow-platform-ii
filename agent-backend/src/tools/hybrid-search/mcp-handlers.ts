@@ -5,12 +5,12 @@ import {
   KNOWLEDGE_MANAGEMENT_RESOURCES,
 } from '../../auth/rbac-catalog.ts';
 import type { AuthUser } from '../../auth/jwt.ts';
-import { redactSandboxSecrets } from '../../sandboxes/sandbox-secret-redact.ts';
+import { redactSecrets } from '../../infrastructure/redact-secrets.ts';
 import { createHybridSearchService, type HybridSearchService } from './service.ts';
 import type { HybridSearchRequest } from './types.ts';
 
 function jsonText(payload: unknown): string {
-  return redactSandboxSecrets(JSON.stringify(payload, null, 2));
+  return redactSecrets(JSON.stringify(payload, null, 2));
 }
 
 async function assertHybridSearchRead(user: AuthUser): Promise<void> {

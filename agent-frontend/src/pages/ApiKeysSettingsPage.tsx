@@ -2,11 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Copy, KeyRound, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
-  clearAgentApiKey,
-  getAgentApiKey,
-  setAgentApiKey,
-} from '../api/agent-api-key.ts';
-import {
   createUserApiKey,
   listUserApiKeys,
   revokeUserApiKey,
@@ -16,7 +11,7 @@ import { iconProps } from '../components/icons/icon-props.ts';
 import { TransientNotice } from '../components/TransientNotice.tsx';
 import { useTransientNotice } from '../hooks/useTransientNotice.ts';
 import { AdminPageDescription, AdminPageTitle } from '../layouts/AppLayout.tsx';
-import { AGENT_PLAYGROUND_PATH } from '../shared/admin-nav.ts';
+import { HOME_PATH } from '../shared/app-nav.ts';
 
 export function ApiKeysSettingsPage() {
   const [items, setItems] = useState<UserApiKeyItem[]>([]);
@@ -24,7 +19,6 @@ export function ApiKeysSettingsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [newKeyPlaintext, setNewKeyPlaintext] = useState<string | null>(null);
-  const [agentKeyDraft, setAgentKeyDraft] = useState(() => getAgentApiKey() ?? '');
   const { notice: transientNotice, showNotice } = useTransientNotice(2500);
 
   const load = useCallback(async () => {
@@ -51,6 +45,7 @@ export function ApiKeysSettingsPage() {
       const created = await createUserApiKey();
       setNewKeyPlaintext(created.key);
       await load();
+      showNotice('API key created.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create API key');
     } finally {
@@ -72,19 +67,10 @@ export function ApiKeysSettingsPage() {
     }
   }
 
-  function onSaveAgentKey() {
-    setAgentApiKey(agentKeyDraft);
-    showNotice('Saved for Playground.');
-  }
-
-  function onClearAgentKey() {
-    clearAgentApiKey();
-    setAgentKeyDraft('');
-  }
-
   async function copyText(text: string) {
     try {
       await navigator.clipboard.writeText(text);
+      showNotice('Copied.');
     } catch {
       // ignore
     }
@@ -93,15 +79,15 @@ export function ApiKeysSettingsPage() {
   return (
     <main className="admin-page">
       <TransientNotice message={transientNotice} />
-      <Link to={AGENT_PLAYGROUND_PATH} className="document-detail-back">
+      <Link to={HOME_PATH} className="document-detail-back">
         <ArrowLeft {...iconProps({ size: 16 })} aria-hidden />
-        Back to Playground
+        Back to Home
       </Link>
       <header className="admin-header">
         <AdminPageTitle main="API" accent="Keys" />
         <AdminPageDescription>
-          Generate personal API keys for Cursor, scripts, and Playground agents. Keys are shown once at
-          creation; only a hash is stored on the server.
+          Generate personal API keys for Cursor, scripts, and external integrations. Keys are shown
+          once at creation; only a hash is stored on the server.
         </AdminPageDescription>
       </header>
 
@@ -113,8 +99,8 @@ export function ApiKeysSettingsPage() {
           Your API keys
         </h2>
         <p className="admin-form-hint">
-          Use <code>OPENKMS_API_KEY</code> in Cursor or CI. Each key maps to your account and
-          respects KB access control.
+          Use <code>Authorization: Bearer okf_…</code> or <code>OPENKMS_API_KEY</code> in Cursor,
+          MCP clients, and CI. Each key maps to your account and respects KB access control.
         </p>
 
         <div className="admin-toolbar">
@@ -188,33 +174,6 @@ export function ApiKeysSettingsPage() {
             </table>
           </div>
         )}
-      </section>
-
-      <section className="admin-card api-keys-section">
-        <h2 className="admin-section-title">Playground agent API key</h2>
-        <p className="admin-form-hint">
-          Paste the same API key here so Playground agents can call hybrid-search MCP tools. Stored in
-          this browser only (<code>localStorage</code>), not on the server.
-        </p>
-        <div className="form-field">
-          <label htmlFor="agent-api-key">Agent API key</label>
-          <input
-            id="agent-api-key"
-            type="password"
-            autoComplete="off"
-            value={agentKeyDraft}
-            onChange={(event) => setAgentKeyDraft(event.target.value)}
-            placeholder="okf_…"
-          />
-        </div>
-        <div className="modal-actions">
-          <button type="button" className="btn-primary" onClick={onSaveAgentKey}>
-            Save for Playground
-          </button>
-          <button type="button" className="btn-secondary" onClick={onClearAgentKey}>
-            Clear
-          </button>
-        </div>
       </section>
     </main>
   );

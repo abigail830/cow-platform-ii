@@ -2,10 +2,9 @@ import type { Context } from 'hono';
 import type { UserRole } from './jwt.ts';
 import type { UserAccessProfile } from './rbac.ts';
 import { loadUserAccessProfile } from './rbac.ts';
-import type { ResourceType, appResourceGrants, appSkills } from '../infrastructure/db/index.ts';
+import type { ResourceType, appResourceGrants } from '../infrastructure/db/index.ts';
 
 type GrantRow = typeof appResourceGrants.$inferSelect;
-type SkillRow = typeof appSkills.$inferSelect;
 
 export type ChannelRowLite = { id: string; parentId: string | null; createdBy: string | null };
 
@@ -14,7 +13,6 @@ export type ResourceAccessRequestCache = {
   platformAdmin: Map<string, boolean>;
   grantsByResource: Map<string, GrantRow[]>;
   channelRowsById: Map<string, ChannelRowLite>;
-  skillRowsById: Map<string, SkillRow>;
 };
 
 export type ResourceAccessScope = {
@@ -36,7 +34,6 @@ export function getOrCreateRequestCache(c: Context): ResourceAccessRequestCache 
     platformAdmin: new Map(),
     grantsByResource: new Map(),
     channelRowsById: new Map(),
-    skillRowsById: new Map(),
   };
   c.set(CACHE_KEY, cache);
   return cache;

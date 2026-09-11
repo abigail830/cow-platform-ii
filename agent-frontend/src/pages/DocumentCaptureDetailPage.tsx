@@ -47,7 +47,7 @@ import { CaptureDetailsPanel } from '../components/CaptureDetailsPanel.tsx';
 import { CapturePipelineStatus } from '../components/CapturePipelineStatus.tsx';
 import { CaptureSegmentDrawer } from '../components/CaptureSegmentDrawer.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
-import { Markdown } from '../chat/Markdown.tsx';
+import { Markdown } from '../components/Markdown.tsx';
 import { useDocumentsOutletContext } from './DocumentsOutletContext.tsx';
 import { DocumentDetailPage } from './DocumentDetailPage.tsx';
 

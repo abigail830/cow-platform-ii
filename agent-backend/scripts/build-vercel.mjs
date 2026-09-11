@@ -1,6 +1,6 @@
 import esbuild from 'esbuild';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,20 +66,13 @@ module.exports.config = globalThis.__okfVercelConfig;
   },
 });
 
-// CJS bundles cannot use import.meta.url; esbuild lowers it to `import_metaN = {}`.
-// just-bash (via @flue/runtime) calls createRequire(import.meta.url) at module init.
+// Patch import.meta.url placeholders when esbuild emits them in the CJS bundle.
 const importMetaUrl = 'require("node:url").pathToFileURL(__filename).href';
 let bundle = readFileSync(outfile, 'utf8');
-const patched = bundle.replace(/import_meta\d+\.url/g, importMetaUrl);
-if (patched === bundle) {
-  throw new Error('expected import_meta.url placeholders in CJS bundle — esbuild output changed?');
+if (/import_meta\d+\.url/.test(bundle)) {
+  bundle = bundle.replace(/import_meta\d+\.url/g, importMetaUrl);
+  writeFileSync(outfile, bundle);
 }
-writeFileSync(outfile, patched);
-
-const catalogSrc = path.join(root, 'agent-assets');
-const catalogDest = path.join(funcDir, 'agent-assets');
-cpSync(catalogSrc, catalogDest, { recursive: true });
-console.log('Vendored agent-assets into serverless bundle.');
 
 const { size } = statSync(outfile);
 if (size < 100_000) {

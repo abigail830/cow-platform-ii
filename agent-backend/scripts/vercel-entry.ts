@@ -1,6 +1,5 @@
 import { getRequestListener } from '@hono/node-server';
 import app from '../src/app.ts';
-import { startFlueRuntimeInit } from '../src/agents/runtime/init.ts';
 
 const vercelConfig = {
   maxDuration: 300,
@@ -8,9 +7,6 @@ const vercelConfig = {
 };
 
 const handler = getRequestListener(app.fetch.bind(app));
-
-// Flue init runs in the background — auth/health and other routes must not wait for it.
-startFlueRuntimeInit();
 
 const g = globalThis as typeof globalThis & {
   __okfVercelHandler?: typeof handler;

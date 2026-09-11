@@ -2,10 +2,8 @@ import type { Context } from 'hono';
 import { getUser } from './jwt.ts';
 import {
   getDocumentChannelIdForDocument,
-  loadSkillRow,
   resolveChannelPermission,
   resolveKnowledgeBasePermission,
-  resolveSkillPermission,
   satisfiesResourcePermission,
   type ResourcePermissionLevel,
 } from './resource-access.ts';
@@ -43,25 +41,6 @@ export async function denyUnlessKnowledgeBaseAccess(
   const user = getUser(c);
   const scope = scopeFromContext(c);
   const flags = await resolveKnowledgeBasePermission(user.id, knowledgeBaseId, scope);
-  if (!satisfiesResourcePermission(flags, required)) {
-    return c.json({ error: 'Forbidden' }, 403);
-  }
-  return null;
-}
-
-export async function denyUnlessSkillAccess(
-  c: Context,
-  skillId: string,
-  required: ResourcePermissionLevel,
-): Promise<Response | null> {
-  const user = getUser(c);
-  const scope = scopeFromContext(c);
-  const skill = await loadSkillRow(skillId, scope.cache);
-  if (!skill) return c.json({ error: 'Skill not found' }, 404);
-  if (skill.origin === 'platform' && required === 'read') {
-    return null;
-  }
-  const flags = await resolveSkillPermission(user.id, skillId, scope);
   if (!satisfiesResourcePermission(flags, required)) {
     return c.json({ error: 'Forbidden' }, 403);
   }

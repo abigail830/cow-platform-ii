@@ -996,7 +996,7 @@ function TranscriptPlainPreview({
 
   if (loadingText) return <p className="admin-muted">Loading transcript…</p>;
   if (error) return <p className="admin-error">{error}</p>;
-  return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
+  return <pre className="code-block-preview eval-run-transcript-preview">{body}</pre>;
 }
 
 async function loadEvalArtifactPreviewText(
@@ -1025,7 +1025,7 @@ async function loadEvalArtifactPreviewText(
 
 function TranscriptTextPreview({ text }: { text: string }) {
   const body = text.trim() || '(empty reference)';
-  return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
+  return <pre className="code-block-preview eval-run-transcript-preview">{body}</pre>;
 }
 
 function EvalRunTranscriptCompare({
@@ -1185,7 +1185,7 @@ function TranscriptPreview({
 
   if (loadingText) return <p className="admin-muted">Loading transcript…</p>;
   if (error) return <p className="admin-error">{error}</p>;
-  return <pre className="asset-market-code eval-run-transcript-preview">{body}</pre>;
+  return <pre className="code-block-preview eval-run-transcript-preview">{body}</pre>;
 }
 
 function EvalRunPipelineOutput({
@@ -1626,7 +1626,7 @@ export function EvaluationRunsListPage() {
     void load();
   }, [load]);
 
-  if (!canRead) return <Navigate to="/agents/playground" replace />;
+  if (!canRead) return <Navigate to="/" replace />;
 
   function openCreateModal() {
     setModalOpen(true);
@@ -1930,7 +1930,7 @@ export function EvaluationRunDetailPage() {
   const runFailureReason = detail ? evalRunFailureMessage(detail.run.summary_metrics) : null;
   const showRtf = detail?.media_type !== 'document';
 
-  if (!canRead) return <Navigate to="/agents/playground" replace />;
+  if (!canRead) return <Navigate to="/" replace />;
   if (!runId) return <Navigate to="/evaluation/runs" replace />;
 
   async function handleStart(runMode: EvalRunMode) {

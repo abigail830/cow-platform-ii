@@ -25,8 +25,8 @@ Do not introduce teal/green as the primary accent in new admin or chat UI.
 
 ## Left sidenav spacing
 
-- **Nav order**: Agents → **Knowledge Management** → **Platform basic** → **Administration** (users, roles, permissions).
-- Under **Agents**, keep **Asset Market** first, then Playground, then Session Explorer (unless product asks otherwise).
+- **Top bar**: show Knowledge Management pages as **flat links** (icon + label each) — no dropdown wrapper.
+- **Admin sidenav order**: **Knowledge Management** → **Evaluation** → **Platform basic** → **Administration** (users, roles, permissions).
 - **Page titles / nav metadata**: resolve with `getNavPage(PATH_CONSTANT)` — never `AGENT_PAGES[i]` or other nav-array indexes. Nav order is product-driven and can change; index lookups silently show the wrong title.
 - **Between categories**: use `.sidenav-menu + .sidenav-category { margin-top: 1rem; }`
 - **Category label → items**: keep tight (`margin-bottom: ~0.2rem` on `.sidenav-category`)
@@ -65,6 +65,6 @@ Copy/theme alone do not make an admin page correct. Before writing markup:
 - **Permission**: registry entry with `key`, route/API patterns, category; role grants use `read` or `write` (or a flat feature key where the catalog defines one).
 - **Role**: predefined bundle of permission grants (`app_role_permissions`).
 - **User**: assigned one or more roles (`app_user_roles`); `/api/auth/me` returns `permissions[]`.
-- Gate nav and APIs with the **resource that owns the surface** — do not bolt a new page onto an unrelated feature key (e.g. Asset Market uses `agent:asset-market` read/write, not `agent:playground`).
+- Gate nav and APIs with the **resource that owns the surface** — do not bolt a new page onto an unrelated feature key (e.g. Knowledge bases use `knowledge:*`, not an admin-only key).
 - New surfaces: add catalog entries in `agent-backend/src/auth/rbac-catalog.ts`, grant system roles in `agent-backend/src/infrastructure/db/sync-rbac.ts`, wire `permissionKey` / `requireResourcePermission` in `agent-backend/src/apis/`, then run `db:migrate` (RBAC sync).
 - System `admin` role receives the full catalog; extend catalog in `rbac-catalog.ts` + sync.

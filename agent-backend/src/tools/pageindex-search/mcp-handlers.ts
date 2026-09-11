@@ -3,11 +3,11 @@ import {
   KNOWLEDGE_MANAGEMENT_CATEGORY,
   KNOWLEDGE_MANAGEMENT_RESOURCES,
 } from '../../auth/rbac-catalog.ts';
-import { redactSandboxSecrets } from '../../sandboxes/sandbox-secret-redact.ts';
+import { redactSecrets } from '../../infrastructure/redact-secrets.ts';
 import type { PageIndexSearchService } from './service.ts';
 
 function jsonText(payload: unknown): string {
-  return redactSandboxSecrets(JSON.stringify(payload, null, 2));
+  return redactSecrets(JSON.stringify(payload, null, 2));
 }
 
 export type PageIndexSearchMcpAuth = {

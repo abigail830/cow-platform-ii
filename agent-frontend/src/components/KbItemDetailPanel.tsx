@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import type { KbItem } from '../api/knowledgeBases.ts';
-import { Markdown } from '../chat/Markdown.tsx';
+import { Markdown } from '../components/Markdown.tsx';
 import { MindmapMetadataPanel, parseMindmapParsingResult } from './MindmapMetadataPanel.tsx';
 import { PageIndexTreePanel, type PageIndexTree } from './PageIndexTree.tsx';
 import { iconProps } from './icons/icon-props.ts';
@@ -48,7 +48,7 @@ export function KbItemDetailPanel({ item, loading, onClose }: KbItemDetailPanelP
             </p>
           )}
         </div>
-        <button type="button" className="session-explorer-close-btn" onClick={onClose} aria-label="Close detail">
+        <button type="button" className="panel-close-btn" onClick={onClose} aria-label="Close detail">
           <X {...iconProps()} />
         </button>
       </header>
@@ -70,8 +70,8 @@ export function KbItemDetailPanel({ item, loading, onClose }: KbItemDetailPanelP
 
       <div className="kb-item-detail-body">
         {loading ? (
-          <p className="session-explorer-loading" role="status">
-            <Loader2 {...iconProps({ size: 18, className: 'session-explorer-loading-icon' })} aria-hidden />
+          <p className="panel-loading" role="status">
+            <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
             Loading item…
           </p>
         ) : !item ? (

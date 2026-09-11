@@ -8,8 +8,8 @@ type KbPageLoadingStateProps = {
 export function KbPageLoadingState({ label }: KbPageLoadingStateProps) {
   return (
     <div className="kb-page-loading">
-      <p className="session-explorer-loading" role="status" aria-live="polite">
-        <Loader2 {...iconProps({ size: 18, className: 'session-explorer-loading-icon' })} aria-hidden />
+      <p className="panel-loading" role="status" aria-live="polite">
+        <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
         {label}
       </p>
     </div>

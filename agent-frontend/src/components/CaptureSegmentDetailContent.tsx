@@ -13,7 +13,7 @@ import {
 import { fetchPresignedStorageText } from '../api/storage-fetch.ts';
 import { downloadTextFile, withDownloadExtension } from '../shared/download-text.ts';
 import { iconProps } from './icons/icon-props.ts';
-import { Markdown } from '../chat/Markdown.tsx';
+import { Markdown } from '../components/Markdown.tsx';
 
 function PanelLoading({ label }: { label: string }) {
   return (

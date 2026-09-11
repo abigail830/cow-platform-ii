@@ -9,8 +9,9 @@ import {
 } from '../shared/admin-nav.ts';
 import type { AuthUser } from '../api/auth.ts';
 import { hasPermission } from '../shared/permissions.ts';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { NavPageIcon } from './icons/NavIcons.tsx';
-import { IconSidenavCollapse, IconSidenavExpand } from './icons/AgentIcons.tsx';
+import { iconProps } from './icons/icon-props.ts';
 
 type AppSideNavProps = {
   user: AuthUser;
@@ -106,7 +107,11 @@ export function AppSideNav({
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed ? <IconSidenavCollapse /> : <IconSidenavExpand />}
+          {collapsed ? (
+            <PanelLeftOpen {...iconProps()} aria-hidden />
+          ) : (
+            <PanelLeftClose {...iconProps()} aria-hidden />
+          )}
         </button>
       </div>
     </aside>

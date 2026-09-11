@@ -69,18 +69,6 @@ export function hasPermission(
   return keys.has(key);
 }
 
-/** Agent playground / session explorer — single grant per feature; legacy users keep playground. */
-export function hasAgentFeaturePermission(
-  user: AuthUser | null | undefined,
-  resource: 'playground' | 'session-explorer',
-): boolean {
-  if (!user) return false;
-  const keys = permissionKeySet(user);
-  if (keys.has(`agent:${resource}`)) return true;
-  if (keys.size === 0 && resource === 'playground') return true;
-  return false;
-}
-
 export function canSeeAdminSection(user: AuthUser | null | undefined): boolean {
   if (!user) return false;
   const keys = permissionKeySet(user);

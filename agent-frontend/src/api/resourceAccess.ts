@@ -30,7 +30,7 @@ export type ResourceAccessSettings = {
   my_access: ResourcePermissionFlags;
 };
 
-export type ResourceType = 'document_channel' | 'audio_channel' | 'knowledge_base' | 'skill';
+export type ResourceType = 'document_channel' | 'audio_channel' | 'knowledge_base';
 
 async function authFetch(path: string, init?: RequestInit) {
   const token = getToken();
@@ -51,9 +51,6 @@ function accessPath(resourceType: ResourceType, resourceId: string): string {
   }
   if (resourceType === 'audio_channel') {
     return `/api/audio-channels/${resourceId}/access`;
-  }
-  if (resourceType === 'skill') {
-    return `/api/agents/studio/skills/${encodeURIComponent(resourceId)}/access`;
   }
   return `/api/knowledge/knowledge-bases/${resourceId}/access`;
 }

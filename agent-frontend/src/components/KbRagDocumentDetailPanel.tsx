@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
 import type { KbDocumentChunks } from '../api/knowledgeBases.ts';
-import { Markdown } from '../chat/Markdown.tsx';
+import { Markdown } from '../components/Markdown.tsx';
 import { buildDocumentSourceUrl } from '../shared/document-deep-link.ts';
 import { iconProps } from './icons/icon-props.ts';
 
@@ -55,7 +55,7 @@ export function KbRagDocumentDetailPanel({ detail, loading, onClose }: KbRagDocu
             </p>
           )}
         </div>
-        <button type="button" className="session-explorer-close-btn" onClick={onClose} aria-label="Close detail">
+        <button type="button" className="panel-close-btn" onClick={onClose} aria-label="Close detail">
           <X {...iconProps()} />
         </button>
       </header>
@@ -77,8 +77,8 @@ export function KbRagDocumentDetailPanel({ detail, loading, onClose }: KbRagDocu
 
       <div className="kb-item-detail-body">
         {loading ? (
-          <p className="session-explorer-loading" role="status">
-            <Loader2 {...iconProps({ size: 18, className: 'session-explorer-loading-icon' })} aria-hidden />
+          <p className="panel-loading" role="status">
+            <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
             Loading chunks…
           </p>
         ) : !detail ? (

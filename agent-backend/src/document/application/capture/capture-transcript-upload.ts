@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { extractSessionFileText } from '../../../agents/session/shared/session-file-extract.ts';
+import { extractFileText } from '../../infrastructure/file-text-extract.ts';
 import {
   MAX_TRANSCRIPT_UPLOAD_BYTES,
   normalizeTranscriptMarkdown,
@@ -40,7 +40,7 @@ export async function extractTranscriptUploadText(filename: string, buffer: Buff
     ext === 'docx'
       ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       : 'text/markdown';
-  const result = await extractSessionFileText({ filename, mimeType, bytes: buffer });
+  const result = await extractFileText({ filename, mimeType, bytes: buffer });
   return result.text.trim();
 }
 

@@ -98,8 +98,8 @@ function FaqIndexStatusCell({ faq, jobActive }: { faq: KbFaq; jobActive: boolean
 
 function ListLoadingState({ label }: { label: string }) {
   return (
-    <p className="session-explorer-loading" role="status" aria-live="polite">
-      <Loader2 {...iconProps({ size: 18, className: 'session-explorer-loading-icon' })} aria-hidden />
+    <p className="panel-loading" role="status" aria-live="polite">
+      <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
       {label}
     </p>
   );
@@ -473,7 +473,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
   }
 
   if (forbidden) {
-    return <Navigate to="/agents/playground" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (!knowledgeBaseId) {
@@ -654,7 +654,7 @@ export function FaqKnowledgeBaseDetailPage({ initialKb }: FaqKnowledgeBaseDetail
                         <tr>
                           <td
                             colSpan={canManage ? 8 : 7}
-                            className="admin-table-empty session-explorer-table-loading"
+                            className="admin-table-empty panel-table-loading"
                           >
                             <ListLoadingState label="Loading FAQs…" />
                           </td>

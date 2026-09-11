@@ -200,7 +200,7 @@ export function PipelineConfigForm({ initial, onSubmit, onCancel }: PipelineConf
         </div>
         <button
           type="button"
-          className="session-explorer-close-btn"
+          className="panel-close-btn"
           onClick={onCancel}
           aria-label="Close editor"
         >

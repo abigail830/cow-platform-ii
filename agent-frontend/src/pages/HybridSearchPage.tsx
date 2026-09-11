@@ -363,7 +363,7 @@ export function HybridSearchPage() {
     }
   }
 
-  if (!canAccess) return <Navigate to="/agents/playground" replace />;
+  if (!canAccess) return <Navigate to="/" replace />;
 
   return (
     <main className="admin-page hybrid-search-page">

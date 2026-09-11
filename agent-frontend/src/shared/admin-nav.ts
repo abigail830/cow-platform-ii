@@ -11,10 +11,7 @@ export type NavPageIcon =
   | 'users'
   | 'roles'
   | 'permissions'
-  | 'playground'
-  | 'session-explorer'
   | 'hybrid-search'
-  | 'asset-market'
   | 'evaluation-dataset'
   | 'evaluation-run';
 
@@ -65,39 +62,6 @@ export const PLATFORM_BASIC_PAGES: readonly NavPage[] = [
 ];
 
 export const KNOWLEDGE_MANAGEMENT_CATEGORY = 'Knowledge Management';
-
-export const AGENTS_CATEGORY = 'Agents';
-
-export const AGENT_PLAYGROUND_PATH = '/agents/playground';
-export const SESSION_EXPLORER_PATH = '/agents/session-explorer';
-export const ASSET_MARKET_PATH = '/agents/asset-market';
-
-export const AGENT_PAGES: readonly NavPage[] = [
-  {
-    path: ASSET_MARKET_PATH,
-    navLabel: 'Asset Market',
-    titleMain: 'Asset',
-    titleAccent: 'Market',
-    permissionKey: 'agent:asset-market',
-    icon: 'asset-market',
-  },
-  {
-    path: AGENT_PLAYGROUND_PATH,
-    navLabel: 'Agent Playground',
-    titleMain: 'Agent',
-    titleAccent: 'Playground',
-    permissionKey: 'agent:playground',
-    icon: 'playground',
-  },
-  {
-    path: SESSION_EXPLORER_PATH,
-    navLabel: 'Session Explorer',
-    titleMain: 'Session',
-    titleAccent: 'Explorer',
-    permissionKey: 'agent:session-explorer',
-    icon: 'session-explorer',
-  },
-];
 
 export const KNOWLEDGE_MANAGEMENT_PAGES: readonly NavPage[] = [
   {
@@ -193,7 +157,6 @@ export const ADMIN_PAGES: readonly NavPage[] = [
 ];
 
 export const ALL_NAV_PAGES: readonly NavPage[] = [
-  ...AGENT_PAGES,
   ...KNOWLEDGE_MANAGEMENT_PAGES,
   ...EVALUATION_PAGES,
   ...PLATFORM_BASIC_PAGES,

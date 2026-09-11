@@ -3,8 +3,6 @@ import {
   appDocumentChannels,
   appKnowledgeBases,
   appResourceGrants,
-  appSkills,
-  appStudioAgents,
   appUsers,
   db,
   type ResourceType,
@@ -113,24 +111,6 @@ async function loadOwnerId(resourceType: ResourceType, resourceId: string): Prom
       .select({ createdBy: appDocumentChannels.createdBy })
       .from(appDocumentChannels)
       .where(eq(appDocumentChannels.id, resourceId))
-      .limit(1);
-    return row?.createdBy ?? null;
-  }
-
-  if (resourceType === 'studio_agent') {
-    const [row] = await db
-      .select({ createdBy: appStudioAgents.createdBy })
-      .from(appStudioAgents)
-      .where(eq(appStudioAgents.id, resourceId))
-      .limit(1);
-    return row?.createdBy ?? null;
-  }
-
-  if (resourceType === 'skill') {
-    const [row] = await db
-      .select({ createdBy: appSkills.createdBy })
-      .from(appSkills)
-      .where(eq(appSkills.id, resourceId))
       .limit(1);
     return row?.createdBy ?? null;
   }
@@ -308,60 +288,6 @@ export async function userHasKnowledgeBaseAccess(
   return satisfiesResourcePermission(flags, required);
 }
 
-export async function resolveStudioAgentPermission(
-  userId: string,
-  studioAgentId: string,
-  scope?: ResourceAccessScope,
-): Promise<ResourcePermissionFlags> {
-  if (await isPlatformAdmin(userId, scope)) return FULL_RESOURCE_ACCESS;
-  const ownerId = await loadOwnerId('studio_agent', studioAgentId);
-  const grantsByResource = await loadGrantsForResources('studio_agent', [studioAgentId], scope?.cache);
-  return permissionAtLevel(userId, ownerId, grantsByResource.get(studioAgentId) ?? []);
-}
-
-export async function userHasStudioAgentAccess(
-  userId: string,
-  studioAgentId: string,
-  level: ResourcePermissionLevel,
-  scope?: ResourceAccessScope,
-): Promise<boolean> {
-  const flags = await resolveStudioAgentPermission(userId, studioAgentId, scope);
-  return satisfiesResourcePermission(flags, level);
-}
-
-export async function loadSkillRow(skillId: string, cache?: ResourceAccessRequestCache) {
-  const cached = cache?.skillRowsById.get(skillId);
-  if (cached) return cached;
-  const [row] = await db.select().from(appSkills).where(eq(appSkills.id, skillId)).limit(1);
-  if (row) cache?.skillRowsById.set(skillId, row);
-  return row ?? null;
-}
-
-export async function resolveSkillPermission(
-  userId: string,
-  skillId: string,
-  scope?: ResourceAccessScope,
-): Promise<ResourcePermissionFlags> {
-  const skill = await loadSkillRow(skillId, scope?.cache);
-  if (!skill) return NO_RESOURCE_ACCESS;
-  if (await isPlatformAdmin(userId, scope)) return FULL_RESOURCE_ACCESS;
-  if (skill.origin === 'platform') {
-    return { read: true, write: false, manage: false };
-  }
-  const grantsByResource = await loadGrantsForResources('skill', [skillId], scope?.cache);
-  return permissionAtLevel(userId, skill.createdBy, grantsByResource.get(skillId) ?? []);
-}
-
-export async function userHasSkillAccess(
-  userId: string,
-  skillId: string,
-  level: ResourcePermissionLevel,
-  scope?: ResourceAccessScope,
-): Promise<boolean> {
-  const flags = await resolveSkillPermission(userId, skillId, scope);
-  return satisfiesResourcePermission(flags, level);
-}
-
 export async function resolveViewerResourcePermission(
   userId: string,
   resourceType: ResourceType,
@@ -370,12 +296,6 @@ export async function resolveViewerResourcePermission(
 ): Promise<ResourcePermissionFlags> {
   if (resourceType === 'document_channel') {
     return resolveChannelPermission(userId, resourceId, scope);
-  }
-  if (resourceType === 'studio_agent') {
-    return resolveStudioAgentPermission(userId, resourceId, scope);
-  }
-  if (resourceType === 'skill') {
-    return resolveSkillPermission(userId, resourceId, scope);
   }
   return resolveKnowledgeBasePermission(userId, resourceId, scope);
 }
@@ -491,23 +411,6 @@ export async function getResourceAccessSettings(
       .limit(1);
     if (!exists) return null;
   }
-  if (ownerId === null && resourceType === 'studio_agent') {
-    const [exists] = await db
-      .select({ id: appStudioAgents.id })
-      .from(appStudioAgents)
-      .where(eq(appStudioAgents.id, resourceId))
-      .limit(1);
-    if (!exists) return null;
-  }
-  if (ownerId === null && resourceType === 'skill') {
-    const [exists] = await db
-      .select({ id: appSkills.id })
-      .from(appSkills)
-      .where(eq(appSkills.id, resourceId))
-      .limit(1);
-    if (!exists) return null;
-  }
-
   const grants = (await loadGrantsForResources(resourceType, [resourceId], options?.cache)).get(resourceId) ?? [];
   const othersGrant = grants.find((grant) => grant.granteeType === 'others');
   const userGrants = grants.filter((grant) => grant.granteeType === 'user' && grant.granteeUserId);
@@ -632,20 +535,6 @@ export async function transferResourceOwner(
       .where(eq(appDocumentChannels.id, resourceId))
       .returning({ id: appDocumentChannels.id });
     if (!updated) throw new Error('Channel not found');
-  } else if (resourceType === 'studio_agent') {
-    const [updated] = await db
-      .update(appStudioAgents)
-      .set({ createdBy: newOwnerUserId, updatedAt: new Date() })
-      .where(eq(appStudioAgents.id, resourceId))
-      .returning({ id: appStudioAgents.id });
-    if (!updated) throw new Error('Studio agent not found');
-  } else if (resourceType === 'skill') {
-    const [updated] = await db
-      .update(appSkills)
-      .set({ createdBy: newOwnerUserId, updatedAt: new Date() })
-      .where(eq(appSkills.id, resourceId))
-      .returning({ id: appSkills.id });
-    if (!updated) throw new Error('Skill not found');
   } else {
     const [updated] = await db
       .update(appKnowledgeBases)

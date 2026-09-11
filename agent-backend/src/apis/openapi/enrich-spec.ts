@@ -5,10 +5,6 @@ type Operation = OpenAPIV3_1.OperationObject;
 const TAG_RULES: Array<{ prefix: string; tag: string }> = [
   { prefix: '/api/auth', tag: 'Auth' },
   { prefix: '/api/user/api-keys', tag: 'Auth' },
-  { prefix: '/api/agents/studio', tag: 'Agents · Studio' },
-  { prefix: '/api/agents/conversations', tag: 'Agents · Conversations' },
-  { prefix: '/api/agents/session-explorer', tag: 'Agents · Session Explorer' },
-  { prefix: '/api/agents', tag: 'Agents · Runtime' },
   { prefix: '/api/knowledge/document-channels', tag: 'Knowledge · Document Channels' },
   { prefix: '/api/knowledge/documents', tag: 'Knowledge · Documents' },
   { prefix: '/api/knowledge/captures', tag: 'Knowledge · Captures' },

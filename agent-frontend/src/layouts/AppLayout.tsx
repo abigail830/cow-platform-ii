@@ -1,16 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { clearSession, fetchMe, getToken, setSession, type AuthUser } from '../api/auth.ts';
-import { listAgents, type AgentInfo } from '../api/conversations.ts';
 import { AppSideNav } from '../components/AppSideNav.tsx';
 import { AppTopBar } from '../components/AppTopBar.tsx';
-import { canAccessAppPath, resolveAppHomePath } from '../shared/agent-nav.ts';
+import { canAccessAppPath, resolveAppHomePath } from '../shared/app-nav.ts';
 import { getAppLayoutMode } from '../shared/app-layout-mode.ts';
 
 export type AppOutletContext = {
   user: AuthUser;
-  agents: AgentInfo[];
-  refreshAgents: () => Promise<void>;
 };
 
 const AppOutletContextInternal = createContext<AppOutletContext | null>(null);
@@ -25,17 +22,11 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [booting, setBooting] = useState(true);
   const [navCollapsed, setNavCollapsed] = useState(false);
 
   const layoutMode = getAppLayoutMode(location.pathname);
   const showSideNav = layoutMode === 'admin';
-
-  async function refreshAgents() {
-    const agentList = await listAgents();
-    setAgents(agentList);
-  }
 
   useEffect(() => {
     if (!getToken()) {
@@ -48,7 +39,6 @@ export function AppLayout() {
         setUser(me);
         const token = getToken();
         if (token) setSession(token, me);
-        await refreshAgents();
       } catch {
         clearSession();
         navigate('/login', { replace: true });
@@ -76,8 +66,6 @@ export function AppLayout() {
 
   const outletContext: AppOutletContext = {
     user,
-    agents,
-    refreshAgents,
   };
 
   const bodyClassName = [

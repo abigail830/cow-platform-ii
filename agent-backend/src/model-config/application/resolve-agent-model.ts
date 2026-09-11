@@ -16,8 +16,8 @@ export function isLegacyModelProfile(profile: string): boolean {
 export async function resolveAgentModel(model: AgentModelYaml): Promise<string> {
   const configName = model.configName?.trim();
   if (configName) {
-    const { resolveFlueModelFromConfigName } = await import('../infrastructure/model-registry.ts');
-    return resolveFlueModelFromConfigName(configName);
+    const { resolveModelSpecifierByConfigName } = await import('../infrastructure/model-registry.ts');
+    return resolveModelSpecifierByConfigName(configName);
   }
 
   const profile = resolveAgentProfileName(model);
@@ -26,6 +26,6 @@ export async function resolveAgentModel(model: AgentModelYaml): Promise<string> 
     return resolveModel(profile);
   }
 
-  const { resolveFlueModelFromConfigName } = await import('../infrastructure/model-registry.ts');
-  return resolveFlueModelFromConfigName(profile);
+  const { resolveModelSpecifierByConfigName } = await import('../infrastructure/model-registry.ts');
+  return resolveModelSpecifierByConfigName(profile);
 }

@@ -1,7 +1,7 @@
 import './load-env.ts';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { appAgentPermissions, appRoles, appUserRoles, appUsers, db } from '../src/infrastructure/db/index.ts';
+import { appRoles, appUserRoles, appUsers, db } from '../src/infrastructure/db/index.ts';
 import { syncRbac } from '../src/infrastructure/db/sync-rbac.ts';
 import { closePool } from '../src/infrastructure/db/pool.ts';
 
@@ -11,7 +11,6 @@ const SEED_USERS = [
     password: 'admin123',
     displayName: 'Admin',
     role: 'admin' as const,
-    agents: ['content-studio'],
     rbacRoles: [] as string[],
   },
   {
@@ -19,23 +18,13 @@ const SEED_USERS = [
     password: 'user123',
     displayName: 'Demo User',
     role: 'user' as const,
-    agents: ['content-studio'],
     rbacRoles: [] as string[],
-  },
-  {
-    email: 'player@example.com',
-    password: 'player123',
-    displayName: 'Agent Player',
-    role: 'user' as const,
-    agents: [] as string[],
-    rbacRoles: ['agent-player'],
   },
   {
     email: 'km@example.com',
     password: 'km123',
     displayName: 'Knowledge Manager',
     role: 'user' as const,
-    agents: [] as string[],
     rbacRoles: ['knowledge-manager'],
   },
   {
@@ -43,7 +32,6 @@ const SEED_USERS = [
     password: 'unused-a2a-service',
     displayName: 'A2A Service',
     role: 'operator' as const,
-    agents: [] as string[],
     rbacRoles: [] as string[],
   },
 ];
@@ -84,15 +72,6 @@ async function main() {
         .returning();
       userId = created.id;
       console.log(`Created user: ${seed.email} / ${seed.password}`);
-    }
-
-    if (seed.role === 'user') {
-      for (const agentName of seed.agents) {
-        await db
-          .insert(appAgentPermissions)
-          .values({ userId, agentName })
-          .onConflictDoNothing();
-      }
     }
 
     if (seed.rbacRoles.length > 0) {

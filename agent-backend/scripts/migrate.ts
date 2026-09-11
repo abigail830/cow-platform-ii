@@ -3,7 +3,6 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { syncRbac } from '../src/infrastructure/db/sync-rbac.ts';
 import { seedBuiltinAgents } from '../src/builtin-agents/seed-builtin-agents.ts';
-import { seedPlatformSkillsFromAssets } from '../src/skills/application/skills.ts';
 import { getPool, closePool } from '../src/infrastructure/db/pool.ts';
 import { validateMigrations } from './validate-migrations.ts';
 import { reencryptLegacyModelApiKeys } from './reencrypt-legacy-model-api-keys.ts';
@@ -19,10 +18,6 @@ async function main() {
   }
   await syncRbac();
   await seedBuiltinAgents();
-  const seededSkills = await seedPlatformSkillsFromAssets();
-  if (seededSkills > 0) {
-    console.log(`Seeded ${seededSkills} platform skill(s).`);
-  }
 }
 
 main()

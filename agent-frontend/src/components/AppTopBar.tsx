@@ -1,14 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Settings, User } from 'lucide-react';
+import { Settings, User } from 'lucide-react';
 import type { AuthUser } from '../api/auth.ts';
-import { KNOWLEDGE_MANAGEMENT_PAGES, type NavPage } from '../shared/admin-nav.ts';
-import {
-  isAdminSectionPath,
-  isAgentsSectionPath,
-  isKnowledgeSectionPath,
-  resolveDefaultAdminPath,
-} from '../shared/app-layout-mode.ts';
-import { HOME_PATH, visibleAgentPages } from '../shared/agent-nav.ts';
+import { KNOWLEDGE_MANAGEMENT_PAGES } from '../shared/admin-nav.ts';
+import { isAdminSectionPath, resolveDefaultAdminPath } from '../shared/app-layout-mode.ts';
+import { HOME_PATH } from '../shared/app-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { NavPageIcon } from './icons/NavIcons.tsx';
 import { iconProps } from './icons/icon-props.ts';
@@ -21,79 +16,10 @@ type AppTopBarProps = {
   onLogout: () => void;
 };
 
-type TopNavDropdownProps = {
-  label: string;
-  items: readonly NavPage[];
-  activePath: string;
-  isSectionActive: boolean;
-  onNavigate: (path: string) => void;
-};
-
-function TopNavDropdown({
-  label,
-  items,
-  activePath,
-  isSectionActive,
-  onNavigate,
-}: TopNavDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(event: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [open]);
-
-  if (items.length === 0) return null;
-
-  return (
-    <div className={`topbar-dropdown${open ? ' is-open' : ''}`} ref={wrapRef}>
-      <button
-        type="button"
-        className={`topbar-nav-item${isSectionActive ? ' active' : ''}${open ? ' is-open' : ''}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span>{label}</span>
-        <ChevronDown {...iconProps({ size: 12 })} aria-hidden />
-      </button>
-      {open && (
-        <div className="topbar-dropdown-menu" role="menu">
-          {items.map((item) => (
-            <button
-              key={item.path}
-              type="button"
-              role="menuitem"
-              className={`topbar-dropdown-item${activePath.startsWith(item.path) ? ' active' : ''}`}
-              onClick={() => {
-                setOpen(false);
-                onNavigate(item.path);
-              }}
-            >
-              <span className="topbar-dropdown-item-icon">
-                <NavPageIcon name={item.icon} />
-              </span>
-              <span>{item.navLabel}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function AppTopBar({ user, userLabel, activePath, onNavigate, onLogout }: AppTopBarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const agentItems = visibleAgentPages(user);
   const knowledgeItems = KNOWLEDGE_MANAGEMENT_PAGES.filter((item) =>
     hasPermission(user, item.permissionKey, 'read'),
   );
@@ -132,20 +58,19 @@ export function AppTopBar({ user, userLabel, activePath, onNavigate, onLogout }:
 
       <nav className="topbar-nav" aria-label="Main">
         <div className="topbar-nav-links">
-          <TopNavDropdown
-            label="Agents"
-            items={agentItems}
-            activePath={activePath}
-            isSectionActive={isAgentsSectionPath(activePath)}
-            onNavigate={onNavigate}
-          />
-          <TopNavDropdown
-            label="Knowledge"
-            items={knowledgeItems}
-            activePath={activePath}
-            isSectionActive={isKnowledgeSectionPath(activePath)}
-            onNavigate={onNavigate}
-          />
+          {knowledgeItems.map((item) => (
+            <button
+              key={item.path}
+              type="button"
+              className={`topbar-nav-item${activePath.startsWith(item.path) ? ' active' : ''}`}
+              onClick={() => onNavigate(item.path)}
+            >
+              <span className="topbar-nav-item-icon" aria-hidden>
+                <NavPageIcon name={item.icon} />
+              </span>
+              <span>{item.navLabel}</span>
+            </button>
+          ))}
         </div>
       </nav>
 

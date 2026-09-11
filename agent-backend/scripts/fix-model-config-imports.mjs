@@ -13,7 +13,7 @@ const REPLACEMENTS = [
   ['model-config/resolve-agent-thinking-level', 'model-config/application/resolve-agent-thinking-level'],
   ['model-config/resolve-agent-model', 'model-config/application/resolve-agent-model'],
   ['model-config/model-cli-client', 'model-config/infrastructure/model-cli-client'],
-  ['model-config/model-flue-binding', 'model-config/infrastructure/model-flue-binding'],
+  ['model-config/model-specifier', 'model-config/infrastructure/model-specifier'],
   ['model-config/embedding-provider', 'model-config/domain/embedding-provider'],
   ['model-config/thinking-level', 'model-config/domain/thinking-level'],
   ['model-config/models', 'model-config/domain/models'],

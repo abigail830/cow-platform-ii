@@ -11,7 +11,3 @@ export function apiUrl(path: string): string {
   const origin = env?.VITE_API_ORIGIN?.trim().replace(/\/$/, '') ?? '';
   return origin ? `${origin}${path}` : path;
 }
-
-export function flueApiBaseUrl(): string {
-  return apiUrl('/api');
-}

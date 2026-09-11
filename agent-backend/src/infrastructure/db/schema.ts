@@ -30,18 +30,6 @@ export const pgVector = customType<{ data: number[]; driverData: string }>({
   },
 });
 
-export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
-  dataType() {
-    return 'bytea';
-  },
-  toDriver(value: Buffer): Buffer {
-    return value;
-  },
-  fromDriver(value: Buffer): Buffer {
-    return value;
-  },
-});
-
 /** Chunking options for RAG index pipeline Config YAML (not stored on KB row). */
 export type KbChunkConfig = {
   strategy?: 'markdown_header' | 'fixed_size' | 'paragraph';
@@ -65,7 +53,7 @@ export const MODEL_API_TYPES = [
 
 export type ModelApiType = (typeof MODEL_API_TYPES)[number];
 
-export const PERMISSION_CATEGORIES = ['platform-basic', 'knowledge-management', 'evaluation', 'admin', 'agent'] as const;
+export const PERMISSION_CATEGORIES = ['platform-basic', 'knowledge-management', 'evaluation', 'admin'] as const;
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
 
 export const ACCESS_LEVELS = ['read', 'write'] as const;
@@ -80,48 +68,6 @@ export const appUsers = pgTable('app_users', {
   role: text('role').notNull().default('user'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
-
-export const appAgentPermissions = pgTable(
-  'app_agent_permissions',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => appUsers.id, { onDelete: 'cascade' }),
-    agentName: text('agent_name').notNull(),
-  },
-  (t) => [primaryKey({ columns: [t.userId, t.agentName] })],
-);
-
-export const appConversations = pgTable(
-  'app_conversations',
-  {
-    id: uuid('id').primaryKey(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => appUsers.id, { onDelete: 'cascade' }),
-    agentName: text('agent_name').notNull(),
-    title: text('title'),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    index('idx_conversations_user').on(t.userId, t.updatedAt),
-    index('idx_conversations_agent_updated').on(t.agentName, t.updatedAt),
-  ],
-);
-
-/** Platform-owned E2B sandbox lease keyed by Flue agent instance id (`userId--conversationId`). */
-export const appE2bSessions = pgTable(
-  'app_e2b_sessions',
-  {
-    instanceId: text('instance_id').primaryKey(),
-    sandboxId: text('sandbox_id').notNull(),
-    agentName: text('agent_name'),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [index('idx_e2b_sessions_updated').on(t.updatedAt)],
-);
 
 export const appModelConfigs = pgTable(
   'app_model_configs',
@@ -222,12 +168,7 @@ export const appUserRoles = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.roleId] })],
 );
 
-export const RESOURCE_TYPES = [
-  'document_channel',
-  'knowledge_base',
-  'studio_agent',
-  'skill',
-] as const;
+export const RESOURCE_TYPES = ['document_channel', 'knowledge_base'] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
 
 export const GRANTEE_TYPES = ['user', 'others'] as const;
@@ -785,28 +726,6 @@ export const appPipelineJobs = pgTable(
   ],
 );
 
-/** Agent playground session file attachments (metadata only; bytes in local FS or Vercel Blob). */
-export const appSessionFiles = pgTable(
-  'app_session_files',
-  {
-    id: text('id').primaryKey(),
-    instanceId: text('instance_id').notNull(),
-    agentName: text('agent_name').notNull(),
-    filename: text('filename').notNull(),
-    mimeType: text('mime_type').notNull(),
-    sizeBytes: integer('size_bytes').notNull(),
-    storageBackend: text('storage_backend').notNull(),
-    storageKey: text('storage_key').notNull(),
-    contentCacheKey: text('content_cache_key'),
-    expiresAt: timestamp('expires_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    index('idx_session_files_instance').on(t.instanceId, t.createdAt),
-    index('idx_session_files_expires').on(t.expiresAt),
-  ],
-);
-
 export const BUILTIN_WORKFLOW_KEYS = [
   'session_image_extract',
   'metadata_extract',
@@ -900,157 +819,6 @@ export const appSyncAgentMessages = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index('idx_sync_agent_messages_run').on(t.runId)],
-);
-
-export const STUDIO_AGENT_ORIGINS = ['user', 'platform'] as const;
-export type StudioAgentOrigin = (typeof STUDIO_AGENT_ORIGINS)[number];
-
-export const appStudioAgents = pgTable(
-  'app_studio_agents',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    slug: text('slug').notNull().unique(),
-    displayName: text('display_name').notNull(),
-    description: text('description').notNull().default(''),
-    icon: text('icon'),
-    origin: text('origin').notNull().default('user'),
-    createdBy: uuid('created_by')
-      .notNull()
-      .references(() => appUsers.id, { onDelete: 'cascade' }),
-    instructions: text('instructions').notNull().default(''),
-    modelConfigId: uuid('model_config_id')
-      .notNull()
-      .references(() => appModelConfigs.id, { onDelete: 'restrict' }),
-    thinkingLevel: text('thinking_level'),
-    skillIds: jsonb('skill_ids').$type<string[]>().notNull().default([]),
-    platformMcpIds: jsonb('platform_mcp_ids').$type<string[]>().notNull().default([]),
-    privateMcpIds: jsonb('private_mcp_ids').$type<string[]>().notNull().default([]),
-    datasourceIds: jsonb('datasource_ids').$type<string[]>().notNull().default([]),
-    sandbox: jsonb('sandbox').$type<Record<string, unknown>>().notNull().default({ provider: 'none' }),
-    a2a: jsonb('a2a').$type<Record<string, unknown> | null>(),
-    version: integer('version').notNull().default(1),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    index('idx_studio_agents_created_by').on(t.createdBy),
-    index('idx_studio_agents_updated').on(t.updatedAt),
-  ],
-);
-
-export const appUserMcpServers = pgTable(
-  'app_user_mcp_servers',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    createdBy: uuid('created_by')
-      .notNull()
-      .references(() => appUsers.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    title: text('title'),
-    config: jsonb('config').$type<Record<string, unknown>>().notNull(),
-    secrets: text('secrets'),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    index('idx_user_mcp_servers_created_by').on(t.createdBy),
-    uniqueIndex('uq_user_mcp_servers_owner_name').on(t.createdBy, t.name),
-  ],
-);
-
-export const appUserMcpCredentials = pgTable(
-  'app_user_mcp_credentials',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => appUsers.id, { onDelete: 'cascade' }),
-    platformMcpId: text('platform_mcp_id').notNull(),
-    secrets: text('secrets').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [uniqueIndex('uq_user_mcp_credentials_user_platform').on(t.userId, t.platformMcpId)],
-);
-
-export const SKILL_ORIGINS = ['platform', 'user'] as const;
-export type SkillOrigin = (typeof SKILL_ORIGINS)[number];
-
-export const SKILL_IMPORT_STATUSES = ['pending', 'ready', 'failed'] as const;
-export type SkillImportStatus = (typeof SKILL_IMPORT_STATUSES)[number];
-
-export const appSkills = pgTable(
-  'app_skills',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    slug: text('slug').notNull(),
-    title: text('title').notNull(),
-    description: text('description').notNull(),
-    instructions: text('instructions').notNull().default(''),
-    license: text('license'),
-    compatibility: text('compatibility'),
-    metadata: jsonb('metadata').$type<Record<string, string>>().notNull().default({}),
-    origin: text('origin').notNull(),
-    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'cascade' }),
-    sourceS3Key: text('source_s3_key'),
-    importStatus: text('import_status').notNull().default('ready'),
-    importError: text('import_error'),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    index('idx_app_skills_origin').on(t.origin),
-    index('idx_app_skills_created_by').on(t.createdBy),
-    index('idx_app_skills_import_status').on(t.importStatus),
-    index('idx_app_skills_slug').on(t.slug),
-  ],
-);
-
-export const appSkillFiles = pgTable(
-  'app_skill_files',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    skillId: uuid('skill_id')
-      .notNull()
-      .references(() => appSkills.id, { onDelete: 'cascade' }),
-    filePath: text('file_path').notNull(),
-    content: bytea('content').notNull(),
-    contentType: text('content_type').notNull().default('text/plain'),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    uniqueIndex('uq_app_skill_files_skill_path').on(t.skillId, t.filePath),
-    index('idx_app_skill_files_skill').on(t.skillId),
-  ],
-);
-
-export const appUserDatasources = pgTable(
-  'app_user_datasources',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    createdBy: uuid('created_by')
-      .notNull()
-      .references(() => appUsers.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    displayTitle: text('display_title'),
-    type: text('type').notNull(),
-    host: text('host').notNull(),
-    port: integer('port').notNull(),
-    username: text('username').notNull(),
-    database: text('database').notNull(),
-    passwordEncrypted: text('password_encrypted').notNull(),
-    ssl: boolean('ssl').notNull().default(false),
-    readonly: boolean('readonly').notNull().default(true),
-    maxRows: integer('max_rows').notNull().default(100),
-    statementTimeoutMs: integer('statement_timeout_ms').notNull().default(30_000),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    index('idx_user_datasources_created_by').on(t.createdBy),
-    uniqueIndex('uq_user_datasources_owner_name').on(t.createdBy, t.name),
-  ],
 );
 
 export const EVAL_DATASET_KINDS = ['test', 'annotation'] as const;

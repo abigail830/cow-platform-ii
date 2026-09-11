@@ -2,7 +2,6 @@ import type { Context } from 'hono';
 import { getUser } from '../../auth/jwt.ts';
 import {
   getResourceAccessSettings,
-  loadSkillRow,
   replaceResourceAccessSettings,
   resolveViewerResourcePermission,
   satisfiesResourcePermission,
@@ -19,11 +18,6 @@ export async function handleGetResourceAccess(
 ): Promise<Response> {
   const user = getUser(c);
   const scope = scopeFromContext(c);
-
-  if (resourceType === 'skill') {
-    const skill = await loadSkillRow(resourceId, scope.cache);
-    if (!skill) return c.json({ error: 'Skill not found' }, 404);
-  }
 
   const myAccess = await resolveViewerResourcePermission(user.id, resourceType, resourceId, scope);
   if (!satisfiesResourcePermission(myAccess, 'read')) {

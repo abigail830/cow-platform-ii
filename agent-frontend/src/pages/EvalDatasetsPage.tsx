@@ -194,7 +194,7 @@ export function EvalDatasetsListPage() {
     }
   }
 
-  if (forbidden) return <Navigate to="/agents/playground" replace />;
+  if (forbidden) return <Navigate to="/" replace />;
 
   return (
     <div className="admin-page">
@@ -554,7 +554,7 @@ export function EvalDatasetDetailPage() {
     }
   }
 
-  if (forbidden) return <Navigate to="/agents/playground" replace />;
+  if (forbidden) return <Navigate to="/" replace />;
   if (!datasetId) return <Navigate to="/evaluation/datasets" replace />;
 
   return (

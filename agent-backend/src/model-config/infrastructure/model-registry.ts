@@ -3,7 +3,7 @@ import {
   listRuntimeModelConfigs,
   type RuntimeModelConfig,
 } from './model-config-store.ts';
-import { resolveFlueModelFromConfig } from './model-flue-binding.ts';
+import { resolveModelSpecifierFromConfig } from './model-specifier.ts';
 
 const CACHE_TTL_MS = 60_000;
 
@@ -39,12 +39,12 @@ export async function lookupModelConfigByName(name: string): Promise<RuntimeMode
   return row;
 }
 
-export async function resolveFlueModelFromConfigName(configName: string): Promise<string> {
+export async function resolveModelSpecifierByConfigName(configName: string): Promise<string> {
   const config = await lookupModelConfigByName(configName);
   if (!config) {
     throw new Error(`Model config not found: "${configName}"`);
   }
-  return resolveFlueModelFromConfig(config);
+  return resolveModelSpecifierFromConfig(config);
 }
 
 export function resetModelConfigCacheForTests(): void {

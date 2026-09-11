@@ -40,16 +40,6 @@ export const EVALUATION_RESOURCES = {
 
 export type EvaluationResource = (typeof EVALUATION_RESOURCES)[keyof typeof EVALUATION_RESOURCES];
 
-export const AGENT_CATEGORY = 'agent' as const;
-
-export const AGENT_RESOURCES = {
-  ASSET_MARKET: 'asset-market',
-  PLAYGROUND: 'playground',
-  SESSION_EXPLORER: 'session-explorer',
-} as const;
-
-export type AgentResource = (typeof AGENT_RESOURCES)[keyof typeof AGENT_RESOURCES];
-
 export type AdminResource = (typeof ADMIN_RESOURCES)[keyof typeof ADMIN_RESOURCES];
 
 type ResourceDefinition = {
@@ -163,38 +153,6 @@ const KNOWLEDGE_MANAGEMENT_FEATURE_DEFS: ResourceDefinition[] = [
   },
 ];
 
-const AGENT_RW_RESOURCE_DEFS: ResourceDefinition[] = [
-  {
-    resource: AGENT_RESOURCES.ASSET_MARKET,
-    label: 'Asset market',
-    description: 'Browse platform assets and create or edit personal studio agents and MCP credentials.',
-    routePatterns: ['/agents/asset-market'],
-    apiPatterns: ['/api/agents/studio', '/api/agents/studio/*'],
-  },
-];
-
-const AGENT_FEATURE_DEFS: ResourceDefinition[] = [
-  {
-    resource: AGENT_RESOURCES.PLAYGROUND,
-    label: 'Agent playground',
-    description: 'Chat with catalog agents and manage personal conversations.',
-    routePatterns: ['/agents/playground', '/chat'],
-    apiPatterns: [
-      '/api/agents',
-      '/api/agents/*',
-      '/api/agents/conversations',
-      '/api/agents/conversations/*',
-    ],
-  },
-  {
-    resource: AGENT_RESOURCES.SESSION_EXPLORER,
-    label: 'Session explorer',
-    description: 'Browse agent conversation history by date range and user.',
-    routePatterns: ['/agents/session-explorer'],
-    apiPatterns: ['/api/agents/session-explorer', '/api/agents/session-explorer/*'],
-  },
-];
-
 const ADMIN_RESOURCE_DEFS: ResourceDefinition[] = [
   {
     resource: ADMIN_RESOURCES.USERS,
@@ -276,12 +234,10 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   ...buildPermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCE_DEFS),
   ...buildFeaturePermissions(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_FEATURE_DEFS),
   ...buildPermissions(EVALUATION_CATEGORY, EVALUATION_RESOURCE_DEFS),
-  ...buildPermissions(AGENT_CATEGORY, AGENT_RW_RESOURCE_DEFS),
-  ...buildFeaturePermissions(AGENT_CATEGORY, AGENT_FEATURE_DEFS),
   ...buildPermissions('admin', ADMIN_RESOURCE_DEFS),
 ];
 
-/** Keys superseded by granular read/write permissions or category moves. */
+/** Keys superseded by granular read/write permissions, category moves, or removed surfaces. */
 export const OBSOLETE_PERMISSION_KEYS = [
   'admin:all',
   'admin:models',
@@ -290,8 +246,13 @@ export const OBSOLETE_PERMISSION_KEYS = [
   'admin:users',
   'admin:roles',
   'admin:permissions',
+  // Removed interactive agent surfaces (Asset Market / Playground / Session Explorer)
+  'agent:asset-market:read',
+  'agent:asset-market:write',
+  'agent:playground',
   'agent:playground:read',
   'agent:playground:write',
+  'agent:session-explorer',
   'agent:session-explorer:read',
   'agent:session-explorer:write',
   'knowledge-management:hybrid-search:read',

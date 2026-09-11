@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../api/auth.ts';
-import { resolveAppHomePath } from '../shared/agent-nav.ts';
+import { resolveAppHomePath } from '../shared/app-nav.ts';
 
 export function LoginPage() {
   const navigate = useNavigate();

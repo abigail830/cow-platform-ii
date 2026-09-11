@@ -305,7 +305,7 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
   }
 
   if (forbidden) {
-    return <Navigate to="/agents/playground" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (!knowledgeBaseId) {

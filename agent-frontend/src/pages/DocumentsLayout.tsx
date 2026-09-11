@@ -295,7 +295,7 @@ export function DocumentsLayout() {
     navigate(`/knowledge/documents/captures/${item.id}`);
   }
 
-  if (forbidden) return <Navigate to="/agents/playground" replace />;
+  if (forbidden) return <Navigate to="/" replace />;
 
   const createParentChannel =
     channelModal?.mode === 'create' && channelModal.parentId

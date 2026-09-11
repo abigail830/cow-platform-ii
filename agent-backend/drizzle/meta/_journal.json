@@ -568,6 +568,13 @@
       "when": 1785237000000,
       "tag": "0080_async_job_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1789122406177,
+      "tag": "0081_drop_legacy_agent_tables",
+      "breakpoints": true
     }
   ]
 }

@@ -20,13 +20,6 @@ const ADMIN_ROLE = {
   isSystem: true,
 };
 
-const AGENT_PLAYER_ROLE = {
-  key: 'agent-player',
-  label: 'Agent player',
-  description: 'Access to Asset market, Agent playground, and Session explorer.',
-  isSystem: true,
-};
-
 const KNOWLEDGE_MANAGER_ROLE = {
   key: 'knowledge-manager',
   label: 'Knowledge Manager',
@@ -37,18 +30,12 @@ const KNOWLEDGE_MANAGER_ROLE = {
 const READ_ONLY_ROLE = {
   key: 'read-only',
   label: 'Read only',
-  description: 'Agent playground and read-only access to knowledge management features.',
+  description: 'Read-only access to knowledge management features.',
   isSystem: true,
 };
 
 /** Permission keys granted to each system role (admin gets the full catalog separately). */
 const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
-  'agent-player': [
-    'agent:asset-market:read',
-    'agent:asset-market:write',
-    'agent:playground',
-    'agent:session-explorer',
-  ],
   'knowledge-manager': [
     'knowledge-management:asr-hotwords:read',
     'knowledge-management:asr-hotwords:write',
@@ -65,7 +52,6 @@ const SYSTEM_ROLE_PERMISSION_KEYS: Record<string, readonly string[]> = {
     'knowledge-management:pageindex-search',
   ],
   'read-only': [
-    'agent:playground',
     'knowledge-management:documents:read',
     'knowledge-management:knowledge-bases:read',
     'knowledge-management:hybrid-search',
@@ -250,6 +236,8 @@ async function migrateRenamedPermissionGrants(
   }
 }
 
+const OBSOLETE_ROLE_KEYS = ['agent-player'] as const;
+
 async function removeObsoletePermissions() {
   const keys = [...OBSOLETE_PERMISSION_KEYS];
   if (keys.length === 0) return;
@@ -263,6 +251,18 @@ async function removeObsoletePermissions() {
     await db.delete(appRolePermissions).where(eq(appRolePermissions.permissionId, perm.id));
     await db.delete(appPermissions).where(eq(appPermissions.id, perm.id));
     console.log(`  removed obsolete permission: ${perm.key}`);
+  }
+}
+
+async function removeObsoleteRoles() {
+  for (const key of OBSOLETE_ROLE_KEYS) {
+    const [role] = await db.select().from(appRoles).where(eq(appRoles.key, key)).limit(1);
+    if (!role) continue;
+
+    await db.delete(appUserRoles).where(eq(appUserRoles.roleId, role.id));
+    await db.delete(appRolePermissions).where(eq(appRolePermissions.roleId, role.id));
+    await db.delete(appRoles).where(eq(appRoles.id, role.id));
+    console.log(`  removed obsolete role: ${key}`);
   }
 }
 
@@ -281,10 +281,10 @@ export async function syncRbac(): Promise<{ permissionCount: number }> {
   await migrateLegacyHybridSearchGrants(permissions);
   await migrateRenamedPermissionGrants(permissions);
   await removeObsoletePermissions();
+  await removeObsoleteRoles();
 
   const adminRole = await upsertSystemRole(ADMIN_ROLE);
   const systemRolesByKey = {
-    'agent-player': await upsertSystemRole(AGENT_PLAYER_ROLE),
     'knowledge-manager': await upsertSystemRole(KNOWLEDGE_MANAGER_ROLE),
     'read-only': await upsertSystemRole(READ_ONLY_ROLE),
   };

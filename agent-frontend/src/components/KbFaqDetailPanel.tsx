@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, X } from 'lucide-react';
 import type { KbFaq } from '../api/knowledgeBases.ts';
-import { Markdown } from '../chat/Markdown.tsx';
+import { Markdown } from '../components/Markdown.tsx';
 import { iconProps } from './icons/icon-props.ts';
 
 type DetailTab = 'faq' | 'metadata';
@@ -80,7 +80,7 @@ export function KbFaqDetailPanel({ faq, loading, onClose }: KbFaqDetailPanelProp
             <h2>FAQ</h2>
           )}
         </div>
-        <button type="button" className="session-explorer-close-btn" onClick={onClose} aria-label="Close detail">
+        <button type="button" className="panel-close-btn" onClick={onClose} aria-label="Close detail">
           <X {...iconProps()} />
         </button>
       </header>
@@ -102,8 +102,8 @@ export function KbFaqDetailPanel({ faq, loading, onClose }: KbFaqDetailPanelProp
 
       <div className="kb-item-detail-body">
         {loading ? (
-          <p className="session-explorer-loading" role="status">
-            <Loader2 {...iconProps({ size: 18, className: 'session-explorer-loading-icon' })} aria-hidden />
+          <p className="panel-loading" role="status">
+            <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
             Loading FAQ…
           </p>
         ) : !faq ? (
