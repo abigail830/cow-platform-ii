@@ -67,11 +67,15 @@ module.exports.config = globalThis.__okfVercelConfig;
 });
 
 // Patch import.meta.url placeholders when esbuild emits them in the CJS bundle.
+// esbuild may emit `import_meta.url` (load-env) or `import_meta2.url` (other modules).
 const importMetaUrl = 'require("node:url").pathToFileURL(__filename).href';
 let bundle = readFileSync(outfile, 'utf8');
-if (/import_meta\d+\.url/.test(bundle)) {
-  bundle = bundle.replace(/import_meta\d+\.url/g, importMetaUrl);
+if (/import_meta\d*\.url/.test(bundle)) {
+  bundle = bundle.replace(/import_meta\d*\.url/g, importMetaUrl);
   writeFileSync(outfile, bundle);
+  if (/import_meta\d*\.url/.test(bundle)) {
+    throw new Error('import.meta.url placeholders remain after CJS patch — rebuild aborted');
+  }
 }
 
 const { size } = statSync(outfile);

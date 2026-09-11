@@ -3,7 +3,10 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+/** Repo-relative backend root — on Vercel, .env files are not shipped; use task cwd. */
+const backendRoot = process.env.VERCEL
+  ? process.cwd()
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 config({ path: path.join(backendRoot, '.env'), override: true });
 
