@@ -4986,6 +4986,16 @@ select:focus-visible {
   flex: 1;
 }
 
+.documents-main-panel .admin-table .documents-kind-col {
+  min-width: 8.5rem;
+  white-space: nowrap;
+}
+
+.documents-main-panel .admin-table .documents-size-col {
+  min-width: 5.5rem;
+  white-space: nowrap;
+}
+
 .documents-main-panel .admin-table .documents-status-col {
   min-width: 18rem;
   vertical-align: middle;

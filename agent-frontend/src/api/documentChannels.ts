@@ -48,6 +48,9 @@ export type KnowledgeChannelProcessingOptions = {
   postProcessPipelines: Array<{ id: string; name: string; pipelineName: string }>;
 };
 
+/** Default document parse for PDF/images/Office uploads in knowledge channels. */
+export const DEFAULT_KNOWLEDGE_DOCUMENT_PIPELINE_NAME = 'aliyun-docmind-parse';
+
 /** Default ASR for audio/transcript captures in document knowledge channels. */
 export const DEFAULT_KNOWLEDGE_TRANSCRIPTION_PIPELINE_NAME = 'aliyun-qwen-audio-transcribe';
 

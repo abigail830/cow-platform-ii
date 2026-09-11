@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  DEFAULT_KNOWLEDGE_DOCUMENT_PIPELINE_NAME,
   DEFAULT_KNOWLEDGE_POST_PROCESS_PIPELINE_NAME,
   DEFAULT_KNOWLEDGE_TRANSCRIPTION_PIPELINE_NAME,
   fetchChannelProcessingOptions,
@@ -166,6 +167,13 @@ export function ChannelSettingsModal({
   const postProcessPipelines =
     options && isKnowledgeProcessingOptions(options) ? options.postProcessPipelines : [];
 
+  const resolvedDocumentPipelineId =
+    pipelineId ||
+    documentPipelines.find((pipeline) => pipeline.pipelineName === DEFAULT_KNOWLEDGE_DOCUMENT_PIPELINE_NAME)
+      ?.id ||
+    documentPipelines[0]?.id ||
+    '';
+
   const resolvedPostProcessPipelineId =
     postProcessPipelineId ||
     postProcessPipelines.find((pipeline) => pipeline.pipelineName === DEFAULT_KNOWLEDGE_POST_PROCESS_PIPELINE_NAME)
@@ -176,6 +184,13 @@ export function ChannelSettingsModal({
   useEffect(() => {
     if (!knowledgePipelineMode || !options || optionsLoading || knowledgeDefaultsAppliedRef.current) return;
     knowledgeDefaultsAppliedRef.current = true;
+
+    if (!initialPipelineId) {
+      const docmind = documentPipelines.find(
+        (pipeline) => pipeline.pipelineName === DEFAULT_KNOWLEDGE_DOCUMENT_PIPELINE_NAME,
+      );
+      if (docmind) setPipelineId(docmind.id);
+    }
 
     if (!initialTranscriptionPipelineId) {
       const qwen = transcriptionPipelines.find(
@@ -192,6 +207,8 @@ export function ChannelSettingsModal({
       if (postProcess) setPostProcessPipelineId(postProcess.id);
     }
   }, [
+    documentPipelines,
+    initialPipelineId,
     initialPostProcessPipelineId,
     initialTranscriptionPipelineId,
     knowledgePipelineMode,
@@ -215,7 +232,7 @@ export function ChannelSettingsModal({
       await onSubmit({
         name: name.trim(),
         description: description.trim(),
-        pipelineId: pipelineId || null,
+        pipelineId: (knowledgePipelineMode ? resolvedDocumentPipelineId : pipelineId) || null,
         ...(knowledgePipelineMode
           ? {
               postProcessPipelineId: resolvedPostProcessPipelineId || null,
@@ -223,7 +240,7 @@ export function ChannelSettingsModal({
             }
           : {}),
         autoStartPipeline: knowledgePipelineMode
-          ? Boolean(pipelineId) && autoStartPipeline
+          ? Boolean(resolvedDocumentPipelineId) && autoStartPipeline
           : Boolean(pipelineId) && autoStartPipeline,
       });
     } catch (err) {
@@ -323,7 +340,7 @@ export function ChannelSettingsModal({
                       <label className="channel-pipeline-row">
                         <span>Document parse pipeline</span>
                         <select
-                          value={pipelineId}
+                          value={resolvedDocumentPipelineId}
                           onChange={(event) => {
                             const value = event.target.value;
                             setPipelineId(value);
@@ -343,8 +360,8 @@ export function ChannelSettingsModal({
                         <input
                           type="checkbox"
                           className="brand-checkbox"
-                          checked={Boolean(pipelineId) && autoStartPipeline}
-                          disabled={!pipelineId}
+                          checked={Boolean(resolvedDocumentPipelineId) && autoStartPipeline}
+                          disabled={!resolvedDocumentPipelineId}
                           onChange={(event) => setAutoStartPipeline(event.target.checked)}
                         />
                       </label>

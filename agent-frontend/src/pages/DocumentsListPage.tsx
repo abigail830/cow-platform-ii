@@ -263,9 +263,9 @@ export function DocumentsListPage() {
           <thead>
             <tr>
               <th>Name</th>
-              <th>Kind</th>
+              <th className="documents-kind-col">Kind</th>
               <th>Files</th>
-              <th>Size</th>
+              <th className="documents-size-col">Size</th>
               <th className="documents-status-col">Status</th>
               <th>Updated</th>
               <th className="admin-table-actions-col">Actions</th>
@@ -319,11 +319,13 @@ export function DocumentsListPage() {
                         </span>
                       </Link>
                     </td>
-                    <td>
+                    <td className="documents-kind-col">
                       <span className="document-status-badge">{knowledgeKindLabel(item)}</span>
                     </td>
                     <td className="documents-table-meta">{itemFileCount(item)}</td>
-                    <td className="documents-table-meta">{formatDocumentBytes(item.size_bytes)}</td>
+                    <td className="documents-table-meta documents-size-col">
+                      {formatDocumentBytes(item.size_bytes)}
+                    </td>
                     <td className="documents-status-col">
                       <KnowledgePipelineStatus item={item} />
                     </td>
