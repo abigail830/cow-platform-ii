@@ -4399,12 +4399,27 @@ textarea {
   margin-top: 1rem;
 }
 
-/* Upload modal — fixed body height; spare space goes to file list when present, else bottom */
+/* Upload modal — flex column; file list scrolls inside body when space is tight */
+.knowledge-upload-modal.modal-card {
+  max-height: calc(100vh - 2.5rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.knowledge-upload-modal form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .knowledge-upload-modal-heading {
   display: flex;
   align-items: baseline;
   gap: 0.55rem;
   margin: 0 0 0.75rem;
+  flex-shrink: 0;
 }
 
 .knowledge-upload-modal-heading h2 {
@@ -4418,6 +4433,7 @@ textarea {
 }
 .knowledge-upload-modal .capture-artifact-tabs {
   width: 100%;
+  flex-shrink: 0;
 }
 
 .knowledge-upload-modal .capture-artifact-tab {
@@ -4428,29 +4444,28 @@ textarea {
 .knowledge-upload-modal .knowledge-upload-modal-body {
   display: flex;
   flex-direction: column;
-  height: 31rem;
+  flex: 1 1 auto;
+  /* Keep the largest tab layout stable before/after files are added */
+  min-height: min(31rem, calc(100vh - 14rem));
 }
 
 .knowledge-upload-modal .knowledge-upload-modal-stack {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.knowledge-upload-modal .knowledge-upload-modal-body:has(.document-upload-file-list) .knowledge-upload-modal-stack {
-  flex: 1 1 auto;
-}
-
-.knowledge-upload-modal .knowledge-upload-modal-spacer {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.knowledge-upload-modal .knowledge-upload-modal-body:has(.document-upload-file-list) .knowledge-upload-modal-spacer {
-  flex: 0 0 0;
-  height: 0;
   overflow: hidden;
+}
+
+.knowledge-upload-modal .knowledge-upload-modal-body:has(.document-upload-file-list) .knowledge-upload-form-panel {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.knowledge-upload-modal .modal-actions {
+  flex-shrink: 0;
 }
 
 .knowledge-upload-modal .knowledge-upload-form-panel {
@@ -4463,6 +4478,11 @@ textarea {
 
 .knowledge-upload-modal .knowledge-upload-form-panel .form-grid {
   margin-bottom: 0;
+}
+
+.knowledge-upload-modal .knowledge-upload-brief-input {
+  min-height: calc(1rem + 2lh);
+  resize: vertical;
 }
 
 .knowledge-upload-modal .knowledge-upload-separate-captures {
@@ -4489,13 +4509,9 @@ textarea {
 }
 
 .knowledge-upload-modal .knowledge-upload-file-list-slot {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   margin-top: 0.75rem;
   min-height: 0;
-}
-
-.knowledge-upload-modal .knowledge-upload-modal-body:has(.document-upload-file-list) .knowledge-upload-file-list-slot {
-  flex: 1 1 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
 }

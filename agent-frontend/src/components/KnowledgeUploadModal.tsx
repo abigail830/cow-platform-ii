@@ -196,6 +196,7 @@ export function KnowledgeUploadModal({
               <label className="form-field form-field-wide">
                 <span>Brief (optional)</span>
                 <textarea
+                  className="knowledge-upload-brief-input"
                   value={brief}
                   onChange={(event) => setBrief(event.target.value)}
                   rows={2}
@@ -329,7 +330,6 @@ export function KnowledgeUploadModal({
             ) : null}
           </div>
             </div>
-            <div className="knowledge-upload-modal-spacer" aria-hidden="true" />
           </div>
 
           {error && <p className="error">{error}</p>}
