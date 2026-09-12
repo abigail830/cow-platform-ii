@@ -10,6 +10,8 @@ type MarkdownProps = {
   children?: string;
   content?: string;
   headingIds?: boolean;
+  /** Merge with built-in renderers (e.g. document parsed-image presign). */
+  components?: Components;
 };
 
 function headingIdFromChildren(children: ReactNode): string | undefined {
@@ -27,7 +29,7 @@ function extractText(node: ReactNode): string {
   return '';
 }
 
-function buildMarkdownComponents(headingIds: boolean): Components {
+function buildMarkdownComponents(headingIds: boolean, extra?: Components): Components {
   const link = ({ href, children, ...props }: { href?: string; children?: ReactNode }) => {
     if (href && isExternalHttpUrl(href)) {
       return (
@@ -60,6 +62,7 @@ function buildMarkdownComponents(headingIds: boolean): Components {
           <table {...props}>{children}</table>
         </div>
       ),
+      ...extra,
     };
   }
 
@@ -87,10 +90,11 @@ function buildMarkdownComponents(headingIds: boolean): Components {
     h4: heading('h4'),
     h5: heading('h5'),
     h6: heading('h6'),
+    ...extra,
   };
 }
 
-export function Markdown({ children, content, headingIds = false }: MarkdownProps) {
+export function Markdown({ children, content, headingIds = false, components }: MarkdownProps) {
   const source = content ?? children ?? '';
 
   return (
@@ -98,7 +102,7 @@ export function Markdown({ children, content, headingIds = false }: MarkdownProp
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={headingIds ? [rehypeRaw] : []}
-        components={buildMarkdownComponents(headingIds)}
+        components={buildMarkdownComponents(headingIds, components)}
       >
         {source}
       </ReactMarkdown>

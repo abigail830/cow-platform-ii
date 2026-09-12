@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  collectDocumentMarkdownImageStoragePaths,
   collectRelativeMarkdownImagePaths,
   markdownImagePathCandidates,
+  ossMarkdownImagePathCandidates,
   rewriteMarkdownImageUrls,
 } from './markdown-images.ts';
 
@@ -19,6 +21,25 @@ describe('markdown-images', () => {
       'markdown_out/block_0.png',
     ]);
     assert.deepEqual(markdownImagePathCandidates('markdown_out/a.jpeg'), ['markdown_out/a.jpeg']);
+  });
+
+  it('maps stale OSS image URLs to bundle path candidates', () => {
+    assert.deepEqual(
+      ossMarkdownImagePathCandidates(
+        'https://bucket.oss-cn-hongkong.aliyuncs.com/documents/abc/markdown_out/block_0.png?Expires=1',
+      ),
+      ['block_0.png', 'markdown_out/block_0.png'],
+    );
+  });
+
+  it('collects storage paths from relative and OSS markdown images', () => {
+    const md =
+      '![a](markdown_out/a.png) ![b](https://bucket.oss.aliyuncs.com/hash/e699b436.jpg?sig=1)';
+    assert.deepEqual(collectDocumentMarkdownImageStoragePaths(md), [
+      'markdown_out/a.png',
+      'e699b436.jpg',
+      'markdown_out/e699b436.jpg',
+    ]);
   });
 
   it('rewrites relative urls from a map', () => {

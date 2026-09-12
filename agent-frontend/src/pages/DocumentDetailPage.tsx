@@ -13,7 +13,7 @@ import { MindmapMetadataPanel, parseMindmapParsingResult } from '../components/M
 import { formatDocumentStatusLabel } from '../components/DocumentPipelineStatus.tsx';
 import { PageIndexTreePanel, type PageIndexNode, type PageIndexTree } from '../components/PageIndexTree.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
-import { Markdown } from '../components/Markdown.tsx';
+import { DocumentParsedMarkdown } from '../components/DocumentParsedMarkdown.tsx';
 import { useResizableSplit } from '../hooks/useResizableSplit.ts';
 import {
   findPageIndexNode,
@@ -327,7 +327,11 @@ export function DocumentDetailPage({ documentIdOverride }: DocumentDetailPagePro
               ) : (
                 <div ref={contentRef} className="document-detail-content-scroll">
                   {content?.has_markdown && content.markdown ? (
-                    <Markdown content={content.markdown} headingIds />
+                    <DocumentParsedMarkdown
+                      documentId={documentId!}
+                      content={content.markdown}
+                      headingIds
+                    />
                   ) : (
                     <div className="document-detail-panel-empty">
                       <p>No parsed content yet.</p>

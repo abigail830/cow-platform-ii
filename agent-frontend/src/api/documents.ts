@@ -11,11 +11,7 @@ import {
   UPLOAD_CHUNK_SIZE_BYTES,
   usesRemoteApiOrigin,
 } from './direct-upload.ts';
-import {
-  collectRelativeMarkdownImagePaths,
-  markdownImagePathCandidates,
-  rewriteMarkdownImageUrls,
-} from '../shared/markdown-images.ts';
+import { collectDocumentMarkdownImageStoragePaths } from '../shared/markdown-images.ts';
 import JSZip from 'jszip';
 
 export type DocumentPipelineJob = {
@@ -157,9 +153,6 @@ export async function fetchDocumentContent(
 
   const page_index = parseJsonRecord(pageIndexRaw);
   const parsing_result = parseJsonRecord(resultRaw);
-  const markdown = markdownRaw
-    ? await resolveDocumentMarkdownImages(id, markdownRaw, signal)
-    : null;
 
   return {
     id: manifest.id,
@@ -167,35 +160,28 @@ export async function fetchDocumentContent(
     file_type: manifest.file_type,
     status: manifest.status,
     metadata: manifest.metadata,
-    markdown,
+    markdown: markdownRaw,
     page_index,
     parsing_result,
-    has_markdown: Boolean(markdown?.trim()),
+    has_markdown: Boolean(markdownRaw?.trim()),
     has_page_index: page_index !== null,
   };
 }
 
-/** Presign relative image paths in parsed markdown so the browser can load them from OSS. */
-async function resolveDocumentMarkdownImages(
+/** Mint fresh presigned GET URLs for images referenced in parsed markdown (per page load). */
+export async function presignDocumentMarkdownImages(
   documentId: string,
   markdown: string,
   signal?: AbortSignal,
-): Promise<string> {
-  const relativePaths = collectRelativeMarkdownImagePaths(markdown);
-  if (relativePaths.length === 0) return markdown;
-
-  const pathSet = new Set<string>();
-  for (const path of relativePaths) {
-    for (const candidate of markdownImagePathCandidates(path)) {
-      pathSet.add(candidate);
-    }
-  }
+): Promise<Map<string, string>> {
+  const paths = collectDocumentMarkdownImageStoragePaths(markdown);
+  if (paths.length === 0) return new Map();
 
   try {
     const presigned = (await authFetch(`/api/knowledge/documents/${documentId}/download/bundle-presign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths: [...pathSet] }),
+      body: JSON.stringify({ paths }),
       signal,
     })) as { files: Array<{ path: string; url: string }> };
 
@@ -203,22 +189,9 @@ async function resolveDocumentMarkdownImages(
     for (const file of presigned.files ?? []) {
       if (file.path && file.url) byStoragePath.set(file.path, file.url);
     }
-    if (byStoragePath.size === 0) return markdown;
-
-    const rewriteMap = new Map<string, string>();
-    for (const path of relativePaths) {
-      for (const candidate of markdownImagePathCandidates(path)) {
-        const url = byStoragePath.get(candidate);
-        if (url) {
-          rewriteMap.set(path, url);
-          break;
-        }
-      }
-    }
-    return rewriteMarkdownImageUrls(markdown, rewriteMap);
+    return byStoragePath;
   } catch {
-    // Presign/CORS failures should not block parsed text rendering.
-    return markdown;
+    return new Map();
   }
 }
 
