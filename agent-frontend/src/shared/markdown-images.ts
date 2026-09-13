@@ -260,3 +260,18 @@ export function rewriteMarkdownImageUrls(
     return `![${alt}](${resolved})`;
   });
 }
+
+/** Rewrite only images we can resolve; leave unresolved refs unchanged in the markdown. */
+export function rewriteDocumentMarkdownImageUrls(
+  markdown: string,
+  ticketByPath: ReadonlyMap<string, string>,
+  urlByStoragePath: ReadonlyMap<string, string>,
+  toAbsoluteApiUrl: (apiPath: string) => string = (path) => path,
+): string {
+  return markdown.replace(MD_IMAGE_RE, (full, alt: string, url: string) => {
+    const resolved = resolveDocumentMarkdownImageUrl(url, ticketByPath, urlByStoragePath, alt);
+    if (!resolved) return full;
+    const display = resolved.startsWith('/api/') ? toAbsoluteApiUrl(resolved) : resolved;
+    return `![${alt}](${display})`;
+  });
+}

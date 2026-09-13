@@ -9,6 +9,7 @@ import {
   ossMarkdownImagePathCandidates,
   resolveDocumentMarkdownImageUrl,
   resolvePresignedImageUrl,
+  rewriteDocumentMarkdownImageUrls,
   rewriteMarkdownImageUrls,
 } from './markdown-images.ts';
 
@@ -107,6 +108,34 @@ describe('markdown-images', () => {
     assert.equal(
       resolvePresignedImageUrl('markdown_out/7fb7e5037340e71fd119dc62cc6a936d.jpg', lookup),
       'https://signed.example/a.jpg',
+    );
+  });
+
+  it('leaves unresolved document image refs unchanged in markdown', () => {
+    const docId = 'ca6ba407-ae5d-4f83-b7c0-0ca180679953';
+    const md = `![img.jpg](/api/knowledge/documents/${docId}/assets/markdown_out/img.jpg)`;
+    assert.equal(rewriteDocumentMarkdownImageUrls(md, new Map(), new Map()), md);
+  });
+
+  it('rewrites resolved document image refs to fetchable URLs', () => {
+    const docId = 'ca6ba407-ae5d-4f83-b7c0-0ca180679953';
+    const bundlePath = 'markdown_out/img.jpg';
+    const md = `![img.jpg](/api/knowledge/documents/${docId}/assets/${bundlePath})`;
+    const ticketByPath = buildPlatformAssetTicketByPath([
+      {
+        path: bundlePath,
+        url: `/api/knowledge/documents/${docId}/assets/${bundlePath}?exp=1&sig=abc`,
+      },
+    ]);
+    const out = rewriteDocumentMarkdownImageUrls(
+      md,
+      ticketByPath,
+      new Map(),
+      (path) => `https://api.example.com${path}`,
+    );
+    assert.match(
+      out,
+      /!\[img\.jpg\]\(https:\/\/api\.example\.com\/api\/knowledge\/documents\/.*\?exp=1&sig=abc\)/,
     );
   });
 
