@@ -13,7 +13,9 @@ import {
 } from './direct-upload.ts';
 import {
   buildImagePresignLookup,
+  buildPlatformAssetTicketLookup,
   collectDocumentMarkdownImageStoragePaths,
+  collectPlatformDocumentAssetPaths,
 } from '../shared/markdown-images.ts';
 import JSZip from 'jszip';
 
@@ -171,20 +173,43 @@ export async function fetchDocumentContent(
   };
 }
 
-/** Mint fresh presigned GET URLs for bundle images (OSS ListObjects + presign, per page load). */
+/** Mint short-lived tickets for platform asset URLs embedded in markdown. */
+export async function mintDocumentAssetTickets(
+  documentId: string,
+  markdown: string,
+  signal?: AbortSignal,
+): Promise<Map<string, string>> {
+  const paths = collectPlatformDocumentAssetPaths(markdown, documentId);
+  if (paths.length === 0) return new Map();
+
+  try {
+    const response = (await authFetch(`/api/knowledge/documents/${documentId}/assets/tickets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths }),
+      signal,
+    })) as { tickets: Array<{ path: string; url: string }> };
+
+    return buildPlatformAssetTicketLookup(response.tickets ?? [], markdown);
+  } catch {
+    return new Map();
+  }
+}
+
+/** Mint fresh presigned GET URLs for legacy bundle images (relative paths / stale OSS URLs). */
 export async function presignDocumentMarkdownImages(
   documentId: string,
   markdown: string,
   signal?: AbortSignal,
 ): Promise<Map<string, string>> {
-  const hasImageRefs = collectDocumentMarkdownImageStoragePaths(markdown).length > 0;
-  if (!hasImageRefs) return new Map();
+  const paths = collectDocumentMarkdownImageStoragePaths(markdown);
+  if (paths.length === 0) return new Map();
 
   try {
     const presigned = (await authFetch(`/api/knowledge/documents/${documentId}/download/bundle-presign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ discover_images: true }),
+      body: JSON.stringify({ discover_images: true, paths }),
       signal,
     })) as { files: Array<{ path: string; url: string }> };
 
@@ -192,6 +217,19 @@ export async function presignDocumentMarkdownImages(
   } catch {
     return new Map();
   }
+}
+
+/** Resolve markdown image src values to browser-fetchable URLs (platform tickets + legacy presign). */
+export async function resolveDocumentMarkdownImageUrls(
+  documentId: string,
+  markdown: string,
+  signal?: AbortSignal,
+): Promise<{ ticketBySrc: Map<string, string>; urlByStoragePath: Map<string, string> }> {
+  const [ticketBySrc, urlByStoragePath] = await Promise.all([
+    mintDocumentAssetTickets(documentId, markdown, signal),
+    presignDocumentMarkdownImages(documentId, markdown, signal),
+  ]);
+  return { ticketBySrc, urlByStoragePath };
 }
 
 export async function listDocuments(params: {

@@ -15,6 +15,7 @@ export const HYBRID_SEARCH_MCP_DESCRIPTION = [
   'kb_ids must be a subset of visible_ids from list_knowledge_bases; forbidden ids error.',
   'Defaults: top_k=10, search_type=all (chunks+faqs), BM25 enabled, rrf_k=60, recall_k=25.',
   'search_type: all | chunks (RAG) | faqs. no_bm25 disables the BM25 leg. rerank_model_id optional.',
-  'Each result includes source { document_name, preview_url, citation_markdown, parsed_url, original_url, locator, chunk_index }.',
+  'Each result includes source { document_id, document_name, preview_url, citation_markdown, parsed_url, original_url, locator, chunk_index }.',
   'Cite KB claims by copying source.citation_markdown verbatim into your answer—never invent URLs or use placeholders like preview_url.',
+  'When content references parsed images (…/documents/{id}/assets/markdown_out/… or markdown_out/…), use fetch_document_asset with source.document_id and the bundle path.',
 ].join(' ');

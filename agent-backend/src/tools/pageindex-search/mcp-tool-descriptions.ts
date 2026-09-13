@@ -41,6 +41,7 @@ export const GET_SECTION_CONTENT_MCP_DESCRIPTION = [
   'Layer-2 section read: returns natural section markdown by node_id (preferred), or pages/lines range.',
   'Hard length limit default 12000 chars; when truncated, follow next_hint for continuation.',
   'Hot path reads Postgres markdown; S3 markdown.md is cold fallback when markdown_complete=false or DB markdown missing.',
-  'Each response includes source.citation_markdown — copy it verbatim when citing; never invent preview URLs.',
+  'Each response includes source { document_id, … } and citation_markdown — copy citation_markdown verbatim when citing; never invent preview URLs.',
+  'When content references parsed images (…/documents/{id}/assets/markdown_out/… or markdown_out/…), use fetch_document_asset with document_id and the bundle path.',
   'Forbidden: dumping entire large documents; skipping get_document_structure on long docs; treating this MCP like hybrid vector chunk search.',
 ].join(' ');

@@ -332,6 +332,18 @@ def finalize_job_artifacts(
     prefix = ctx["s3_prefix"]
     document_id = doc["id"]
 
+    if not is_eval_run_job(ctx):
+        markdown = result.get("markdown")
+        if markdown:
+            from openkms_cli.parse.markdown_images import rewrite_markdown_to_platform_asset_urls
+
+            api_base = (api or cfg.openkms_api_url or "").strip() or None
+            result["markdown"] = rewrite_markdown_to_platform_asset_urls(
+                str(markdown),
+                document_id,
+                api_url=api_base,
+            )
+
     if original_content is None:
         work = Path(tempfile.mkdtemp(prefix="openkms-original-"))
         _stored, original_content, _ext = download_input_to_temp(ctx, work)

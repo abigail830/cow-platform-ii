@@ -4,12 +4,56 @@ export const MD_IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 
 const OSS_IMAGE_HOST_RE = /aliyuncs\.com|amazonaws\.com|docmind/i;
 
+const PLATFORM_ASSET_PATH_RE =
+  /^(?:https?:\/\/[^/]+)?\/api\/knowledge\/documents\/([0-9a-f-]{36})\/assets\/(.+)$/i;
+
+export type ParsedPlatformAssetUrl = {
+  documentId: string;
+  path: string;
+};
+
+export function parsePlatformAssetUrl(src: string): ParsedPlatformAssetUrl | null {
+  const trimmed = src.trim();
+  const match = PLATFORM_ASSET_PATH_RE.exec(trimmed);
+  if (!match) return null;
+  try {
+    return {
+      documentId: match[1]!,
+      path: decodeURIComponent(match[2]!),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function isPlatformAssetUrl(src: string): boolean {
+  return parsePlatformAssetUrl(src) !== null;
+}
+
+/** Bundle-relative paths from platform asset URLs in markdown (for ticket minting). */
+export function collectPlatformDocumentAssetPaths(
+  markdown: string,
+  documentId?: string,
+): string[] {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  for (const match of markdown.matchAll(MD_IMAGE_RE)) {
+    const parsed = parsePlatformAssetUrl(match[2] ?? '');
+    if (!parsed) continue;
+    if (documentId && parsed.documentId !== documentId) continue;
+    if (seen.has(parsed.path)) continue;
+    seen.add(parsed.path);
+    paths.push(parsed.path);
+  }
+  return paths;
+}
+
 export function collectRelativeMarkdownImagePaths(markdown: string): string[] {
   const paths: string[] = [];
   const seen = new Set<string>();
   for (const match of markdown.matchAll(MD_IMAGE_RE)) {
     const url = (match[2] ?? '').trim();
-    if (!url || /^(https?:|data:)/i.test(url)) continue;
+    if (!url || isPlatformAssetUrl(url) || /^(https?:|data:)/i.test(url)) continue;
     const normalized = url.replace(/^\.\//, '');
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
@@ -39,7 +83,7 @@ export function ossMarkdownImagePathCandidates(url: string): string[] {
   }
 }
 
-/** Storage paths to presign for all images referenced in document markdown. */
+/** Storage paths to presign for legacy relative / OSS images (not platform asset URLs). */
 export function collectDocumentMarkdownImageStoragePaths(markdown: string): string[] {
   const pathSet = new Set<string>();
   for (const path of collectRelativeMarkdownImagePaths(markdown)) {
@@ -49,12 +93,43 @@ export function collectDocumentMarkdownImageStoragePaths(markdown: string): stri
   }
   for (const match of markdown.matchAll(MD_IMAGE_RE)) {
     const url = (match[2] ?? '').trim();
+    if (isPlatformAssetUrl(url)) continue;
     if (!/^https?:/i.test(url)) continue;
     for (const candidate of ossMarkdownImagePathCandidates(url)) {
       pathSet.add(candidate);
     }
   }
   return [...pathSet];
+}
+
+export function buildPlatformAssetTicketLookup(
+  tickets: ReadonlyArray<{ path: string; url: string }>,
+  markdown: string,
+): Map<string, string> {
+  const byPath = new Map<string, string>();
+  for (const ticket of tickets) {
+    if (ticket.path && ticket.url) byPath.set(ticket.path, ticket.url);
+  }
+
+  const bySrc = new Map<string, string>();
+  for (const match of markdown.matchAll(MD_IMAGE_RE)) {
+    const src = (match[2] ?? '').trim();
+    const parsed = parsePlatformAssetUrl(src);
+    if (!parsed) continue;
+    const ticketUrl = byPath.get(parsed.path);
+    if (ticketUrl) bySrc.set(src, ticketUrl);
+  }
+  return bySrc;
+}
+
+export function resolveDocumentMarkdownImageUrl(
+  src: string,
+  ticketBySrc: ReadonlyMap<string, string>,
+  urlByStoragePath: ReadonlyMap<string, string>,
+): string | undefined {
+  const ticketUrl = ticketBySrc.get(src.trim());
+  if (ticketUrl) return ticketUrl;
+  return resolvePresignedImageUrl(src, urlByStoragePath);
 }
 
 /** Resolve a markdown image src to a bundle storage path key (if known). */

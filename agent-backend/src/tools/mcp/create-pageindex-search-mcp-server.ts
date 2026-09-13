@@ -14,6 +14,7 @@ import {
   LIST_KNOWLEDGE_BASES_MCP_DESCRIPTION,
   SEARCH_DOCUMENTS_MCP_DESCRIPTION,
 } from '../pageindex-search/mcp-tool-descriptions.ts';
+import { FETCH_DOCUMENT_ASSET_MCP_DESCRIPTION } from '../shared/fetch-document-asset-mcp.ts';
 
 export function createPageIndexSearchMcpServer(
   user: AuthUser,
@@ -162,6 +163,30 @@ export function createPageIndexSearchMcpServer(
     },
     async (input) => {
       const text = await handlers.getSectionContent(input);
+      return { content: [{ type: 'text', text }] };
+    },
+  );
+
+  server.registerTool(
+    'fetch_document_asset',
+    {
+      title: 'Fetch document asset',
+      description: FETCH_DOCUMENT_ASSET_MCP_DESCRIPTION,
+      inputSchema: {
+        document_id: z
+          .string()
+          .uuid()
+          .describe('Document id from get_section_content, get_document, or browse/search cards'),
+        path: z
+          .string()
+          .min(1)
+          .describe(
+            'Bundle-relative path (markdown_out/foo.jpg) or platform asset URL from section markdown',
+          ),
+      },
+    },
+    async (input) => {
+      const text = await handlers.fetchDocumentAsset(input);
       return { content: [{ type: 'text', text }] };
     },
   );

@@ -28,6 +28,7 @@ async function assertHybridSearchRead(user: AuthUser): Promise<void> {
 export type HybridSearchMcpHandlers = {
   listKnowledgeBases: (input: { group_by_embedding?: boolean }) => Promise<string>;
   hybridSearch: (input: HybridSearchMcpInput) => Promise<string>;
+  fetchDocumentAsset: (input: { document_id: string; path: string }) => Promise<string>;
 };
 
 export type HybridSearchMcpInput = {
@@ -107,6 +108,12 @@ export function createHybridSearchMcpHandlers(
 
       const result = await service.search(request);
       return jsonText(result);
+    },
+
+    async fetchDocumentAsset(input) {
+      await assertHybridSearchRead(user);
+      const { fetchDocumentAssetMcpText } = await import('../shared/fetch-document-asset-mcp.ts');
+      return fetchDocumentAssetMcpText(user, input);
     },
   };
 }

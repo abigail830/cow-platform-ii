@@ -60,6 +60,7 @@ export type PageIndexSearchMcpHandlers = {
   getDocument: (input: { kb_id: string; document_id: string }) => Promise<string>;
   getDocumentStructure: (input: GetDocumentStructureMcpInput) => Promise<string>;
   getSectionContent: (input: GetSectionContentMcpInput) => Promise<string>;
+  fetchDocumentAsset: (input: { document_id: string; path: string }) => Promise<string>;
 };
 
 export type BrowseDocumentsMcpInput = {
@@ -216,6 +217,12 @@ export function createPageIndexSearchMcpHandlers(
         maxChars: input.max_chars,
       });
       return jsonText(result);
+    },
+
+    async fetchDocumentAsset(input) {
+      await auth.assertRead(user);
+      const { fetchDocumentAssetMcpText } = await import('../shared/fetch-document-asset-mcp.ts');
+      return fetchDocumentAssetMcpText(user, input);
     },
   };
 }

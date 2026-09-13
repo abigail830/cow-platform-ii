@@ -3,6 +3,11 @@ import { Readable } from 'node:stream';
 import { KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES } from '../../auth/rbac-catalog.ts';
 import { requireAuth, getUser } from '../../auth/jwt.ts';
 import { requireResourcePermission } from '../../auth/require-permission.ts';
+import { userHasResourcePermission } from '../../auth/rbac.ts';
+import {
+  getOrCreateRequestCache,
+  loadUserAccessProfileCached,
+} from '../../auth/resource-access-request-cache.ts';
 import { listAccessibleChannelIds } from '../../auth/resource-access.ts';
 import { denyUnlessChannelAccess, denyUnlessDocumentAccess } from '../../auth/require-resource-access.ts';
 import { routeParam } from '../../infrastructure/http/route-param.ts';
@@ -20,8 +25,10 @@ import {
   fileTypeFromExtension,
   formatStorageError,
   getDocumentDownloadUrl,
+  getStorageReadUrl,
   MAX_DOCUMENT_BYTES,
   presignDocumentBundlePaths,
+  resolveDocumentStorageKey,
   sha256Hex,
   StorageNotConfiguredError,
   storeUploadChunk,
@@ -29,6 +36,12 @@ import {
   validateDocumentFilename,
   validateFileHash,
 } from '../../document/infrastructure/document-files.ts';
+import {
+  assertAllowedBundleAssetPath,
+  buildDocumentAssetTicketUrl,
+  extractDocumentAssetRequestPath,
+  verifyAssetTicket,
+} from '../../document/infrastructure/document-asset-url.ts';
 import { initDocumentUpload } from '../../document/application/document-upload.ts';
 import {
   createDocumentRecord,
@@ -47,7 +60,31 @@ import { startDocumentPipeline } from '../../pipeline/application/pipeline-runne
 
 const documents = new Hono();
 
-documents.use('*', requireAuth);
+documents.use('*', async (c, next) => {
+  if (c.req.method === 'GET') {
+    const assetRequest = extractDocumentAssetRequestPath(c.req.path);
+    if (assetRequest) {
+      const exp = c.req.query('exp');
+      const sig = c.req.query('sig');
+      if (exp && sig) {
+        try {
+          const row = await getDocumentById(assetRequest.documentId);
+          if (row) {
+            const rel = assertAllowedBundleAssetPath(assetRequest.assetPath, row.fileHash);
+            if (verifyAssetTicket(assetRequest.documentId, rel, exp, sig)) {
+              c.set('assetTicketAuth', true);
+              await next();
+              return;
+            }
+          }
+        } catch {
+          // Fall through to Bearer auth.
+        }
+      }
+    }
+  }
+  return requireAuth(c, next);
+});
 
 function storageUnavailable(c: { json: (body: unknown, status?: number) => Response }) {
   return c.json({ error: 'Object storage is not configured' }, 503);
@@ -247,7 +284,8 @@ documents.post(
         const { presignDiscoveredDocumentBundleImages } = await import(
           '../../document/infrastructure/document-files.ts'
         );
-        const files = await presignDiscoveredDocumentBundleImages(row.fileHash);
+        const hintPaths = Array.isArray(body.paths) ? body.paths : [];
+        const files = await presignDiscoveredDocumentBundleImages(row.fileHash, hintPaths);
         return c.json({ files });
       }
 
@@ -382,6 +420,83 @@ documents.put(
     }
   },
 );
+
+documents.post(
+  '/:id/assets/tickets',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'read'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const denied = await denyUnlessDocumentAccess(c, id, 'read');
+    if (denied) return denied;
+
+    const body = await c.req
+      .json<{ paths?: string[] }>()
+      .catch((): { paths?: string[] } => ({}));
+    if (!Array.isArray(body.paths) || body.paths.length === 0) {
+      return c.json({ error: 'paths array is required' }, 400);
+    }
+    if (body.paths.length > 500) {
+      return c.json({ error: 'Too many paths requested' }, 400);
+    }
+
+    const row = await getDocumentById(id);
+    if (!row) return c.json({ error: 'Document not found' }, 404);
+
+    const tickets = [];
+    for (const rawPath of body.paths) {
+      try {
+        const rel = assertAllowedBundleAssetPath(rawPath, row.fileHash);
+        tickets.push(buildDocumentAssetTicketUrl(id, rel));
+      } catch {
+        // Skip paths that are not allowed bundle images.
+      }
+    }
+    return c.json({ tickets });
+  },
+);
+
+documents.get('/:id/assets/*', async (c) => {
+  if (!isStorageEnabled()) return storageUnavailable(c);
+
+  const id = routeParam(c, 'id');
+  if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+  const assetPathRaw = c.req.param('*');
+  if (!assetPathRaw) return c.json({ error: 'Asset path is required' }, 400);
+
+  const ticketAuth = c.get('assetTicketAuth') === true;
+  if (!ticketAuth) {
+    const user = getUser(c);
+    const cache = getOrCreateRequestCache(c);
+    const profile = await loadUserAccessProfileCached(user.id, cache);
+    const allowed = await userHasResourcePermission(
+      user.id,
+      KNOWLEDGE_MANAGEMENT_CATEGORY,
+      KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS,
+      'read',
+      { profile, cache, jwtRole: user.role },
+    );
+    if (!allowed) return c.json({ error: 'Forbidden' }, 403);
+
+    const denied = await denyUnlessDocumentAccess(c, id, 'read');
+    if (denied) return denied;
+  }
+
+  const row = await getDocumentById(id);
+  if (!row) return c.json({ error: 'Document not found' }, 404);
+
+  try {
+    const rel = assertAllowedBundleAssetPath(assetPathRaw, row.fileHash);
+    const url = await getStorageReadUrl(resolveDocumentStorageKey(row.fileHash, rel));
+    return c.redirect(url, 302);
+  } catch (error) {
+    if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+    const message = error instanceof Error ? error.message : 'Invalid asset path';
+    return c.json({ error: message }, 400);
+  }
+});
 
 documents.get(
   '/:id/content',

@@ -13,6 +13,10 @@ import requests
 logger = logging.getLogger("openkms_cli.markdown_images")
 
 _MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+_PLATFORM_ASSET_PATH_RE = re.compile(
+    r"^(?:https?://[^/]+)?/api/knowledge/documents/[0-9a-f-]{36}/assets/.+",
+    re.I,
+)
 _SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+\.(?:jpe?g|png|gif|webp|bmp|tif|tiff)$", re.I)
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 
@@ -128,6 +132,45 @@ def materialize_remote_markdown_images(
         )
 
     return rewrite_markdown_image_urls(markdown, url_to_rel)
+
+
+def platform_asset_url(
+    document_id: str,
+    bundle_rel: str,
+    *,
+    api_url: str | None = None,
+) -> str:
+    rel = bundle_rel.replace("\\", "/").lstrip("./").lstrip("/")
+    path = f"/api/knowledge/documents/{document_id}/assets/{rel}"
+    if api_url:
+        return f"{api_url.rstrip('/')}{path}"
+    return path
+
+
+def rewrite_markdown_to_platform_asset_urls(
+    markdown: str,
+    document_id: str,
+    *,
+    api_url: str | None = None,
+) -> str:
+    """Rewrite bundle-relative image refs to stable platform asset HTTP URLs."""
+    if not markdown or not document_id:
+        return markdown
+
+    def _replace(match: re.Match[str]) -> str:
+        alt = match.group(1) or ""
+        src = (match.group(2) or "").strip()
+        if not src or _PLATFORM_ASSET_PATH_RE.match(src):
+            return match.group(0)
+        if src.startswith(("http://", "https://", "data:")):
+            return match.group(0)
+        rel = src.replace("\\", "/").lstrip("./")
+        if not rel or ".." in rel.split("/"):
+            return match.group(0)
+        new_url = platform_asset_url(document_id, rel, api_url=api_url)
+        return f"![{alt}]({new_url})"
+
+    return _MD_IMAGE_RE.sub(_replace, markdown)
 
 
 def collect_relative_markdown_image_paths(markdown: str) -> list[str]:

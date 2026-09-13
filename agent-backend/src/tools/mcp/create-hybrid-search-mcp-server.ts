@@ -5,6 +5,7 @@ import {
   createHybridSearchMcpHandlers,
   type HybridSearchMcpHandlers,
 } from '../hybrid-search/mcp-handlers.ts';
+import { FETCH_DOCUMENT_ASSET_MCP_DESCRIPTION } from '../shared/fetch-document-asset-mcp.ts';
 import {
   HYBRID_SEARCH_MCP_DESCRIPTION,
   LIST_KNOWLEDGE_BASES_MCP_DESCRIPTION,
@@ -64,6 +65,30 @@ export function createHybridSearchMcpServer(
     },
     async (input) => {
       const text = await handlers.hybridSearch(input);
+      return { content: [{ type: 'text', text }] };
+    },
+  );
+
+  server.registerTool(
+    'fetch_document_asset',
+    {
+      title: 'Fetch document asset',
+      description: FETCH_DOCUMENT_ASSET_MCP_DESCRIPTION,
+      inputSchema: {
+        document_id: z
+          .string()
+          .uuid()
+          .describe('Document id from hybrid_search result.source.document_id'),
+        path: z
+          .string()
+          .min(1)
+          .describe(
+            'Bundle-relative path (markdown_out/foo.jpg) or platform asset URL from chunk markdown',
+          ),
+      },
+    },
+    async (input) => {
+      const text = await handlers.fetchDocumentAsset(input);
       return { content: [{ type: 'text', text }] };
     },
   );

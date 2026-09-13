@@ -6,8 +6,12 @@ from unittest.mock import MagicMock, patch
 from openkms_cli.parse.markdown_images import (
     collect_relative_markdown_image_paths,
     materialize_remote_markdown_images,
+    platform_asset_url,
     rewrite_markdown_image_urls,
+    rewrite_markdown_to_platform_asset_urls,
 )
+
+DOC_ID = "550e8400-e29b-41d4-a716-446655440000"
 
 
 def test_rewrite_markdown_image_urls():
@@ -45,6 +49,30 @@ def test_materialize_remote_markdown_images(tmp_path: Path):
     assert "markdown_out/a601ed764008139b74e39ba7c6337772.jpeg" in out
     saved = tmp_path / "markdown_out" / "a601ed764008139b74e39ba7c6337772.jpeg"
     assert saved.read_bytes() == b"\x89PNG\r\n"
+
+
+def test_platform_asset_url():
+    rel_path = platform_asset_url(DOC_ID, "markdown_out/foo.jpg")
+    assert rel_path == f"/api/knowledge/documents/{DOC_ID}/assets/markdown_out/foo.jpg"
+    abs_path = platform_asset_url(
+        DOC_ID,
+        "./markdown_out/foo.jpg",
+        api_url="https://cow-platform.vercel.app",
+    )
+    assert abs_path.startswith("https://cow-platform.vercel.app/api/knowledge/documents/")
+
+
+def test_rewrite_markdown_to_platform_asset_urls():
+    md = "![a](markdown_out/a.png) ![b](https://x/y.png) text"
+    out = rewrite_markdown_to_platform_asset_urls(
+        md,
+        DOC_ID,
+        api_url="https://api.example.com",
+    )
+    assert platform_asset_url(DOC_ID, "markdown_out/a.png", api_url="https://api.example.com") in out
+    assert "https://x/y.png" in out
+    already = rewrite_markdown_to_platform_asset_urls(out, DOC_ID, api_url="https://api.example.com")
+    assert already == out
 
 
 def test_materialize_keeps_url_when_download_fails(tmp_path: Path):

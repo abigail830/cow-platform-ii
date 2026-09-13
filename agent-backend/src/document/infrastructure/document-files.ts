@@ -311,14 +311,27 @@ export function isBundleImageRelativePath(path: string): boolean {
   return BUNDLE_IMAGE_PATH_RE.test(name);
 }
 
-/** List image artifacts under the document bundle prefix and presign only keys that exist in OSS. */
-export async function presignDiscoveredDocumentBundleImages(fileHash: string): Promise<BundleManifestFile[]> {
-  const existingKeys = await listDocumentStorageKeys(fileHash);
+/** List image artifacts under the document bundle prefix; merge with markdown hint paths. */
+export async function presignDiscoveredDocumentBundleImages(
+  fileHash: string,
+  hintPaths: string[] = [],
+): Promise<BundleManifestFile[]> {
   const relativePaths = new Set<string>();
-  for (const key of existingKeys) {
-    const rel = relativeStoragePath(key, fileHash);
-    if (rel && isBundleImageRelativePath(rel)) relativePaths.add(rel);
+  for (const hint of hintPaths) {
+    const rel = normalizeBundleRelativePath(fileHash, hint);
+    if (isBundleImageRelativePath(rel)) relativePaths.add(rel);
   }
+
+  try {
+    const existingKeys = await listDocumentStorageKeys(fileHash);
+    for (const key of existingKeys) {
+      const rel = relativeStoragePath(key, fileHash);
+      if (rel && isBundleImageRelativePath(rel)) relativePaths.add(rel);
+    }
+  } catch {
+    // Vercel→OSS ListObjects may fail; markdown hint paths still get presigned below.
+  }
+
   return presignDocumentBundlePaths(fileHash, [...relativePaths]);
 }
 
