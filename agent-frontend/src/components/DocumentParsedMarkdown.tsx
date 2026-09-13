@@ -26,7 +26,7 @@ function ParsedMarkdownImage({
   urlByStoragePath: ReadonlyMap<string, string>;
   onRemint: (src: string) => void;
 }) {
-  const rawResolved = resolveDocumentMarkdownImageUrl(src, ticketBySrc, urlByStoragePath);
+  const rawResolved = resolveDocumentMarkdownImageUrl(src, ticketBySrc, urlByStoragePath, alt);
   const resolved = rawResolved?.startsWith('/api/')
     ? apiUrl(rawResolved)
     : rawResolved;

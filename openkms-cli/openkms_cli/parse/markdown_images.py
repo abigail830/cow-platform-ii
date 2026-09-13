@@ -13,6 +13,7 @@ import requests
 logger = logging.getLogger("openkms_cli.markdown_images")
 
 _MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+_MD_IMAGE_URL_IN_TEXT_RE = re.compile(r"\]\((https?://[^)\s]+)")
 _PLATFORM_ASSET_PATH_RE = re.compile(
     r"^(?:https?://[^/]+)?/api/knowledge/documents/[0-9a-f-]{36}/assets/.+",
     re.I,
@@ -111,6 +112,8 @@ def _iter_http_strings(value: Any) -> list[str]:
         if isinstance(node, str):
             if node.startswith(("http://", "https://")):
                 found.append(node)
+            for match in _MD_IMAGE_URL_IN_TEXT_RE.finditer(node):
+                found.append(match.group(1))
             return
         if isinstance(node, dict):
             for item in node.values():

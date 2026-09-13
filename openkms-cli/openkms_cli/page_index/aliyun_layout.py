@@ -158,12 +158,20 @@ def write_page_index_from_aliyun_layouts(
     doc_name: str,
     output_path: Path,
     markdown_path: Path | None = None,
+    rewrite_markdown: bool = False,
 ) -> dict[str, Any]:
-    """Optionally rewrite markdown with anchors, then write page_index.json."""
+    """Write page_index.json; optionally rewrite markdown with layout anchors.
+
+    Pipeline workers pass ``markdown_path`` only so ``line_num`` anchors align with
+    the finalized ``markdown.md`` (already built + materialized in ``_finalize_aliyun``).
+    Rewriting markdown is opt-in (CLI ``--rewrite-markdown``) so page-index build does
+    not clobber materialized image URLs with DocMind short-lived https links.
+    """
     anchor_lines: dict[str, int] = {}
-    if markdown_path is not None:
+    if layouts:
         markdown, anchor_lines = build_markdown_with_layout_anchors(layouts)
-        markdown_path.write_text(markdown, encoding="utf-8")
+        if rewrite_markdown and markdown_path is not None:
+            markdown_path.write_text(markdown, encoding="utf-8")
 
     tree = build_page_index_from_aliyun_layouts(
         layouts,

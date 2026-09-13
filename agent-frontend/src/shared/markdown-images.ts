@@ -62,12 +62,36 @@ export function collectRelativeMarkdownImagePaths(markdown: string): string[] {
   return paths;
 }
 
+/** DocMind alt/path often disagree on .jpg vs .jpeg — try both when presigning bundle files. */
+export function imageBasenameVariants(name: string): string[] {
+  const variants = new Set<string>([name]);
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.jpeg')) {
+    variants.add(`${name.slice(0, -5)}.jpg`);
+  } else if (lower.endsWith('.jpg')) {
+    variants.add(`${name.slice(0, -4)}.jpeg`);
+  }
+  return [...variants];
+}
+
 /** Candidate storage keys to try for a relative markdown image path. */
 export function markdownImagePathCandidates(path: string): string[] {
   const normalized = path.replace(/^\.\//, '').replace(/^\/+/, '');
   if (!normalized) return [];
-  if (normalized.startsWith('markdown_out/')) return [normalized];
-  return [normalized, `markdown_out/${normalized}`];
+  const slash = normalized.lastIndexOf('/');
+  const dir = slash >= 0 ? normalized.slice(0, slash + 1) : '';
+  const baseName = slash >= 0 ? normalized.slice(slash + 1) : normalized;
+  const candidates = new Set<string>();
+
+  for (const variant of imageBasenameVariants(baseName)) {
+    const rel = `${dir}${variant}`;
+    candidates.add(rel);
+    if (!rel.startsWith('markdown_out/')) {
+      candidates.add(`markdown_out/${variant}`);
+    }
+  }
+
+  return [...candidates];
 }
 
 /** Map a stale OSS presigned URL to bundle-relative storage path candidates. */
@@ -92,11 +116,17 @@ export function collectDocumentMarkdownImageStoragePaths(markdown: string): stri
     }
   }
   for (const match of markdown.matchAll(MD_IMAGE_RE)) {
+    const alt = (match[1] ?? '').trim();
     const url = (match[2] ?? '').trim();
     if (isPlatformAssetUrl(url)) continue;
     if (!/^https?:/i.test(url)) continue;
     for (const candidate of ossMarkdownImagePathCandidates(url)) {
       pathSet.add(candidate);
+    }
+    if (alt) {
+      for (const candidate of markdownImagePathCandidates(alt)) {
+        pathSet.add(candidate);
+      }
     }
   }
   return [...pathSet];
@@ -126,10 +156,19 @@ export function resolveDocumentMarkdownImageUrl(
   src: string,
   ticketBySrc: ReadonlyMap<string, string>,
   urlByStoragePath: ReadonlyMap<string, string>,
+  alt?: string,
 ): string | undefined {
   const ticketUrl = ticketBySrc.get(src.trim());
   if (ticketUrl) return ticketUrl;
-  return resolvePresignedImageUrl(src, urlByStoragePath);
+  const fromSrc = resolvePresignedImageUrl(src, urlByStoragePath);
+  if (fromSrc) return fromSrc;
+  const altName = alt?.trim();
+  if (!altName) return undefined;
+  for (const candidate of markdownImagePathCandidates(altName)) {
+    const url = urlByStoragePath.get(candidate);
+    if (url) return url;
+  }
+  return undefined;
 }
 
 /** Resolve a markdown image src to a bundle storage path key (if known). */

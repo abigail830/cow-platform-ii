@@ -122,6 +122,7 @@ def build_page_index(
         doc_name=doc_name or (markdown.stem if markdown else "document"),
         output_path=output,
         markdown_path=md_path,
+        rewrite_markdown=rewrite_markdown,
     )
     roots = len(tree.get("structure") or [])
     console.print(f"[green]Wrote {output} ({roots} root nodes, strategy={strategy_name})[/green]")

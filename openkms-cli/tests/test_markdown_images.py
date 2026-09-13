@@ -84,6 +84,19 @@ def test_build_basename_http_url_map():
     assert mapping["0f74a6c5b368a3991c3cde93b4bf3e7e.jpg"].startswith("https://")
 
 
+def test_build_basename_http_url_map_from_markdown_content():
+    layouts = [
+        {
+            "markdownContent": (
+                "![f29999a192678ef083fa7c284481ca61.jpg]"
+                "(http://docmind.example/out/f29999a192678ef083fa7c284481ca61.jpeg)"
+            ),
+        }
+    ]
+    mapping = build_basename_http_url_map(layouts)
+    assert mapping["f29999a192678ef083fa7c284481ca61.jpeg"].startswith("http://")
+
+
 def test_materialize_relative_markdown_images(tmp_path: Path):
     md = "![shot](0f74a6c5b368a3991c3cde93b4bf3e7e.jpg)"
     mock_resp = MagicMock()

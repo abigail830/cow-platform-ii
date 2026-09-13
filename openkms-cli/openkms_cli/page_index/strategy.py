@@ -91,7 +91,8 @@ def write_page_index(
 ) -> dict[str, Any] | None:
     """
     Write hash_dir/page_index.json using the selected strategy.
-    For aliyun-layouts, rewrites markdown.md with layout anchors when layouts are provided.
+    For aliyun-layouts, writes page_index.json from layouts; markdown.md is left as-is
+    (materialized in finalize) unless CLI passes --rewrite-markdown.
     For baidu-layouts, uses Baidu parse_result pages[].layouts title types.
     """
     output_path = hash_dir / "page_index.json"

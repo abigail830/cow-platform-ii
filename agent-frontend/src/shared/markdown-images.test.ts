@@ -6,6 +6,7 @@ import {
   collectRelativeMarkdownImagePaths,
   markdownImagePathCandidates,
   ossMarkdownImagePathCandidates,
+  resolveDocumentMarkdownImageUrl,
   resolvePresignedImageUrl,
   rewriteMarkdownImageUrls,
 } from './markdown-images.ts';
@@ -22,7 +23,30 @@ describe('markdown-images', () => {
       'block_0.png',
       'markdown_out/block_0.png',
     ]);
-    assert.deepEqual(markdownImagePathCandidates('markdown_out/a.jpeg'), ['markdown_out/a.jpeg']);
+    assert.deepEqual(markdownImagePathCandidates('markdown_out/a.jpeg'), [
+      'markdown_out/a.jpeg',
+      'markdown_out/a.jpg',
+    ]);
+  });
+
+  it('maps docmind jpeg path to jpg bundle via alt text', () => {
+    const lookup = buildImagePresignLookup([
+      {
+        path: 'markdown_out/f29999a192678ef083fa7c284481ca61.jpg',
+        url: 'https://signed.example/img.jpg',
+      },
+    ]);
+    const docmindUrl =
+      'http://docmind-api.oss-cn-hangzhou.aliyuncs.com/out/f29999a192678ef083fa7c284481ca61.jpeg?Expires=1';
+    assert.equal(
+      resolveDocumentMarkdownImageUrl(
+        docmindUrl,
+        new Map(),
+        lookup,
+        'f29999a192678ef083fa7c284481ca61.jpg',
+      ),
+      'https://signed.example/img.jpg',
+    );
   });
 
   it('maps stale OSS image URLs to bundle path candidates', () => {
@@ -31,6 +55,11 @@ describe('markdown-images', () => {
         'https://bucket.oss-cn-hongkong.aliyuncs.com/documents/abc/markdown_out/block_0.png?Expires=1',
       ),
       ['block_0.png', 'markdown_out/block_0.png'],
+    );
+    assert.ok(
+      ossMarkdownImagePathCandidates(
+        'https://docmind-api.oss.aliyuncs.com/out/f29999a192678ef083fa7c284481ca61.jpeg?Expires=1',
+      ).includes('markdown_out/f29999a192678ef083fa7c284481ca61.jpg'),
     );
   });
 

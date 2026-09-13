@@ -372,6 +372,19 @@ def finalize_job_artifacts(
         page_index_strategy=page_index_strategy,
         doc_name=doc.get("name"),
     )
+
+    md_path = hash_dir / "markdown.md"
+    if md_path.is_file():
+        disk_markdown = md_path.read_text(encoding="utf-8")
+        if disk_markdown.strip():
+            result["markdown"] = disk_markdown
+            result_path = hash_dir / "result.json"
+            if result_path.is_file():
+                result_path.write_text(
+                    json.dumps(result, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
     count = upload_hash_dir_to_document_bundle(
         hash_dir,
         ctx,
