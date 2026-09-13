@@ -148,44 +148,15 @@ export function collectDocumentMarkdownImageStoragePaths(
   return [...pathSet];
 }
 
-export function buildPlatformAssetTicketByPath(
-  tickets: ReadonlyArray<{ path: string; url: string }>,
-): Map<string, string> {
-  const byPath = new Map<string, string>();
-  for (const ticket of tickets) {
-    if (ticket.path && ticket.url) byPath.set(ticket.path, ticket.url);
-  }
-  return byPath;
-}
-
-/** @deprecated Prefer ticketByPath — react-markdown may normalize src to an absolute URL. */
-export function buildPlatformAssetTicketLookup(
-  tickets: ReadonlyArray<{ path: string; url: string }>,
-  markdown: string,
-): Map<string, string> {
-  const byPath = buildPlatformAssetTicketByPath(tickets);
-  const bySrc = new Map<string, string>();
-  for (const match of markdown.matchAll(MD_IMAGE_RE)) {
-    const src = (match[2] ?? '').trim();
-    const parsed = parsePlatformAssetUrl(src);
-    if (!parsed) continue;
-    const ticketUrl = byPath.get(parsed.path);
-    if (ticketUrl) bySrc.set(src, ticketUrl);
-  }
-  return bySrc;
-}
-
-export function resolveDocumentMarkdownImageUrl(
+/** Map a markdown/platform image ref to a presigned OSS fetch URL (same as MCP fetch_document_asset). */
+export function resolveDocumentMarkdownFetchUrl(
   src: string,
-  ticketByPath: ReadonlyMap<string, string>,
   urlByStoragePath: ReadonlyMap<string, string>,
   alt?: string,
 ): string | undefined {
   const trimmed = src.trim();
   const platform = parsePlatformAssetUrl(trimmed);
   if (platform) {
-    const ticketUrl = ticketByPath.get(platform.path);
-    if (ticketUrl) return ticketUrl;
     for (const candidate of markdownImagePathCandidates(platform.path)) {
       const url = urlByStoragePath.get(candidate);
       if (url) return url;
@@ -202,6 +173,24 @@ export function resolveDocumentMarkdownImageUrl(
     if (url) return url;
   }
   return undefined;
+}
+
+/** When presign is not ready, keep the markdown ref but route /api/ paths to the API origin. */
+export function fallbackMarkdownImageSrc(
+  src: string,
+  toAbsoluteApiUrl: (apiPath: string) => string,
+): string {
+  const trimmed = src.trim();
+  if (trimmed.startsWith('/api/')) return toAbsoluteApiUrl(trimmed);
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.pathname.startsWith('/api/')) {
+      return toAbsoluteApiUrl(`${parsed.pathname}${parsed.search}`);
+    }
+  } catch {
+    // relative or non-URL
+  }
+  return trimmed;
 }
 
 /** Resolve a markdown image src to a bundle storage path key (if known). */
@@ -261,17 +250,3 @@ export function rewriteMarkdownImageUrls(
   });
 }
 
-/** Rewrite only images we can resolve; leave unresolved refs unchanged in the markdown. */
-export function rewriteDocumentMarkdownImageUrls(
-  markdown: string,
-  ticketByPath: ReadonlyMap<string, string>,
-  urlByStoragePath: ReadonlyMap<string, string>,
-  toAbsoluteApiUrl: (apiPath: string) => string = (path) => path,
-): string {
-  return markdown.replace(MD_IMAGE_RE, (full, alt: string, url: string) => {
-    const resolved = resolveDocumentMarkdownImageUrl(url, ticketByPath, urlByStoragePath, alt);
-    if (!resolved) return full;
-    const display = resolved.startsWith('/api/') ? toAbsoluteApiUrl(resolved) : resolved;
-    return `![${alt}](${display})`;
-  });
-}

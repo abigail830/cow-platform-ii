@@ -13,9 +13,7 @@ import {
 } from './direct-upload.ts';
 import {
   buildImagePresignLookup,
-  buildPlatformAssetTicketByPath,
   collectDocumentMarkdownImageStoragePaths,
-  collectPlatformDocumentAssetPaths,
 } from '../shared/markdown-images.ts';
 import JSZip from 'jszip';
 
@@ -173,30 +171,7 @@ export async function fetchDocumentContent(
   };
 }
 
-/** Mint short-lived tickets for platform asset URLs embedded in markdown. */
-export async function mintDocumentAssetTickets(
-  documentId: string,
-  markdown: string,
-  signal?: AbortSignal,
-): Promise<Map<string, string>> {
-  const paths = collectPlatformDocumentAssetPaths(markdown, documentId);
-  if (paths.length === 0) return new Map();
-
-  try {
-    const response = (await authFetch(`/api/knowledge/documents/${documentId}/assets/tickets`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths }),
-      signal,
-    })) as { tickets: Array<{ path: string; url: string }> };
-
-    return buildPlatformAssetTicketByPath(response.tickets ?? []);
-  } catch {
-    return new Map();
-  }
-}
-
-/** Mint fresh presigned GET URLs for legacy bundle images (relative paths / stale OSS URLs). */
+/** Mint fresh presigned GET URLs for bundle images (platform refs, relative paths, legacy OSS URLs). */
 export async function presignDocumentMarkdownImages(
   documentId: string,
   markdown: string,
@@ -217,19 +192,6 @@ export async function presignDocumentMarkdownImages(
   } catch {
     return new Map();
   }
-}
-
-/** Resolve markdown image src values to browser-fetchable URLs (platform tickets + legacy presign). */
-export async function resolveDocumentMarkdownImageUrls(
-  documentId: string,
-  markdown: string,
-  signal?: AbortSignal,
-): Promise<{ ticketByPath: Map<string, string>; urlByStoragePath: Map<string, string> }> {
-  const [ticketByPath, urlByStoragePath] = await Promise.all([
-    mintDocumentAssetTickets(documentId, markdown, signal),
-    presignDocumentMarkdownImages(documentId, markdown, signal),
-  ]);
-  return { ticketByPath, urlByStoragePath };
 }
 
 export async function listDocuments(params: {

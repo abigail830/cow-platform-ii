@@ -2,14 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   buildImagePresignLookup,
-  buildPlatformAssetTicketByPath,
   collectDocumentMarkdownImageStoragePaths,
   collectRelativeMarkdownImagePaths,
+  fallbackMarkdownImageSrc,
   markdownImagePathCandidates,
   ossMarkdownImagePathCandidates,
-  resolveDocumentMarkdownImageUrl,
+  resolveDocumentMarkdownFetchUrl,
   resolvePresignedImageUrl,
-  rewriteDocumentMarkdownImageUrls,
   rewriteMarkdownImageUrls,
 } from './markdown-images.ts';
 
@@ -41,12 +40,7 @@ describe('markdown-images', () => {
     const docmindUrl =
       'http://docmind-api.oss-cn-hangzhou.aliyuncs.com/out/f29999a192678ef083fa7c284481ca61.jpeg?Expires=1';
     assert.equal(
-      resolveDocumentMarkdownImageUrl(
-        docmindUrl,
-        new Map(),
-        lookup,
-        'f29999a192678ef083fa7c284481ca61.jpg',
-      ),
+      resolveDocumentMarkdownFetchUrl(docmindUrl, lookup, 'f29999a192678ef083fa7c284481ca61.jpg'),
       'https://signed.example/img.jpg',
     );
   });
@@ -75,25 +69,35 @@ describe('markdown-images', () => {
     ]);
   });
 
-  it('collects bundle paths from platform asset URLs for presign fallback', () => {
+  it('collects bundle paths from platform asset URLs for presign', () => {
     const docId = '550e8400-e29b-41d4-a716-446655440000';
     const md = `![x](/api/knowledge/documents/${docId}/assets/markdown_out/x.jpg)`;
     assert.ok(collectDocumentMarkdownImageStoragePaths(md, docId).includes('markdown_out/x.jpg'));
   });
 
-  it('resolves platform asset tickets by bundle path when react-markdown absolutizes src', () => {
+  it('resolves platform asset refs via presign when react-markdown absolutizes src', () => {
     const docId = 'ca6ba407-ae5d-4f83-b7c0-0ca180679953';
     const bundlePath = 'markdown_out/74357d1ceb7fa6c05d49a1c875675d13.jpg';
-    const ticketByPath = buildPlatformAssetTicketByPath([
-      {
-        path: bundlePath,
-        url: `/api/knowledge/documents/${docId}/assets/${bundlePath}?exp=1&sig=abc`,
-      },
+    const lookup = buildImagePresignLookup([
+      { path: bundlePath, url: 'https://signed.example/img.jpg' },
     ]);
     const absoluteSrc = `https://cow-platform.vercel.app/api/knowledge/documents/${docId}/assets/${bundlePath}`;
     assert.equal(
-      resolveDocumentMarkdownImageUrl(absoluteSrc, ticketByPath, new Map()),
-      `/api/knowledge/documents/${docId}/assets/${bundlePath}?exp=1&sig=abc`,
+      resolveDocumentMarkdownFetchUrl(absoluteSrc, lookup),
+      'https://signed.example/img.jpg',
+    );
+  });
+
+  it('routes unresolved /api/ refs to the API origin', () => {
+    const docId = 'ca6ba407-ae5d-4f83-b7c0-0ca180679953';
+    const src = `/api/knowledge/documents/${docId}/assets/markdown_out/foo.jpg`;
+    assert.equal(
+      fallbackMarkdownImageSrc(src, (path) => `https://api.example.com${path}`),
+      `https://api.example.com${src}`,
+    );
+    assert.equal(
+      fallbackMarkdownImageSrc(`https://cow-platform.vercel.app${src}`, (path) => `https://api.example.com${path}`),
+      `https://api.example.com${src}`,
     );
   });
 
@@ -108,34 +112,6 @@ describe('markdown-images', () => {
     assert.equal(
       resolvePresignedImageUrl('markdown_out/7fb7e5037340e71fd119dc62cc6a936d.jpg', lookup),
       'https://signed.example/a.jpg',
-    );
-  });
-
-  it('leaves unresolved document image refs unchanged in markdown', () => {
-    const docId = 'ca6ba407-ae5d-4f83-b7c0-0ca180679953';
-    const md = `![img.jpg](/api/knowledge/documents/${docId}/assets/markdown_out/img.jpg)`;
-    assert.equal(rewriteDocumentMarkdownImageUrls(md, new Map(), new Map()), md);
-  });
-
-  it('rewrites resolved document image refs to fetchable URLs', () => {
-    const docId = 'ca6ba407-ae5d-4f83-b7c0-0ca180679953';
-    const bundlePath = 'markdown_out/img.jpg';
-    const md = `![img.jpg](/api/knowledge/documents/${docId}/assets/${bundlePath})`;
-    const ticketByPath = buildPlatformAssetTicketByPath([
-      {
-        path: bundlePath,
-        url: `/api/knowledge/documents/${docId}/assets/${bundlePath}?exp=1&sig=abc`,
-      },
-    ]);
-    const out = rewriteDocumentMarkdownImageUrls(
-      md,
-      ticketByPath,
-      new Map(),
-      (path) => `https://api.example.com${path}`,
-    );
-    assert.match(
-      out,
-      /!\[img\.jpg\]\(https:\/\/api\.example\.com\/api\/knowledge\/documents\/.*\?exp=1&sig=abc\)/,
     );
   });
 

@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Components } from 'react-markdown';
 import { apiUrl } from '../api/base.ts';
-import { resolveDocumentMarkdownImageUrls } from '../api/documents.ts';
-import { rewriteDocumentMarkdownImageUrls } from '../shared/markdown-images.ts';
+import { presignDocumentMarkdownImages } from '../api/documents.ts';
+import {
+  fallbackMarkdownImageSrc,
+  resolveDocumentMarkdownFetchUrl,
+} from '../shared/markdown-images.ts';
 import { Markdown } from './Markdown.tsx';
 
 type DocumentParsedMarkdownProps = {
@@ -10,32 +14,83 @@ type DocumentParsedMarkdownProps = {
   headingIds?: boolean;
 };
 
+const MAX_IMAGE_REMINT_ATTEMPTS = 1;
+
+function ParsedMarkdownImage({
+  src,
+  alt,
+  urlByStoragePath,
+  onRemint,
+}: {
+  src: string;
+  alt?: string;
+  urlByStoragePath: ReadonlyMap<string, string>;
+  onRemint: () => void;
+}) {
+  const fetchUrl = resolveDocumentMarkdownFetchUrl(src, urlByStoragePath, alt);
+  const displaySrc = fetchUrl ?? fallbackMarkdownImageSrc(src, apiUrl);
+  const errorAttemptsRef = useRef(0);
+
+  useEffect(() => {
+    errorAttemptsRef.current = 0;
+  }, [displaySrc]);
+
+  return (
+    <img
+      src={displaySrc}
+      alt={alt ?? ''}
+      loading="lazy"
+      onError={() => {
+        if (errorAttemptsRef.current >= MAX_IMAGE_REMINT_ATTEMPTS) return;
+        errorAttemptsRef.current += 1;
+        onRemint();
+      }}
+    />
+  );
+}
+
 export function DocumentParsedMarkdown({
   documentId,
   content,
   headingIds = false,
 }: DocumentParsedMarkdownProps) {
-  const [renderContent, setRenderContent] = useState(content);
+  const [urlByStoragePath, setUrlByStoragePath] = useState<Map<string, string>>(() => new Map());
+  const [remintVersion, setRemintVersion] = useState(0);
   const hasImageRefs = useMemo(() => /!\[[^\]]*\]\([^)]+\)/.test(content), [content]);
 
   useEffect(() => {
-    setRenderContent(content);
-  }, [content]);
-
-  useEffect(() => {
-    if (!hasImageRefs) return;
+    if (!hasImageRefs) {
+      setUrlByStoragePath(new Map());
+      return;
+    }
 
     let cancelled = false;
-    void resolveDocumentMarkdownImageUrls(documentId, content).then(({ ticketByPath, urlByStoragePath }) => {
-      if (cancelled) return;
-      setRenderContent(
-        rewriteDocumentMarkdownImageUrls(content, ticketByPath, urlByStoragePath, apiUrl),
-      );
+    void presignDocumentMarkdownImages(documentId, content).then((lookup) => {
+      if (!cancelled) setUrlByStoragePath(lookup);
     });
     return () => {
       cancelled = true;
     };
-  }, [content, documentId, hasImageRefs]);
+  }, [content, documentId, hasImageRefs, remintVersion]);
 
-  return <Markdown content={renderContent} headingIds={headingIds} />;
+  const remintImages = useCallback(() => {
+    setRemintVersion((value) => value + 1);
+  }, []);
+
+  const components = useMemo((): Components => {
+    const img = ({ src, alt }: { src?: string; alt?: string }) => {
+      if (!src) return null;
+      return (
+        <ParsedMarkdownImage
+          src={src}
+          alt={alt}
+          urlByStoragePath={urlByStoragePath}
+          onRemint={remintImages}
+        />
+      );
+    };
+    return { img };
+  }, [remintImages, urlByStoragePath]);
+
+  return <Markdown content={content} headingIds={headingIds} components={components} />;
 }
