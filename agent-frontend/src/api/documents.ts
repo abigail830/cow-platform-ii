@@ -202,7 +202,7 @@ export async function presignDocumentMarkdownImages(
   markdown: string,
   signal?: AbortSignal,
 ): Promise<Map<string, string>> {
-  const paths = collectDocumentMarkdownImageStoragePaths(markdown);
+  const paths = collectDocumentMarkdownImageStoragePaths(markdown, documentId);
   if (paths.length === 0) return new Map();
 
   try {

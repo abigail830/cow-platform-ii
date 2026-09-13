@@ -115,10 +115,29 @@ export function buildDocumentAssetTicketUrl(
 export function extractDocumentAssetRequestPath(
   requestPath: string,
 ): { documentId: string; assetPath: string } | null {
-  const normalized = requestPath.split('?')[0] ?? requestPath;
-  const match = normalized.match(/^\/([^/]+)\/assets\/(.+)$/);
-  if (!match?.[1] || !match[2]) return null;
-  return { documentId: match[1], assetPath: match[2] };
+  const normalized = (requestPath.split('?')[0] ?? requestPath).replace(/\/+$/, '') || '/';
+
+  // Vercel / root-mounted Hono: full path includes /api/knowledge/documents/...
+  const full = PLATFORM_ASSET_PATH_RE.exec(normalized);
+  if (full?.[1] && full[2]) {
+    try {
+      return { documentId: full[1], assetPath: decodeURIComponent(full[2]) };
+    } catch {
+      return null;
+    }
+  }
+
+  // Sub-app relative path when mounted at /api/knowledge/documents: /{id}/assets/...
+  const rel = normalized.match(/^\/([0-9a-f-]{36})\/assets\/(.+)$/i);
+  if (rel?.[1] && rel[2]) {
+    try {
+      return { documentId: rel[1], assetPath: decodeURIComponent(rel[2]) };
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 /** Normalize MCP/HTTP input: bundle-relative path or platform asset URL (must match document_id). */

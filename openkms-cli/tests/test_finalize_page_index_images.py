@@ -40,7 +40,6 @@ def test_build_page_index_preserves_platform_image_urls(tmp_path: Path) -> None:
     platform_url = platform_asset_url(
         DOC_ID,
         "markdown_out/f29999a192678ef083fa7c284481ca61.jpg",
-        api_url="https://api.example.com",
     )
     markdown = f'# Section\n\n![img]({platform_url})\n'
     result = {
@@ -93,7 +92,6 @@ def test_finalize_job_artifacts_uploads_platform_image_markdown(
     platform_url = platform_asset_url(
         DOC_ID,
         "markdown_out/f29999a192678ef083fa7c284481ca61.jpg",
-        api_url="https://api.example.com",
     )
     layouts = [
         {

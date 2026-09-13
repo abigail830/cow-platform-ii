@@ -73,6 +73,12 @@ describe('markdown-images', () => {
     ]);
   });
 
+  it('collects bundle paths from platform asset URLs for presign fallback', () => {
+    const docId = '550e8400-e29b-41d4-a716-446655440000';
+    const md = `![x](/api/knowledge/documents/${docId}/assets/markdown_out/x.jpg)`;
+    assert.ok(collectDocumentMarkdownImageStoragePaths(md, docId).includes('markdown_out/x.jpg'));
+  });
+
   it('builds basename lookup for presigned bundle images', () => {
     const lookup = buildImagePresignLookup([
       { path: 'markdown_out/7fb7e5037340e71fd119dc62cc6a936d.jpg', url: 'https://signed.example/a.jpg' },

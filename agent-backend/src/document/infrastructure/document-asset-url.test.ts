@@ -6,6 +6,7 @@ import {
   documentAssetApiPath,
   parsePlatformAssetUrl,
   platformAssetUrl,
+  extractDocumentAssetRequestPath,
   resolveDocumentAssetPathInput,
   signAssetTicket,
   verifyAssetTicket,
@@ -92,6 +93,20 @@ describe('document-asset-url', () => {
         ),
       /does not match/,
     );
+  });
+
+  it('extracts asset paths from full API and sub-app request paths', () => {
+    const assetPath = 'markdown_out/foo.jpg';
+    const full = `/api/knowledge/documents/${DOC_ID}/assets/${assetPath}`;
+    assert.deepEqual(extractDocumentAssetRequestPath(full), {
+      documentId: DOC_ID,
+      assetPath,
+    });
+    assert.deepEqual(extractDocumentAssetRequestPath(`/${DOC_ID}/assets/${assetPath}`), {
+      documentId: DOC_ID,
+      assetPath,
+    });
+    assert.equal(extractDocumentAssetRequestPath(`/api/knowledge/documents/${DOC_ID}/content`), null);
   });
 
   it('builds ticket URLs with exp and sig query params', () => {

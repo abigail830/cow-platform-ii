@@ -107,8 +107,11 @@ export function ossMarkdownImagePathCandidates(url: string): string[] {
   }
 }
 
-/** Storage paths to presign for legacy relative / OSS images (not platform asset URLs). */
-export function collectDocumentMarkdownImageStoragePaths(markdown: string): string[] {
+/** Storage paths to presign for bundle images (legacy OSS URLs + platform asset paths). */
+export function collectDocumentMarkdownImageStoragePaths(
+  markdown: string,
+  documentId?: string,
+): string[] {
   const pathSet = new Set<string>();
   for (const path of collectRelativeMarkdownImagePaths(markdown)) {
     for (const candidate of markdownImagePathCandidates(path)) {
@@ -118,7 +121,20 @@ export function collectDocumentMarkdownImageStoragePaths(markdown: string): stri
   for (const match of markdown.matchAll(MD_IMAGE_RE)) {
     const alt = (match[1] ?? '').trim();
     const url = (match[2] ?? '').trim();
-    if (isPlatformAssetUrl(url)) continue;
+    const platform = parsePlatformAssetUrl(url);
+    if (platform) {
+      if (!documentId || platform.documentId === documentId) {
+        for (const candidate of markdownImagePathCandidates(platform.path)) {
+          pathSet.add(candidate);
+        }
+      }
+      if (alt) {
+        for (const candidate of markdownImagePathCandidates(alt)) {
+          pathSet.add(candidate);
+        }
+      }
+      continue;
+    }
     if (!/^https?:/i.test(url)) continue;
     for (const candidate of ossMarkdownImagePathCandidates(url)) {
       pathSet.add(candidate);
@@ -162,6 +178,15 @@ export function resolveDocumentMarkdownImageUrl(
   if (ticketUrl) return ticketUrl;
   const fromSrc = resolvePresignedImageUrl(src, urlByStoragePath);
   if (fromSrc) return fromSrc;
+
+  const platform = parsePlatformAssetUrl(src.trim());
+  if (platform) {
+    for (const candidate of markdownImagePathCandidates(platform.path)) {
+      const url = urlByStoragePath.get(candidate);
+      if (url) return url;
+    }
+  }
+
   const altName = alt?.trim();
   if (!altName) return undefined;
   for (const candidate of markdownImagePathCandidates(altName)) {

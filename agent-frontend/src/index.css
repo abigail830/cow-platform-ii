@@ -6337,6 +6337,11 @@ select:focus-visible {
   padding: 0.5rem 0.75rem 0.75rem;
 }
 
+/* Page-index layout anchors: keep in DOM for deep-link scroll, hide in Parsed UI */
+.document-detail-content-scroll .markdown-body span[id^='blk-'] {
+  display: none;
+}
+
 .page-index-doc-name {
   margin: 0 0 0.5rem;
   font-size: 0.75rem;

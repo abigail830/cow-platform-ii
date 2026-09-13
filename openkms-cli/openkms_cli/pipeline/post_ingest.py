@@ -337,11 +337,11 @@ def finalize_job_artifacts(
         if markdown:
             from openkms_cli.parse.markdown_images import rewrite_markdown_to_platform_asset_urls
 
-            api_base = (api or cfg.openkms_api_url or "").strip() or None
+            # Host-relative URLs in canonical markdown (portable across frontend/API origins).
             result["markdown"] = rewrite_markdown_to_platform_asset_urls(
                 str(markdown),
                 document_id,
-                api_url=api_base,
+                api_url=None,
             )
 
     if original_content is None:
