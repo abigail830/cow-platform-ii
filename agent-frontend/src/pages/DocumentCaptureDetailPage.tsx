@@ -39,7 +39,6 @@ import {
 } from '../api/documentCaptures.ts';
 import { formatDocumentBytes } from '../api/documents.ts';
 import { isAudioPipelineActive } from '../api/capture-pipeline-utils.ts';
-import { buildCaptureCombinedMarkdown } from '../shared/capture-combined-markdown.ts';
 import { downloadTextFile, withDownloadExtension } from '../shared/download-text.ts';
 import { IconView } from '../components/AdminActionIcons.tsx';
 import { AudioPipelineStatus } from '../components/AudioPipelineStatus.tsx';
@@ -112,13 +111,22 @@ const CAPTURE_ARTIFACT_TABS: Array<{ id: CaptureArtifactTab; label: string }> = 
 const ARTIFACT_POLL_MAX_AFTER_FINISH = 15;
 const ARTIFACT_POLL_INTERVAL_MS = 3000;
 
+function artifactMissingMessage(tab: CaptureArtifactTab): string {
+  if (tab === 'markdown') {
+    return 'markdown.md not found in storage. Run post-process to generate it.';
+  }
+  return 'Post-process artifact not found in storage';
+}
+
 function shouldDeferArtifactErrors(
   capture: Pick<DocumentCaptureDetail, 'status' | 'pipeline_job'>,
   pollExhausted: boolean,
 ): boolean {
   if (pollExhausted) return false;
   if (capture.status === 'failed') return false;
-  return capture.pipeline_job?.stage === 'done';
+  // Job finished: missing artifact is final — do not poll/retry.
+  if (capture.pipeline_job?.stage === 'done') return false;
+  return capture.status === 'post_processing';
 }
 
 function formatArtifactLoadError(err: unknown): string {
@@ -634,51 +642,6 @@ export function DocumentCaptureDetailPage() {
             if (text?.trim()) {
               setCombinedMarkdown(text.trim());
               loaded = true;
-            } else {
-              let summaryText = summaryMarkdown;
-              let extraction = extractionArtifact;
-              let structured = structuredArtifact;
-
-              if (!summaryText?.trim()) {
-                const summaryRaw = await fetchCapturePostProcessArtifactText(captureId, 'summary');
-                if (summaryRaw?.trim()) {
-                  summaryText = summaryRaw.trim();
-                  setSummaryMarkdown(summaryText);
-                }
-              }
-              if (!extraction) {
-                const extractionRaw = await fetchCapturePostProcessArtifactText(captureId, 'extraction');
-                const parsed = parseArtifactJson<ExtractionArtifact>(extractionRaw);
-                if (parsed) {
-                  extraction = parsed;
-                  setExtractionArtifact(parsed);
-                }
-              }
-              if (structured == null) {
-                const structuredRaw = await fetchCapturePostProcessArtifactText(
-                  captureId,
-                  'structured_transcript',
-                );
-                const parsed = parseArtifactJson<{ topics?: Array<{ label?: string; title?: string; preview?: string }> }>(
-                  structuredRaw,
-                );
-                if (parsed != null) {
-                  structured = parsed;
-                  setStructuredArtifact(parsed);
-                }
-              }
-
-              const synthesized = buildCaptureCombinedMarkdown({
-                title: capture?.title ?? 'Capture',
-                abstract: capture?.abstract ?? null,
-                summaryMd: summaryText,
-                extraction: (extraction as Record<string, unknown> | null) ?? null,
-                structured: (structured as { topics?: Array<{ label?: string; title?: string; preview?: string }> } | null) ?? null,
-              });
-              if (synthesized?.trim()) {
-                setCombinedMarkdown(synthesized.trim());
-                loaded = true;
-              }
             }
           }
         }
@@ -695,7 +658,7 @@ export function DocumentCaptureDetailPage() {
         } else if (!loaded) {
           setArtifactTabErrors((current) => ({
             ...current,
-            [tab]: 'Post-process artifact not found in storage',
+            [tab]: artifactMissingMessage(tab),
           }));
         }
 
@@ -714,17 +677,7 @@ export function DocumentCaptureDetailPage() {
         if (showLoading) setArtifactTabLoading(tab, false);
       }
     },
-    [
-      capture,
-      captureId,
-      combinedMarkdown,
-      contextArtifact,
-      extractionArtifact,
-      loadExtractionCompanions,
-      setArtifactTabLoading,
-      structuredArtifact,
-      summaryMarkdown,
-    ],
+    [captureId, combinedMarkdown, contextArtifact, extractionArtifact, loadExtractionCompanions, setArtifactTabLoading, structuredArtifact, summaryMarkdown],
   );
 
   const syncCaptureWhenCoreArtifactsReady = useCallback(
@@ -862,8 +815,8 @@ export function DocumentCaptureDetailPage() {
       isCapturePipelineActive(capture) || runningPipeline;
     const shouldPollArtifacts =
       !postProcessActiveNow &&
-      jobStage === 'done' &&
-      capture.status !== 'failed' &&
+      jobStage !== 'done' &&
+      capture.status === 'post_processing' &&
       !isArtifactTabLoaded(
         artifactTab,
         summaryMarkdown,
@@ -1328,10 +1281,6 @@ export function DocumentCaptureDetailPage() {
             : 'Post-process results are not available in storage. Use Run post-process to regenerate them.'}
         </p>
       );
-    }
-
-    if (postProcessJobDone && !artifactPollExhausted) {
-      return <PanelLoading label="Waiting for post-process results from storage…" />;
     }
 
     return <p className="document-detail-panel-empty">No artifact for this tab yet.</p>;
