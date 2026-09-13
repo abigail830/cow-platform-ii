@@ -13,7 +13,7 @@ import {
 } from './direct-upload.ts';
 import {
   buildImagePresignLookup,
-  buildPlatformAssetTicketLookup,
+  buildPlatformAssetTicketByPath,
   collectDocumentMarkdownImageStoragePaths,
   collectPlatformDocumentAssetPaths,
 } from '../shared/markdown-images.ts';
@@ -190,7 +190,7 @@ export async function mintDocumentAssetTickets(
       signal,
     })) as { tickets: Array<{ path: string; url: string }> };
 
-    return buildPlatformAssetTicketLookup(response.tickets ?? [], markdown);
+    return buildPlatformAssetTicketByPath(response.tickets ?? []);
   } catch {
     return new Map();
   }
@@ -224,12 +224,12 @@ export async function resolveDocumentMarkdownImageUrls(
   documentId: string,
   markdown: string,
   signal?: AbortSignal,
-): Promise<{ ticketBySrc: Map<string, string>; urlByStoragePath: Map<string, string> }> {
-  const [ticketBySrc, urlByStoragePath] = await Promise.all([
+): Promise<{ ticketByPath: Map<string, string>; urlByStoragePath: Map<string, string> }> {
+  const [ticketByPath, urlByStoragePath] = await Promise.all([
     mintDocumentAssetTickets(documentId, markdown, signal),
     presignDocumentMarkdownImages(documentId, markdown, signal),
   ]);
-  return { ticketBySrc, urlByStoragePath };
+  return { ticketByPath, urlByStoragePath };
 }
 
 export async function listDocuments(params: {

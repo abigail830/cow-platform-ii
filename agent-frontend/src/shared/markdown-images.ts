@@ -148,15 +148,22 @@ export function collectDocumentMarkdownImageStoragePaths(
   return [...pathSet];
 }
 
-export function buildPlatformAssetTicketLookup(
+export function buildPlatformAssetTicketByPath(
   tickets: ReadonlyArray<{ path: string; url: string }>,
-  markdown: string,
 ): Map<string, string> {
   const byPath = new Map<string, string>();
   for (const ticket of tickets) {
     if (ticket.path && ticket.url) byPath.set(ticket.path, ticket.url);
   }
+  return byPath;
+}
 
+/** @deprecated Prefer ticketByPath — react-markdown may normalize src to an absolute URL. */
+export function buildPlatformAssetTicketLookup(
+  tickets: ReadonlyArray<{ path: string; url: string }>,
+  markdown: string,
+): Map<string, string> {
+  const byPath = buildPlatformAssetTicketByPath(tickets);
   const bySrc = new Map<string, string>();
   for (const match of markdown.matchAll(MD_IMAGE_RE)) {
     const src = (match[2] ?? '').trim();
@@ -170,22 +177,23 @@ export function buildPlatformAssetTicketLookup(
 
 export function resolveDocumentMarkdownImageUrl(
   src: string,
-  ticketBySrc: ReadonlyMap<string, string>,
+  ticketByPath: ReadonlyMap<string, string>,
   urlByStoragePath: ReadonlyMap<string, string>,
   alt?: string,
 ): string | undefined {
-  const ticketUrl = ticketBySrc.get(src.trim());
-  if (ticketUrl) return ticketUrl;
-  const fromSrc = resolvePresignedImageUrl(src, urlByStoragePath);
-  if (fromSrc) return fromSrc;
-
-  const platform = parsePlatformAssetUrl(src.trim());
+  const trimmed = src.trim();
+  const platform = parsePlatformAssetUrl(trimmed);
   if (platform) {
+    const ticketUrl = ticketByPath.get(platform.path);
+    if (ticketUrl) return ticketUrl;
     for (const candidate of markdownImagePathCandidates(platform.path)) {
       const url = urlByStoragePath.get(candidate);
       if (url) return url;
     }
   }
+
+  const fromSrc = resolvePresignedImageUrl(trimmed, urlByStoragePath);
+  if (fromSrc) return fromSrc;
 
   const altName = alt?.trim();
   if (!altName) return undefined;

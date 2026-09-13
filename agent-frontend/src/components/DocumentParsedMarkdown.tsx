@@ -16,17 +16,17 @@ const MAX_IMAGE_REMINT_ATTEMPTS = 1;
 function ParsedMarkdownImage({
   src,
   alt,
-  ticketBySrc,
+  ticketByPath,
   urlByStoragePath,
   onRemint,
 }: {
   src: string;
   alt?: string;
-  ticketBySrc: ReadonlyMap<string, string>;
+  ticketByPath: ReadonlyMap<string, string>;
   urlByStoragePath: ReadonlyMap<string, string>;
   onRemint: (src: string) => void;
 }) {
-  const rawResolved = resolveDocumentMarkdownImageUrl(src, ticketBySrc, urlByStoragePath, alt);
+  const rawResolved = resolveDocumentMarkdownImageUrl(src, ticketByPath, urlByStoragePath, alt);
   const resolved = rawResolved?.startsWith('/api/')
     ? apiUrl(rawResolved)
     : rawResolved;
@@ -63,7 +63,7 @@ export function DocumentParsedMarkdown({
   content,
   headingIds = false,
 }: DocumentParsedMarkdownProps) {
-  const [ticketBySrc, setTicketBySrc] = useState<Map<string, string>>(() => new Map());
+  const [ticketByPath, setTicketByPath] = useState<Map<string, string>>(() => new Map());
   const [urlByStoragePath, setUrlByStoragePath] = useState<Map<string, string>>(() => new Map());
   const [remintVersion, setRemintVersion] = useState(0);
   const remintedSrcsRef = useRef<Set<string>>(new Set());
@@ -75,15 +75,15 @@ export function DocumentParsedMarkdown({
 
   useEffect(() => {
     if (!hasImageRefs) {
-      setTicketBySrc(new Map());
+      setTicketByPath(new Map());
       setUrlByStoragePath(new Map());
       return;
     }
 
     let cancelled = false;
-    void resolveDocumentMarkdownImageUrls(documentId, content).then(({ ticketBySrc, urlByStoragePath }) => {
+    void resolveDocumentMarkdownImageUrls(documentId, content).then(({ ticketByPath, urlByStoragePath }) => {
       if (!cancelled) {
-        setTicketBySrc(ticketBySrc);
+        setTicketByPath(ticketByPath);
         setUrlByStoragePath(urlByStoragePath);
       }
     });
@@ -105,14 +105,14 @@ export function DocumentParsedMarkdown({
         <ParsedMarkdownImage
           src={src}
           alt={alt}
-          ticketBySrc={ticketBySrc}
+          ticketByPath={ticketByPath}
           urlByStoragePath={urlByStoragePath}
           onRemint={remintImage}
         />
       );
     };
     return { img };
-  }, [remintImage, ticketBySrc, urlByStoragePath]);
+  }, [remintImage, ticketByPath, urlByStoragePath]);
 
   return <Markdown content={content} headingIds={headingIds} components={components} />;
 }

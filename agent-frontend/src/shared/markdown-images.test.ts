@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   buildImagePresignLookup,
+  buildPlatformAssetTicketByPath,
   collectDocumentMarkdownImageStoragePaths,
   collectRelativeMarkdownImagePaths,
   markdownImagePathCandidates,
@@ -77,6 +78,22 @@ describe('markdown-images', () => {
     const docId = '550e8400-e29b-41d4-a716-446655440000';
     const md = `![x](/api/knowledge/documents/${docId}/assets/markdown_out/x.jpg)`;
     assert.ok(collectDocumentMarkdownImageStoragePaths(md, docId).includes('markdown_out/x.jpg'));
+  });
+
+  it('resolves platform asset tickets by bundle path when react-markdown absolutizes src', () => {
+    const docId = 'ca6ba407-ae5d-4f83-b7c0-0ca180679953';
+    const bundlePath = 'markdown_out/74357d1ceb7fa6c05d49a1c875675d13.jpg';
+    const ticketByPath = buildPlatformAssetTicketByPath([
+      {
+        path: bundlePath,
+        url: `/api/knowledge/documents/${docId}/assets/${bundlePath}?exp=1&sig=abc`,
+      },
+    ]);
+    const absoluteSrc = `https://cow-platform.vercel.app/api/knowledge/documents/${docId}/assets/${bundlePath}`;
+    assert.equal(
+      resolveDocumentMarkdownImageUrl(absoluteSrc, ticketByPath, new Map()),
+      `/api/knowledge/documents/${docId}/assets/${bundlePath}?exp=1&sig=abc`,
+    );
   });
 
   it('builds basename lookup for presigned bundle images', () => {
