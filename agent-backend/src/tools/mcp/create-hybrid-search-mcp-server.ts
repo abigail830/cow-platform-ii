@@ -85,11 +85,18 @@ export function createHybridSearchMcpServer(
           .describe(
             'Bundle-relative path (markdown_out/foo.jpg) or platform asset URL from chunk markdown',
           ),
+        max_dimension: z
+          .number()
+          .int()
+          .min(64)
+          .max(4096)
+          .optional()
+          .describe('Max width/height for vision embed resize (default 1024)'),
       },
     },
     async (input) => {
-      const text = await handlers.fetchDocumentAsset(input);
-      return { content: [{ type: 'text', text }] };
+      const content = await handlers.fetchDocumentAsset(input);
+      return { content };
     },
   );
 

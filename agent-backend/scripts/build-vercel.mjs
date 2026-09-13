@@ -42,6 +42,7 @@ const external = [
   'mongodb',
   'kerberos',
   'snappy',
+  'sharp',
 ];
 
 const outfile = path.join(funcDir, 'index.cjs');
