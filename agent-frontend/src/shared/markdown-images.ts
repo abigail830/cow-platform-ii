@@ -2,7 +2,7 @@
 
 export const MD_IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 
-const OSS_IMAGE_HOST_RE = /aliyuncs\.com|amazonaws\.com/i;
+const OSS_IMAGE_HOST_RE = /aliyuncs\.com|amazonaws\.com|docmind/i;
 
 export function collectRelativeMarkdownImagePaths(markdown: string): string[] {
   const paths: string[] = [];
@@ -58,6 +58,39 @@ export function collectDocumentMarkdownImageStoragePaths(markdown: string): stri
 }
 
 /** Resolve a markdown image src to a bundle storage path key (if known). */
+/** Lookup map keyed by full storage path and basename (for markdown refs like `img.jpg`). */
+export function buildImagePresignLookup(
+  files: ReadonlyArray<{ path: string; url: string }>,
+): Map<string, string> {
+  const lookup = new Map<string, string>();
+  for (const file of files) {
+    if (!file.path || !file.url) continue;
+    lookup.set(file.path, file.url);
+    const base = file.path.split('/').pop();
+    if (base && !lookup.has(base)) lookup.set(base, file.url);
+  }
+  return lookup;
+}
+
+export function resolvePresignedImageUrl(
+  src: string,
+  urlByStoragePath: ReadonlyMap<string, string>,
+): string | undefined {
+  for (const storagePath of markdownImageSrcStorageCandidates(src)) {
+    const url = urlByStoragePath.get(storagePath);
+    if (url) return url;
+  }
+  const trimmed = src.trim();
+  if (!/^https?:/i.test(trimmed)) {
+    const base = trimmed.replace(/^\.\//, '').split('/').pop();
+    if (base) {
+      const byBase = urlByStoragePath.get(base);
+      if (byBase) return byBase;
+    }
+  }
+  return undefined;
+}
+
 export function markdownImageSrcStorageCandidates(src: string): string[] {
   const trimmed = src.trim();
   if (!trimmed) return [];

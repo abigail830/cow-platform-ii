@@ -304,6 +304,24 @@ export async function createDocumentBundleManifest(input: {
   };
 }
 
+const BUNDLE_IMAGE_PATH_RE = /\.(jpe?g|png|gif|webp|bmp|tiff?|svg)$/i;
+
+export function isBundleImageRelativePath(path: string): boolean {
+  const name = path.split('/').pop() ?? '';
+  return BUNDLE_IMAGE_PATH_RE.test(name);
+}
+
+/** List image artifacts under the document bundle prefix and presign only keys that exist in OSS. */
+export async function presignDiscoveredDocumentBundleImages(fileHash: string): Promise<BundleManifestFile[]> {
+  const existingKeys = await listDocumentStorageKeys(fileHash);
+  const relativePaths = new Set<string>();
+  for (const key of existingKeys) {
+    const rel = relativeStoragePath(key, fileHash);
+    if (rel && isBundleImageRelativePath(rel)) relativePaths.add(rel);
+  }
+  return presignDocumentBundlePaths(fileHash, [...relativePaths]);
+}
+
 export async function presignDocumentBundlePaths(
   fileHash: string,
   paths: string[],

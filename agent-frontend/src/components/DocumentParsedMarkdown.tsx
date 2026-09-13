@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Components } from 'react-markdown';
 import { presignDocumentMarkdownImages } from '../api/documents.ts';
-import { markdownImageSrcStorageCandidates } from '../shared/markdown-images.ts';
+import { collectDocumentMarkdownImageStoragePaths, resolvePresignedImageUrl } from '../shared/markdown-images.ts';
 import { Markdown } from './Markdown.tsx';
 
 type DocumentParsedMarkdownProps = {
@@ -10,22 +10,24 @@ type DocumentParsedMarkdownProps = {
   headingIds?: boolean;
 };
 
-function resolveImageUrl(src: string, urlByStoragePath: ReadonlyMap<string, string>): string | undefined {
-  for (const storagePath of markdownImageSrcStorageCandidates(src)) {
-    const url = urlByStoragePath.get(storagePath);
-    if (url) return url;
-  }
-  return undefined;
-}
-
 export function DocumentParsedMarkdown({
   documentId,
   content,
   headingIds = false,
 }: DocumentParsedMarkdownProps) {
   const [urlByStoragePath, setUrlByStoragePath] = useState<Map<string, string>>(() => new Map());
+  const [remintVersion, setRemintVersion] = useState(0);
+  const hasImageRefs = useMemo(
+    () => collectDocumentMarkdownImageStoragePaths(content).length > 0,
+    [content],
+  );
 
   useEffect(() => {
+    if (!hasImageRefs) {
+      setUrlByStoragePath(new Map());
+      return;
+    }
+
     let cancelled = false;
     void presignDocumentMarkdownImages(documentId, content).then((map) => {
       if (!cancelled) setUrlByStoragePath(map);
@@ -33,40 +35,36 @@ export function DocumentParsedMarkdown({
     return () => {
       cancelled = true;
     };
-  }, [documentId, content]);
+  }, [content, documentId, hasImageRefs, remintVersion]);
 
-  const remintImage = useCallback(
-    async (src: string) => {
-      const paths = markdownImageSrcStorageCandidates(src);
-      if (paths.length === 0) return;
-      const map = await presignDocumentMarkdownImages(documentId, content);
-      if (map.size === 0) return;
-      setUrlByStoragePath((current) => {
-        const next = new Map(current);
-        for (const [path, url] of map) next.set(path, url);
-        return next;
-      });
-    },
-    [content, documentId],
-  );
+  const remintImages = useCallback(() => {
+    setRemintVersion((value) => value + 1);
+  }, []);
 
   const components = useMemo((): Components => {
     const img = ({ src, alt }: { src?: string; alt?: string }) => {
       if (!src) return null;
-      const resolved = resolveImageUrl(src, urlByStoragePath) ?? src;
+      const resolved = resolvePresignedImageUrl(src, urlByStoragePath);
+      if (!resolved) {
+        return (
+          <span className="admin-muted" title="Image artifact missing or unavailable — re-run parse if this persists">
+            {alt?.trim() || src.split('/').pop() || 'Image unavailable'}
+          </span>
+        );
+      }
       return (
         <img
           src={resolved}
           alt={alt ?? ''}
           loading="lazy"
           onError={() => {
-            void remintImage(src);
+            remintImages();
           }}
         />
       );
     };
     return { img };
-  }, [remintImage, urlByStoragePath]);
+  }, [remintImages, urlByStoragePath]);
 
   return <Markdown content={content} headingIds={headingIds} components={components} />;
 }

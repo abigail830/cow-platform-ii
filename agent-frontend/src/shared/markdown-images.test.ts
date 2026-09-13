@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  buildImagePresignLookup,
   collectDocumentMarkdownImageStoragePaths,
   collectRelativeMarkdownImagePaths,
   markdownImagePathCandidates,
   ossMarkdownImagePathCandidates,
+  resolvePresignedImageUrl,
   rewriteMarkdownImageUrls,
 } from './markdown-images.ts';
 
@@ -40,6 +42,20 @@ describe('markdown-images', () => {
       'e699b436.jpg',
       'markdown_out/e699b436.jpg',
     ]);
+  });
+
+  it('builds basename lookup for presigned bundle images', () => {
+    const lookup = buildImagePresignLookup([
+      { path: 'markdown_out/7fb7e5037340e71fd119dc62cc6a936d.jpg', url: 'https://signed.example/a.jpg' },
+    ]);
+    assert.equal(
+      resolvePresignedImageUrl('7fb7e5037340e71fd119dc62cc6a936d.jpg', lookup),
+      'https://signed.example/a.jpg',
+    );
+    assert.equal(
+      resolvePresignedImageUrl('markdown_out/7fb7e5037340e71fd119dc62cc6a936d.jpg', lookup),
+      'https://signed.example/a.jpg',
+    );
   });
 
   it('rewrites relative urls from a map', () => {

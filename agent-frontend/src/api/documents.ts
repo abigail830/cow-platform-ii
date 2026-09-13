@@ -11,7 +11,10 @@ import {
   UPLOAD_CHUNK_SIZE_BYTES,
   usesRemoteApiOrigin,
 } from './direct-upload.ts';
-import { collectDocumentMarkdownImageStoragePaths } from '../shared/markdown-images.ts';
+import {
+  buildImagePresignLookup,
+  collectDocumentMarkdownImageStoragePaths,
+} from '../shared/markdown-images.ts';
 import JSZip from 'jszip';
 
 export type DocumentPipelineJob = {
@@ -168,28 +171,24 @@ export async function fetchDocumentContent(
   };
 }
 
-/** Mint fresh presigned GET URLs for images referenced in parsed markdown (per page load). */
+/** Mint fresh presigned GET URLs for bundle images (OSS ListObjects + presign, per page load). */
 export async function presignDocumentMarkdownImages(
   documentId: string,
   markdown: string,
   signal?: AbortSignal,
 ): Promise<Map<string, string>> {
-  const paths = collectDocumentMarkdownImageStoragePaths(markdown);
-  if (paths.length === 0) return new Map();
+  const hasImageRefs = collectDocumentMarkdownImageStoragePaths(markdown).length > 0;
+  if (!hasImageRefs) return new Map();
 
   try {
     const presigned = (await authFetch(`/api/knowledge/documents/${documentId}/download/bundle-presign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths }),
+      body: JSON.stringify({ discover_images: true }),
       signal,
     })) as { files: Array<{ path: string; url: string }> };
 
-    const byStoragePath = new Map<string, string>();
-    for (const file of presigned.files ?? []) {
-      if (file.path && file.url) byStoragePath.set(file.path, file.url);
-    }
-    return byStoragePath;
+    return buildImagePresignLookup(presigned.files ?? []);
   } catch {
     return new Map();
   }

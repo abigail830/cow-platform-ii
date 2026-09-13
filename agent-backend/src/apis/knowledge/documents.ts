@@ -235,18 +235,29 @@ documents.post(
     const denied = await denyUnlessDocumentAccess(c, id, 'read');
     if (denied) return denied;
 
-    const body = await c.req.json<{ paths?: string[] }>().catch((): { paths?: string[] } => ({}));
-    if (!Array.isArray(body.paths) || body.paths.length === 0) {
-      return c.json({ error: 'paths array is required' }, 400);
-    }
-    if (body.paths.length > 500) {
-      return c.json({ error: 'Too many paths requested' }, 400);
-    }
+    const body = await c.req
+      .json<{ paths?: string[]; discover_images?: boolean }>()
+      .catch((): { paths?: string[]; discover_images?: boolean } => ({}));
 
     const row = await getDocumentById(id);
     if (!row) return c.json({ error: 'Document not found' }, 404);
 
     try {
+      if (body.discover_images) {
+        const { presignDiscoveredDocumentBundleImages } = await import(
+          '../../document/infrastructure/document-files.ts'
+        );
+        const files = await presignDiscoveredDocumentBundleImages(row.fileHash);
+        return c.json({ files });
+      }
+
+      if (!Array.isArray(body.paths) || body.paths.length === 0) {
+        return c.json({ error: 'paths array is required unless discover_images is true' }, 400);
+      }
+      if (body.paths.length > 500) {
+        return c.json({ error: 'Too many paths requested' }, 400);
+      }
+
       const files = await presignDocumentBundlePaths(row.fileHash, body.paths);
       return c.json({ files });
     } catch (error) {
