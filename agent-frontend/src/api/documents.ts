@@ -53,7 +53,7 @@ export type ChannelKnowledgeCaptureItem = {
   channel_id: string;
   name: string;
   title: string;
-  brief: string | null;
+  abstract: string | null;
   input_mode: 'document' | 'audio' | 'transcript';
   file_count: number;
   size_bytes: number;

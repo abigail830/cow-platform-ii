@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from openkms_cli.pipeline.capture_config import apply_prompt_template
+from openkms_cli.pipeline.capture_config import apply_prompt_template, capture_abstract, capture_prompt_template_vars
 from openkms_cli.pipeline.capture_structure import chat_text
 
 
@@ -44,9 +44,9 @@ def render_summary_template(
     lines.append("")
 
     meta: list[str] = []
-    brief = str(capture.get("brief") or recording_context.get("brief") or "").strip()
-    if brief:
-        meta.append(f"- **Brief:** {brief}")
+    abstract = capture_abstract(capture) or capture_abstract(recording_context)
+    if abstract:
+        meta.append(f"- **Abstract:** {abstract}")
     participants = str(
         capture.get("participants_hint") or extraction.get("participants_hint") or ""
     ).strip()
@@ -139,9 +139,7 @@ def llm_synthesize_summary(
         user_prompt=apply_prompt_template(
             str(llm_cfg.get("user_prompt_template") or ""),
             {
-                "title": str(capture.get("title") or ""),
-                "brief": str(capture.get("brief") or ""),
-                "participants_hint": str(capture.get("participants_hint") or ""),
+                **capture_prompt_template_vars(capture),
                 "recording_mode": recording_mode,
                 "audience": audience,
                 "extractions_json": json.dumps(extraction, ensure_ascii=False, indent=2),

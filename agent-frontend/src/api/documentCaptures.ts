@@ -48,7 +48,7 @@ export type DocumentCaptureRecord = {
   id: string;
   channel_id: string;
   title: string;
-  brief: string | null;
+  abstract: string | null;
   participants_hint: string | null;
   recording_mode: string | null;
   audience: string;
@@ -267,7 +267,7 @@ export async function listDocumentCaptures(input: {
 export async function createDocumentCapture(input: {
   channelId: string;
   title: string;
-  brief?: string;
+  abstract?: string;
   participantsHint?: string;
   recordingMode?: string;
   audience?: string;
@@ -279,7 +279,7 @@ export async function createDocumentCapture(input: {
     body: JSON.stringify({
       channel_id: input.channelId,
       title: input.title,
-      brief: input.brief,
+      abstract: input.abstract,
       participants_hint: input.participantsHint,
       recording_mode: input.recordingMode,
       audience: input.audience,
@@ -477,7 +477,7 @@ export async function bulkSegmentCaptureUpload(
   files: File[],
   input: {
     inputMode: 'audio' | 'transcript';
-    brief?: string;
+    abstract?: string;
     participantsHint?: string;
     recordingMode?: string;
     audience?: string;
@@ -490,7 +490,7 @@ export async function bulkSegmentCaptureUpload(
     const capture = await createDocumentCapture({
       channelId,
       title: captureTitleFromFilename(file.name),
-      brief: input.brief,
+      abstract: input.abstract,
       participantsHint: input.participantsHint,
       recordingMode: input.recordingMode,
       audience: input.audience,
@@ -556,7 +556,8 @@ export type CapturePostProcessArtifactKind =
   | 'structured_transcript'
   | 'recording_context'
   | 'extraction'
-  | 'summary';
+  | 'summary'
+  | 'markdown';
 
 export async function presignCapturePostProcessArtifacts(
   captureId: string,
@@ -589,13 +590,15 @@ export async function getCapturePostProcessArtifacts(captureId: string): Promise
   recording_context: unknown | null;
   extraction: unknown | null;
   summary: string | null;
-  missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'>;
+  markdown: string | null;
+  missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary' | 'markdown'>;
 }> {
   const kinds: CapturePostProcessArtifactKind[] = [
     'structured_transcript',
     'recording_context',
     'extraction',
     'summary',
+    'markdown',
   ];
   const files = await presignCapturePostProcessArtifacts(captureId, kinds);
   const byKind = new Map(files.map((file) => [file.artifact, file.url]));
@@ -615,31 +618,35 @@ export async function getCapturePostProcessArtifacts(captureId: string): Promise
     }
   }
 
-  const [structuredText, contextText, extractionText, summaryText] = await Promise.all([
+  const [structuredText, contextText, extractionText, summaryText, markdownText] = await Promise.all([
     readText('structured_transcript'),
     readText('recording_context'),
     readText('extraction'),
     readText('summary'),
+    readText('markdown'),
   ]);
 
   const structured_transcript = parseJson(structuredText);
   const recording_context = parseJson(contextText);
   const extraction = parseJson(extractionText);
   const summary = summaryText?.trim() ? summaryText : null;
-  const missing: Array<'structured_transcript' | 'recording_context' | 'extraction' | 'summary'> =
-    [];
+  const markdown = markdownText?.trim() ? markdownText : null;
+  const missing: Array<
+    'structured_transcript' | 'recording_context' | 'extraction' | 'summary' | 'markdown'
+  > = [];
   if (structured_transcript == null) missing.push('structured_transcript');
   if (recording_context == null) missing.push('recording_context');
   if (extraction == null) missing.push('extraction');
   if (summary == null) missing.push('summary');
-  return { structured_transcript, recording_context, extraction, summary, missing };
+  if (markdown == null) missing.push('markdown');
+  return { structured_transcript, recording_context, extraction, summary, markdown, missing };
 }
 
 export async function updateDocumentCapture(
   id: string,
   input: {
     title?: string;
-    brief?: string | null;
+    abstract?: string | null;
     participantsHint?: string | null;
     recordingMode?: string | null;
     audience?: string;
@@ -650,7 +657,7 @@ export async function updateDocumentCapture(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       title: input.title,
-      brief: input.brief,
+      abstract: input.abstract,
       participants_hint: input.participantsHint,
       recording_mode: input.recordingMode,
       audience: input.audience,

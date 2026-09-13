@@ -40,6 +40,13 @@ export function summaryS3Key(captureId: string): string {
   return key;
 }
 
+/** Combined post-process markdown (same relative name as document parse `markdown.md`). */
+export function captureMarkdownS3Key(captureId: string): string {
+  const key = `${captureStoragePrefix(captureId)}markdown.md`;
+  validateKey(key);
+  return key;
+}
+
 export type CaptureArtifactName =
   | 'capture'
   | 'structured_transcript'
@@ -68,7 +75,8 @@ export type CapturePostProcessArtifactKind =
   | 'structured_transcript'
   | 'recording_context'
   | 'extraction'
-  | 'summary';
+  | 'summary'
+  | 'markdown';
 
 export type CapturePostProcessArtifactPresign = {
   artifact: CapturePostProcessArtifactKind;
@@ -80,6 +88,7 @@ export type CapturePostProcessArtifactBundle = {
   recording_context: unknown | null;
   extraction: unknown | null;
   summary: string | null;
+  markdown: string | null;
   missing: CapturePostProcessArtifactKind[];
 };
 
@@ -88,6 +97,7 @@ const POST_PROCESS_ARTIFACT_KINDS: CapturePostProcessArtifactKind[] = [
   'recording_context',
   'extraction',
   'summary',
+  'markdown',
 ];
 
 function capturePostProcessArtifactKey(
@@ -103,6 +113,8 @@ function capturePostProcessArtifactKey(
       return extractionS3Key(captureId);
     case 'summary':
       return summaryS3Key(captureId);
+    case 'markdown':
+      return captureMarkdownS3Key(captureId);
     default:
       throw new Error(`Unknown capture post-process artifact: ${artifact}`);
   }
@@ -141,23 +153,26 @@ export async function readCapturePostProcessArtifactBundle(
     extraction: extractionS3Key(captureId),
   } as const;
 
-  const [structuredText, contextText, extractionText, summaryText] = await Promise.all([
+  const [structuredText, contextText, extractionText, summaryText, markdownText] = await Promise.all([
     readStorageText(keys.structured_transcript),
     readStorageText(keys.recording_context),
     readStorageText(keys.extraction),
     readStorageText(summaryS3Key(captureId)),
+    readStorageText(captureMarkdownS3Key(captureId)),
   ]);
 
   const structured_transcript = parseStorageJson(structuredText);
   const recording_context = parseStorageJson(contextText);
   const extraction = parseStorageJson(extractionText);
   const summary = summaryText?.trim() ? summaryText : null;
+  const markdown = markdownText?.trim() ? markdownText : null;
 
   const missing: CapturePostProcessArtifactBundle['missing'] = [];
   if (structured_transcript == null) missing.push('structured_transcript');
   if (recording_context == null) missing.push('recording_context');
   if (extraction == null) missing.push('extraction');
   if (summary == null) missing.push('summary');
+  if (markdown == null) missing.push('markdown');
 
-  return { structured_transcript, recording_context, extraction, summary, missing };
+  return { structured_transcript, recording_context, extraction, summary, markdown, missing };
 }

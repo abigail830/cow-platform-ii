@@ -337,7 +337,7 @@ export const appDocumentCaptures = pgTable(
       .notNull()
       .references(() => appDocumentChannels.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
-    brief: text('brief'),
+    abstract: text('abstract'),
     participantsHint: text('participants_hint'),
     recordingMode: text('recording_mode').$type<AudioCaptureRecordingMode | null>(),
     audience: text('audience').$type<AudioCaptureAudience>().notNull().default('unknown'),

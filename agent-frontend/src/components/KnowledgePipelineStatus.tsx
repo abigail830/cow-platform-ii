@@ -19,7 +19,7 @@ function captureItemToPipelineCapture(item: ChannelKnowledgeItem): DocumentCaptu
     id: item.id,
     channel_id: item.channel_id,
     title: item.title ?? item.name,
-    brief: item.brief,
+    abstract: item.abstract,
     participants_hint: null,
     recording_mode: null,
     audience: 'unknown',

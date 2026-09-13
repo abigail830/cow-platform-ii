@@ -14,6 +14,7 @@ import {
   recordingContextS3Key,
   extractionS3Key,
   summaryS3Key,
+  captureMarkdownS3Key,
 } from '../../document/infrastructure/audio-capture-files.ts';
 import { transcriptS3Key, asrResultS3Key } from '../../audio/infrastructure/audio-files.ts';
 import { snapshotConfigYaml } from '../../audio/application/audio-pipeline-jobs.ts';
@@ -152,7 +153,7 @@ export async function buildDocumentCapturePipelineJobContext(jobId: string) {
       id: capture.id,
       channel_id: capture.channelId,
       title: capture.title,
-      brief: capture.brief,
+      abstract: capture.abstract,
       participants_hint: capture.participantsHint,
       recording_mode: capture.recordingMode,
       audience: capture.audience,
@@ -177,6 +178,7 @@ export async function buildDocumentCapturePipelineJobContext(jobId: string) {
       recording_context: recordingContextS3Key(capture.id),
       extraction: extractionS3Key(capture.id),
       summary: summaryS3Key(capture.id),
+      markdown: captureMarkdownS3Key(capture.id),
     },
   };
 }

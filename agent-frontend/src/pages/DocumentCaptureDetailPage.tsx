@@ -90,7 +90,7 @@ type RecordingContextArtifact = {
   metadata?: Record<string, unknown>;
 };
 
-type CaptureArtifactTab = 'summary' | 'structured_transcript' | 'extraction';
+type CaptureArtifactTab = 'summary' | 'structured_transcript' | 'extraction' | 'markdown';
 type StructuredTranscriptView = 'json' | 'table';
 type ExtractionView = 'timeline' | 'json';
 
@@ -105,6 +105,7 @@ const CAPTURE_ARTIFACT_TABS: Array<{ id: CaptureArtifactTab; label: string }> = 
   { id: 'summary', label: 'Summary' },
   { id: 'structured_transcript', label: 'Structured transcript' },
   { id: 'extraction', label: 'Extraction' },
+  { id: 'markdown', label: 'Markdown' },
 ];
 
 const ARTIFACT_POLL_MAX_AFTER_FINISH = 15;
@@ -263,6 +264,7 @@ function isArtifactTabLoaded(
   summaryMarkdown: string | null,
   structuredArtifact: unknown | null,
   extractionArtifact: ExtractionArtifact | null,
+  combinedMarkdown: string | null,
 ): boolean {
   switch (tab) {
     case 'structured_transcript':
@@ -271,6 +273,8 @@ function isArtifactTabLoaded(
       return extractionArtifact != null;
     case 'summary':
       return Boolean(summaryMarkdown);
+    case 'markdown':
+      return Boolean(combinedMarkdown);
     default:
       return false;
   }
@@ -418,6 +422,7 @@ export function DocumentCaptureDetailPage() {
   const [showExtractionTagging, setShowExtractionTagging] = useState(false);
   const [artifactPreviewMaximized, setArtifactPreviewMaximized] = useState(false);
   const [summaryMarkdown, setSummaryMarkdown] = useState<string | null>(null);
+  const [combinedMarkdown, setCombinedMarkdown] = useState<string | null>(null);
   const [structuredArtifact, setStructuredArtifact] = useState<unknown | null>(null);
   const [contextArtifact, setContextArtifact] = useState<RecordingContextArtifact | null>(null);
   const [extractionArtifact, setExtractionArtifact] = useState<ExtractionArtifact | null>(null);
@@ -523,6 +528,7 @@ export function DocumentCaptureDetailPage() {
     setContextArtifact(null);
     setExtractionArtifact(null);
     setSummaryMarkdown(null);
+    setCombinedMarkdown(null);
     setArtifactTabErrors({});
     setLoadingArtifactTabs(new Set());
     setNeedsReview(false);
@@ -544,6 +550,7 @@ export function DocumentCaptureDetailPage() {
           summaryMarkdown,
           structuredArtifact,
           extractionArtifact,
+          combinedMarkdown,
         )
       ) {
         if (tab === 'extraction') void loadExtractionCompanions();
@@ -622,6 +629,11 @@ export function DocumentCaptureDetailPage() {
               loaded = true;
               void loadExtractionCompanions();
             }
+          } else if (artifact === 'markdown') {
+            if (text?.trim()) {
+              setCombinedMarkdown(text.trim());
+              loaded = true;
+            }
           }
         }
 
@@ -656,7 +668,7 @@ export function DocumentCaptureDetailPage() {
         if (showLoading) setArtifactTabLoading(tab, false);
       }
     },
-    [captureId, contextArtifact, extractionArtifact, loadExtractionCompanions, setArtifactTabLoading, structuredArtifact, summaryMarkdown],
+    [captureId, combinedMarkdown, contextArtifact, extractionArtifact, loadExtractionCompanions, setArtifactTabLoading, structuredArtifact, summaryMarkdown],
   );
 
   const syncCaptureWhenCoreArtifactsReady = useCallback(
@@ -706,6 +718,7 @@ export function DocumentCaptureDetailPage() {
     setContextArtifact(null);
     setExtractionArtifact(null);
     setSummaryMarkdown(null);
+    setCombinedMarkdown(null);
     setArtifactTabErrors({});
     setLoadingArtifactTabs(new Set());
     setArtifactPollExhausted(false);
@@ -800,6 +813,7 @@ export function DocumentCaptureDetailPage() {
         summaryMarkdown,
         structuredArtifact,
         extractionArtifact,
+        combinedMarkdown,
       ) &&
       !artifactPollExhausted &&
       artifactPollAttemptsRef.current < ARTIFACT_POLL_MAX_AFTER_FINISH;
@@ -832,6 +846,7 @@ export function DocumentCaptureDetailPage() {
     artifactTab,
     capture,
     contextArtifact,
+    combinedMarkdown,
     extractionArtifact,
     loadArtifactTab,
     loadCapture,
@@ -854,7 +869,7 @@ export function DocumentCaptureDetailPage() {
   }, [loadCapture]);
 
   async function handleSaveDetails(input: {
-    brief: string | null;
+    abstract: string | null;
     participantsHint: string | null;
     recordingMode: string | null;
     audience: string;
@@ -1011,7 +1026,8 @@ export function DocumentCaptureDetailPage() {
     structuredArtifact != null ||
     contextArtifact != null ||
     extractionArtifact != null ||
-    Boolean(summaryMarkdown);
+    Boolean(summaryMarkdown) ||
+    Boolean(combinedMarkdown);
   const postProcessJobDone = capture.pipeline_job?.stage === 'done';
   const postProcessSucceeded = postProcessJobDone && capture.status === 'done';
   const postProcessDoneWithoutArtifacts =
@@ -1025,6 +1041,7 @@ export function DocumentCaptureDetailPage() {
     summaryMarkdown,
     structuredArtifact,
     extractionArtifact,
+    combinedMarkdown,
   );
   const canBrowseArtifactTabs =
     captureExpectsPostProcessArtifacts(capture) && !postProcessActive && !postProcessFailed;
@@ -1079,6 +1096,17 @@ export function DocumentCaptureDetailPage() {
             onWheel={handleArtifactPreviewWheel}
           >
             <Markdown content={summaryMarkdown ?? ''} />
+          </div>
+        );
+      }
+
+      if (artifactTab === 'markdown') {
+        return (
+          <div
+            className="document-markdown-panel capture-artifact-preview capture-artifact-preview-scroll"
+            onWheel={handleArtifactPreviewWheel}
+          >
+            <Markdown content={combinedMarkdown ?? ''} />
           </div>
         );
       }
@@ -1674,6 +1702,25 @@ export function DocumentCaptureDetailPage() {
                           downloadTextFile(
                             summaryMarkdown,
                             withDownloadExtension(`${capture.title}-summary`, 'md'),
+                            'text/markdown;charset=utf-8',
+                          )
+                        }
+                      >
+                        <Download {...iconProps()} aria-hidden />
+                        .md
+                      </button>
+                    </div>
+                  ) : null}
+                  {artifactTab === 'markdown' && combinedMarkdown?.trim() ? (
+                    <div className="document-detail-toolbar-actions">
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        title="Download combined markdown"
+                        onClick={() =>
+                          downloadTextFile(
+                            combinedMarkdown,
+                            withDownloadExtension(`${capture.title}-markdown`, 'md'),
                             'text/markdown;charset=utf-8',
                           )
                         }

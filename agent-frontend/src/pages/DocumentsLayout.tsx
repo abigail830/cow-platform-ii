@@ -97,7 +97,7 @@ export function DocumentsLayout() {
       channel_id: selectedChannelId ?? '',
       name: '',
       title: '',
-      brief: null,
+      abstract: null,
       input_mode: 'document',
       file_count: 0,
       size_bytes: 0,

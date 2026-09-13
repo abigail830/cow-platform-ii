@@ -11,7 +11,7 @@ type CaptureDetailsPanelProps = {
   capture: DocumentCaptureDetail;
   canEdit: boolean;
   onSave: (input: {
-    brief: string | null;
+    abstract: string | null;
     participantsHint: string | null;
     recordingMode: string | null;
     audience: string;
@@ -19,7 +19,7 @@ type CaptureDetailsPanelProps = {
 };
 
 type FormState = {
-  brief: string;
+  abstract: string;
   participantsHint: string;
   recordingMode: string;
   audience: string;
@@ -27,7 +27,7 @@ type FormState = {
 
 function toFormState(capture: DocumentCaptureDetail): FormState {
   return {
-    brief: capture.brief ?? '',
+    abstract: capture.abstract ?? '',
     participantsHint: capture.participants_hint ?? '',
     recordingMode: capture.recording_mode ?? 'general',
     audience: capture.audience ?? 'unknown',
@@ -59,7 +59,7 @@ export function CaptureDetailsPanel({ capture, canEdit, onSave }: CaptureDetails
     setError('');
     try {
       await onSave({
-        brief: form.brief.trim() || null,
+        abstract: form.abstract.trim() || null,
         participantsHint: form.participantsHint.trim() || null,
         recordingMode: form.recordingMode || null,
         audience: form.audience,
@@ -119,13 +119,13 @@ export function CaptureDetailsPanel({ capture, canEdit, onSave }: CaptureDetails
         {editing ? (
           <div className="capture-detail-edit-form">
             <label className="form-field form-field-wide">
-              <span>Brief</span>
+              <span>Abstract</span>
               <textarea
-                value={form.brief}
-                onChange={(event) => setForm((current) => ({ ...current, brief: event.target.value }))}
+                value={form.abstract}
+                onChange={(event) => setForm((current) => ({ ...current, abstract: event.target.value }))}
                 rows={2}
                 disabled={saving}
-                placeholder="Optional context for classification and extraction"
+                placeholder="Optional abstract for classification and extraction"
               />
             </label>
             <div className="capture-detail-meta-grid capture-detail-meta-grid--details">
@@ -178,8 +178,8 @@ export function CaptureDetailsPanel({ capture, canEdit, onSave }: CaptureDetails
         ) : (
           <dl className="capture-detail-fields" aria-label="Capture metadata">
             <div className="capture-detail-field capture-detail-field--brief">
-              <dt>Brief</dt>
-              <dd>{displayValue(capture.brief)}</dd>
+              <dt>Abstract</dt>
+              <dd>{displayValue(capture.abstract)}</dd>
             </div>
             <div className="capture-detail-meta-grid capture-detail-meta-grid--details">
               <div className="capture-detail-meta-item">

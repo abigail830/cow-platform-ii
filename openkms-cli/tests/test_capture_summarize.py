@@ -12,7 +12,7 @@ def test_render_summary_template_includes_topic_outline_and_bullets():
     markdown = render_summary_template(
         capture={
             "title": "HK trip",
-            "brief": "Field notes",
+            "abstract": "Field notes",
             "participants_hint": "Sara",
         },
         recording_context={

@@ -7,6 +7,7 @@ from typing import Any
 
 from openkms_cli.core.auth import try_api_request_auth
 from openkms_cli.pipeline.api_client import put_document_markdown
+from openkms_cli.pipeline.capture_config import capture_abstract
 
 
 def resolve_index_content(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -47,9 +48,9 @@ def build_combined_markdown(
     title = str(capture.get("title") or "Capture").strip() or "Capture"
     parts = [f"# {title}", ""]
 
-    brief = str(capture.get("brief") or "").strip()
-    if brief:
-        parts.extend(["## Brief", "", brief, ""])
+    abstract = capture_abstract(capture)
+    if abstract:
+        parts.extend(["## Abstract", "", abstract, ""])
 
     if summary_md and summary_md.strip():
         parts.extend(["## Summary", "", summary_md.strip(), ""])
@@ -117,12 +118,40 @@ def build_materialized_markdown(
     )
 
 
+def write_capture_markdown_artifact(
+    *,
+    ctx: dict[str, Any],
+    s3_client: Any,
+    bucket: str,
+    artifact_keys: dict[str, str],
+) -> str:
+    """Build combined markdown and PUT under captures/{id}/markdown.md."""
+    markdown_key = str(artifact_keys.get("markdown") or "").strip()
+    if not markdown_key:
+        raise RuntimeError("artifact_keys.markdown is required")
+
+    markdown = build_materialized_markdown(
+        ctx=ctx,
+        s3_client=s3_client,
+        bucket=bucket,
+        artifact_keys=artifact_keys,
+    )
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=markdown_key,
+        Body=markdown.encode("utf-8"),
+        ContentType="text/markdown; charset=utf-8",
+    )
+    return markdown
+
+
 def materialize_capture_for_index(
     *,
     ctx: dict[str, Any],
     s3_client: Any,
     bucket: str,
     api_url: str,
+    markdown: str | None = None,
 ) -> None:
     if not ctx.get("materialize_for_index"):
         return
@@ -136,7 +165,7 @@ def materialize_capture_for_index(
         raise RuntimeError("materialize_for_index requires index_file_hash")
 
     artifact_keys = ctx.get("artifact_keys") if isinstance(ctx.get("artifact_keys"), dict) else {}
-    markdown = build_materialized_markdown(
+    body = markdown or build_materialized_markdown(
         ctx=ctx,
         s3_client=s3_client,
         bucket=bucket,
@@ -147,7 +176,7 @@ def materialize_capture_for_index(
     s3_client.put_object(
         Bucket=bucket,
         Key=markdown_key,
-        Body=markdown.encode("utf-8"),
+        Body=body.encode("utf-8"),
         ContentType="text/markdown; charset=utf-8",
     )
 
@@ -155,6 +184,6 @@ def materialize_capture_for_index(
     if cred is None:
         raise RuntimeError("API authentication required to sync materialized markdown")
     auth_headers, basic = cred
-    ok, _, _ = put_document_markdown(api_url, index_document_id, markdown, auth_headers, basic)
+    ok, _, _ = put_document_markdown(api_url, index_document_id, body, auth_headers, basic)
     if not ok:
         raise RuntimeError(f"Failed to sync markdown for document {index_document_id}")

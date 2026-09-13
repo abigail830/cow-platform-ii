@@ -78,6 +78,7 @@ const POST_PROCESS_ARTIFACT_KINDS = new Set<CapturePostProcessArtifactKind>([
   'recording_context',
   'extraction',
   'summary',
+  'markdown',
 ]);
 
 documentCaptures.get(
@@ -107,7 +108,7 @@ documentCaptures.post(
     const body = await c.req.json<{
       channel_id: string;
       title: string;
-      brief?: string;
+      abstract?: string;
       participants_hint?: string;
       recording_mode?: string;
       audience?: string;
@@ -135,7 +136,7 @@ documentCaptures.post(
     const capture = await createDocumentCapture({
       channelId: body.channel_id,
       title: body.title,
-      brief: body.brief,
+      abstract: body.abstract,
       participantsHint: body.participants_hint,
       recordingMode: (body.recording_mode as never) ?? null,
       audience: (body.audience as never) ?? 'unknown',
@@ -154,7 +155,7 @@ documentCaptures.post(
     const body = await c.req.json<{
       channel_id: string;
       input_mode?: string;
-      items: Array<{ title?: string; brief?: string }>;
+      items: Array<{ title?: string; abstract?: string }>;
     }>();
 
     if (!body.channel_id || !Array.isArray(body.items) || body.items.length === 0) {
@@ -176,7 +177,7 @@ documentCaptures.post(
         await createDocumentCapture({
           channelId: body.channel_id,
           title,
-          brief: item.brief,
+          abstract: item.abstract,
           inputMode: (body.input_mode as never) ?? 'document',
           createdBy: user.id,
         }),
@@ -287,7 +288,7 @@ documentCaptures.patch(
 
     const body = await c.req.json<{
       title?: string;
-      brief?: string | null;
+      abstract?: string | null;
       participants_hint?: string | null;
       recording_mode?: string | null;
       audience?: string;
@@ -318,7 +319,7 @@ documentCaptures.patch(
 
     await updateDocumentCapture(id, {
       title: body.title,
-      brief: body.brief,
+      abstract: body.abstract,
       participantsHint: body.participants_hint,
       recordingMode: (body.recording_mode as never) ?? undefined,
       audience: body.audience as never,

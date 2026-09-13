@@ -23,7 +23,7 @@ post_process:
         Prefer fewer, broader topics over many tiny fragments.
       user_prompt_template: |
         Capture: {title}
-        Brief: {brief}
+        Abstract: {abstract}
 
         Turn window ({window_index}/{window_count}):
         {turns_json}
@@ -61,7 +61,7 @@ post_process:
         Set needs_review=true when confidence < confidence_threshold.
       user_prompt_template: |
         Capture title: {title}
-        Brief: {brief}
+        Abstract: {abstract}
         Participants hint: {participants_hint}
         User-selected recording_mode hint: {recording_mode_hint}
         Audience metadata: {audience}
@@ -127,7 +127,7 @@ post_process:
         Do not invent facts beyond the provided extractions.
       user_prompt_template: |
         Capture title: {title}
-        Brief: {brief}
+        Abstract: {abstract}
         Participants: {participants_hint}
         Recording mode: {recording_mode}
         Audience: {audience}

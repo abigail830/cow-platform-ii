@@ -119,7 +119,7 @@ export function DocumentsListPage() {
 
   async function handleCreateCapture(input: {
     title: string;
-    brief?: string;
+    abstract?: string;
     participantsHint?: string;
     recordingMode?: string;
     audience?: string;
@@ -132,7 +132,7 @@ export function DocumentsListPage() {
     if (input.separateCaptures) {
       await bulkSegmentCaptureUpload(selectedChannelId, input.files, {
         inputMode: input.inputMode,
-        brief: input.brief,
+        abstract: input.abstract,
         participantsHint: input.participantsHint,
         recordingMode: input.recordingMode,
         audience: input.audience,
@@ -141,7 +141,7 @@ export function DocumentsListPage() {
       const capture = await createDocumentCapture({
         channelId: selectedChannelId,
         title: input.title,
-        brief: input.brief,
+        abstract: input.abstract,
         participantsHint: input.participantsHint,
         recordingMode: input.recordingMode,
         audience: input.audience,
@@ -313,8 +313,8 @@ export function DocumentsListPage() {
                         />
                         <span className="knowledge-item-copy">
                           <span className="knowledge-item-title">{itemDisplayName(item)}</span>
-                          {item.brief ? (
-                            <span className="knowledge-item-brief">{item.brief}</span>
+                          {item.abstract ? (
+                            <span className="knowledge-item-brief">{item.abstract}</span>
                           ) : null}
                         </span>
                       </Link>

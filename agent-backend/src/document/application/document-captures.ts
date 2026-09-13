@@ -55,7 +55,7 @@ export function toCapturePublic(
     id: row.id,
     channel_id: row.channelId,
     title: row.title,
-    brief: row.brief,
+    abstract: row.abstract,
     participants_hint: row.participantsHint,
     recording_mode: row.recordingMode,
     audience: row.audience,
@@ -119,7 +119,7 @@ function toSegmentPublic(
 export async function createDocumentCapture(input: {
   channelId: string;
   title: string;
-  brief?: string | null;
+  abstract?: string | null;
   participantsHint?: string | null;
   recordingMode?: AudioCaptureRecordingMode | null;
   audience?: AudioCaptureAudience;
@@ -131,7 +131,7 @@ export async function createDocumentCapture(input: {
     .values({
       channelId: input.channelId,
       title: input.title.trim(),
-      brief: input.brief?.trim() || null,
+      abstract: input.abstract?.trim() || null,
       participantsHint: input.participantsHint?.trim() || null,
       recordingMode: input.recordingMode ?? null,
       audience: input.audience ?? 'unknown',
@@ -323,7 +323,7 @@ export async function updateDocumentCapture(
   id: string,
   input: {
     title?: string;
-    brief?: string | null;
+    abstract?: string | null;
     participantsHint?: string | null;
     recordingMode?: AudioCaptureRecordingMode | null;
     audience?: AudioCaptureAudience;
@@ -334,7 +334,7 @@ export async function updateDocumentCapture(
     .update(appDocumentCaptures)
     .set({
       ...(input.title !== undefined ? { title: input.title.trim() } : {}),
-      ...(input.brief !== undefined ? { brief: input.brief?.trim() || null } : {}),
+      ...(input.abstract !== undefined ? { abstract: input.abstract?.trim() || null } : {}),
       ...(input.participantsHint !== undefined
         ? { participantsHint: input.participantsHint?.trim() || null }
         : {}),

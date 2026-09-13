@@ -36,7 +36,7 @@ For each topic, assign one or more content_facets from the allowed list.
 Set needs_review=true when confidence < confidence_threshold."""
 
 DEFAULT_CLASSIFY_LLM_USER = """Capture title: {title}
-Brief: {brief}
+Abstract: {abstract}
 Participants hint: {participants_hint}
 User-selected recording_mode hint: {recording_mode_hint}
 Audience metadata: {audience}
@@ -68,7 +68,7 @@ Titles: concise (<= 12 words). Summaries: 1-2 sentences capturing the gist, not 
 Prefer fewer, broader topics over many tiny fragments."""
 
 DEFAULT_SEGMENT_TOPICS_LLM_USER = """Capture: {title}
-Brief: {brief}
+Abstract: {abstract}
 
 Turn window ({window_index}/{window_count}):
 {turns_json}
@@ -107,7 +107,7 @@ End with ## Action items and ## Open questions sections when applicable.
 Do not invent facts beyond the provided extractions."""
 
 DEFAULT_SYNTHESIZE_LLM_USER = """Capture title: {title}
-Brief: {brief}
+Abstract: {abstract}
 Participants: {participants_hint}
 Recording mode: {recording_mode}
 Audience: {audience}
@@ -218,6 +218,24 @@ def workflow_temperature(workflow: dict[str, Any], *, default: float = 0.2) -> f
     except (TypeError, ValueError):
         return default
     return max(0.0, min(temp, 2.0))
+
+
+def capture_abstract(source: dict[str, Any] | None) -> str:
+    if not source:
+        return ""
+    return str(source.get("abstract") or source.get("brief") or "").strip()
+
+
+def capture_prompt_template_vars(capture: dict[str, Any]) -> dict[str, str]:
+    """Template variables for LLM prompts; includes legacy ``brief`` alias for old job snapshots."""
+    abstract = capture_abstract(capture)
+    return {
+        "title": str(capture.get("title") or ""),
+        "abstract": abstract,
+        "brief": abstract,
+        "participants_hint": str(capture.get("participants_hint") or ""),
+        "recording_mode_hint": str(capture.get("recording_mode") or ""),
+    }
 
 
 def apply_prompt_template(template: str, variables: dict[str, str]) -> str:

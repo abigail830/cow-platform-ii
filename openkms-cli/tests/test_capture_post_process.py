@@ -93,12 +93,14 @@ def test_progress_index_and_skip_step():
 
 def test_build_combined_markdown_includes_summary_and_extraction():
     md = build_combined_markdown(
-        capture={"title": "Weekly sync", "brief": "Team update"},
+        capture={"title": "Weekly sync", "abstract": "Team update"},
         summary_md="## Highlights\nDone.",
         extraction={"knowledge_points": [{"text": "Ship API v2"}]},
         structured={"topics": [{"label": "API", "preview": "Contract review"}]},
     )
     assert "# Weekly sync" in md
+    assert "## Abstract" in md
+    assert "Team update" in md
     assert "## Summary" in md
     assert "Ship API v2" in md
     assert "### API" in md

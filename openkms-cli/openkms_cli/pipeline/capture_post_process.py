@@ -10,9 +10,12 @@ from rich.console import Console
 from openkms_cli.core.settings import get_cli_settings
 from openkms_cli.core.workflow_config import resolve_job_workflow_config
 from openkms_cli.pipeline.capture_api import CapturePipelineJobApiError, get_capture_job_context, patch_capture_job
-from openkms_cli.pipeline.capture_config import resolve_post_process_config, workflow_temperature
+from openkms_cli.pipeline.capture_config import capture_abstract, resolve_post_process_config, workflow_temperature
 from openkms_cli.pipeline.capture_llm import resolve_capture_llm_model, workflow_llm_model_name
-from openkms_cli.pipeline.capture_materialize import materialize_capture_for_index
+from openkms_cli.pipeline.capture_materialize import (
+    materialize_capture_for_index,
+    write_capture_markdown_artifact,
+)
 from openkms_cli.pipeline.capture_merge import merge_segment_turns
 from openkms_cli.pipeline.capture_structure import (
     build_chapters,
@@ -258,6 +261,7 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
         recording_context_key = str(artifact_keys.get("recording_context") or "")
         extraction_key = str(artifact_keys.get("extraction") or "")
         summary_key = str(artifact_keys.get("summary") or "")
+        markdown_key = str(artifact_keys.get("markdown") or "")
 
         structured: dict[str, Any] | None = None
         recording_context: dict[str, Any] | None = None
@@ -348,7 +352,7 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
             recording_context = {
                 "capture_id": capture.get("id"),
                 "title": capture.get("title"),
-                "brief": capture.get("brief"),
+                "abstract": capture_abstract(capture),
                 "participants_hint": capture.get("participants_hint"),
                 "recording_mode": classification.get("recording_mode"),
                 "audience": classification.get("audience"),
@@ -410,16 +414,39 @@ def run_capture_post_process(job_id: str, api_url: str | None = None) -> None:
                 )
                 _put_text(client, bucket, summary_key, summary_md)
 
+        combined_markdown: str | None = None
+        if markdown_key and not _should_skip_step("materializing", resume_stage, markdown_key, client, bucket):
+            current_stage = "materializing"
+            patch_capture_job(api, job_id, stage="materializing")
+            combined_markdown = write_capture_markdown_artifact(
+                ctx=ctx,
+                s3_client=client,
+                bucket=bucket,
+                artifact_keys=artifact_keys,
+            )
+
         if ctx.get("materialize_for_index"):
             materialized_key = (
                 f"documents/{str(ctx.get('index_file_hash') or '').strip()}/markdown.md"
                 if ctx.get("index_file_hash")
                 else None
             )
-            if not _should_skip_step("materializing", resume_stage, materialized_key, client, bucket):
+            if materialized_key and not _should_skip_step(
+                "materializing",
+                resume_stage,
+                materialized_key,
+                client,
+                bucket,
+            ):
                 current_stage = "materializing"
                 patch_capture_job(api, job_id, stage="materializing")
-                materialize_capture_for_index(ctx=ctx, s3_client=client, bucket=bucket, api_url=api)
+                materialize_capture_for_index(
+                    ctx=ctx,
+                    s3_client=client,
+                    bucket=bucket,
+                    api_url=api,
+                    markdown=combined_markdown,
+                )
 
         patch_capture_job(api, job_id, stage="done")
         console.print(f"[green]Capture job {job_id} done — artifacts uploaded[/green]")

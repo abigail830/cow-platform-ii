@@ -38,7 +38,7 @@ type KnowledgeUploadModalProps = {
   onUploadDocuments: (files: File[]) => Promise<void>;
   onCreateCapture: (input: {
     title: string;
-    brief?: string;
+    abstract?: string;
     participantsHint?: string;
     recordingMode?: string;
     audience?: string;
@@ -57,7 +57,7 @@ export function KnowledgeUploadModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<KnowledgeUploadTab>('document');
   const [title, setTitle] = useState('');
-  const [brief, setBrief] = useState('');
+  const [abstract, setAbstract] = useState('');
   const [participantsHint, setParticipantsHint] = useState('');
   const [recordingMode, setRecordingMode] = useState('general');
   const [audience, setAudience] = useState('unknown');
@@ -126,7 +126,7 @@ export function KnowledgeUploadModal({
 
       await onCreateCapture({
         title: title.trim(),
-        brief: brief.trim() || undefined,
+        abstract: abstract.trim() || undefined,
         participantsHint: participantsHint.trim() || undefined,
         recordingMode: recordingMode || undefined,
         audience,
@@ -194,11 +194,11 @@ export function KnowledgeUploadModal({
               ) : null}
 
               <label className="form-field form-field-wide">
-                <span>Brief (optional)</span>
+                <span>Abstract (optional)</span>
                 <textarea
                   className="knowledge-upload-brief-input"
-                  value={brief}
-                  onChange={(event) => setBrief(event.target.value)}
+                  value={abstract}
+                  onChange={(event) => setAbstract(event.target.value)}
                   rows={2}
                   disabled={busy}
                 />

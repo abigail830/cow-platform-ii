@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from openkms_cli.pipeline.capture_config import apply_prompt_template
+from openkms_cli.pipeline.capture_config import apply_prompt_template, capture_prompt_template_vars
 
 
 MAX_LLM_TURNS_TEXT_CHARS = 12_000
@@ -379,8 +379,7 @@ def llm_build_topics(
                 user_prompt=apply_prompt_template(
                     user_template,
                     {
-                        "title": str(capture.get("title") or ""),
-                        "brief": str(capture.get("brief") or ""),
+                        **capture_prompt_template_vars(capture),
                         "window_index": str(idx),
                         "window_count": str(len(windows)),
                         "turns_json": json.dumps(
@@ -454,10 +453,7 @@ def llm_classify_capture(
         user_prompt=apply_prompt_template(
             str(llm_cfg.get("user_prompt_template") or ""),
             {
-                "title": str(capture.get("title") or ""),
-                "brief": str(capture.get("brief") or ""),
-                "participants_hint": str(capture.get("participants_hint") or ""),
-                "recording_mode_hint": str(capture.get("recording_mode") or ""),
+                **capture_prompt_template_vars(capture),
                 "audience": audience,
                 "confidence_threshold": str(threshold),
                 "recording_modes": "\n".join(f"- {mode}" for mode in recording_modes),
