@@ -1,4 +1,9 @@
-from openkms_cli.pipeline.capture_merge import merge_segment_turns, parse_transcript_markdown
+from openkms_cli.pipeline.capture_merge import (
+    build_combined_transcript,
+    extract_transcript_body,
+    merge_segment_turns,
+    parse_transcript_markdown,
+)
 from openkms_cli.pipeline.capture_structure import build_topics, classify_capture
 from openkms_cli.pipeline.capture_materialize import build_combined_markdown, resolve_index_content
 from openkms_cli.pipeline.capture_post_process import PROGRESS_STAGES, _progress_index, _should_skip_step
@@ -91,19 +96,56 @@ def test_progress_index_and_skip_step():
     )
 
 
-def test_build_combined_markdown_includes_summary_and_extraction():
+def test_extract_transcript_body_strips_asr_header():
+    body = extract_transcript_body(SAMPLE_MD)
+    assert body.startswith("## [00:00:05] Speaker 1")
+    assert "architecture" in body
+    assert "ASR:" not in body
+
+
+def test_build_combined_transcript_merges_segments():
+    segments = [
+        {
+            "segment_index": 0,
+            "transcript_s3_key": "audio/hash1/transcript.md",
+        },
+        {
+            "segment_index": 1,
+            "transcript_s3_key": "audio/hash2/transcript.md",
+        },
+    ]
+
+    def loader(key: str) -> str:
+        if key.endswith("hash1/transcript.md"):
+            return SAMPLE_MD
+        return """# part2.m4a
+
+- ASR: qwen-audio
+
+## [00:00:02] Speaker 3
+Follow-up on action items.
+"""
+
+    combined = build_combined_transcript(segments, transcript_loader=loader)
+    assert "## [00:00:05] Speaker 1" in combined
+    assert "## [00:00:02] Speaker 3" in combined
+    assert combined.index("Speaker 1") < combined.index("Speaker 3")
+
+
+def test_build_combined_markdown_includes_summary_and_transcript():
     md = build_combined_markdown(
         capture={"title": "Weekly sync", "abstract": "Team update"},
         summary_md="## Highlights\nDone.",
-        extraction={"knowledge_points": [{"text": "Ship API v2"}]},
-        structured={"topics": [{"label": "API", "preview": "Contract review"}]},
+        transcript_text="## [00:00:05] Speaker 1\nHello team.",
     )
     assert "# Weekly sync" in md
-    assert "## Abstract" in md
-    assert "Team update" in md
     assert "## Summary" in md
-    assert "Ship API v2" in md
-    assert "### API" in md
+    assert "## Highlights" in md
+    assert "## Transcript" in md
+    assert "Hello team." in md
+    assert "## Abstract" not in md
+    assert "Knowledge extraction" not in md
+    assert "## Topics" not in md
 
 
 def test_resolve_index_content_defaults_to_combined():

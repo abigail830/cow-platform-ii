@@ -85,6 +85,49 @@ def parse_transcript_markdown(content: str) -> list[ParsedTurn]:
     return turns
 
 
+def extract_transcript_body(content: str) -> str:
+    """Return spoken transcript body from segment transcript.md (strip file header/metadata)."""
+    text = content.strip()
+    if not text:
+        return ""
+    if not text.startswith("#"):
+        return text
+
+    lines = text.split("\n")
+    index = 1 if lines[0].startswith("#") else 0
+    while index < len(lines):
+        line = lines[index].strip()
+        if not line:
+            index += 1
+            continue
+        lowered = line.lower()
+        if line.startswith("- ") and (
+            "asr:" in lowered or "language:" in lowered or "speaker" in lowered
+        ):
+            index += 1
+            continue
+        break
+    return "\n".join(lines[index:]).strip()
+
+
+def build_combined_transcript(
+    segments: list[dict[str, Any]],
+    *,
+    transcript_loader: Callable[[str], str],
+) -> str:
+    """Merge ordered segment transcript artifacts into one plain transcript block."""
+    ordered = sorted(segments, key=lambda segment: int(segment.get("segment_index") or 0))
+    parts: list[str] = []
+    for segment in ordered:
+        key = str(segment.get("transcript_s3_key") or "")
+        if not key:
+            continue
+        body = extract_transcript_body(transcript_loader(key))
+        if body:
+            parts.append(body)
+    return "\n\n".join(parts).strip()
+
+
 def merge_segment_turns(
     segments: list[dict[str, Any]],
     *,
