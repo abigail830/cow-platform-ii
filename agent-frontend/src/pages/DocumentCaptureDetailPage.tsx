@@ -39,6 +39,7 @@ import {
 } from '../api/documentCaptures.ts';
 import { formatDocumentBytes } from '../api/documents.ts';
 import { isAudioPipelineActive } from '../api/capture-pipeline-utils.ts';
+import { buildCaptureCombinedMarkdown } from '../shared/capture-combined-markdown.ts';
 import { downloadTextFile, withDownloadExtension } from '../shared/download-text.ts';
 import { IconView } from '../components/AdminActionIcons.tsx';
 import { AudioPipelineStatus } from '../components/AudioPipelineStatus.tsx';
@@ -633,6 +634,51 @@ export function DocumentCaptureDetailPage() {
             if (text?.trim()) {
               setCombinedMarkdown(text.trim());
               loaded = true;
+            } else {
+              let summaryText = summaryMarkdown;
+              let extraction = extractionArtifact;
+              let structured = structuredArtifact;
+
+              if (!summaryText?.trim()) {
+                const summaryRaw = await fetchCapturePostProcessArtifactText(captureId, 'summary');
+                if (summaryRaw?.trim()) {
+                  summaryText = summaryRaw.trim();
+                  setSummaryMarkdown(summaryText);
+                }
+              }
+              if (!extraction) {
+                const extractionRaw = await fetchCapturePostProcessArtifactText(captureId, 'extraction');
+                const parsed = parseArtifactJson<ExtractionArtifact>(extractionRaw);
+                if (parsed) {
+                  extraction = parsed;
+                  setExtractionArtifact(parsed);
+                }
+              }
+              if (structured == null) {
+                const structuredRaw = await fetchCapturePostProcessArtifactText(
+                  captureId,
+                  'structured_transcript',
+                );
+                const parsed = parseArtifactJson<{ topics?: Array<{ label?: string; title?: string; preview?: string }> }>(
+                  structuredRaw,
+                );
+                if (parsed != null) {
+                  structured = parsed;
+                  setStructuredArtifact(parsed);
+                }
+              }
+
+              const synthesized = buildCaptureCombinedMarkdown({
+                title: capture?.title ?? 'Capture',
+                abstract: capture?.abstract ?? null,
+                summaryMd: summaryText,
+                extraction: (extraction as Record<string, unknown> | null) ?? null,
+                structured: (structured as { topics?: Array<{ label?: string; title?: string; preview?: string }> } | null) ?? null,
+              });
+              if (synthesized?.trim()) {
+                setCombinedMarkdown(synthesized.trim());
+                loaded = true;
+              }
             }
           }
         }
@@ -668,7 +714,17 @@ export function DocumentCaptureDetailPage() {
         if (showLoading) setArtifactTabLoading(tab, false);
       }
     },
-    [captureId, combinedMarkdown, contextArtifact, extractionArtifact, loadExtractionCompanions, setArtifactTabLoading, structuredArtifact, summaryMarkdown],
+    [
+      capture,
+      captureId,
+      combinedMarkdown,
+      contextArtifact,
+      extractionArtifact,
+      loadExtractionCompanions,
+      setArtifactTabLoading,
+      structuredArtifact,
+      summaryMarkdown,
+    ],
   );
 
   const syncCaptureWhenCoreArtifactsReady = useCallback(
