@@ -1,5 +1,3 @@
-import sharp from 'sharp';
-
 export const DEFAULT_ASSET_IMAGE_MAX_DIMENSION = 1024;
 /** Skip vision embed when the OSS object is larger than this (pre-resize). */
 export const MAX_ASSET_IMAGE_INPUT_BYTES = 8 * 1024 * 1024;
@@ -33,6 +31,11 @@ function mimeTypeForFormat(format: string | undefined): string {
   }
 }
 
+async function loadSharp() {
+  const mod = await import('sharp');
+  return mod.default;
+}
+
 export async function preprocessDocumentAssetImage(
   input: Buffer,
   options?: { maxDimension?: number },
@@ -43,6 +46,7 @@ export async function preprocessDocumentAssetImage(
     );
   }
 
+  const sharp = await loadSharp();
   const maxDimension = options?.maxDimension ?? DEFAULT_ASSET_IMAGE_MAX_DIMENSION;
   const pipeline = sharp(input, { animated: false }).rotate();
   const metadata = await pipeline.metadata();

@@ -84,10 +84,35 @@ if (size < 100_000) {
   throw new Error(`serverless bundle suspiciously small (${size} bytes)`);
 }
 
+const rootPkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+const sharpVersion = rootPkg.dependencies?.sharp;
+if (!sharpVersion) {
+  throw new Error('package.json dependencies.sharp is required for Vercel image preprocessing');
+}
+
 writeFileSync(
   path.join(funcDir, 'package.json'),
-  `${JSON.stringify({ type: 'commonjs' }, null, 2)}\n`,
+  `${JSON.stringify(
+    {
+      type: 'commonjs',
+      dependencies: {
+        sharp: sharpVersion,
+      },
+    },
+    null,
+    2,
+  )}\n`,
 );
+
+console.log('Installing sharp for Vercel function bundle...');
+const installSharp = spawnSync('npm', ['install', '--omit=dev', '--no-package-lock'], {
+  cwd: funcDir,
+  stdio: 'inherit',
+  env: process.env,
+});
+if (installSharp.status !== 0) {
+  throw new Error('npm install failed for Vercel function sharp dependency');
+}
 
 writeFileSync(
   path.join(funcDir, '.vc-config.json'),

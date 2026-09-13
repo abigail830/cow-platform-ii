@@ -22,10 +22,7 @@ import {
   getStorageReadUrl,
   resolveDocumentStorageKey,
 } from '../infrastructure/document-files.ts';
-import {
-  preprocessDocumentAssetImage,
-  type PreprocessedDocumentAssetImage,
-} from './preprocess-document-asset-image.ts';
+import type { PreprocessedDocumentAssetImage } from './preprocess-document-asset-image.ts';
 import { getDocumentById } from './documents.ts';
 
 export type DocumentAssetVisionResult =
@@ -146,6 +143,7 @@ export async function fetchDocumentAssetForUser(
 
   let vision: DocumentAssetVisionResult;
   try {
+    const { preprocessDocumentAssetImage } = await import('./preprocess-document-asset-image.ts');
     const preprocessed = await preprocessDocumentAssetImage(buffer, {
       maxDimension: input.max_dimension,
     });

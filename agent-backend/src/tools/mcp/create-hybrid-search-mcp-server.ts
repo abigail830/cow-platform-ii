@@ -5,7 +5,7 @@ import {
   createHybridSearchMcpHandlers,
   type HybridSearchMcpHandlers,
 } from '../hybrid-search/mcp-handlers.ts';
-import { FETCH_DOCUMENT_ASSET_MCP_DESCRIPTION } from '../shared/fetch-document-asset-mcp.ts';
+import { FETCH_DOCUMENT_ASSET_MCP_DESCRIPTION } from '../shared/fetch-document-asset-mcp-descriptions.ts';
 import {
   HYBRID_SEARCH_MCP_DESCRIPTION,
   LIST_KNOWLEDGE_BASES_MCP_DESCRIPTION,
