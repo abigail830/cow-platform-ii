@@ -645,13 +645,16 @@ def _finalize_aliyun(
     hash_dir = out_base / file_hash
     hash_dir.mkdir(parents=True, exist_ok=True)
 
-    from openkms_cli.parse.markdown_images import materialize_remote_markdown_images
+    from openkms_cli.parse.markdown_images import materialize_docmind_markdown_images
 
-    # DocMind embeds short-lived OSS image URLs; persist them into the document bundle.
-    markdown = materialize_remote_markdown_images(
+    # DocMind may emit short-lived https URLs or relative hash.jpg refs — persist into bundle.
+    markdown = materialize_docmind_markdown_images(
         markdown,
         file_hash=file_hash,
         out_dir=hash_dir,
+        layouts=layouts,
+        status_data=status_data,
+        markdown_export=markdown_override,
     )
 
     result = build_result_from_layouts(

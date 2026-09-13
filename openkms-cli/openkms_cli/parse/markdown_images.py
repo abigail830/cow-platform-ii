@@ -71,6 +71,195 @@ def _download_image(url: str, *, session: requests.Session | None = None) -> tup
     return resp.content, resp.headers.get("Content-Type")
 
 
+def _write_markdown_image_bytes(
+    raw: bytes,
+    *,
+    file_hash: str,
+    out_dir: Path,
+    preferred_name: str,
+    used_names: set[str],
+) -> str | None:
+    if not raw:
+        return None
+    md_dir = out_dir / "markdown_out"
+    stem = Path(preferred_name).stem or "img"
+    suffix = Path(preferred_name).suffix.lower() or ".png"
+    if suffix not in _IMAGE_EXTS:
+        suffix = ".jpg"
+    candidate = f"{stem}{suffix}"
+    n = 1
+    while candidate in used_names:
+        candidate = f"{stem}_{n}{suffix}"
+        n += 1
+    used_names.add(candidate)
+    md_dir.mkdir(parents=True, exist_ok=True)
+    (md_dir / candidate).write_bytes(raw)
+    rel = f"markdown_out/{candidate}"
+    logger.info(
+        "Materialized markdown image file_hash=%s rel=%s bytes=%s",
+        file_hash[:12],
+        rel,
+        len(raw),
+    )
+    return rel
+
+
+def _iter_http_strings(value: Any) -> list[str]:
+    found: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, str):
+            if node.startswith(("http://", "https://")):
+                found.append(node)
+            return
+        if isinstance(node, dict):
+            for item in node.values():
+                walk(item)
+            return
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(value)
+    return found
+
+
+def build_basename_http_url_map(*sources: Any) -> dict[str, str]:
+    """Map image basenames (hash.jpg) to downloadable http(s) URLs discovered in API payloads."""
+    mapping: dict[str, str] = {}
+    for source in sources:
+        for url in _iter_http_strings(source):
+            basename = Path(unquote(urlparse(url).path)).name
+            if not basename or not _SAFE_NAME_RE.match(basename):
+                continue
+            mapping.setdefault(basename, url)
+    return mapping
+
+
+def materialize_relative_markdown_images(
+    markdown: str,
+    url_by_basename: dict[str, str],
+    *,
+    file_hash: str,
+    out_dir: Path,
+    session: requests.Session | None = None,
+) -> str:
+    """Download relative markdown image refs when a basename→URL map is available (DocMind REFERENCED)."""
+    if not markdown or not url_by_basename:
+        return markdown
+
+    ref_to_rel: dict[str, str] = {}
+    used_names: set[str] = set()
+
+    for match in _MD_IMAGE_RE.finditer(markdown):
+        alt = match.group(1) or ""
+        ref = (match.group(2) or "").strip()
+        if not ref or ref in ref_to_rel:
+            continue
+        if ref.startswith(("http://", "https://", "data:")):
+            continue
+        normalized = ref.replace("\\", "/").lstrip("./")
+        basename = Path(normalized).name
+        if not basename or not _SAFE_NAME_RE.match(basename):
+            continue
+        url = url_by_basename.get(basename)
+        if not url:
+            continue
+        try:
+            raw, content_type = _download_image(url, session=session)
+        except Exception as exc:
+            logger.warning(
+                "Failed to download relative markdown image %s via %s: %s",
+                ref,
+                url[:120],
+                exc,
+            )
+            continue
+        preferred = basename
+        if content_type and Path(preferred).suffix.lower() not in _IMAGE_EXTS:
+            ext = _ext_from_content_type(content_type)
+            if ext:
+                preferred = f"{Path(preferred).stem}{ext}"
+        rel = _write_markdown_image_bytes(
+            raw,
+            file_hash=file_hash,
+            out_dir=out_dir,
+            preferred_name=preferred,
+            used_names=used_names,
+        )
+        if rel:
+            ref_to_rel[ref] = rel
+
+    return rewrite_markdown_image_urls(markdown, ref_to_rel)
+
+
+def materialize_docmind_markdown_images(
+    markdown: str,
+    *,
+    file_hash: str,
+    out_dir: Path,
+    layouts: list[dict[str, Any]] | None = None,
+    status_data: dict[str, Any] | None = None,
+    markdown_export: str | None = None,
+    session: requests.Session | None = None,
+) -> str:
+    """
+    Materialize DocMind markdown images: https refs in markdown, plus relative hash.jpg refs
+    resolved from layout/status/export payloads.
+    """
+    if not markdown:
+        return markdown
+
+    url_by_basename = build_basename_http_url_map(layouts, status_data, markdown_export, markdown)
+
+    if markdown_export and "://" in markdown_export:
+        materialize_remote_markdown_images(
+            markdown_export,
+            file_hash=file_hash,
+            out_dir=out_dir,
+            session=session,
+        )
+
+    markdown = materialize_remote_markdown_images(
+        markdown,
+        file_hash=file_hash,
+        out_dir=out_dir,
+        session=session,
+    )
+    markdown = materialize_relative_markdown_images(
+        markdown,
+        url_by_basename,
+        file_hash=file_hash,
+        out_dir=out_dir,
+        session=session,
+    )
+    return link_relative_refs_to_existing_bundle_files(markdown, out_dir)
+
+
+def link_relative_refs_to_existing_bundle_files(markdown: str, out_dir: Path) -> str:
+    """Rewrite relative image refs when bytes already exist under markdown_out/."""
+    md_dir = out_dir / "markdown_out"
+    if not markdown or not md_dir.is_dir():
+        return markdown
+
+    ref_to_rel: dict[str, str] = {}
+    for match in _MD_IMAGE_RE.finditer(markdown):
+        ref = (match.group(2) or "").strip()
+        if not ref or ref in ref_to_rel:
+            continue
+        if ref.startswith(("http://", "https://", "data:")):
+            continue
+        normalized = ref.replace("\\", "/").lstrip("./")
+        basename = Path(normalized).name
+        if basename and (md_dir / basename).is_file():
+            ref_to_rel[ref] = f"markdown_out/{basename}"
+            continue
+        if normalized.startswith("markdown_out/") and (out_dir / normalized).is_file():
+            ref_to_rel[ref] = normalized
+
+    return rewrite_markdown_image_urls(markdown, ref_to_rel)
+
+
 def materialize_remote_markdown_images(
     markdown: str,
     *,
@@ -106,30 +295,19 @@ def materialize_remote_markdown_images(
         except Exception as exc:
             logger.warning("Failed to download markdown image %s: %s", url[:120], exc)
             continue
-        if not raw:
-            continue
 
         name = _guess_name(alt, url, counter, content_type)
-        stem = Path(name).stem
-        suffix = Path(name).suffix.lower() or ".png"
-        candidate = f"{stem}{suffix}"
-        n = 1
-        while candidate in used_names:
-            candidate = f"{stem}_{n}{suffix}"
-            n += 1
-        used_names.add(candidate)
-
-        md_dir.mkdir(parents=True, exist_ok=True)
-        (md_dir / candidate).write_bytes(raw)
-        rel = f"markdown_out/{candidate}"
+        rel = _write_markdown_image_bytes(
+            raw,
+            file_hash=file_hash,
+            out_dir=out_dir,
+            preferred_name=name,
+            used_names=used_names,
+        )
+        if not rel:
+            continue
         url_to_rel[url] = rel
         counter += 1
-        logger.info(
-            "Materialized markdown image file_hash=%s rel=%s bytes=%s",
-            file_hash[:12],
-            rel,
-            len(raw),
-        )
 
     return rewrite_markdown_image_urls(markdown, url_to_rel)
 

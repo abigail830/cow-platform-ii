@@ -4,7 +4,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from openkms_cli.parse.markdown_images import (
+    build_basename_http_url_map,
     collect_relative_markdown_image_paths,
+    link_relative_refs_to_existing_bundle_files,
+    materialize_relative_markdown_images,
     materialize_remote_markdown_images,
     platform_asset_url,
     rewrite_markdown_image_urls,
@@ -73,6 +76,41 @@ def test_rewrite_markdown_to_platform_asset_urls():
     assert "https://x/y.png" in out
     already = rewrite_markdown_to_platform_asset_urls(out, DOC_ID, api_url="https://api.example.com")
     assert already == out
+
+
+def test_build_basename_http_url_map():
+    layouts = [{"imageUrl": "https://docmind.example/out/0f74a6c5b368a3991c3cde93b4bf3e7e.jpg"}]
+    mapping = build_basename_http_url_map(layouts)
+    assert mapping["0f74a6c5b368a3991c3cde93b4bf3e7e.jpg"].startswith("https://")
+
+
+def test_materialize_relative_markdown_images(tmp_path: Path):
+    md = "![shot](0f74a6c5b368a3991c3cde93b4bf3e7e.jpg)"
+    mock_resp = MagicMock()
+    mock_resp.content = b"\xff\xd8\xff"
+    mock_resp.headers = {"Content-Type": "image/jpeg"}
+    mock_resp.raise_for_status = MagicMock()
+    url_map = {
+        "0f74a6c5b368a3991c3cde93b4bf3e7e.jpg": "https://docmind.example/out/0f74a6c5b368a3991c3cde93b4bf3e7e.jpg",
+    }
+    with patch("openkms_cli.parse.markdown_images.requests.get", return_value=mock_resp):
+        out = materialize_relative_markdown_images(
+            md,
+            url_map,
+            file_hash="abc",
+            out_dir=tmp_path,
+        )
+    assert "markdown_out/0f74a6c5b368a3991c3cde93b4bf3e7e.jpg" in out
+    assert (tmp_path / "markdown_out" / "0f74a6c5b368a3991c3cde93b4bf3e7e.jpg").is_file()
+
+
+def test_link_relative_refs_to_existing_bundle_files(tmp_path: Path):
+    md_dir = tmp_path / "markdown_out"
+    md_dir.mkdir(parents=True)
+    (md_dir / "abc.jpg").write_bytes(b"jpeg")
+    md = "![x](abc.jpg)"
+    out = link_relative_refs_to_existing_bundle_files(md, tmp_path)
+    assert "markdown_out/abc.jpg" in out
 
 
 def test_materialize_keeps_url_when_download_fails(tmp_path: Path):
