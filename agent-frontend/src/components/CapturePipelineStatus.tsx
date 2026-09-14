@@ -12,7 +12,14 @@ const POST_PROCESS_STEPS = [
   { key: 'done', label: 'Done' },
 ] as const;
 
-const ACTIVE_STAGES = new Set(['submitted', 'structuring', 'classifying', 'extracting', 'synthesizing']);
+const ACTIVE_STAGES = new Set([
+  'submitted',
+  'structuring',
+  'classifying',
+  'extracting',
+  'synthesizing',
+  'materializing',
+]);
 
 type CaptureJob = NonNullable<DocumentCaptureRecord['pipeline_job']>;
 
@@ -26,6 +33,7 @@ function pipelineStageProgressIndex(stage: string): number {
     case 'extracting':
       return 2;
     case 'synthesizing':
+    case 'materializing':
       return 3;
     case 'done':
       return 4;
@@ -59,11 +67,15 @@ function buildTooltip(capture: DocumentCaptureRecord, job: CaptureJob | null): s
   return parts.join(' — ');
 }
 
-function shouldShowPostProcessStepper(capture: DocumentCaptureRecord): boolean {
+function shouldShowPostProcessStepper(
+  capture: DocumentCaptureRecord,
+  showPipelineTrack: boolean,
+): boolean {
   const job = capture.pipeline_job;
   if (capture.status === 'post_processing') return true;
   if (!job) return false;
   if (job.stage === 'failed') return true;
+  if (showPipelineTrack && job.stage === 'done') return true;
   return ACTIVE_STAGES.has(job.stage);
 }
 
@@ -106,17 +118,22 @@ type CapturePipelineStatusProps = {
   capture: DocumentCaptureRecord;
   /** stack: error below stepper (table/list). inline: error to the right of stepper (detail header). */
   errorLayout?: 'stack' | 'inline';
+  compact?: boolean;
+  /** List view: keep full stepper after terminal job stages (e.g. done). */
+  showPipelineTrack?: boolean;
 };
 
 export function CapturePipelineStatus({
   capture,
   errorLayout = 'stack',
+  compact = false,
+  showPipelineTrack = false,
 }: CapturePipelineStatusProps) {
   const job = capture.pipeline_job ?? null;
   const failed = isCapturePostProcessFailed(capture);
   const statusLabel = formatCaptureStatusLabel(capture.status);
 
-  if (!shouldShowPostProcessStepper(capture)) {
+  if (!shouldShowPostProcessStepper(capture, showPipelineTrack)) {
     return (
       <span className={`document-status-badge ${failed ? 'status-failed' : 'status-completed'}`.trim()} title={statusLabel}>
         {statusLabel}
@@ -131,12 +148,14 @@ export function CapturePipelineStatus({
   return (
     <div
       className={`document-pipeline-status capture-pipeline-status${
-        errorLayout === 'inline' ? ' capture-pipeline-status--inline-error' : ''
-      }`.trim()}
+        compact ? ' document-pipeline-status--compact' : ''
+      }${errorLayout === 'inline' ? ' capture-pipeline-status--inline-error' : ''}`.trim()}
       title={buildTooltip(capture, job)}
     >
       <div
-        className="document-pipeline-stepper capture-post-process-stepper"
+        className={`document-pipeline-stepper capture-post-process-stepper${
+          compact ? ' document-pipeline-stepper--list-labeled' : ''
+        }`.trim()}
         aria-label={`Capture post-process: ${statusLabel}`}
       >
         {steps.map((step, index) => (

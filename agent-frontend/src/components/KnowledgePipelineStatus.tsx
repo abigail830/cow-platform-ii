@@ -1,6 +1,7 @@
 import type { ChannelKnowledgeItem } from '../api/documents.ts';
 import type { DocumentCaptureRecord } from '../api/documentCaptures.ts';
 import {
+  captureUsesPostProcess,
   knowledgeItemSegmentDocumentStatus,
   knowledgeItemUsesSegmentPipeline,
   shouldShowKnowledgePostProcessPipeline,
@@ -75,8 +76,18 @@ export function KnowledgePipelineStatus({ item }: KnowledgePipelineStatusProps) 
     }
   }
 
-  if (shouldShowKnowledgePostProcessPipeline(item)) {
-    return <CapturePipelineStatus capture={captureItemToPipelineCapture(item)} errorLayout="stack" />;
+  if (
+    captureUsesPostProcess(item) &&
+    (shouldShowKnowledgePostProcessPipeline(item) || item.pipeline_job)
+  ) {
+    return (
+      <CapturePipelineStatus
+        capture={captureItemToPipelineCapture(item)}
+        errorLayout="stack"
+        compact
+        showPipelineTrack
+      />
+    );
   }
 
   return (
