@@ -125,7 +125,7 @@ export function CaptureDetailsPanel({ capture, canEdit, onSave }: CaptureDetails
                 onChange={(event) => setForm((current) => ({ ...current, abstract: event.target.value }))}
                 rows={2}
                 disabled={saving}
-                placeholder="Optional abstract for classification and extraction"
+                placeholder="Optional abstract for segmentation, classification, and summary"
               />
             </label>
             <div className="capture-detail-meta-grid capture-detail-meta-grid--details">

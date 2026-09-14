@@ -92,16 +92,9 @@ def render_summary_template(
 
         action_items = [str(p).strip() for p in (topic.get("action_items") or []) if str(p).strip()]
         if action_items:
-            lines.append("### Action items")
+            lines.append("### Follow up")
             for item in action_items:
                 lines.append(f"- {item}")
-            lines.append("")
-
-        open_questions = [str(p).strip() for p in (topic.get("open_questions") or []) if str(p).strip()]
-        if open_questions:
-            lines.append("### Open questions")
-            for question in open_questions:
-                lines.append(f"- {question}")
             lines.append("")
 
     return "\n".join(lines).strip() + "\n"
