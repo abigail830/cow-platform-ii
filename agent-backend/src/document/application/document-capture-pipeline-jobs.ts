@@ -19,6 +19,7 @@ import {
 import { transcriptS3Key, asrResultS3Key } from '../../audio/infrastructure/audio-files.ts';
 import { snapshotConfigYaml } from '../../audio/application/audio-pipeline-jobs.ts';
 import { parseCaptureMaterializeContext } from '../domain/capture/capture-materialize-context.ts';
+import { ensureCaptureLibraryDocument } from './document-capture-library-document.ts';
 
 export async function createDocumentCapturePipelineJob(input: {
   captureId: string;
@@ -188,6 +189,14 @@ export async function markDocumentCaptureForJobStage(
   stage: CapturePipelineJobStage,
 ): Promise<void> {
   if (stage === 'done') {
+    try {
+      await ensureCaptureLibraryDocument(captureId);
+    } catch (error) {
+      console.error(
+        `[document-capture] failed to shadow library document for ${captureId}:`,
+        error,
+      );
+    }
     await db
       .update(appDocumentCaptures)
       .set({ status: 'done', updatedAt: new Date() })

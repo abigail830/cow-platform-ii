@@ -24,6 +24,10 @@ import {
   syncDocumentCaptureStatus,
 } from './document-capture-status.ts';
 import { getChannelById } from './documents.ts';
+import {
+  resolveCaptureLegacyDocumentId,
+  resolveCaptureLibraryDocumentId,
+} from '../domain/capture/capture-library-document.ts';
 
 export type DocumentCaptureRow = typeof appDocumentCaptures.$inferSelect;
 
@@ -383,7 +387,10 @@ export async function moveDocumentCapture(
       .where(eq(appDocumentCaptureSegments.captureId, id));
 
     const documentIds = [
-      ...new Set(segments.flatMap((segment) => linkedDocumentIds(segment.metadata))),
+      ...new Set([
+        ...segments.flatMap((segment) => linkedDocumentIds(segment.metadata)),
+        ...linkedDocumentIds(existing.metadata),
+      ]),
     ];
     if (documentIds.length > 0) {
       await tx
@@ -397,25 +404,33 @@ export async function moveDocumentCapture(
 }
 
 export async function deleteDocumentCapture(id: string): Promise<boolean> {
+  const [capture] = await db
+    .select({ metadata: appDocumentCaptures.metadata })
+    .from(appDocumentCaptures)
+    .where(eq(appDocumentCaptures.id, id))
+    .limit(1);
+
   const segments = await db
     .select({ metadata: appDocumentCaptureSegments.metadata })
     .from(appDocumentCaptureSegments)
     .where(eq(appDocumentCaptureSegments.captureId, id));
 
-  const artifactDocIds = segments
-    .map((segment) => {
-      const meta = segment.metadata as Record<string, unknown> | null;
-      const libraryDocumentId =
-        typeof meta?.library_document_id === 'string' ? meta.library_document_id : null;
-      const legacyDocumentId =
-        typeof meta?.legacy_document_id === 'string' ? meta.legacy_document_id : null;
-      if (libraryDocumentId && !legacyDocumentId) return libraryDocumentId;
-      return null;
-    })
-    .filter((docId): docId is string => Boolean(docId));
+  const artifactDocIds = new Set<string>();
+  for (const segment of segments) {
+    const meta = segment.metadata as Record<string, unknown> | null;
+    const libraryDocumentId =
+      typeof meta?.library_document_id === 'string' ? meta.library_document_id : null;
+    const legacyDocumentId =
+      typeof meta?.legacy_document_id === 'string' ? meta.legacy_document_id : null;
+    if (libraryDocumentId && !legacyDocumentId) artifactDocIds.add(libraryDocumentId);
+  }
 
-  if (artifactDocIds.length > 0) {
-    await db.delete(appDocuments).where(inArray(appDocuments.id, artifactDocIds));
+  const captureLibraryId = resolveCaptureLibraryDocumentId(capture?.metadata);
+  const captureLegacyId = resolveCaptureLegacyDocumentId(capture?.metadata);
+  if (captureLibraryId && !captureLegacyId) artifactDocIds.add(captureLibraryId);
+
+  if (artifactDocIds.size > 0) {
+    await db.delete(appDocuments).where(inArray(appDocuments.id, [...artifactDocIds]));
   }
 
   const result = await db.delete(appDocumentCaptures).where(eq(appDocumentCaptures.id, id));

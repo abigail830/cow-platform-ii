@@ -140,6 +140,7 @@ export type ImportSourceDocument = {
   name: string;
   file_type: string;
   status: string;
+  source_kind?: 'audio' | 'transcript' | null;
   updated_at: string;
 };
 

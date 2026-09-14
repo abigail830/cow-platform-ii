@@ -122,7 +122,11 @@ function ChannelTreeNode({
                         onChange={(e) => onToggleDocument(doc.id, e.target.checked)}
                       />
                       <span>{doc.name}</span>
-                      <span className="kb-import-doc-meta">{doc.file_type}</span>
+                      <span className="kb-import-doc-meta">
+                        {doc.source_kind
+                          ? `${doc.file_type} · ${doc.source_kind}`
+                          : doc.file_type}
+                      </span>
                     </label>
                   </li>
                 );

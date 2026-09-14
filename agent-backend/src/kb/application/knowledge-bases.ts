@@ -17,6 +17,8 @@ import {
 } from '../../infrastructure/db/index.ts';
 import { buildChannelPath, collectDescendantIds } from '../../document/domain/channel-tree.ts';
 import { getChannelById, getDocumentById } from '../../document/application/documents.ts';
+import { reconcileDoneCaptureLibraryDocuments } from '../../document/application/document-capture-library-document.ts';
+import { parseLibrarySourceKind } from '../../document/domain/capture/capture-library-document.ts';
 import { storagePrefixFromS3Key } from '../../infrastructure/oss/storage-read.ts';
 import {
   KB_IMPORT_MAX_MARKDOWN_BYTES,
@@ -504,6 +506,7 @@ export async function expandDocumentIdsForImport(input: {
   }
 
   if (channelIdSet.size > 0) {
+    await reconcileDoneCaptureLibraryDocuments([...channelIdSet]);
     const docs = await db
       .select({ id: appDocuments.id })
       .from(appDocuments)
@@ -1081,6 +1084,8 @@ export async function buildKbImportJobWorkerContext(jobId: string): Promise<KbIm
 }
 
 export async function listImportSources() {
+  await reconcileDoneCaptureLibraryDocuments();
+
   const channels = await db
     .select()
     .from(appDocumentChannels)
@@ -1101,6 +1106,7 @@ export async function listImportSources() {
       file_type: appDocuments.fileType,
       status: appDocuments.status,
       updated_at: appDocuments.updatedAt,
+      metadata: appDocuments.metadata,
     })
     .from(appDocuments)
     .orderBy(desc(appDocuments.updatedAt));
@@ -1122,6 +1128,7 @@ export async function listImportSources() {
           name: d.name,
           file_type: d.file_type,
           status: d.status,
+          source_kind: parseLibrarySourceKind(d.metadata),
           updated_at: d.updated_at.toISOString(),
         })),
       ]),
