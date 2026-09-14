@@ -11,6 +11,13 @@ export function channelHasWriteAccess(
   return Boolean(flags.write || flags.manage);
 }
 
+/** Match backend `satisfiesResourcePermission(..., 'manage')`. Missing flags = no access. */
+export function channelCanManage(
+  channel: { my_access?: ResourcePermissionFlags | null } | null | undefined,
+): boolean {
+  return Boolean(channel?.my_access?.manage);
+}
+
 export type ChannelMoveOption = {
   id: string;
   label: string;

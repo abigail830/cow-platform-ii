@@ -10,17 +10,13 @@ import {
 } from 'lucide-react';
 import type { DocumentChannel } from '../api/documentChannels.ts';
 import type { ChannelKnowledgeItem } from '../api/documents.ts';
-import { channelHasWriteAccess } from '../shared/channel-access.ts';
+import { channelCanManage, channelHasWriteAccess } from '../shared/channel-access.ts';
 import { KnowledgeFileTypeIcon } from './icons/file-type-icon.tsx';
 import { iconProps } from './icons/icon-props.ts';
 
 export type KnowledgeTreeSelection =
   | { type: 'channel'; channelId: string }
   | { type: 'item'; item: ChannelKnowledgeItem };
-
-function channelCanManage(channel: DocumentChannel): boolean {
-  return Boolean(channel.my_access?.manage);
-}
 
 function itemDisplayName(item: ChannelKnowledgeItem): string {
   return item.title || item.name;

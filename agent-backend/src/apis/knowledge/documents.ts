@@ -44,6 +44,10 @@ import {
 } from '../../document/infrastructure/document-asset-url.ts';
 import { initDocumentUpload } from '../../document/application/document-upload.ts';
 import {
+  finalizeDocumentArtifactUpdate,
+  initDocumentArtifactUpload,
+} from '../../document/application/document-artifacts.ts';
+import {
   createDocumentRecord,
   deleteDocument,
   getDocumentById,
@@ -515,6 +519,59 @@ documents.get(
       return c.json(content);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load document content';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+documents.post(
+  '/:id/artifacts/upload-init',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
+  async (c) => {
+    if (!isStorageEnabled()) return storageUnavailable(c);
+
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const denied = await denyUnlessDocumentAccess(c, id, 'write');
+    if (denied) return denied;
+
+    const body = await c.req.json<{ artifact?: unknown }>().catch((): { artifact?: unknown } => ({}));
+
+    try {
+      const result = await initDocumentArtifactUpload(id, body.artifact);
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
+      const message = error instanceof Error ? error.message : 'Failed to start artifact upload';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+documents.post(
+  '/:id/artifacts/upload-complete',
+  requireResourcePermission(KNOWLEDGE_MANAGEMENT_CATEGORY, KNOWLEDGE_MANAGEMENT_RESOURCES.DOCUMENTS, 'write'),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Document id is required' }, 400);
+
+    const denied = await denyUnlessDocumentAccess(c, id, 'write');
+    if (denied) return denied;
+
+    const body = await c.req.json<{ artifact?: unknown; s3_key?: string }>().catch(
+      (): { artifact?: unknown; s3_key?: string } => ({}),
+    );
+    const s3Key = body.s3_key?.trim() ?? '';
+    if (!s3Key) return c.json({ error: 's3_key is required' }, 400);
+
+    try {
+      const result = await finalizeDocumentArtifactUpdate(id, body.artifact, s3Key);
+      return c.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to complete artifact update';
       const status = message.includes('not found') ? 404 : 400;
       return c.json({ error: message }, status);
     }

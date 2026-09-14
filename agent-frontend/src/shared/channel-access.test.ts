@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { DocumentChannel } from '../api/documentChannels.ts';
-import { channelHasWriteAccess, listWritableChannelMoveOptions } from './channel-access.ts';
+import { channelCanManage, channelHasWriteAccess, listWritableChannelMoveOptions } from './channel-access.ts';
 
 function channel(
   overrides: Partial<DocumentChannel> & Pick<DocumentChannel, 'id' | 'name'>,
@@ -41,6 +41,14 @@ describe('channelHasWriteAccess', () => {
       channelHasWriteAccess({ my_access: { read: true, write: false, manage: true } }),
       true,
     );
+  });
+});
+
+describe('channelCanManage', () => {
+  it('is fail-closed unless manage is granted', () => {
+    assert.equal(channelCanManage(null), false);
+    assert.equal(channelCanManage({ my_access: { read: true, write: true, manage: false } }), false);
+    assert.equal(channelCanManage({ my_access: { read: true, write: false, manage: true } }), true);
   });
 });
 

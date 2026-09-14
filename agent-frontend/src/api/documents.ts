@@ -400,6 +400,42 @@ export async function updateDocumentMetadata(
   return { metadata: data.metadata as Record<string, unknown> };
 }
 
+export type DocumentArtifactKind = 'markdown' | 'page_index';
+
+export async function saveDocumentArtifact(
+  documentId: string,
+  artifact: DocumentArtifactKind,
+  content: string,
+): Promise<void> {
+  const init = (await authFetch(`/api/knowledge/documents/${documentId}/artifacts/upload-init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ artifact }),
+  })) as {
+    s3_key: string;
+    upload_url?: string;
+    method?: string;
+    headers?: Record<string, string>;
+  };
+
+  const uploadUrl = init.upload_url;
+  if (!uploadUrl) throw new Error('Server did not return an upload URL');
+
+  const contentType = init.headers?.['Content-Type'] ?? 'application/octet-stream';
+  await putFileToPresignedUrl(
+    uploadUrl,
+    new Blob([content], { type: contentType }),
+    init.headers ?? { 'Content-Type': contentType },
+    init.method ?? 'PUT',
+  );
+
+  await authFetch(`/api/knowledge/documents/${documentId}/artifacts/upload-complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ artifact, s3_key: init.s3_key }),
+  });
+}
+
 async function uploadDocumentDirect(channelId: string, file: File): Promise<DocumentRecord> {
   const fileHash = await sha256HexFromFile(file);
   const init = (await authFetch('/api/knowledge/documents/upload-init', {

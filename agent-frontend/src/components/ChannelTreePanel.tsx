@@ -1,5 +1,6 @@
 import { Folder, Plus, Settings, Trash2 } from 'lucide-react';
 import type { ResourcePermissionFlags } from '../api/resourceAccess.ts';
+import { channelCanManage } from '../shared/channel-access.ts';
 import { iconProps } from './icons/icon-props.ts';
 
 export type ChannelTreeNode = {
@@ -8,10 +9,6 @@ export type ChannelTreeNode = {
   my_access?: ResourcePermissionFlags;
   children: ChannelTreeNode[];
 };
-
-function channelCanManage(channel: ChannelTreeNode): boolean {
-  return Boolean(channel.my_access?.manage);
-}
 
 type ChannelTreePanelProps<T extends ChannelTreeNode> = {
   channels: T[];
