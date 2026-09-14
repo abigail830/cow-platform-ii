@@ -1,3 +1,5 @@
+import { outboundFetch } from '../../lib/outbound-fetch.ts';
+
 /** Same service prefix as openkms-cli transcription (`/services/audio/asr/transcription`). */
 const CUSTOMIZATION_PATH = '/services/audio/asr/customization';
 
@@ -55,7 +57,7 @@ export async function dashScopeCreateVocabulary(
   },
 ): Promise<string> {
   const url = dashScopeVocabularyUrl(creds.baseUrl);
-  const response = await fetch(url, {
+  const response = await outboundFetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${creds.apiKey}`,
@@ -70,6 +72,8 @@ export async function dashScopeCreateVocabulary(
         vocabulary: input.vocabulary,
       },
     }),
+    timeoutMs: 20_000,
+    label: 'DashScope create vocabulary',
   });
   const data = await parseJsonResponse(response, 'Create vocabulary');
   const output = data.output;
@@ -91,7 +95,7 @@ export async function dashScopeUpdateVocabulary(
   },
 ): Promise<void> {
   const url = dashScopeVocabularyUrl(creds.baseUrl);
-  const response = await fetch(url, {
+  const response = await outboundFetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${creds.apiKey}`,
@@ -105,6 +109,8 @@ export async function dashScopeUpdateVocabulary(
         vocabulary: input.vocabulary,
       },
     }),
+    timeoutMs: 20_000,
+    label: 'DashScope update vocabulary',
   });
   await parseJsonResponse(response, 'Update vocabulary');
 }
@@ -114,7 +120,7 @@ export async function dashScopeDeleteVocabulary(
   vocabularyId: string,
 ): Promise<void> {
   const url = dashScopeVocabularyUrl(creds.baseUrl);
-  const response = await fetch(url, {
+  const response = await outboundFetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${creds.apiKey}`,
@@ -127,6 +133,8 @@ export async function dashScopeDeleteVocabulary(
         vocabulary_id: vocabularyId,
       },
     }),
+    timeoutMs: 20_000,
+    label: 'DashScope delete vocabulary',
   });
   await parseJsonResponse(response, 'Delete vocabulary');
 }

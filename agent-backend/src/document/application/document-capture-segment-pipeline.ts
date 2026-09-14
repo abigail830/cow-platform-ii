@@ -334,7 +334,14 @@ export async function afterDocumentCaptureSegmentAttached(segmentId: string): Pr
   if (inputMode === 'document') {
     await startDocumentCaptureSegmentDocumentPipeline(segment, capture.id);
   } else if (inputMode === 'audio') {
-    await startDocumentCaptureSegmentAudioPipeline(segmentId, segment.channelId);
+    try {
+      await startDocumentCaptureSegmentAudioPipeline(segmentId, segment.channelId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[document-capture] auto-start ASR failed for segment ${segmentId}: ${message}`,
+      );
+    }
   } else if (inputMode === 'transcript') {
     await db
       .update(appDocumentCaptureSegments)

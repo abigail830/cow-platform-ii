@@ -4,6 +4,7 @@ import { readApiErrorMessage } from './http.ts';
 import { fetchPresignedStorageText } from './storage-fetch.ts';
 import { sha256HexFromFile } from '../shared/file-hash.ts';
 import {
+  isNetworkFetchFailure,
   putFileToPresignedUrl,
   shouldUseDirectUpload,
 } from './direct-upload.ts';
@@ -240,9 +241,9 @@ async function authFetch(path: string, init?: RequestInit) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Network error';
-    if (message === 'Failed to fetch') {
+    if (isNetworkFetchFailure(message)) {
       throw new Error(
-        'Request failed (network or timeout). Large transcript .docx uploads still run on the server after OSS upload and may exceed Vercel limits — try .md or a smaller file.',
+        'Request failed (network or timeout). If this happened after a large audio upload, retry — the file may already be in storage.',
       );
     }
     throw new Error(message);

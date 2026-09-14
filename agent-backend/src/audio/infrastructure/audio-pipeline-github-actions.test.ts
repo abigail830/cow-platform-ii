@@ -74,4 +74,25 @@ describe('audio-pipeline-github-actions', () => {
       'job-audio-1',
     ]);
   });
+
+  it('rewrites Node fetch failed into a dispatch unreachable error', async () => {
+    const fetchImpl = async () => {
+      throw new TypeError('fetch failed', { cause: new Error('ConnectTimeoutError') });
+    };
+
+    await assert.rejects(
+      () =>
+        triggerAudioPipelineGithubActions(
+          { jobId: 'job-audio-1' },
+          {
+            token: 'pat',
+            repository: 'abigail830/cow-platform-ii',
+            workflowFile: 'openkms-audio-transcribe.yml',
+            ref: 'main',
+          },
+          fetchImpl,
+        ),
+      /GitHub Actions audio pipeline dispatch unreachable/,
+    );
+  });
 });

@@ -264,7 +264,13 @@ export function assembleUploadSession(uploadId: string): {
 
 export function formatStorageError(error: unknown): string {
   if (error instanceof StorageNotConfiguredError) return 'Object storage is not configured';
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) {
+    const message = error.message;
+    if (message === 'fetch failed' || message.includes('ETIMEDOUT')) {
+      return 'Could not reach Aliyun from this server. Retry, or check that the request is not proxying OSS/DashScope through Vercel.';
+    }
+    return message;
+  }
   return 'Storage operation failed';
 }
 

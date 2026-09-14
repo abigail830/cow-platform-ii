@@ -10,6 +10,16 @@ export function usesRemoteApiOrigin(): boolean {
   return Boolean(import.meta.env.VITE_API_ORIGIN?.trim());
 }
 
+/** Browser CORS/network and Node undici both mean the TCP call never completed. */
+export function isNetworkFetchFailure(message: string): boolean {
+  return (
+    message === 'Failed to fetch' ||
+    message === 'fetch failed' ||
+    message === 'Load failed' ||
+    message === 'NetworkError when attempting to fetch resource.'
+  );
+}
+
 /** Production and remote API must never proxy object bytes through Vercel. Local dev may for small files. */
 export function shouldUseDirectUpload(file: File): boolean {
   return import.meta.env.PROD || usesRemoteApiOrigin() || file.size > DIRECT_UPLOAD_THRESHOLD_BYTES;
@@ -31,7 +41,7 @@ export async function putFileToPresignedUrl(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Direct storage upload failed';
     throw new Error(
-      message === 'Failed to fetch'
+      isNetworkFetchFailure(message)
         ? 'Direct storage upload failed (network/CORS). In Aliyun OSS CORS, allow PUT from your frontend origin.'
         : message,
     );

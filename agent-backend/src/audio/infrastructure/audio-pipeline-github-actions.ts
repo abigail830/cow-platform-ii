@@ -1,3 +1,5 @@
+import { formatOutboundFetchError } from '../../lib/outbound-fetch.ts';
+
 /**
  * Dispatch audio transcription jobs to GitHub Actions (workflow_dispatch).
  */
@@ -55,16 +57,23 @@ export async function triggerAudioPipelineGithubActions(
     body.inputs.worker_cli_args = JSON.stringify(input.workerCliArgs);
   }
 
-  const response = await fetchImpl(url, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${config.token}`,
-      'Content-Type': 'application/json',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${config.token}`,
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    throw new Error(formatOutboundFetchError(error, 'GitHub Actions audio pipeline dispatch', url), {
+      cause: error,
+    });
+  }
 
   if (response.status === 204) return;
 

@@ -239,7 +239,11 @@ export async function createDocumentBundleArchive(fileHash: string): Promise<Rea
 export function formatStorageError(error: unknown): string {
   if (!(error instanceof Error)) return 'Storage operation failed';
   const message = error.message;
-  if (message.includes('socket did not establish a connection') || message.includes('ETIMEDOUT')) {
+  if (
+    message === 'fetch failed' ||
+    message.includes('socket did not establish a connection') ||
+    message.includes('ETIMEDOUT')
+  ) {
     return 'Could not connect to object storage. Check network connectivity and storage configuration.';
   }
   if (/timeout/i.test(message)) {

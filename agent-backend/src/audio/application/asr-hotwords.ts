@@ -372,33 +372,17 @@ export async function deleteAsrHotword(id: string): Promise<void> {
   await invalidateDocumentChannelAsrVocabulary(channelIds);
 }
 
+/**
+ * Snapshot only. Never call DashScope here — Vercel HK→Aliyun times out (`fetch failed`)
+ * and used to fail the whole audio upload. Vocabulary sync belongs on hotword save.
+ */
 export async function getDocumentChannelAsrVocabularyIdForJob(channelId: string): Promise<string | null> {
   const channel = await getChannelById(channelId);
   if (!channel) return null;
 
   const hotwordCount = await hotwordCountForDocumentChannel(channelId);
-  if (hotwordCount === 0) {
-    if (channel.asrVocabularyId?.trim()) {
-      await syncDocumentChannelAsrVocabulary(channelId);
-    }
-    return null;
-  }
-
-  const creds = await resolveDocumentChannelAsrCredentials(channelId);
-  if (!creds) return null;
-
-  const stale =
-    !channel.asrVocabularyId?.trim() ||
-    !channel.asrVocabularySyncedAt ||
-    channel.asrVocabularyTargetModel !== creds.targetModel;
-
-  if (stale) {
-    await syncDocumentChannelAsrVocabulary(channelId);
-    const refreshed = await getChannelById(channelId);
-    return refreshed?.asrVocabularyId?.trim() || null;
-  }
-
-  return channel.asrVocabularyId.trim();
+  if (hotwordCount === 0) return null;
+  return channel.asrVocabularyId?.trim() || null;
 }
 
 export async function invalidateDocumentChannelAsrVocabularyIfPipelineChanged(

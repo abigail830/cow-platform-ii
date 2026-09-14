@@ -9,6 +9,10 @@ API runs on Vercel (often HK). OSS is Aliyun South China. **Do not stream object
 
 Signing a URL is local HMAC and does **not** open a TCP connection to OSS. `HeadObject` / `GetObject` / `PutObject` **do**. That is the same timeout class as proxying file bytes.
 
+The same class includes **any Aliyun HTTPS from Vercel HK** (DashScope vocabulary/ASR, not only OSS). Node surfaces this as raw `fetch failed` (undici), which is not a CORS/signature bug. Snapshot Aliyun IDs from the DB on user-facing paths; sync DashScope when saving hotwords (admin) or from workers.
+
+UI `fetch failed` on production upload almost always means a Vercel handler called Aliyun (or the error was forwarded unmapped). Browser OSS PUT failures are `Failed to fetch` / CORS, not this string.
+
 ## Pattern
 
 1. **Server**: authenticate + authorize (RBAC), then mint a **presigned URL** with `getStorageReadUrl` / `getStorageUploadUrl` (signing is local HMAC — no OSS round-trip).
@@ -50,6 +54,7 @@ Do not disable checksums on worker `PutObject` that goes through the SDK client 
 - Ensure OSS bucket **CORS** allows the frontend origin for GET/PUT as needed.
 - Production frontend (`import.meta.env.PROD` or `VITE_API_ORIGIN`) must use presigned PUT for **every** file size — not only files above the Vercel body limit.
 - Capture status sync from **pipeline job rows in the DB**. Do not HEAD OSS to confirm artifacts exist.
+- On audio upload complete, snapshot `asrVocabularyId` from the channel row. Do **not** call DashScope to create/update vocabulary on that path.
 
 ## Don't
 
@@ -60,6 +65,8 @@ Do not disable checksums on worker `PutObject` that goes through the SDK client 
 - Legacy **multipart chunk** uploads must use chunks **≤ 3 MB** (`UPLOAD_CHUNK_SIZE_BYTES` in `direct-upload.ts`) if they still hit the API — prefer presigned full-file PUT instead
 - Block UI on a single bundle request that waits for every artifact when partial/progressive load is possible
 - Proxy OSS through Vercel to “simplify” the frontend — it reintroduces the timeout class
+- Call DashScope / other Aliyun APIs from capture upload-complete or other browser-initiated handlers
+- Return raw Node `fetch failed` to the UI — map it (`formatOutboundFetchError` / `formatStorageError`)
 
 ## Exceptions (server may touch OSS directly)
 

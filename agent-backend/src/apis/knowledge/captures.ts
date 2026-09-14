@@ -393,8 +393,7 @@ documentCaptures.post(
       return c.json(result);
     } catch (error) {
       if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
-      const message =
-        error instanceof Error ? error.message : formatStorageError(error);
+      const message = formatStorageError(error);
       return c.json({ error: message }, 400);
     }
   },
@@ -533,7 +532,7 @@ documentCaptures.post(
           uploadedBy: user.id,
           segmentLabel: body.segment_label,
         });
-        const refreshed = await getCaptureWithSegments(id);
+        const refreshed = await getCaptureWithSegments(id, { sync: false });
         return c.json({ capture: refreshed }, 201);
       }
 
@@ -559,12 +558,9 @@ documentCaptures.post(
       return c.json({ capture: refreshed }, 201);
     } catch (error) {
       if (error instanceof StorageNotConfiguredError) return storageUnavailable(c);
-      const message =
-        error instanceof Error
-          ? error.message
-          : inputModeUsesAudio(capture.input_mode)
-            ? formatAudioStorageError(error)
-            : formatStorageError(error);
+      const message = inputModeUsesAudio(capture.input_mode)
+        ? formatAudioStorageError(error)
+        : formatStorageError(error);
       return c.json({ error: message }, 400);
     }
   },
