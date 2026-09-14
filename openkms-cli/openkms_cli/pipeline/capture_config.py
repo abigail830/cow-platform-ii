@@ -107,7 +107,6 @@ When extractions include genuine post-meeting follow-ups, add one ## Follow up s
 Follow up items must be commitments someone still needs to complete after the meeting — not in-meeting conduct
 (e.g. "I will start sharing now", "let me walk through the deck", "I'll present the next slide").
 If action_items in the extractions are only in-meeting conduct or none are post-meeting, omit ## Follow up entirely.
-Do not add an Open questions section.
 Do not invent facts beyond the provided extractions."""
 
 DEFAULT_SYNTHESIZE_LLM_USER = """Capture title: {title}
