@@ -258,7 +258,7 @@ function handleArtifactPreviewWheel(event: WheelEvent<HTMLElement>) {
   if (!canScroll) return;
 
   const atTop = element.scrollTop <= 0;
-  const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+  const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 8;
   if ((event.deltaY < 0 && !atTop) || (event.deltaY > 0 && !atBottom)) {
     event.stopPropagation();
   }
@@ -1756,7 +1756,9 @@ export function DocumentCaptureDetailPage() {
               {postProcessActive ? (
                 <PanelLoading label="Post-processing in progress…" />
               ) : postProcessFailed ? null : (
-                renderActiveArtifactTabContent(capture)
+                <div className="capture-artifact-preview-body">
+                  {renderActiveArtifactTabContent(capture)}
+                </div>
               )}
             </>
           ) : capture.status !== 'ready' && capture.status !== 'done' ? (
