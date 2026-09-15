@@ -19,6 +19,7 @@ import {
 import { transcriptS3Key, asrResultS3Key } from '../../audio/infrastructure/audio-files.ts';
 import { snapshotConfigYaml } from '../../audio/application/audio-pipeline-jobs.ts';
 import { parseCaptureMaterializeContext } from '../domain/capture/capture-materialize-context.ts';
+import { shouldFailStaleCapturePipelineJob } from '../domain/capture/capture-pipeline-stale.ts';
 import { ensureCaptureLibraryDocument } from './document-capture-library-document.ts';
 
 export async function createDocumentCapturePipelineJob(input: {
@@ -182,6 +183,48 @@ export async function buildDocumentCapturePipelineJobContext(jobId: string) {
       markdown: captureMarkdownS3Key(capture.id),
     },
   };
+}
+
+export async function failDocumentCapturePipelineDispatch(
+  jobId: string,
+  captureId: string,
+  error: unknown,
+): Promise<void> {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(
+    `[document-capture-post-process] dispatch failed for job ${jobId}: ${message}`,
+  );
+  await updateDocumentCapturePipelineJob(jobId, {
+    stage: 'failed',
+    errorMessage: `Post-process worker did not start: ${message}`.slice(0, 2000),
+  });
+  await markDocumentCaptureForJobStage(captureId, 'failed');
+}
+
+export async function failStaleDocumentCapturePipelineJobIfNeeded(
+  job: typeof appDocumentCapturePipelineJobs.$inferSelect,
+): Promise<typeof appDocumentCapturePipelineJobs.$inferSelect> {
+  const decision = shouldFailStaleCapturePipelineJob({
+    stage: job.stage,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  });
+  if (!decision.stale) return job;
+
+  const updated = await updateDocumentCapturePipelineJob(job.id, {
+    stage: 'failed',
+    errorMessage: decision.message ?? 'Capture post-process timed out',
+  });
+  await markDocumentCaptureForJobStage(job.captureId, 'failed');
+  return updated ?? { ...job, stage: 'failed', errorMessage: decision.message ?? null };
+}
+
+export async function reconcileStaleDocumentCapturePipelineJob(
+  captureId: string,
+): Promise<typeof appDocumentCapturePipelineJobs.$inferSelect | null> {
+  const job = await getLatestDocumentCapturePipelineJob(captureId);
+  if (!job) return null;
+  return failStaleDocumentCapturePipelineJobIfNeeded(job);
 }
 
 export async function markDocumentCaptureForJobStage(

@@ -18,7 +18,10 @@ import {
 } from '../../audio/application/audio-pipeline-jobs.ts';
 import { spawnAsyncAudioPipelineWorker } from '../../audio/infrastructure/audio-pipeline-runner.ts';
 import { getDocumentChannelAsrVocabularyIdForJob } from '../../audio/application/asr-hotwords.ts';
-import { createDocumentCapturePipelineJob } from './document-capture-pipeline-jobs.ts';
+import {
+  createDocumentCapturePipelineJob,
+  failDocumentCapturePipelineDispatch,
+} from './document-capture-pipeline-jobs.ts';
 import { getChannelById, createDocumentRecord } from './documents.ts';
 import {
   resolveDocumentCapturePostProcessPipelineForChannel,
@@ -355,10 +358,10 @@ export async function afterDocumentCaptureSegmentAttached(segmentId: string): Pr
       })
       .where(eq(appDocumentCaptureSegments.id, segmentId));
 
-    void maybeStartDocumentCapturePostProcess(capture.id);
+    await maybeStartDocumentCapturePostProcess(capture.id);
   }
 
-  void syncDocumentCaptureStatus(capture.id);
+  await syncDocumentCaptureStatus(capture.id);
 }
 
 export async function syncDocumentCaptureSegmentFromDocumentPipeline(
@@ -396,7 +399,7 @@ export async function markDocumentCaptureSegmentForAudioJobStage(
       .set({ status: 'completed', updatedAt: new Date() })
       .where(eq(appDocumentCaptureSegments.id, segmentId));
 
-    void maybeStartDocumentCapturePostProcess(ctx.capture.id);
+    await maybeStartDocumentCapturePostProcess(ctx.capture.id);
   } else if (stage === 'failed') {
     await db
       .update(appDocumentCaptureSegments)
@@ -409,7 +412,7 @@ export async function markDocumentCaptureSegmentForAudioJobStage(
       .where(eq(appDocumentCaptureSegments.id, segmentId));
   }
 
-  void syncDocumentCaptureStatus(ctx.capture.id);
+  await syncDocumentCaptureStatus(ctx.capture.id);
 }
 
 export async function maybeStartDocumentCapturePostProcess(captureId: string): Promise<void> {
@@ -455,7 +458,11 @@ export async function maybeStartDocumentCapturePostProcess(captureId: string): P
     .set({ status: 'post_processing', updatedAt: new Date() })
     .where(eq(appDocumentCaptures.id, captureId));
 
-  await spawnDocumentCapturePostProcessWorker(job.id, job.pipelineName);
+  try {
+    await spawnDocumentCapturePostProcessWorker(job.id, job.pipelineName);
+  } catch (error) {
+    await failDocumentCapturePipelineDispatch(job.id, captureId, error);
+  }
 }
 
 export function isDocumentCaptureTranscriptSegment(metadata: Record<string, unknown> | null | undefined): boolean {

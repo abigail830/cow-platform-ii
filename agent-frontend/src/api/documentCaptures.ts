@@ -132,7 +132,8 @@ export function isCapturePipelineActive(
       stage === 'structuring' ||
       stage === 'classifying' ||
       stage === 'extracting' ||
-      stage === 'synthesizing');
+      stage === 'synthesizing' ||
+      stage === 'materializing');
   if (postProcessActive) return true;
   if (capture.status === 'transcribing' || capture.status === 'running') return true;
   if (!segments?.length) return false;

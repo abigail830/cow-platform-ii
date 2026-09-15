@@ -75,4 +75,25 @@ describe('audio-capture-pipeline-github-actions', () => {
       'job-capture-1',
     ]);
   });
+
+  it('wraps GitHub API fetch failures', async () => {
+    const fetchImpl = async () => {
+      throw Object.assign(new Error('fetch failed'), { name: 'TypeError' });
+    };
+
+    await assert.rejects(
+      () =>
+        triggerCapturePipelineGithubActions(
+          { jobId: 'job-capture-1' },
+          {
+            token: 'pat',
+            repository: 'abigail830/cow-platform-ii',
+            workflowFile: DEFAULT_CAPTURE_POST_PROCESS_WORKFLOW_FILE,
+            ref: 'main',
+          },
+          fetchImpl,
+        ),
+      /GitHub Actions capture post-process dispatch unreachable/,
+    );
+  });
 });

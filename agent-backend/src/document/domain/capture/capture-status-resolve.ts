@@ -13,6 +13,7 @@ const POST_PROCESS_ACTIVE_STAGES = new Set([
   'classifying',
   'extracting',
   'synthesizing',
+  'materializing',
 ]);
 
 export function segmentAsrState(segment: CaptureStatusSegment): SegmentAsrState {

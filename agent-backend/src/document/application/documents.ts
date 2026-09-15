@@ -394,9 +394,8 @@ export async function listChannelKnowledgeItems(input: {
 
   const captureIds = captureRows.map((row) => row.id);
   const { toCapturePublic } = await import('./document-captures.ts');
-  const { getLatestDocumentCapturePipelineJobsForCaptures } = await import(
-    './document-capture-pipeline-jobs.ts'
-  );
+  const { failStaleDocumentCapturePipelineJobIfNeeded, getLatestDocumentCapturePipelineJobsForCaptures } =
+    await import('./document-capture-pipeline-jobs.ts');
   const { buildDocumentCaptureStatusSegments } = await import('./document-capture-status.ts');
   const { resolveCaptureStatusFromSegments } = await import(
     '../domain/capture/capture-status-resolve.ts'
@@ -404,6 +403,12 @@ export async function listChannelKnowledgeItems(input: {
   const capturePostProcessJobs = captureIds.length
     ? await getLatestDocumentCapturePipelineJobsForCaptures(captureIds)
     : new Map();
+  await Promise.all(
+    [...capturePostProcessJobs.entries()].map(async ([captureId, job]) => {
+      const next = await failStaleDocumentCapturePipelineJobIfNeeded(job);
+      if (next !== job) capturePostProcessJobs.set(captureId, next);
+    }),
+  );
 
   const captureStats = captureIds.length
     ? await db

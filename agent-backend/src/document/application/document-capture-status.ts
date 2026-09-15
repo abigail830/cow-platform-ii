@@ -57,7 +57,8 @@ export async function syncDocumentCaptureStatus(captureId: string) {
   const { appDocumentCaptures, db } = await import('../../infrastructure/db/index.ts');
   const { eq } = await import('drizzle-orm');
   const { resolveCaptureStatusFromSegments } = await import('../domain/capture/capture-status-resolve.ts');
-  const { getLatestDocumentCapturePipelineJob } = await import('./document-capture-pipeline-jobs.ts');
+  const { getLatestDocumentCapturePipelineJob, reconcileStaleDocumentCapturePipelineJob } =
+    await import('./document-capture-pipeline-jobs.ts');
   const { getLatestAudioPipelineJobsForDocumentCaptureSegments } = await import(
     '../../audio/application/audio-pipeline-jobs.ts'
   );
@@ -69,6 +70,8 @@ export async function syncDocumentCaptureStatus(captureId: string) {
     .where(eq(appDocumentCaptures.id, captureId))
     .limit(1);
   if (!capture) return null;
+
+  await reconcileStaleDocumentCapturePipelineJob(captureId);
 
   const segments = await db
     .select()

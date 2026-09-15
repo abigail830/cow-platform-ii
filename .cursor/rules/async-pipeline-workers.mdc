@@ -10,7 +10,7 @@ Long-running parse/transcribe/import jobs **must not** run inside Vercel request
 ## Core pattern (all async pipelines)
 
 1. **Write job row in DB first** — snapshot everything the worker needs (`pipeline_name`, `config_yaml`, input refs, output prefix, stage=`submitted`).
-2. **`await` dispatch** after the insert/commit (do not fire-and-forget before the row exists).
+2. **`await` dispatch** after the insert/commit (do not fire-and-forget before the row exists). On Vercel/serverless, **do not `void` worker dispatch** — the isolate freezes after the HTTP response, so GHA never starts while the job row stays `submitted`.
 3. **Worker CLI args = job id only** (plus subcommand). Build from a **module-specific template**, not another pipeline's `command_template` / `workflow_file`.
 4. **Worker GETs context** from `/internal-api/<module>/jobs/:id` (Basic auth: `OPENKMS_CLI_BASIC_*`).
 5. **Worker PATCHes progress** (`stage`, `external_job_id`, `error_message`, optional `metrics`) on the same path.
@@ -78,6 +78,7 @@ Eval runs dispatch **one worker at a time** (`eval-run-dispatch.ts`): claim via 
 - Pass full pipeline config in GHA inputs — worker loads from DB.
 - Reuse another domain's GHA workflow or internal-api prefix.
 - Dispatch before the job row is committed.
+- `void` / fire-and-forget worker dispatch on a serverless request path (ASR-done → post-process, attach → post-process, etc.).
 - Mark undispatched queue items failed in stale reconcile.
 - Run provider submit/poll/OSS writes on the user-facing API request path.
 - Write pipeline artifacts in internal-api PATCH handlers (worker PutObject; backend records deterministic `artifact_keys` / `resultS3Key` only).

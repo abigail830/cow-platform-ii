@@ -15,7 +15,9 @@ import { resolvePipelineWorkerMode } from '../../pipeline/application/pipeline-w
 import { getChannelById } from './documents.ts';
 import {
   createDocumentCapturePipelineJob,
+  failDocumentCapturePipelineDispatch,
   getLatestDocumentCapturePipelineJob,
+  reconcileStaleDocumentCapturePipelineJob,
 } from './document-capture-pipeline-jobs.ts';
 import { retryFailedJob } from '../../pipeline/application/async-job-retry.ts';
 import { isCapturePostProcessPipelineName } from '../domain/capture/capture-post-process-pipeline-names.ts';
@@ -186,6 +188,8 @@ export async function resolveDocumentCapturePostProcessPipelineForChannel(channe
 export async function startDocumentCapturePostProcess(
   captureId: string,
 ): Promise<{ status: string; job_id: string }> {
+  await reconcileStaleDocumentCapturePipelineJob(captureId);
+
   const [capture] = await db
     .select()
     .from(appDocumentCaptures)
@@ -203,13 +207,18 @@ export async function startDocumentCapturePostProcess(
 
   const latestJob = await getLatestDocumentCapturePipelineJob(captureId);
   if (latestJob?.stage === 'failed') {
-    const retry = await retryFailedJob('capture_pipeline', latestJob.id);
-    if (retry.retried) {
-      await db
-        .update(appDocumentCaptures)
-        .set({ status: 'post_processing', updatedAt: new Date() })
-        .where(eq(appDocumentCaptures.id, captureId));
-      return { status: 'post_processing', job_id: latestJob.id };
+    try {
+      const retry = await retryFailedJob('capture_pipeline', latestJob.id);
+      if (retry.retried) {
+        await db
+          .update(appDocumentCaptures)
+          .set({ status: 'post_processing', updatedAt: new Date() })
+          .where(eq(appDocumentCaptures.id, captureId));
+        return { status: 'post_processing', job_id: latestJob.id };
+      }
+    } catch (error) {
+      await failDocumentCapturePipelineDispatch(latestJob.id, captureId, error);
+      throw error;
     }
   }
 
@@ -247,6 +256,11 @@ export async function startDocumentCapturePostProcess(
     .set({ status: 'post_processing', updatedAt: new Date() })
     .where(eq(appDocumentCaptures.id, captureId));
 
-  await spawnDocumentCapturePostProcessWorker(job.id, job.pipelineName);
+  try {
+    await spawnDocumentCapturePostProcessWorker(job.id, job.pipelineName);
+  } catch (error) {
+    await failDocumentCapturePipelineDispatch(job.id, captureId, error);
+    throw error;
+  }
   return { status: 'post_processing', job_id: job.id };
 }

@@ -42,4 +42,13 @@ describe('capture-readiness', () => {
     assert.equal(result.ready, false);
     assert.equal(result.reason, 'already_done');
   });
+
+  it('skips while a post-process job is still submitted', () => {
+    const result = evaluateCaptureReadiness({
+      segmentStatuses: ['completed'],
+      latestJobStage: 'submitted',
+    });
+    assert.equal(result.ready, false);
+    assert.equal(result.reason, 'post_process_active');
+  });
 });
