@@ -9,13 +9,12 @@ export const LIST_KNOWLEDGE_BASES_MCP_DESCRIPTION = [
 ].join(' ');
 
 export const HYBRID_SEARCH_MCP_DESCRIPTION = [
-  'Hybrid retrieval over visible knowledge bases: dense vector + BM25 + RRF fusion, optional rerank.',
-  'Prerequisite: call list_knowledge_bases in this session (or reuse its visible_ids if scope unchanged).',
-  'query must be a standalone retrieval query—rewrite when the user message depends on context ("这个", "上面说的", short follow-ups).',
-  'kb_ids must be a subset of visible_ids from list_knowledge_bases; forbidden ids error.',
-  'Defaults: top_k=10, search_type=all (chunks+faqs), BM25 enabled, rrf_k=60, recall_k=25.',
-  'search_type: all | chunks (RAG) | faqs. no_bm25 disables the BM25 leg. rerank_model_id optional.',
-  'Each result includes source { document_id, document_name, preview_url, citation_markdown, parsed_url, original_url, locator, chunk_index }.',
-  'Cite KB claims by copying source.citation_markdown verbatim into your answer—never invent URLs or use placeholders like preview_url.',
-  'When content references parsed images (…/documents/{id}/assets/markdown_out/… or markdown_out/…), use fetch_document_asset with source.document_id and the bundle path.',
+  'Hybrid retrieval over visible knowledge bases (dense + BM25 + RRF, optional rerank).',
+  'Call with separate named arguments — never pack them into one JSON string or a single parameter.',
+  'Required: query (plain string). Optional: kb_ids (uuid array), top_k (int, default 10), search_type (all|chunks|faqs, default all).',
+  'Example: hybrid_search(query="Nexus 存储系统 定义", kb_ids=["<visible uuid>"], top_k=10)',
+  'query is the retrieval text itself, not a JSON object. Rewrite follow-ups ("这个", "上面说的") into a full standalone query.',
+  'Prerequisite: list_knowledge_bases in this session (or reuse its visible_ids if scope is unchanged). kb_ids must be a subset of those visible_ids; do not invent UUIDs. If visible_ids is empty, do not call this tool.',
+  'Cite KB claims by copying source.citation_markdown verbatim — never invent URLs.',
+  'If chunk markdown references parsed images (markdown_out/…), call fetch_document_asset with source.document_id and that path.',
 ].join(' ');

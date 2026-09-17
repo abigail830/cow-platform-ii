@@ -47,12 +47,21 @@ export function createHybridSearchMcpServer(
         query: z
           .string()
           .min(1)
-          .describe('Standalone retrieval query (rewrite when user message needs conversation context)'),
+          .describe(
+            'Required top-level string: the search text (e.g. "Nexus 存储系统 定义"). Rewrite follow-ups into a full query. Do not pass a JSON object here.',
+          ),
         kb_ids: z
           .array(z.string().uuid())
           .optional()
-          .describe('Subset of visible_ids from list_knowledge_bases; default all visible'),
-        top_k: z.number().int().min(1).optional().describe('Max hits to return (default 10)'),
+          .describe(
+            'Optional top-level uuid array: subset of visible_ids from list_knowledge_bases. Omit to search all visible. Not a JSON string.',
+          ),
+        top_k: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe('Optional top-level integer: max hits (default 10). Not a JSON string.'),
         search_type: z
           .enum(['all', 'chunks', 'faqs'])
           .optional()
