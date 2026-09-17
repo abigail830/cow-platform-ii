@@ -15,6 +15,7 @@ import {
   type ResourceAccessRequestCache,
   type ResourceAccessScope,
 } from './resource-access-request-cache.ts';
+import { isUuid } from '../infrastructure/http/route-param.ts';
 import type { ChannelNode } from '../document/domain/channel-node.ts';
 import {
   buildChannelAncestorChain,
@@ -261,6 +262,7 @@ export async function resolveKnowledgeBasePermission(
   knowledgeBaseId: string,
   scope?: ResourceAccessScope,
 ): Promise<ResourcePermissionFlags> {
+  if (!isUuid(knowledgeBaseId)) return NO_RESOURCE_ACCESS;
   if (await isPlatformAdmin(userId, scope)) return FULL_RESOURCE_ACCESS;
 
   const ownerId = await loadOwnerId('knowledge_base', knowledgeBaseId);

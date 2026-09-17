@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { getUser } from './jwt.ts';
+import { isUuid } from '../infrastructure/http/route-param.ts';
 import {
   getDocumentChannelIdForDocument,
   resolveChannelPermission,
@@ -38,6 +39,9 @@ export async function denyUnlessKnowledgeBaseAccess(
   knowledgeBaseId: string,
   required: ResourcePermissionLevel,
 ): Promise<Response | null> {
+  if (!isUuid(knowledgeBaseId)) {
+    return c.json({ error: 'Knowledge base id is required' }, 400);
+  }
   const user = getUser(c);
   const scope = scopeFromContext(c);
   const flags = await resolveKnowledgeBasePermission(user.id, knowledgeBaseId, scope);
@@ -62,7 +66,8 @@ export async function requireKnowledgeBaseId(
 export function knowledgeBaseAccessMiddleware() {
   return async (c: Context, next: () => Promise<void>) => {
     const id = c.req.param('id');
-    if (!id) return next();
+    // `use('/:id')` also matches collection routes like /import-sources.
+    if (!id || !isUuid(id)) return next();
 
     const path = c.req.path;
     const idIndex = path.indexOf(id);

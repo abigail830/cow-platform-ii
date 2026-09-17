@@ -53,6 +53,8 @@ Mounted from `app.ts`:
 
 Shared handlers (e.g. resource access): `apis/platform/`.
 
+Hono `use('/:id')` matches **any** single path segment, including collection routes (`/import-sources`, `/rag-processing-options`). Resource ACL middleware on `/:id` must skip non-UUID params (see `isUuid` in `route-param.ts`). Do not rely on the platform-admin short-circuit — that only hides the bug for `admin`.
+
 ## Shared infrastructure
 
 - **Schema / Drizzle:** `infrastructure/db/schema.ts`, `infrastructure/db/index.ts` — not `src/db/schema.ts`
