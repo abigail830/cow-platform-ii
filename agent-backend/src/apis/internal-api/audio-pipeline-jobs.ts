@@ -92,6 +92,16 @@ audioPipelineJobs.patch('/:id', async (c) => {
     await maybeAutoRetryAfterFailed('audio_pipeline', job.id);
   }
 
+  if (body.stage === 'done' || body.stage === 'failed' || body.stage === 'transcribing') {
+    const { onIngestAudioPipelinePatch } = await import('../../kb/application/ingest-workflow-dispatch.ts');
+    await onIngestAudioPipelinePatch({
+      jobId: job.id,
+      stage: body.stage,
+      errorMessage: body.error_message,
+      documentCaptureSegmentId: job.documentCaptureSegmentId,
+    });
+  }
+
   return c.json({ ok: true, job: updated });
 });
 

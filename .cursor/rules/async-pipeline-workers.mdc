@@ -30,6 +30,7 @@ Worker mode: `PIPELINE_WORKER=spawn` (local dev) | `github_actions` (Vercel defa
 | **Eval compare** | `app_eval_run_comparisons` | *(backend inline)* | — | — | `eval-run-compare.ts` |
 | **Capture post-process** | capture pipeline jobs | `/internal-api/audio-capture-pipeline/jobs` | openkms-cli | capture workflow env | `document/application/document-capture-pipeline-runner.ts` |
 | **KB import** | kb import jobs | `/internal-api/kb-import-jobs` | openkms-cli | kb import workflow | `kb/infrastructure/kb-import-runner.ts` |
+| **Knowledge ingest workflow** | `app_knowledge_ingest_workflows` (+ items) | user `/api/knowledge/workflows` *(orchestrator — no own worker)* | — | — | `kb/application/ingest-workflow.ts` + `ingest-workflow-dispatch.ts` |
 
 **Eval transcribe rule:** reuse **audio pipeline worker** with fun-asr/qwen configs from `app_pipeline_configs`. Job context overrides `input_uri` (dataset audio) and `s3_prefix` (eval-runs output) via `eval_run_item_id` on the audio job row. PATCH on audio job syncs `app_eval_run_items` stage. **Do not** run transcription through `evaluate-cli pipeline` or `evaluate-pipeline.yml`.
 
@@ -50,6 +51,7 @@ Worker mode: `PIPELINE_WORKER=spawn` (local dev) | `github_actions` (Vercel defa
 | Eval serial dispatch | `eval/application/eval-run-dispatch.ts` |
 | Capture post-process | `document/application/document-capture-pipeline-runner.ts` |
 | KB import | `kb/infrastructure/kb-import-runner.ts` |
+| Knowledge ingest workflow (orchestrator) | `kb/application/ingest-workflow.ts`, `kb/application/ingest-workflow-dispatch.ts` |
 
 HTTP routes: `apis/internal-api/*-jobs.ts`. User-facing APIs live under `apis/` only.
 
@@ -82,6 +84,7 @@ Eval runs dispatch **one worker at a time** (`eval-run-dispatch.ts`): claim via 
 - Mark undispatched queue items failed in stale reconcile.
 - Run provider submit/poll/OSS writes on the user-facing API request path.
 - Write pipeline artifacts in internal-api PATCH handlers (worker PutObject; backend records deterministic `artifact_keys` / `resultS3Key` only).
+- Invent a second parse/ASR/post-process/retry/materialize path for **knowledge ingest workflows** — they orchestrate existing capture + document parse + audio ASR + kb-import jobs. Terminal PATCH on those jobs advances ingest items; GET reconciles missed PATCHes.
 
 ## New async pipeline checklist
 

@@ -70,6 +70,16 @@ audioCapturePipelineJobs.patch('/:id', async (c) => {
     await maybeAutoRetryAfterFailed('capture_pipeline', documentJob.id);
   }
 
+  if (body.stage) {
+    const { onIngestCapturePipelinePatch } = await import('../../kb/application/ingest-workflow-dispatch.ts');
+    await onIngestCapturePipelinePatch({
+      jobId: documentJob.id,
+      stage: body.stage,
+      errorMessage: body.error_message,
+      captureId: documentJob.captureId,
+    });
+  }
+
   return c.json({ ok: true, job: updated });
 });
 

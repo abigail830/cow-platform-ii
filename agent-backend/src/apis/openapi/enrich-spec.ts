@@ -11,6 +11,7 @@ const TAG_RULES: Array<{ prefix: string; tag: string }> = [
   { prefix: '/api/knowledge/knowledge-bases', tag: 'Knowledge · Knowledge Bases' },
   { prefix: '/api/knowledge/hybrid-search', tag: 'Knowledge · Hybrid Search' },
   { prefix: '/api/knowledge/asr-hotwords', tag: 'Knowledge · ASR Hotwords' },
+  { prefix: '/api/knowledge/workflows', tag: 'Knowledge · Ingest Workflows' },
   { prefix: '/api/evaluation', tag: 'Evaluation' },
   { prefix: '/api/admin', tag: 'Admin' },
   { prefix: '/api/mcp', tag: 'MCP' },

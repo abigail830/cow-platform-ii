@@ -120,6 +120,16 @@ pipelineJobs.patch('/:id', async (c) => {
     await maybeAutoRetryAfterFailed('document_pipeline', job.id);
   }
 
+  if (body.stage === 'done' || body.stage === 'failed' || body.stage === 'parsed' || body.stage === 'extracted_metadata') {
+    const { onIngestDocumentPipelinePatch } = await import('../../kb/application/ingest-workflow-dispatch.ts');
+    await onIngestDocumentPipelinePatch({
+      jobId: job.id,
+      stage: body.stage,
+      errorMessage: body.error_message,
+      documentCaptureSegmentId: job.documentCaptureSegmentId,
+    });
+  }
+
   return c.json({ ok: true, job: updated });
 });
 

@@ -589,6 +589,13 @@
       "when": 1789124000000,
       "tag": "0083_document_capture_abstract",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1789125000000,
+      "tag": "0084_knowledge_ingest_workflows",
+      "breakpoints": true
     }
   ]
 }

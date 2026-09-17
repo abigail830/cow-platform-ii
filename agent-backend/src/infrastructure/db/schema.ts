@@ -1131,3 +1131,173 @@ export const appEvalRunJudgeJobs = pgTable(
   ],
 );
 
+export const INGEST_WORKFLOW_STATUSES = [
+  'pending_upload',
+  'running',
+  'completed',
+  'partially_completed',
+  'failed',
+  'cancelled',
+] as const;
+export type IngestWorkflowStatus = (typeof INGEST_WORKFLOW_STATUSES)[number];
+
+export const INGEST_WORKFLOW_ITEM_STATUSES = [
+  'pending_upload',
+  'uploaded',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+export type IngestWorkflowItemStatus = (typeof INGEST_WORKFLOW_ITEM_STATUSES)[number];
+
+export const INGEST_WORKFLOW_STEPS = ['upload', 'process', 'index'] as const;
+export type IngestWorkflowStep = (typeof INGEST_WORKFLOW_STEPS)[number];
+
+export const INGEST_WORKFLOW_FILE_TYPES = ['document', 'audio', 'transcript'] as const;
+export type IngestWorkflowFileType = (typeof INGEST_WORKFLOW_FILE_TYPES)[number];
+
+export type IngestWorkflowRetryConfig = {
+  max_attempts: number;
+  auto_retry: boolean;
+};
+
+export type IngestWorkflowParallelism = {
+  process: number;
+  index: number;
+};
+
+export type IngestWorkflowIndexContent = {
+  audio: 'combined' | 'summary';
+};
+
+export type IngestWorkflowFileState = {
+  client_ref: string;
+  filename: string;
+  file_hash: string;
+  size_bytes: number;
+  content_type?: string;
+  s3_key?: string | null;
+  segment_id?: string | null;
+  upload_status: 'awaiting_put' | 'uploaded';
+};
+
+export type IngestWorkflowJobRefs = {
+  parse_job_id?: string;
+  audio_job_ids?: string[];
+  capture_job_id?: string;
+  import_job_id?: string;
+};
+
+export const WEBHOOK_SIGNATURE_MODES = ['hmac_sha256', 'none'] as const;
+export type WebhookSignatureMode = (typeof WEBHOOK_SIGNATURE_MODES)[number];
+
+export const WEBHOOK_DELIVERY_STATUSES = ['pending', 'delivered', 'failed'] as const;
+export type WebhookDeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
+
+export const appWebhookSubscriptions = pgTable(
+  'app_webhook_subscriptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerType: text('owner_type').notNull(),
+    ownerId: uuid('owner_id').notNull(),
+    url: text('url').notNull(),
+    secret: text('secret').notNull(),
+    signatureMode: text('signature_mode').$type<WebhookSignatureMode>().notNull().default('hmac_sha256'),
+    sequence: integer('sequence').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_webhook_subscriptions_owner').on(t.ownerType, t.ownerId)],
+);
+
+export const appWebhookDeliveries = pgTable(
+  'app_webhook_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    subscriptionId: uuid('subscription_id')
+      .notNull()
+      .references(() => appWebhookSubscriptions.id, { onDelete: 'cascade' }),
+    event: text('event').notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    sequence: integer('sequence').notNull(),
+    status: text('status').$type<WebhookDeliveryStatus>().notNull().default('pending'),
+    attempt: integer('attempt').notNull().default(1),
+    responseStatus: integer('response_status'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('idx_webhook_deliveries_subscription').on(t.subscriptionId, t.createdAt)],
+);
+
+export const appKnowledgeIngestWorkflows = pgTable(
+  'app_knowledge_ingest_workflows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    status: text('status').$type<IngestWorkflowStatus>().notNull().default('pending_upload'),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => appDocumentChannels.id, { onDelete: 'restrict' }),
+    knowledgeBaseId: uuid('knowledge_base_id')
+      .notNull()
+      .references(() => appKnowledgeBases.id, { onDelete: 'restrict' }),
+    knowledgeBaseType: text('knowledge_base_type').notNull().default('rag'),
+    webhookSubscriptionId: uuid('webhook_subscription_id').references(() => appWebhookSubscriptions.id, {
+      onDelete: 'set null',
+    }),
+    steps: jsonb('steps').$type<IngestWorkflowStep[]>().notNull().default(['upload', 'process', 'index']),
+    retryConfig: jsonb('retry_config')
+      .$type<IngestWorkflowRetryConfig>()
+      .notNull()
+      .default({ max_attempts: 2, auto_retry: true }),
+    parallelism: jsonb('parallelism')
+      .$type<IngestWorkflowParallelism>()
+      .notNull()
+      .default({ process: 3, index: 1 }),
+    indexMode: text('index_mode').notNull().default('batch'),
+    indexContent: jsonb('index_content')
+      .$type<IngestWorkflowIndexContent>()
+      .notNull()
+      .default({ audio: 'combined' }),
+    uploadDeadlineAt: timestamp('upload_deadline_at', { withTimezone: true }),
+    idempotencyKey: text('idempotency_key'),
+    errorMessage: text('error_message'),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_ingest_workflows_status').on(t.status, t.createdAt),
+    index('idx_ingest_workflows_deadline').on(t.uploadDeadlineAt),
+    uniqueIndex('uq_ingest_workflows_idempotency').on(t.createdBy, t.idempotencyKey),
+  ],
+);
+
+export const appKnowledgeIngestWorkflowItems = pgTable(
+  'app_knowledge_ingest_workflow_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => appKnowledgeIngestWorkflows.id, { onDelete: 'cascade' }),
+    clientRef: text('client_ref').notNull(),
+    detectedType: text('detected_type').$type<IngestWorkflowFileType>().notNull(),
+    status: text('status').$type<IngestWorkflowItemStatus>().notNull().default('pending_upload'),
+    step: text('step').$type<IngestWorkflowStep>().notNull().default('upload'),
+    captureId: uuid('capture_id')
+      .notNull()
+      .references(() => appDocumentCaptures.id, { onDelete: 'restrict' }),
+    documentId: uuid('document_id').references(() => appDocuments.id, { onDelete: 'set null' }),
+    files: jsonb('files').$type<IngestWorkflowFileState[]>().notNull().default([]),
+    jobRefs: jsonb('job_refs').$type<IngestWorkflowJobRefs>().notNull().default({}),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('uq_ingest_workflow_items_client_ref').on(t.workflowId, t.clientRef),
+    index('idx_ingest_workflow_items_capture').on(t.captureId),
+    index('idx_ingest_workflow_items_status').on(t.workflowId, t.status),
+  ],
+);
+

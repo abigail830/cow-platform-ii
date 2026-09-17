@@ -66,6 +66,15 @@ kbImportJobs.patch('/:id', async (c) => {
     await maybeAutoRetryAfterFailed('kb_import', id);
   }
 
+  if (body.status === 'completed' || body.status === 'failed') {
+    const { onIngestKbImportPatch } = await import('../../kb/application/ingest-workflow-dispatch.ts');
+    await onIngestKbImportPatch({
+      jobId: id,
+      status: body.status,
+      errorMessage: body.error_message,
+    });
+  }
+
   return c.json({ ok: true, job: updated });
 });
 

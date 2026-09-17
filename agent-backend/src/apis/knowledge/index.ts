@@ -5,6 +5,7 @@ import captures from './captures.ts';
 import knowledgeBases from './knowledge-bases.ts';
 import hybridSearch from './hybrid-search.ts';
 import asrHotwords from './asr-hotwords.ts';
+import workflows from './workflows.ts';
 
 const knowledge = new Hono();
 
@@ -14,5 +15,6 @@ knowledge.route('/captures', captures);
 knowledge.route('/knowledge-bases', knowledgeBases);
 knowledge.route('/hybrid-search', hybridSearch);
 knowledge.route('/asr-hotwords', asrHotwords);
+knowledge.route('/workflows', workflows);
 
 export default knowledge;
