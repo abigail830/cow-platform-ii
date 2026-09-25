@@ -425,16 +425,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                 {kb.description || 'RAG knowledge base'}
               </AdminPageDescription>
             </div>
-            <div className="kb-page-header-actions">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setFolderSyncOpen(true)}
-              >
-                <FolderSync {...iconProps({ size: 16 })} aria-hidden />
-                Folder sync
-              </button>
-            </div>
           </header>
 
           {error && <p className="admin-error" role="alert">{error}</p>}
@@ -442,9 +432,8 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
           <section className="kb-items-section">
             <div className="kb-items-header">
               <h2 className="kb-section-title">Indexed documents ({total})</h2>
-              {canImport && (
-                <div className="kb-items-toolbar">
-                  {docs.length > 0 && (
+              <div className="kb-items-toolbar">
+                {canImport && docs.length > 0 && (
                     <>
                       <button
                         type="button"
@@ -494,47 +483,58 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                         {selectedRemovableCount > 0 ? ` (${selectedRemovableCount})` : ''}
                       </button>
                     </>
-                  )}
-                  {total > 0 && (
+                )}
+                {canImport && total > 0 && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={!kb.is_configured || importJobActive || reindexingAll}
+                    title={
+                      !kb.is_configured
+                        ? 'Configure Admin → Pipelines → kb-rag-index Config YAML first'
+                        : REINDEX_ALL_TITLE
+                    }
+                    onClick={() => void handleReindexAll()}
+                  >
+                    {reindexingAll ? (
+                      <Loader2 {...iconProps({ size: 16, className: 'icon-btn-spin' })} aria-hidden />
+                    ) : (
+                      <IconRun {...iconProps({ size: 16 })} aria-hidden />
+                    )}
+                    Reindex all ({total})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setFolderSyncOpen(true)}
+                >
+                  <FolderSync {...iconProps({ size: 16 })} aria-hidden />
+                  Folder sync
+                </button>
+                {canImport && (
+                  <>
                     <button
                       type="button"
-                      className="btn-secondary"
-                      disabled={!kb.is_configured || importJobActive || reindexingAll}
-                      title={
-                        !kb.is_configured
-                          ? 'Configure Admin → Pipelines → kb-rag-index Config YAML first'
-                          : REINDEX_ALL_TITLE
-                      }
-                      onClick={() => void handleReindexAll()}
+                      className="btn-dark"
+                      onClick={() => setSettingsOpen(true)}
                     >
-                      {reindexingAll ? (
-                        <Loader2 {...iconProps({ size: 16, className: 'icon-btn-spin' })} aria-hidden />
-                      ) : (
-                        <IconRun {...iconProps({ size: 16 })} aria-hidden />
-                      )}
-                      Reindex all ({total})
+                      <Settings {...iconProps({ size: 16 })} aria-hidden />
+                      Settings
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn-dark"
-                    onClick={() => setSettingsOpen(true)}
-                  >
-                    <Settings {...iconProps({ size: 16 })} aria-hidden />
-                    Settings
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={!kb.is_configured || importJobActive || importSourcesLoading}
-                    title={!kb.is_configured ? 'Configure Admin → Pipelines → kb-rag-index Config YAML first' : undefined}
-                    onClick={() => void openImportModal()}
-                  >
-                    <Plus {...iconProps({ size: 16 })} aria-hidden />
-                    {importSourcesLoading ? 'Loading…' : 'Import & index'}
-                  </button>
-                </div>
-              )}
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={!kb.is_configured || importJobActive || importSourcesLoading}
+                      title={!kb.is_configured ? 'Configure Admin → Pipelines → kb-rag-index Config YAML first' : undefined}
+                      onClick={() => void openImportModal()}
+                    >
+                      <Plus {...iconProps({ size: 16 })} aria-hidden />
+                      {importSourcesLoading ? 'Loading…' : 'Import & index'}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             <div

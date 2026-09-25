@@ -330,16 +330,6 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
                 {kb.description || 'PageIndex knowledge base'}
               </AdminPageDescription>
             </div>
-            <div className="kb-page-header-actions">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setFolderSyncOpen(true)}
-              >
-                <FolderSync {...iconProps({ size: 16 })} aria-hidden />
-                Folder sync
-              </button>
-            </div>
           </header>
 
           {error && <p className="admin-error" role="alert">{error}</p>}
@@ -347,9 +337,8 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
           <section className="kb-items-section">
             <div className="kb-items-header">
               <h2 className="kb-section-title">Items ({total})</h2>
-              {canImport && (
-                <div className="kb-items-toolbar">
-                  {items.length > 0 && (
+              <div className="kb-items-toolbar">
+                {canImport && items.length > 0 && (
                     <>
                       <button
                         type="button"
@@ -372,7 +361,16 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
                         Remove selected{selectionCount > 0 ? ` (${selectionCount})` : ''}
                       </button>
                     </>
-                  )}
+                )}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setFolderSyncOpen(true)}
+                >
+                  <FolderSync {...iconProps({ size: 16 })} aria-hidden />
+                  Folder sync
+                </button>
+                {canImport && (
                   <button
                     type="button"
                     className="btn-primary"
@@ -382,8 +380,8 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
                     <Plus {...iconProps({ size: 16 })} aria-hidden />
                     {importSourcesLoading ? 'Loading…' : 'Import knowledge'}
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {items.length === 0 ? (
