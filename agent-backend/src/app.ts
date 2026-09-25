@@ -4,6 +4,7 @@ import './load-env.ts';
 import { registerModelProviders } from './providers.ts';
 import auth from './apis/auth/auth.ts';
 import userApiKeys from './apis/auth/user-api-keys.ts';
+import userNotifications from './apis/user/notifications.ts';
 import admin from './apis/admin/index.ts';
 import knowledge from './apis/knowledge/index.ts';
 import hybridSearchMcp from './tools/mcp/routes/hybrid-search.ts';
@@ -48,6 +49,7 @@ app.get('/health', (c) => c.json({ ok: true, service: 'agent-backend' }));
 
 app.route('/api/auth', auth);
 app.route('/api/user/api-keys', userApiKeys);
+app.route('/api/user/notifications', userNotifications);
 app.route('/api/admin', admin);
 app.route('/api/knowledge', knowledge);
 app.route('/api/evaluation', evaluation);

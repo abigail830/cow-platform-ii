@@ -596,6 +596,7 @@ export async function buildDocumentImportContext(documentId: string) {
 export async function upsertKbItemPending(
   knowledgeBaseId: string,
   documentId: string,
+  options?: { syncManaged?: boolean },
 ): Promise<void> {
   const doc = await getDocumentById(documentId);
   if (!doc) throw new Error(`Document not found: ${documentId}`);
@@ -604,6 +605,8 @@ export async function upsertKbItemPending(
   const channelPath = buildChannelPath(doc.channelId, channelRows);
 
   const existing = await getKbItemByDocumentId(knowledgeBaseId, documentId);
+  const syncManaged = options?.syncManaged ?? existing?.syncManaged ?? false;
+
   if (existing) {
     await db
       .update(appKbItems)
@@ -613,6 +616,7 @@ export async function upsertKbItemPending(
         originalS3Key: doc.s3Key,
         importStatus: 'pending',
         importError: null,
+        syncManaged: syncManaged || existing.syncManaged,
         updatedAt: new Date(),
       })
       .where(eq(appKbItems.id, existing.id));
@@ -626,6 +630,7 @@ export async function upsertKbItemPending(
     channelPath,
     originalS3Key: doc.s3Key,
     importStatus: 'pending',
+    syncManaged,
   });
 }
 
@@ -792,6 +797,7 @@ export async function createKbImportJob(input: {
   pipelineId?: string | null;
   configYaml?: string | null;
   createdBy?: string | null;
+  metrics?: AsyncJobMetrics | null;
 }): Promise<KbImportJobRow> {
   const faqIds = input.faqIds ?? [];
   const documentIds = input.documentIds;
@@ -810,6 +816,7 @@ export async function createKbImportJob(input: {
       totalCount,
       configYaml: input.configYaml?.trim() ? input.configYaml.trim() : null,
       createdBy: input.createdBy ?? null,
+      metrics: input.metrics ?? null,
     })
     .returning();
   return row!;
@@ -876,6 +883,7 @@ export async function startKbPageIndexImport(input: {
   channelIds?: string[];
   documentIds?: string[];
   createdBy?: string | null;
+  fromFolderSync?: boolean;
 }) {
   const kb = await getKnowledgeBaseById(input.knowledgeBaseId);
   if (!kb) throw new Error('Knowledge base not found');
@@ -897,8 +905,9 @@ export async function startKbPageIndexImport(input: {
   });
   if (documentIds.length === 0) throw new Error('No documents selected for import');
 
+  const syncManaged = Boolean(input.fromFolderSync);
   for (const documentId of documentIds) {
-    await upsertKbItemPending(input.knowledgeBaseId, documentId);
+    await upsertKbItemPending(input.knowledgeBaseId, documentId, { syncManaged });
   }
 
   const configYaml = await resolvePipelineConfigYamlSnapshot({
@@ -915,6 +924,7 @@ export async function startKbPageIndexImport(input: {
     pipelineId: kb.pipelineId,
     configYaml,
     createdBy: input.createdBy,
+    metrics: syncManaged ? { folder_sync: true } : null,
   });
 
   return { job: toKbImportJobPublic(job), document_count: documentIds.length };
@@ -925,6 +935,7 @@ export async function startKbRagIndexImport(input: {
   channelIds?: string[];
   documentIds?: string[];
   createdBy?: string | null;
+  fromFolderSync?: boolean;
 }) {
   const kb = await getKnowledgeBaseById(input.knowledgeBaseId);
   if (!kb) throw new Error('Knowledge base not found');
@@ -959,8 +970,9 @@ export async function startKbRagIndexImport(input: {
   });
   if (documentIds.length === 0) throw new Error('No documents selected for import');
 
+  const syncManaged = Boolean(input.fromFolderSync);
   for (const documentId of documentIds) {
-    await upsertKbChunkDocumentIndexing(input.knowledgeBaseId, documentId);
+    await upsertKbChunkDocumentIndexing(input.knowledgeBaseId, documentId, { syncManaged });
   }
 
   const configYaml = await resolvePipelineConfigYamlSnapshot({
@@ -977,6 +989,7 @@ export async function startKbRagIndexImport(input: {
     pipelineId: pipeline.id,
     configYaml,
     createdBy: input.createdBy,
+    metrics: syncManaged ? { folder_sync: true } : null,
   });
 
   return { job: toKbImportJobPublic(job), document_count: documentIds.length };

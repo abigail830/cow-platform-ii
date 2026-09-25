@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { ChevronRight, Loader2, Plus, Settings, Trash2 } from 'lucide-react';
+import { ChevronRight, FolderSync, Loader2, Plus, Settings, Trash2 } from 'lucide-react';
 import {
   deleteDocumentChunks,
+  getKbImportJob,
   getKnowledgeBase,
   listAllIndexedDocumentIds,
   listDocumentChunks,
@@ -18,6 +19,7 @@ import { KbImportModal } from '../components/KbImportModal.tsx';
 import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
 import { KbItemDeleteConfirmModal } from '../components/KbItemDeleteConfirmModal.tsx';
 import { KbRagDocumentDetailPanel } from '../components/KbRagDocumentDetailPanel.tsx';
+import { KbFolderSyncSettings } from '../components/KbFolderSyncSettings.tsx';
 import { KbRagSettingsModal } from '../components/KbRagSettingsModal.tsx';
 import { AdminPageDescription, AdminPageTitle, useAppOutletContext } from '../layouts/AppLayout.tsx';
 import { iconProps } from '../components/icons/icon-props.ts';
@@ -109,6 +111,7 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
   const [importedDocumentIds, setImportedDocumentIds] = useState<string[]>([]);
   const [importSourcesLoading, setImportSourcesLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [folderSyncOpen, setFolderSyncOpen] = useState(false);
   const [activeJob, setActiveJob] = useState<KbImportJob | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
@@ -504,6 +507,14 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                   )}
                   <button
                     type="button"
+                    className="btn-secondary"
+                    onClick={() => setFolderSyncOpen(true)}
+                  >
+                    <FolderSync {...iconProps({ size: 16 })} aria-hidden />
+                    Folder sync
+                  </button>
+                  <button
+                    type="button"
                     className="btn-dark"
                     onClick={() => setSettingsOpen(true)}
                   >
@@ -729,6 +740,22 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
           importedDocumentIds={importedDocumentIds}
           onCancel={() => setImportOpen(false)}
           onConfirm={handleImport}
+        />
+      )}
+
+      {folderSyncOpen && knowledgeBaseId && (
+        <KbFolderSyncSettings
+          knowledgeBaseId={knowledgeBaseId}
+          canWrite={canWrite}
+          importJobActive={importJobActive}
+          onCancel={() => setFolderSyncOpen(false)}
+          onSyncStarted={(jobId) => {
+            void (async () => {
+              const job = await getKbImportJob(knowledgeBaseId, jobId);
+              await trackActiveJob(job);
+              setFolderSyncOpen(false);
+            })();
+          }}
         />
       )}
 

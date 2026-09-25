@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { ChevronRight, Loader2, Plus } from 'lucide-react';
+import { ChevronRight, FolderSync, Loader2, Plus } from 'lucide-react';
 import {
   deleteKbItem,
   deleteKbItems,
+  getKbImportJob,
   getKbItem,
   getKnowledgeBase,
   listAllKbItemDocumentIds,
@@ -14,6 +15,7 @@ import {
   type KnowledgeBase,
 } from '../api/knowledgeBases.ts';
 import { IconDelete, IconRun } from '../components/AdminActionIcons.tsx';
+import { KbFolderSyncSettings } from '../components/KbFolderSyncSettings.tsx';
 import { KbImportModal } from '../components/KbImportModal.tsx';
 import { KbPageLoadingState } from '../components/KbPageLoadingState.tsx';
 import { KbItemDeleteConfirmModal } from '../components/KbItemDeleteConfirmModal.tsx';
@@ -81,6 +83,7 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
   const [error, setError] = useState('');
   const [forbidden, setForbidden] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [folderSyncOpen, setFolderSyncOpen] = useState(false);
   const [importedDocumentIds, setImportedDocumentIds] = useState<string[]>([]);
   const [importSourcesLoading, setImportSourcesLoading] = useState(false);
   const [activeJob, setActiveJob] = useState<KbImportJob | null>(null);
@@ -362,6 +365,14 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
                   )}
                   <button
                     type="button"
+                    className="btn-secondary"
+                    onClick={() => setFolderSyncOpen(true)}
+                  >
+                    <FolderSync {...iconProps({ size: 16 })} aria-hidden />
+                    Folder sync
+                  </button>
+                  <button
+                    type="button"
                     className="btn-primary"
                     disabled={importSourcesLoading}
                     onClick={() => void openImportModal()}
@@ -542,6 +553,22 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
           importedDocumentIds={importedDocumentIds}
           onCancel={() => setImportOpen(false)}
           onConfirm={handleImport}
+        />
+      )}
+
+      {folderSyncOpen && knowledgeBaseId && (
+        <KbFolderSyncSettings
+          knowledgeBaseId={knowledgeBaseId}
+          canWrite={canWrite}
+          importJobActive={importJobActive}
+          onCancel={() => setFolderSyncOpen(false)}
+          onSyncStarted={(jobId) => {
+            void (async () => {
+              const job = await getKbImportJob(knowledgeBaseId, jobId);
+              setActiveJob(job);
+              setFolderSyncOpen(false);
+            })();
+          }}
         />
       )}
 

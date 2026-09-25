@@ -73,6 +73,15 @@ kbImportJobs.patch('/:id', async (c) => {
       status: body.status,
       errorMessage: body.error_message,
     });
+
+    const { onKbFolderSyncImportJobTerminal } = await import(
+      '../../kb/application/kb-folder-sync/cycle.ts'
+    );
+    await onKbFolderSyncImportJobTerminal({
+      jobId: id,
+      status: body.status,
+      failedCount: body.failed_count,
+    });
   }
 
   return c.json({ ok: true, job: updated });

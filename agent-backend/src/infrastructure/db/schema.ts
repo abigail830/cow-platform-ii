@@ -312,6 +312,8 @@ export type AsyncJobMetrics = {
   last_retry_at?: string;
   /** Manual re-run: always run LLM metadata extraction even if fields look populated. */
   force_metadata_extract?: boolean;
+  /** KB folder auto-sync import job. */
+  folder_sync?: boolean;
 };
 export type CapturePipelineJobStage = (typeof CAPTURE_PIPELINE_JOB_STAGES)[number];
 
@@ -567,6 +569,8 @@ export const appKbItems = pgTable(
     importError: text('import_error'),
     importWarnings: jsonb('import_warnings').$type<string[] | null>(),
     importedAt: timestamp('imported_at', { withTimezone: true }),
+    /** true when row is managed by KB folder auto-sync (move-out may remove). */
+    syncManaged: boolean('sync_managed').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -651,6 +655,7 @@ export const appKbChunkDocuments = pgTable(
     indexStatus: text('index_status').notNull().default('pending'),
     indexError: text('index_error'),
     indexedAt: timestamp('indexed_at', { withTimezone: true }),
+    syncManaged: boolean('sync_managed').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1227,6 +1232,73 @@ export const appWebhookDeliveries = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index('idx_webhook_deliveries_subscription').on(t.subscriptionId, t.createdAt)],
+);
+
+export const appKbFolderSyncs = pgTable(
+  'app_kb_folder_syncs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    knowledgeBaseId: uuid('knowledge_base_id')
+      .notNull()
+      .references(() => appKnowledgeBases.id, { onDelete: 'cascade' }),
+    autoSyncEnabled: boolean('auto_sync_enabled').notNull().default(false),
+    syncIntervalMinutes: integer('sync_interval_minutes').notNull().default(10),
+    includeSubfolders: boolean('include_subfolders').notNull().default(true),
+    lastAutoSyncAt: timestamp('last_auto_sync_at', { withTimezone: true }),
+    createdBy: uuid('created_by').references(() => appUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('uq_kb_folder_syncs_kb').on(t.knowledgeBaseId),
+    index('idx_kb_folder_syncs_auto').on(t.autoSyncEnabled, t.lastAutoSyncAt),
+  ],
+);
+
+export const appKbFolderSyncChannels = pgTable(
+  'app_kb_folder_sync_channels',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    syncId: uuid('sync_id')
+      .notNull()
+      .references(() => appKbFolderSyncs.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => appDocumentChannels.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('uq_kb_folder_sync_channels').on(t.syncId, t.channelId)],
+);
+
+export type UserNotificationAction = {
+  type: string;
+  label: string;
+  payload?: Record<string, unknown>;
+};
+
+export const appUserNotifications = pgTable(
+  'app_user_notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => appUsers.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    severity: text('severity').notNull().default('info'),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    actions: jsonb('actions').$type<UserNotificationAction[]>().notNull().default([]),
+    metadata: jsonb('metadata').$type<Record<string, unknown> | null>(),
+    sourceType: text('source_type'),
+    sourceId: text('source_id'),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_user_notifications_user').on(t.userId, t.createdAt),
+    index('idx_user_notifications_unread').on(t.userId, t.readAt),
+  ],
 );
 
 export const appKnowledgeIngestWorkflows = pgTable(

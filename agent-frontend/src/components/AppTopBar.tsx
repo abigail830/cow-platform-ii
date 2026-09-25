@@ -6,6 +6,7 @@ import { isAdminSectionPath, resolveDefaultAdminPath } from '../shared/app-layou
 import { HOME_PATH } from '../shared/app-nav.ts';
 import { hasPermission } from '../shared/permissions.ts';
 import { NavPageIcon } from './icons/NavIcons.tsx';
+import { NotificationPanel } from './NotificationPanel.tsx';
 import { iconProps } from './icons/icon-props.ts';
 
 type AppTopBarProps = {
@@ -87,6 +88,8 @@ export function AppTopBar({ user, userLabel, activePath, onNavigate, onLogout }:
           </button>
         )}
         {showAdmin && <span className="topbar-right-divider" aria-hidden />}
+        <NotificationPanel onNavigate={onNavigate} />
+        <span className="topbar-right-divider" aria-hidden />
         <div className="topbar-user-wrap" ref={userMenuRef}>
           <button
             type="button"

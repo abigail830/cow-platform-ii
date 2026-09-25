@@ -596,6 +596,13 @@
       "when": 1789125000000,
       "tag": "0084_knowledge_ingest_workflows",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1789126000000,
+      "tag": "0085_kb_folder_sync",
+      "breakpoints": true
     }
   ]
 }

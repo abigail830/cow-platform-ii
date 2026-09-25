@@ -523,6 +523,86 @@ export function buildChannelTree(channels: ImportSourceChannel[]): ImportSourceC
   return roots;
 }
 
+export type KbFolderSyncFailedDocument = {
+  document_id: string;
+  document_name: string;
+  error_message: string | null;
+};
+
+export type KbFolderSyncStats = {
+  unsynced_count: number;
+  failed_count: number;
+  failed_documents: KbFolderSyncFailedDocument[];
+  import_in_progress: boolean;
+  active_import_job_id: string | null;
+};
+
+export type KbFolderSyncConfig = {
+  knowledge_base_id: string;
+  auto_sync_enabled: boolean;
+  sync_interval_minutes: number;
+  include_subfolders: boolean;
+  channel_ids: string[];
+  last_auto_sync_at: string | null;
+  stats: KbFolderSyncStats;
+};
+
+export type KbFolderSyncCycleResult = {
+  status: string;
+  reason?: string;
+  batch_size?: number;
+  removed?: number;
+  job_id?: string;
+};
+
+export async function getKbFolderSync(knowledgeBaseId: string): Promise<KbFolderSyncConfig> {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/folder-sync`);
+  return data as KbFolderSyncConfig;
+}
+
+export async function updateKbFolderSync(
+  knowledgeBaseId: string,
+  input: {
+    auto_sync_enabled?: boolean;
+    sync_interval_minutes?: number;
+    include_subfolders?: boolean;
+    channel_ids?: string[];
+  },
+): Promise<Omit<KbFolderSyncConfig, 'stats'>> {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/folder-sync`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      auto_sync_enabled: input.auto_sync_enabled,
+      sync_interval_minutes: input.sync_interval_minutes,
+      include_subfolders: input.include_subfolders,
+      channel_ids: input.channel_ids,
+    }),
+  });
+  return data as Omit<KbFolderSyncConfig, 'stats'>;
+}
+
+export async function syncKbFolderNow(
+  knowledgeBaseId: string,
+): Promise<KbFolderSyncCycleResult> {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/folder-sync/sync`, {
+    method: 'POST',
+  });
+  return data as KbFolderSyncCycleResult;
+}
+
+export async function retryKbFolderSync(
+  knowledgeBaseId: string,
+  documentIds?: string[],
+): Promise<KbFolderSyncCycleResult> {
+  const data = await authFetch(`/api/knowledge/knowledge-bases/${knowledgeBaseId}/folder-sync/retry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document_ids: documentIds ?? [] }),
+  });
+  return data as KbFolderSyncCycleResult;
+}
+
 export function collectDescendantChannelIds(
   rootId: string,
   channels: ImportSourceChannel[],

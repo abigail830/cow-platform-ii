@@ -872,4 +872,144 @@ knowledgeBases.get(
   },
 );
 
+knowledgeBases.get(
+  '/:id/folder-sync',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const kb = await getKnowledgeBaseById(id);
+    if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+    if (kb.type === 'faq') return c.json({ error: 'Folder sync is not supported for FAQ knowledge bases' }, 400);
+
+    const {
+      getOrCreateFolderSyncConfig,
+      toFolderSyncPublic,
+    } = await import('../../kb/application/kb-folder-sync/config.ts');
+    const { getFolderSyncStats } = await import('../../kb/application/kb-folder-sync/scan.ts');
+
+    const { row, channelIds } = await getOrCreateFolderSyncConfig(id);
+    const stats = await getFolderSyncStats(id);
+    const activeJob = await getActiveKbImportJobForKnowledgeBase(id);
+
+    return c.json({
+      ...toFolderSyncPublic(row, channelIds),
+      stats: {
+        unsynced_count: stats.unsynced_count,
+        failed_count: stats.failed_count,
+        failed_documents: stats.failed_documents,
+        import_in_progress: Boolean(activeJob),
+        active_import_job_id: activeJob?.id ?? null,
+      },
+    });
+  },
+);
+
+knowledgeBases.put(
+  '/:id/folder-sync',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'write',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const kb = await getKnowledgeBaseById(id);
+    if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+    if (kb.type === 'faq') return c.json({ error: 'Folder sync is not supported for FAQ knowledge bases' }, 400);
+
+    const body = await c.req.json<{
+      auto_sync_enabled?: boolean;
+      sync_interval_minutes?: number;
+      include_subfolders?: boolean;
+      channel_ids?: string[];
+    }>().catch(() => ({}));
+
+    const user = getUser(c);
+    const { upsertFolderSyncConfig } = await import('../../kb/application/kb-folder-sync/config.ts');
+
+    try {
+      const config = await upsertFolderSyncConfig({
+        knowledgeBaseId: id,
+        autoSyncEnabled: body.auto_sync_enabled,
+        syncIntervalMinutes: body.sync_interval_minutes,
+        includeSubfolders: body.include_subfolders,
+        channelIds: body.channel_ids,
+        createdBy: user?.id,
+      });
+      return c.json(config);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save folder sync config';
+      return c.json({ error: message }, 400);
+    }
+  },
+);
+
+knowledgeBases.post(
+  '/:id/folder-sync/sync',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'write',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const user = getUser(c);
+    const { runFolderSyncCycle } = await import('../../kb/application/kb-folder-sync/cycle.ts');
+
+    try {
+      const result = await runFolderSyncCycle({
+        knowledgeBaseId: id,
+        source: 'manual',
+        createdBy: user?.id,
+      });
+      return c.json(result, result.status === 'dispatched' ? 202 : 200);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Folder sync failed';
+      const status = message.includes('not found') ? 404 : 400;
+      return c.json({ error: message }, status);
+    }
+  },
+);
+
+knowledgeBases.post(
+  '/:id/folder-sync/retry',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'write',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const body = await c.req.json<{ document_ids?: string[] }>().catch(() => ({}));
+    const user = getUser(c);
+    const { runFolderSyncCycle } = await import('../../kb/application/kb-folder-sync/cycle.ts');
+
+    try {
+      const result = await runFolderSyncCycle({
+        knowledgeBaseId: id,
+        source: 'retry',
+        failedOnly: !body.document_ids?.length,
+        documentIds: body.document_ids,
+        createdBy: user?.id,
+      });
+      return c.json(result, result.status === 'dispatched' ? 202 : 200);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Retry failed';
+      return c.json({ error: message }, 400);
+    }
+  },
+);
+
 export default knowledgeBases;

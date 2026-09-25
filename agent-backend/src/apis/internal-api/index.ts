@@ -8,6 +8,7 @@ import audioPipelineJobs from './audio-pipeline-jobs.ts';
 import audioCapturePipelineJobs from './audio-capture-pipeline-jobs.ts';
 import evalPipelineJobs from './eval-pipeline-jobs.ts';
 import evalJudgeJobs from './eval-judge-jobs.ts';
+import kbFolderSyncCron from './kb-folder-sync-cron.ts';
 
 const internalApi = new Hono();
 
@@ -21,5 +22,6 @@ internalApi.route('/audio-pipeline/jobs', audioPipelineJobs);
 internalApi.route('/audio-capture-pipeline/jobs', audioCapturePipelineJobs);
 internalApi.route('/eval-pipeline/jobs', evalPipelineJobs);
 internalApi.route('/eval-judge/jobs', evalJudgeJobs);
+internalApi.route('/cron/kb-folder-sync', kbFolderSyncCron);
 
 export default internalApi;

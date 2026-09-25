@@ -36,6 +36,7 @@ export async function getKbChunkDocumentByDocumentId(
 export async function upsertKbChunkDocumentIndexing(
   knowledgeBaseId: string,
   documentId: string,
+  options?: { syncManaged?: boolean },
 ): Promise<void> {
   const doc = await getDocumentById(documentId);
   if (!doc) throw new Error(`Document not found: ${documentId}`);
@@ -44,6 +45,7 @@ export async function upsertKbChunkDocumentIndexing(
   const channelPath = buildChannelPath(doc.channelId, channelRows);
   const now = new Date();
 
+  const syncManaged = options?.syncManaged ?? false;
   const existing = await getKbChunkDocumentByDocumentId(knowledgeBaseId, documentId);
   if (existing) {
     await db
@@ -53,6 +55,7 @@ export async function upsertKbChunkDocumentIndexing(
         channelPath,
         indexStatus: 'indexing',
         indexError: null,
+        syncManaged: syncManaged || existing.syncManaged,
         updatedAt: now,
       })
       .where(eq(appKbChunkDocuments.id, existing.id));
@@ -65,6 +68,7 @@ export async function upsertKbChunkDocumentIndexing(
     documentName: doc.name,
     channelPath,
     indexStatus: 'indexing',
+    syncManaged,
   });
 }
 

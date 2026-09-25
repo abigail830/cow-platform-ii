@@ -4,5 +4,11 @@
   "installCommand": "npm ci",
   "buildCommand": "npm run build:vercel",
   "outputDirectory": ".vercel/output",
-  "regions": ["hkg1"]
+  "regions": ["hkg1"],
+  "crons": [
+    {
+      "path": "/internal-api/cron/kb-folder-sync",
+      "schedule": "* * * * *"
+    }
+  ]
 }
