@@ -6842,6 +6842,13 @@ select:focus-visible {
   gap: 1rem;
 }
 
+.kb-page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .kb-page-search {
   width: min(320px, 100%);
   flex: 1;

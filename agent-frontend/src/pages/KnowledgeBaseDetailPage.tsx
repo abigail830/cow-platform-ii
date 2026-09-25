@@ -330,6 +330,16 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
                 {kb.description || 'PageIndex knowledge base'}
               </AdminPageDescription>
             </div>
+            <div className="kb-page-header-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setFolderSyncOpen(true)}
+              >
+                <FolderSync {...iconProps({ size: 16 })} aria-hidden />
+                Folder sync
+              </button>
+            </div>
           </header>
 
           {error && <p className="admin-error" role="alert">{error}</p>}
@@ -363,14 +373,6 @@ export function KnowledgeBaseDetailPage({ initialKb }: KnowledgeBaseDetailPagePr
                       </button>
                     </>
                   )}
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => setFolderSyncOpen(true)}
-                  >
-                    <FolderSync {...iconProps({ size: 16 })} aria-hidden />
-                    Folder sync
-                  </button>
                   <button
                     type="button"
                     className="btn-primary"

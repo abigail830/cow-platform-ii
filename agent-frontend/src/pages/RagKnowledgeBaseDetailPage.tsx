@@ -425,6 +425,16 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                 {kb.description || 'RAG knowledge base'}
               </AdminPageDescription>
             </div>
+            <div className="kb-page-header-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setFolderSyncOpen(true)}
+              >
+                <FolderSync {...iconProps({ size: 16 })} aria-hidden />
+                Folder sync
+              </button>
+            </div>
           </header>
 
           {error && <p className="admin-error" role="alert">{error}</p>}
@@ -505,14 +515,6 @@ export function RagKnowledgeBaseDetailPage({ initialKb }: RagKnowledgeBaseDetail
                       Reindex all ({total})
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => setFolderSyncOpen(true)}
-                  >
-                    <FolderSync {...iconProps({ size: 16 })} aria-hidden />
-                    Folder sync
-                  </button>
                   <button
                     type="button"
                     className="btn-dark"
