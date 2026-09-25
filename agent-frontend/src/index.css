@@ -7088,9 +7088,28 @@ select:focus-visible {
 }
 
 .kb-folder-sync-modal {
+  display: flex;
+  flex-direction: column;
   width: min(52rem, calc(100vw - 2rem));
-  max-height: min(90vh, 52rem);
-  overflow: auto;
+  height: min(90vh, 42rem);
+  max-height: min(90vh, 42rem);
+  overflow: hidden;
+}
+
+.kb-folder-sync-tab-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 26rem;
+  overflow: hidden;
+}
+
+.kb-folder-sync-panel {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.kb-folder-sync-panel[hidden] {
+  display: none;
 }
 
 .kb-folder-sync-intro {
@@ -7196,7 +7215,7 @@ select:focus-visible {
 }
 
 .kb-folder-sync-history {
-  min-height: 14rem;
+  min-height: 0;
 }
 
 .kb-folder-sync-history-empty {
@@ -7238,12 +7257,17 @@ select:focus-visible {
   color: #b45309;
 }
 
-.kb-folder-sync-actions {
+.kb-folder-sync-footer {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-end;
   gap: 0.5rem;
   justify-content: flex-end;
-  margin-top: 0.25rem;
+  flex-shrink: 0;
+  min-height: 3.25rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
 }
 
 .kb-faq-settings-modal {

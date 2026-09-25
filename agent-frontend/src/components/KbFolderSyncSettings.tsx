@@ -96,13 +96,8 @@ export function KbFolderSyncSettings({
 
   useEffect(() => {
     void loadConfig();
-  }, [loadConfig]);
-
-  useEffect(() => {
-    if (tab === 'history') {
-      void loadHistory();
-    }
-  }, [tab, loadHistory]);
+    void loadHistory();
+  }, [loadConfig, loadHistory]);
 
   async function handleSave(event: FormEvent) {
     event.preventDefault();
@@ -199,6 +194,7 @@ export function KbFolderSyncSettings({
 
         <div className="modal-tabs" role="tablist" aria-label="Folder sync">
           <button
+            id="kb-folder-sync-tab-settings"
             type="button"
             role="tab"
             aria-selected={tab === 'settings'}
@@ -208,6 +204,7 @@ export function KbFolderSyncSettings({
             Settings
           </button>
           <button
+            id="kb-folder-sync-tab-history"
             type="button"
             role="tab"
             aria-selected={tab === 'history'}
@@ -221,70 +218,25 @@ export function KbFolderSyncSettings({
         {error && <p className="admin-error" role="alert">{error}</p>}
         {statusMessage && <p className="admin-success" role="status">{statusMessage}</p>}
 
-        {loading && tab === 'settings' ? (
-          <p className="panel-loading" role="status">
-            <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
-            Loading folder sync…
-          </p>
-        ) : tab === 'history' ? (
-          <div className="kb-folder-sync-history">
-            {historyLoading ? (
+        <div className="kb-folder-sync-tab-body">
+          <div
+            className="kb-folder-sync-panel"
+            role="tabpanel"
+            aria-labelledby="kb-folder-sync-tab-settings"
+            hidden={tab !== 'settings'}
+          >
+            {loading ? (
               <p className="panel-loading" role="status">
                 <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
-                Loading sync history…
+                Loading folder sync…
               </p>
-            ) : historyJobs.length === 0 ? (
-              <p className="kb-folder-sync-history-empty">No folder sync jobs yet.</p>
             ) : (
-              <div className="kb-folder-sync-history-table-wrap">
-                <table className="kb-folder-sync-history-table">
-                  <thead>
-                    <tr>
-                      <th>Started</th>
-                      <th>Status</th>
-                      <th>Documents</th>
-                      <th>Progress</th>
-                      <th>Error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyJobs.map((job) => (
-                      <tr key={job.id}>
-                        <td>{formatWhen(job.created_at)}</td>
-                        <td>
-                          <span className={`kb-status-badge ${jobStatusClass(job.status)}`}>
-                            {job.status}
-                          </span>
-                        </td>
-                        <td>{job.total_count}</td>
-                        <td>
-                          {job.completed_count} ok / {job.failed_count} failed
-                        </td>
-                        <td
-                          className="kb-folder-sync-history-error"
-                          title={job.error_message ?? undefined}
-                        >
-                          {job.error_message ?? '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <div className="kb-folder-sync-actions">
-              <button type="button" className="btn-secondary" onClick={() => void loadHistory()}>
-                <RefreshCw {...iconProps({ size: 16 })} aria-hidden />
-                Refresh
-              </button>
-              <button type="button" className="btn-secondary" onClick={onCancel}>
-                Close
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form className="kb-folder-sync-form" onSubmit={(e) => void handleSave(e)}>
-            <div className="kb-folder-sync-settings-block">
+              <form
+                id="kb-folder-sync-settings-form"
+                className="kb-folder-sync-form"
+                onSubmit={(e) => void handleSave(e)}
+              >
+                <div className="kb-folder-sync-settings-block">
               <div className="kb-folder-sync-row">
                 <div className="kb-folder-sync-row-label">
                   <span className="kb-folder-sync-row-title">Auto sync</span>
@@ -377,8 +329,66 @@ export function KbFolderSyncSettings({
                 )}
               </div>
             )}
+              </form>
+            )}
+          </div>
 
-            <div className="kb-folder-sync-actions">
+          <div
+            className="kb-folder-sync-panel kb-folder-sync-history"
+            role="tabpanel"
+            aria-labelledby="kb-folder-sync-tab-history"
+            hidden={tab !== 'history'}
+          >
+            {historyLoading ? (
+              <p className="panel-loading" role="status">
+                <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
+                Loading sync history…
+              </p>
+            ) : historyJobs.length === 0 ? (
+              <p className="kb-folder-sync-history-empty">No folder sync jobs yet.</p>
+            ) : (
+              <div className="kb-folder-sync-history-table-wrap">
+                <table className="kb-folder-sync-history-table">
+                  <thead>
+                    <tr>
+                      <th>Started</th>
+                      <th>Status</th>
+                      <th>Documents</th>
+                      <th>Progress</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyJobs.map((job) => (
+                      <tr key={job.id}>
+                        <td>{formatWhen(job.created_at)}</td>
+                        <td>
+                          <span className={`kb-status-badge ${jobStatusClass(job.status)}`}>
+                            {job.status}
+                          </span>
+                        </td>
+                        <td>{job.total_count}</td>
+                        <td>
+                          {job.completed_count} ok / {job.failed_count} failed
+                        </td>
+                        <td
+                          className="kb-folder-sync-history-error"
+                          title={job.error_message ?? undefined}
+                        >
+                          {job.error_message ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="kb-folder-sync-footer">
+          {tab === 'settings' ? (
+            <>
               {canWrite && (
                 <>
                   <button
@@ -415,13 +425,28 @@ export function KbFolderSyncSettings({
                 Close
               </button>
               {canWrite && (
-                <button type="submit" className="btn-primary" disabled={saving}>
+                <button
+                  type="submit"
+                  form="kb-folder-sync-settings-form"
+                  className="btn-primary"
+                  disabled={saving}
+                >
                   {saving ? 'Saving…' : 'Save'}
                 </button>
               )}
-            </div>
-          </form>
-        )}
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn-secondary" onClick={() => void loadHistory()}>
+                <RefreshCw {...iconProps({ size: 16 })} aria-hidden />
+                Refresh
+              </button>
+              <button type="button" className="btn-secondary" onClick={onCancel}>
+                Close
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
