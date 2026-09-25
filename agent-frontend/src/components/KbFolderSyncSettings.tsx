@@ -3,6 +3,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { listDocumentChannels, type DocumentChannel } from '../api/documentChannels.ts';
 import {
   getKbFolderSync,
+  listKbFolderSyncJobs,
   retryKbFolderSync,
   syncKbFolderNow,
   updateKbFolderSync,
@@ -21,11 +22,19 @@ type KbFolderSyncSettingsProps = {
   onImportJobUpdate?: (job: KbImportJob | null) => void;
 };
 
-function formatRelativeTime(iso: string | null): string {
+type FolderSyncTab = 'settings' | 'history';
+
+function formatWhen(iso: string | null): string {
   if (!iso) return 'Never';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return 'Never';
   return date.toLocaleString();
+}
+
+function jobStatusClass(status: string): string {
+  if (status === 'completed') return 'kb-status-completed';
+  if (status === 'failed') return 'kb-status-failed';
+  return 'kb-status-pending';
 }
 
 export function KbFolderSyncSettings({
@@ -35,7 +44,9 @@ export function KbFolderSyncSettings({
   onCancel,
   onSyncStarted,
 }: KbFolderSyncSettingsProps) {
+  const [tab, setTab] = useState<FolderSyncTab>('settings');
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -43,13 +54,14 @@ export function KbFolderSyncSettings({
   const [statusMessage, setStatusMessage] = useState('');
   const [config, setConfig] = useState<KbFolderSyncConfig | null>(null);
   const [channels, setChannels] = useState<DocumentChannel[]>([]);
+  const [historyJobs, setHistoryJobs] = useState<KbImportJob[]>([]);
 
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [syncIntervalMinutes, setSyncIntervalMinutes] = useState(10);
   const [includeSubfolders, setIncludeSubfolders] = useState(true);
   const [channelIds, setChannelIds] = useState<string[]>([]);
 
-  const load = useCallback(async () => {
+  const loadConfig = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -70,9 +82,27 @@ export function KbFolderSyncSettings({
     }
   }, [knowledgeBaseId]);
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const items = await listKbFolderSyncJobs(knowledgeBaseId, 30);
+      setHistoryJobs(items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sync history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [knowledgeBaseId]);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadConfig();
+  }, [loadConfig]);
+
+  useEffect(() => {
+    if (tab === 'history') {
+      void loadHistory();
+    }
+  }, [tab, loadHistory]);
 
   async function handleSave(event: FormEvent) {
     event.preventDefault();
@@ -87,7 +117,7 @@ export function KbFolderSyncSettings({
         include_subfolders: includeSubfolders,
         channel_ids: channelIds,
       });
-      await load();
+      await loadConfig();
       setStatusMessage('Settings saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
@@ -106,6 +136,7 @@ export function KbFolderSyncSettings({
       if (result.status === 'dispatched' && result.job_id) {
         onSyncStarted?.(result.job_id);
         setStatusMessage(`Sync started (${result.batch_size ?? 0} document(s)).`);
+        if (tab === 'history') void loadHistory();
       } else if (result.status === 'skipped' && result.reason === 'import_in_progress') {
         setStatusMessage('An import is already in progress.');
       } else if (result.status === 'idle') {
@@ -115,7 +146,7 @@ export function KbFolderSyncSettings({
       } else {
         setStatusMessage(`Sync: ${result.status}${result.reason ? ` (${result.reason})` : ''}`);
       }
-      await load();
+      await loadConfig();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sync failed');
     } finally {
@@ -137,10 +168,11 @@ export function KbFolderSyncSettings({
       if (result.status === 'dispatched' && result.job_id) {
         onSyncStarted?.(result.job_id);
         setStatusMessage(`Retry started (${result.batch_size ?? 0} document(s)).`);
+        if (tab === 'history') void loadHistory();
       } else {
         setStatusMessage(`Retry: ${result.status}${result.reason ? ` (${result.reason})` : ''}`);
       }
-      await load();
+      await loadConfig();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Retry failed');
     } finally {
@@ -165,54 +197,151 @@ export function KbFolderSyncSettings({
           Sync now for an immediate batch.
         </p>
 
+        <div className="modal-tabs" role="tablist" aria-label="Folder sync">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'settings'}
+            className={`modal-tab${tab === 'settings' ? ' active' : ''}`}
+            onClick={() => setTab('settings')}
+          >
+            Settings
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'history'}
+            className={`modal-tab${tab === 'history' ? ' active' : ''}`}
+            onClick={() => setTab('history')}
+          >
+            Sync history
+          </button>
+        </div>
+
         {error && <p className="admin-error" role="alert">{error}</p>}
         {statusMessage && <p className="admin-success" role="status">{statusMessage}</p>}
 
-        {loading ? (
+        {loading && tab === 'settings' ? (
           <p className="panel-loading" role="status">
             <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
             Loading folder sync…
           </p>
+        ) : tab === 'history' ? (
+          <div className="kb-folder-sync-history">
+            {historyLoading ? (
+              <p className="panel-loading" role="status">
+                <Loader2 {...iconProps({ size: 18, className: 'panel-loading-icon' })} aria-hidden />
+                Loading sync history…
+              </p>
+            ) : historyJobs.length === 0 ? (
+              <p className="kb-folder-sync-history-empty">No folder sync jobs yet.</p>
+            ) : (
+              <div className="kb-folder-sync-history-table-wrap">
+                <table className="kb-folder-sync-history-table">
+                  <thead>
+                    <tr>
+                      <th>Started</th>
+                      <th>Status</th>
+                      <th>Documents</th>
+                      <th>Progress</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyJobs.map((job) => (
+                      <tr key={job.id}>
+                        <td>{formatWhen(job.created_at)}</td>
+                        <td>
+                          <span className={`kb-status-badge ${jobStatusClass(job.status)}`}>
+                            {job.status}
+                          </span>
+                        </td>
+                        <td>{job.total_count}</td>
+                        <td>
+                          {job.completed_count} ok / {job.failed_count} failed
+                        </td>
+                        <td
+                          className="kb-folder-sync-history-error"
+                          title={job.error_message ?? undefined}
+                        >
+                          {job.error_message ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="kb-folder-sync-actions">
+              <button type="button" className="btn-secondary" onClick={() => void loadHistory()}>
+                <RefreshCw {...iconProps({ size: 16 })} aria-hidden />
+                Refresh
+              </button>
+              <button type="button" className="btn-secondary" onClick={onCancel}>
+                Close
+              </button>
+            </div>
+          </div>
         ) : (
-          <form className="form-grid" onSubmit={(e) => void handleSave(e)}>
-            <label className="form-field form-field-wide kb-folder-sync-toggle">
-              <span>Auto sync</span>
-              <input
-                type="checkbox"
-                className="brand-checkbox"
-                checked={autoSyncEnabled}
-                disabled={!canWrite}
-                onChange={(e) => setAutoSyncEnabled(e.target.checked)}
-              />
-              <span className="admin-form-hint">
-                When enabled, bound folders are scanned every {syncIntervalMinutes} minutes.
-              </span>
-            </label>
+          <form className="kb-folder-sync-form" onSubmit={(e) => void handleSave(e)}>
+            <div className="kb-folder-sync-settings-block">
+              <div className="kb-folder-sync-row">
+                <div className="kb-folder-sync-row-label">
+                  <span className="kb-folder-sync-row-title">Auto sync</span>
+                  <span className="kb-folder-sync-row-hint">
+                    Scan bound folders every {syncIntervalMinutes} minutes when enabled.
+                  </span>
+                </div>
+                <div className="kb-folder-sync-row-control">
+                  <input
+                    type="checkbox"
+                    className="brand-checkbox"
+                    checked={autoSyncEnabled}
+                    disabled={!canWrite}
+                    aria-label="Auto sync"
+                    onChange={(e) => setAutoSyncEnabled(e.target.checked)}
+                  />
+                </div>
+              </div>
 
-            <label className="form-field">
-              <span>Interval (minutes)</span>
-              <input
-                type="number"
-                min={5}
-                max={1440}
-                value={syncIntervalMinutes}
-                disabled={!canWrite}
-                onChange={(e) => setSyncIntervalMinutes(Number(e.target.value))}
-              />
-            </label>
+              <div className="kb-folder-sync-row">
+                <div className="kb-folder-sync-row-label">
+                  <span className="kb-folder-sync-row-title">Include subfolders</span>
+                  <span className="kb-folder-sync-row-hint">
+                    Also import documents from nested channels under each bound folder.
+                  </span>
+                </div>
+                <div className="kb-folder-sync-row-control">
+                  <input
+                    type="checkbox"
+                    className="brand-checkbox"
+                    checked={includeSubfolders}
+                    disabled={!canWrite}
+                    aria-label="Include subfolders"
+                    onChange={(e) => setIncludeSubfolders(e.target.checked)}
+                  />
+                </div>
+              </div>
 
-            <label className="form-field kb-folder-sync-toggle">
-              <span>Include subfolders</span>
-              <input
-                type="checkbox"
-                className="brand-checkbox"
-                checked={includeSubfolders}
-                disabled={!canWrite}
-                onChange={(e) => setIncludeSubfolders(e.target.checked)}
-              />
-            </label>
+              <div className="kb-folder-sync-row">
+                <div className="kb-folder-sync-row-label">
+                  <span className="kb-folder-sync-row-title">Interval (minutes)</span>
+                  <span className="kb-folder-sync-row-hint">Allowed range: 5–1440.</span>
+                </div>
+                <div className="kb-folder-sync-row-control">
+                  <input
+                    type="number"
+                    min={5}
+                    max={1440}
+                    value={syncIntervalMinutes}
+                    disabled={!canWrite}
+                    onChange={(e) => setSyncIntervalMinutes(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+            </div>
 
-            <div className="form-field form-field-wide">
+            <div className="kb-folder-sync-bound-folders">
               <span>Bound folders</span>
               <FolderChannelPicker
                 channels={channels}
@@ -223,7 +352,7 @@ export function KbFolderSyncSettings({
             </div>
 
             {stats && (
-              <div className="form-field form-field-wide kb-folder-sync-stats">
+              <div className="kb-folder-sync-stats">
                 <span>Status</span>
                 <ul>
                   <li>Unsynced: {stats.unsynced_count}</li>
@@ -232,7 +361,7 @@ export function KbFolderSyncSettings({
                     Import:{' '}
                     {stats.import_in_progress || importJobActive ? 'In progress' : 'Idle'}
                   </li>
-                  <li>Last auto sync: {formatRelativeTime(config?.last_auto_sync_at ?? null)}</li>
+                  <li>Last auto sync: {formatWhen(config?.last_auto_sync_at ?? null)}</li>
                 </ul>
                 {stats.failed_documents.length > 0 && (
                   <details className="kb-folder-sync-failed-list">
@@ -249,7 +378,7 @@ export function KbFolderSyncSettings({
               </div>
             )}
 
-            <div className="modal-actions form-field-wide kb-folder-sync-actions">
+            <div className="kb-folder-sync-actions">
               {canWrite && (
                 <>
                   <button

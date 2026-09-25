@@ -873,6 +873,28 @@ knowledgeBases.get(
 );
 
 knowledgeBases.get(
+  '/:id/folder-sync/jobs',
+  requireResourcePermission(
+    KNOWLEDGE_MANAGEMENT_CATEGORY,
+    KNOWLEDGE_MANAGEMENT_RESOURCES.KNOWLEDGE_BASES,
+    'read',
+  ),
+  async (c) => {
+    const id = routeParam(c, 'id');
+    if (!id) return c.json({ error: 'Knowledge base id is required' }, 400);
+
+    const kb = await getKnowledgeBaseById(id);
+    if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+    if (kb.type === 'faq') return c.json({ error: 'Folder sync is not supported for FAQ knowledge bases' }, 400);
+
+    const limit = Number(c.req.query('limit') ?? '30');
+    const { listKbFolderSyncJobs } = await import('../../kb/application/kb-folder-sync/jobs.ts');
+    const items = await listKbFolderSyncJobs(id, Number.isFinite(limit) ? limit : 30);
+    return c.json({ items });
+  },
+);
+
+knowledgeBases.get(
   '/:id/folder-sync',
   requireResourcePermission(
     KNOWLEDGE_MANAGEMENT_CATEGORY,

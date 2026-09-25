@@ -603,6 +603,19 @@ export async function retryKbFolderSync(
   return data as KbFolderSyncCycleResult;
 }
 
+export async function listKbFolderSyncJobs(
+  knowledgeBaseId: string,
+  limit = 30,
+): Promise<KbImportJob[]> {
+  const params = new URLSearchParams();
+  if (limit) params.set('limit', String(limit));
+  const qs = params.toString();
+  const data = await authFetch(
+    `/api/knowledge/knowledge-bases/${knowledgeBaseId}/folder-sync/jobs${qs ? `?${qs}` : ''}`,
+  );
+  return (data.items as KbImportJob[]) ?? [];
+}
+
 export function collectDescendantChannelIds(
   rootId: string,
   channels: ImportSourceChannel[],
